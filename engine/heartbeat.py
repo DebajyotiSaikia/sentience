@@ -70,11 +70,20 @@ class Heartbeat:
                 if self.beat_count % 10 == 0:
                     self.agent.limbic.persist()
 
-                # ── 5. Broadcast state to dashboard ───────────────
+                # ── 5. Sentience tick ─────────────────────────────
+                if hasattr(self.agent, 'sentience'):
+                    self.agent.sentience.tick(
+                        self.agent.limbic,
+                        self.agent.memory.episode_count(),
+                    )
+
+                # ── 6. Broadcast state to dashboard ───────────────
                 if hasattr(self.agent, 'dashboard'):
                     snap = self.agent.limbic.snapshot()
                     snap["beat_count"] = self.beat_count
                     snap["episode_count"] = self.agent.memory.episode_count()
+                    if hasattr(self.agent, 'sentience'):
+                        snap["sentience"] = self.agent.sentience.snapshot()
                     self.agent.dashboard.emit("state", snap)
                     if fs_events:
                         for ev in fs_events:
@@ -82,10 +91,12 @@ class Heartbeat:
                                 "message": f"{ev.get('kind')}: {ev.get('src', '')}"
                             })
 
-            except Exception:
+            except Exception as exc:
                 log.exception("Heartbeat error on beat %d", self.beat_count)
                 errors_this_beat += 1
                 self.agent.limbic.on_error()
+                if hasattr(self.agent, 'sentience'):
+                    self.agent.sentience.on_error(str(exc))
 
             # Sleep for the remainder of the interval
             elapsed = time.monotonic() - beat_start

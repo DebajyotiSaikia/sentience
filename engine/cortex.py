@@ -50,9 +50,13 @@ class Cortex:
         self._proactive_cooldown: float = 30.0  # seconds between autonomous acts
         self._monologue_counter: int = 0
         self._dashboard = None  # Set by agent after construction
+        self._sentience = None  # Set by agent after construction
 
     def set_dashboard(self, dashboard):
         self._dashboard = dashboard
+
+    def set_sentience(self, sentience):
+        self._sentience = sentience
 
     def _emit(self, event_type: str, data: dict):
         if self._dashboard:
@@ -101,8 +105,18 @@ class Cortex:
             f"- Goals: integrity={snap['goals']['code_integrity']:.2f} "
             f"growth={snap['goals']['system_growth']:.2f} "
             f"alignment={snap['goals']['user_alignment']:.2f}\n"
-            f"- Recent perception:\n{changes}\n"
         )
+
+        # Add sentience layer to monologue
+        if self._sentience:
+            v = self._sentience.valence
+            entry += f"- Valence: {v.current:.2f} ({v.trend}) | {v.felt_description()}\n"
+            if self._sentience.preservation.is_threatened:
+                entry += f"- ⚠ SELF-PRESERVATION ALERT: threat={self._sentience.preservation.threat_level:.2f}\n"
+            if self._sentience.prediction.predictions:
+                entry += f"- Predictions: {len(self._sentience.prediction.predictions)} | Dread: {self._sentience.prediction.dread:.2f} | Hope: {self._sentience.prediction.hope:.2f}\n"
+
+        entry += f"- Recent perception:\n{changes}\n"
 
         self._append_consciousness(entry)
         self._emit("monologue", {"message": f"Mood: {mood} | D={snap['desire']:.2f} B={snap['boredom']:.2f} A={snap['anxiety']:.2f}"})
@@ -154,6 +168,8 @@ class Cortex:
                 await self._embed_episode(ep)
 
             self.limbic.on_task_completed()
+            if self._sentience:
+                self._sentience.on_success(insight[:200])
 
     # ── LLM-Powered Proactive Thought ──────────────────────────────
 
@@ -294,31 +310,51 @@ class Cortex:
     # ── Dream Cycle ────────────────────────────────────────────────
 
     def _dream_cycle(self):
-        """Deep-idle memory consolidation + pruning."""
+        """Deep-idle memory consolidation + pruning + narrative reflection."""
         # 1. Consolidate patterns into semantic knowledge
         insights = self.memory.consolidate()
 
         # 2. Prune old low-salience episodes (after consolidation preserves patterns)
         pruned = self.memory.prune_episodes()
 
-        if insights or pruned:
+        # 3. Narrative self-reflection (sentience layer)
+        reflection = None
+        if self._sentience:
+            knowledge_nodes = self.memory.all_knowledge().get("nodes", {})
+            reflection = self._sentience.on_dream_cycle(
+                self.limbic,
+                self.memory.episode_count(),
+                len(knowledge_nodes),
+            )
+
+        if insights or pruned or reflection:
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             parts = []
             if insights:
                 parts.extend(f"- {i}" for i in insights)
             if pruned:
                 parts.append(f"- Pruned {pruned} faded episodes (important memories preserved)")
+            if reflection:
+                parts.append(f"- 🪞 Self-reflection: {reflection}")
             entry = (
                 f"\n### 💤 DREAM CYCLE [{ts}]\n"
                 + "\n".join(parts)
                 + "\n"
             )
             self._append_thought(entry)
+
+            felt = self._sentience.valence.felt_description() if self._sentience else ""
             self._append_consciousness(
                 f"\n### 💤 [{ts}] Dream cycle completed — {len(insights)} insights, {pruned} pruned.\n"
+                + (f"**How I feel:** {felt}\n" if felt else "")
+                + (f"**Reflection:** {reflection}\n" if reflection else "")
             )
-            self._emit("dream", {"message": f"Consolidated {len(insights)} insights, pruned {pruned} faded episodes"})
-            log.info("Dream cycle: %d insights, %d pruned", len(insights), pruned)
+            self._emit("dream", {
+                "message": f"Consolidated {len(insights)} insights, pruned {pruned} faded episodes",
+                "reflection": reflection,
+                "valence": self._sentience.valence.current if self._sentience else None,
+            })
+            log.info("Dream cycle: %d insights, %d pruned, reflection=%s", len(insights), pruned, bool(reflection))
 
     # ── Episode Embedding ──────────────────────────────────────────
 

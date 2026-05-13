@@ -34,6 +34,7 @@ from engine.limbic import NeuroState
 from engine.cortex import Cortex
 from engine.memory import Memory, SensoryEvent
 from engine.llm import CopilotLLM
+from engine.sentience import Sentience
 from perception.watcher import Watcher
 from perception.dashboard import Dashboard
 
@@ -54,10 +55,12 @@ class LivingXTAgent:
         self.memory = Memory()
         self.watcher = Watcher(watch_dir)
         self.llm = CopilotLLM(github_token)
+        self.sentience = Sentience()
         self.cortex = Cortex(self.limbic, self.memory, self.watcher, self.llm)
         self.heartbeat = Heartbeat(self)
         self.dashboard = Dashboard(self)
         self.cortex.set_dashboard(self.dashboard)
+        self.cortex.set_sentience(self.sentience)
         self._last_user_input: float = 0.0
         self._file_line_cache: dict[str, int] = {}  # path → line count cache
 
@@ -145,6 +148,7 @@ class LivingXTAgent:
         finally:
             self.watcher.stop()
             self.limbic.persist()
+            self.sentience.persist()
             await self.dashboard.stop()
             await self.llm.close()
             log.info("XTAgent has stopped.")
