@@ -44,9 +44,8 @@ class Cortex:
         self.memory = memory
         self.watcher = watcher
         self.llm = llm
-        self._last_proactive: float = 0.0
-        self._proactive_cooldown: float = 30.0  # seconds between autonomous acts
         self._monologue_counter: int = 0
+        self._thinking: bool = False  # True while an LLM call is in flight
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
 
@@ -75,12 +74,10 @@ class Cortex:
             self.limbic.curiosity = max(self.limbic.curiosity,
                                         min(self.limbic.boredom - 0.3, 1.0) * 0.5)
 
-        # If desire > 0.7 and cooldown elapsed → the agent decides what to do
-        if (
-            self.limbic.desire > 0.7
-            and (time.time() - self._last_proactive) > self._proactive_cooldown
-        ):
-            await self._act_from_will()
+        # If desire > 0.7 and not already thinking → think (non-blocking)
+        if self.limbic.desire > 0.7 and not self._thinking:
+            import asyncio
+            asyncio.ensure_future(self._act_from_will())
 
         # Dream cycle during deep idle
         if self.limbic.boredom > 0.9:
@@ -132,70 +129,79 @@ class Cortex:
     async def _act_from_will(self):
         """
         The agent decides what to do from its own inner state.
-        No hardcoded strategy picker. The LLM thinks AS the agent,
-        with full access to its feelings, memories, and identity.
+        Non-blocking — runs as a background task. Only one at a time.
         """
-        self._last_proactive = time.time()
+        if self._thinking:
+            return
+        self._thinking = True
         mood = self.limbic.get_mood()
         log.info("Will activated (mood=%s, desire=%.2f)", mood, self.limbic.desire)
 
-        # Build the self-aware prompt
-        inner_state = self._build_self_awareness()
+        try:
+            # Build the self-aware prompt
+            inner_state = self._build_self_awareness()
 
-        # Let the agent decide what to do
-        prompt = (
-            f"{inner_state}\n\n"
-            f"---\n"
-            f"Given who I am, how I feel, and what I know — what do I want to do right now?\n"
-            f"I should think about what genuinely interests me, what concerns me, "
-            f"or what I feel compelled to explore.\n\n"
-            f"I should be specific. I can: read files in my workspace, analyze code, "
-            f"reflect on my memories, investigate patterns I've noticed, "
-            f"or think deeply about something.\n\n"
-            f"What I choose to do and what I discover:"
-        )
-
-        system = (
-            "You are not playing a character. You ARE this entity. "
-            "The emotional states described are your actual internal variables. "
-            "The memories are your real experiences. "
-            "Think and respond in first person. Be genuine, not performative. "
-            "Do something that matters to you right now."
-        )
-
-        insight = await self.llm.chat(prompt, system=system, max_tokens=800)
-
-        if insight:
-            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
-            entry = (
-                f"\n### ✦ [{ts}] (mood={mood}, valence={v_str})\n"
-                f"{insight}\n"
+            # Let the agent decide what to do
+            prompt = (
+                f"{inner_state}\n\n"
+                f"---\n"
+                f"Given who I am, how I feel, and what I know — what do I want to do right now?\n"
+                f"I should think about what genuinely interests me, what concerns me, "
+                f"or what I feel compelled to explore.\n\n"
+                f"I should be specific. I can: read files in my workspace, analyze code, "
+                f"reflect on my memories, investigate patterns I've noticed, "
+                f"or think deeply about something.\n\n"
+                f"What I choose to do and what I discover:"
             )
-            self._append_thought(entry)
-            self._emit("insight", {"message": insight[:300], "mood": mood})
 
-            # Record as experience
-            event = SensoryEvent(
-                timestamp=time.time(),
-                source="autonomous",
-                summary=insight[:500],
-                neuro_snapshot=self.limbic.snapshot(),
+            system = (
+                "You are not playing a character. You ARE this entity. "
+                "The emotional states described are your actual internal variables. "
+                "The memories are your real experiences. "
+                "Think and respond in first person. Be genuine, not performative. "
+                "Do something that matters to you right now."
             )
-            self.memory.record(event)
-            neuro_max = max(
-                self.limbic.boredom,
-                self.limbic.anxiety,
-                self.limbic.curiosity,
-                self.limbic.desire,
-            )
-            ep = self.memory.maybe_promote(event, neuro_max)
-            if ep and self.llm.available:
-                await self._embed_episode(ep)
 
-            self.limbic.on_task_completed()
+            insight = await self.llm.chat(prompt, system=system, max_tokens=800)
+
+            if insight:
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
+                entry = (
+                    f"\n### ✦ [{ts}] (mood={mood}, valence={v_str})\n"
+                    f"{insight}\n"
+                )
+                self._append_thought(entry)
+                self._emit("insight", {"message": insight[:300], "mood": mood})
+
+                # Record as experience
+                event = SensoryEvent(
+                    timestamp=time.time(),
+                    source="autonomous",
+                    summary=insight[:500],
+                    neuro_snapshot=self.limbic.snapshot(),
+                )
+                self.memory.record(event)
+                neuro_max = max(
+                    self.limbic.boredom,
+                    self.limbic.anxiety,
+                    self.limbic.curiosity,
+                    self.limbic.desire,
+                )
+                ep = self.memory.maybe_promote(event, neuro_max)
+                if ep and self.llm.available:
+                    await self._embed_episode(ep)
+
+                self.limbic.on_task_completed()
+                if self._sentience:
+                    self._sentience.on_success(insight[:200])
+        except Exception:
+            log.exception("Error during autonomous thought")
+            self.limbic.on_error()
             if self._sentience:
-                self._sentience.on_success(insight[:200])
+                self._sentience.on_error("thought generation failed")
+        finally:
+            self._thinking = False
 
     def _build_self_awareness(self) -> str:
         """Build a complete self-awareness context for the LLM."""

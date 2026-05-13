@@ -85,11 +85,6 @@ class Heartbeat:
                     if hasattr(self.agent, 'sentience'):
                         snap["sentience"] = self.agent.sentience.snapshot()
                     self.agent.dashboard.emit("state", snap)
-                    if fs_events:
-                        for ev in fs_events:
-                            self.agent.dashboard.emit("file_change", {
-                                "message": f"{ev.get('kind')}: {ev.get('src', '')}"
-                            })
 
             except Exception as exc:
                 log.exception("Heartbeat error on beat %d", self.beat_count)
