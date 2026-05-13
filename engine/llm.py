@@ -16,6 +16,7 @@ Token lifecycle
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -26,6 +27,8 @@ from typing import Optional
 import aiohttp
 
 log = logging.getLogger("sentience.llm")
+
+_LLM_TIMEOUT = aiohttp.ClientTimeout(total=60)  # 60s timeout for LLM calls
 
 _TOKEN_URL = "https://api.github.com/copilot_internal/v2/token"
 _COMPLETIONS_URL = "https://api.githubcopilot.com/chat/completions"
@@ -67,7 +70,7 @@ class CopilotLLM:
 
     async def _ensure_session(self):
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(timeout=_LLM_TIMEOUT)
 
     async def close(self):
         if self._session and not self._session.closed:
@@ -172,6 +175,8 @@ class CopilotLLM:
                             return data["choices"][0]["message"]["content"]
                     body = await resp.text()
                     log.warning("Model %s failed (%d): %s", model, resp.status, body[:200])
+            except asyncio.TimeoutError:
+                log.warning("Model %s timed out after 60s", model)
             except Exception as exc:
                 log.warning("Model %s exception: %s", model, exc)
 

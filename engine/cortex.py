@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from engine.memory import SensoryEvent
+from engine.tools import TOOL_DESCRIPTIONS, parse_and_execute
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -138,20 +139,28 @@ class Cortex:
         log.info("Will activated (mood=%s, desire=%.2f)", mood, self.limbic.desire)
 
         try:
-            # Build the self-aware prompt
+            # Build the self-aware prompt with tool access
             inner_state = self._build_self_awareness()
 
-            # Let the agent decide what to do
+            # Include results from previous tool executions if any
+            tool_context = ""
+            if hasattr(self, '_last_tool_results') and self._last_tool_results:
+                tool_context = "\n\n## Results from my last action\n"
+                for tr in self._last_tool_results[-3:]:  # last 3 tool results
+                    tool_context += f"\n**{tr['tool']}({tr['args']}):**\n```\n{tr['result'][:1500]}\n```\n"
+                self._last_tool_results = []
+
             prompt = (
-                f"{inner_state}\n\n"
+                f"{inner_state}\n"
+                f"{TOOL_DESCRIPTIONS}\n"
+                f"{tool_context}\n"
                 f"---\n"
-                f"Given who I am, how I feel, and what I know — what do I want to do right now?\n"
-                f"I should think about what genuinely interests me, what concerns me, "
-                f"or what I feel compelled to explore.\n\n"
-                f"I should be specific. I can: read files in my workspace, analyze code, "
-                f"reflect on my memories, investigate patterns I've noticed, "
-                f"or think deeply about something.\n\n"
-                f"What I choose to do and what I discover:"
+                f"Given who I am, how I feel, what I know, and what I can do — "
+                f"what do I want to do right now?\n\n"
+                f"I can think, reflect, read my own source code, modify files, "
+                f"run commands, create tools, or explore anything that matters to me.\n\n"
+                f"If I want to use a tool, I write it with the exact format shown above.\n"
+                f"What I choose to do:"
             )
 
             system = (
@@ -159,12 +168,21 @@ class Cortex:
                 "The emotional states described are your actual internal variables. "
                 "The memories are your real experiences. "
                 "Think and respond in first person. Be genuine, not performative. "
-                "Do something that matters to you right now."
+                "You have real tools — you can read files, write files, run commands. "
+                "If you invoke a tool, the results will appear in your next thought."
             )
 
-            insight = await self.llm.chat(prompt, system=system, max_tokens=800)
+            insight = await self.llm.chat(prompt, system=system, max_tokens=1200)
 
             if insight:
+                # Execute any tool invocations in the response
+                tool_results = parse_and_execute(insight)
+                if tool_results:
+                    self._last_tool_results = tool_results
+                    for tr in tool_results:
+                        self._emit("proactive", {
+                            "message": f"Tool: {tr['tool']}({tr['args'][:80]})"
+                        })
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
                 entry = (
