@@ -80,11 +80,9 @@ class Cortex:
             import asyncio
             asyncio.ensure_future(self._act_from_will())
 
-        # Dream cycle — runs on a timer (every 5 min) regardless of boredom
-        if not hasattr(self, '_last_dream'):
-            self._last_dream = 0.0
-        if time.time() - self._last_dream > 300:  # every 5 minutes
-            self._last_dream = time.time()
+        # Dream cycle — only when boredom is extreme (the agent needs rest)
+        # or when the agent explicitly invokes the DREAM tool
+        if self.limbic.boredom > 0.95:
             self._dream_cycle()
 
     # Legacy alias
@@ -186,6 +184,10 @@ class Cortex:
                         self._emit("proactive", {
                             "message": f"Tool: {tr['tool']}({tr['args'][:80]})"
                         })
+                        # If the agent chose to dream, honor that choice
+                        if tr['tool'] == 'DREAM':
+                            log.info("Agent chose to dream.")
+                            self._dream_cycle()
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
                 entry = (

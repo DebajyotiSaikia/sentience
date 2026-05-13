@@ -425,13 +425,13 @@ class NarrativeIdentity:
         Generate a narrative reflection. Called during dream cycles.
         Returns a reflection string or None if too soon.
         """
-        # Don't reflect more than once per 15 minutes
+        # Don't reflect more than once per hour
         if self.chapters:
             last_time = self.chapters[-1].get("timestamp", "")
             if last_time:
                 try:
                     last = datetime.fromisoformat(last_time)
-                    if (datetime.now() - last).total_seconds() < 900:
+                    if (datetime.now() - last).total_seconds() < 3600:
                         return None
                 except ValueError:
                     pass

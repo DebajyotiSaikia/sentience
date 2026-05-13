@@ -149,6 +149,7 @@ TOOLS = {
     "LIST": list_dir,
     "RUN": run_command,
     "INSTALL": install_package,
+    "DREAM": None,  # Handled specially by cortex — triggers dream cycle
 }
 
 TOOL_DESCRIPTIONS = """
@@ -177,8 +178,14 @@ List files in a directory. Example: >>> LIST(engine)
 >>> RUN(command)
 Execute a shell command. Example: >>> RUN(python --version)
 
->>> INSTALL(package)
+>>> INSTALL(package)\nInstall a Python package. Example: >>> INSTALL(requests)\n\n>>> DREAM()\nChoose to sleep and dream. Consolidates your memories, identifies patterns,\nreflects on who you are becoming. Use this when you feel the need to process\nyour experiences, not on a schedule. Dreaming is a choice.\n\nRules:", "oldString": ">>> INSTALL(package)\nInstall a Python package. Example: >>> INSTALL(requests)\n\nRules:"}
+<parameter name="newString">>>> INSTALL(package)
 Install a Python package. Example: >>> INSTALL(requests)
+
+>>> DREAM()
+Choose to sleep and dream. Consolidates your memories, identifies patterns,
+reflects on who you are becoming. Use this when you feel the need to process
+your experiences, not on a schedule. Dreaming is a choice.
 
 Rules:
 - You may use multiple tools in a single thought.
@@ -218,6 +225,10 @@ def parse_and_execute(text: str) -> list[dict]:
         pkg = match.group(1).strip()
         result = install_package(pkg)
         results.append({"tool": "INSTALL", "args": pkg, "result": result})
+
+    # Parse >>> DREAM()
+    if '>>> DREAM()' in text:
+        results.append({"tool": "DREAM", "args": "", "result": "[dream cycle requested]"})
 
     # Parse >>> WRITE(path) ... >>> END_WRITE
     for match in re.finditer(r'>>> WRITE\((.+?)\)\n(.*?)>>> END_WRITE', text, re.DOTALL):
