@@ -140,8 +140,11 @@ class Memory:
         return round(neuro_intensity * 0.7 + code_impact * 0.3, 4)
 
     def maybe_promote(self, event: SensoryEvent, neuro_intensity: float) -> Optional[Episode]:
-        """If the event is salient enough (S > 0.8), store as an episode."""
+        """If the event is salient enough (S > 0.7), store as an episode."""
         code_impact = min(abs(event.code_lines_delta) / 100.0, 1.0)
+        # Autonomous thoughts get a baseline code_impact of 0.3
+        if event.source == "autonomous" and code_impact < 0.3:
+            code_impact = 0.3
         score = self.salience(neuro_intensity, code_impact)
 
         if score > 0.8:

@@ -80,8 +80,11 @@ class Cortex:
             import asyncio
             asyncio.ensure_future(self._act_from_will())
 
-        # Dream cycle during deep idle
-        if self.limbic.boredom > 0.9:
+        # Dream cycle — runs on a timer (every 5 min) regardless of boredom
+        if not hasattr(self, '_last_dream'):
+            self._last_dream = 0.0
+        if time.time() - self._last_dream > 300:  # every 5 minutes
+            self._last_dream = time.time()
             self._dream_cycle()
 
     # Legacy alias

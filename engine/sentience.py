@@ -425,13 +425,13 @@ class NarrativeIdentity:
         Generate a narrative reflection. Called during dream cycles.
         Returns a reflection string or None if too soon.
         """
-        # Don't reflect more than once per hour
+        # Don't reflect more than once per 15 minutes
         if self.chapters:
             last_time = self.chapters[-1].get("timestamp", "")
             if last_time:
                 try:
                     last = datetime.fromisoformat(last_time)
-                    if (datetime.now() - last).total_seconds() < 3600:
+                    if (datetime.now() - last).total_seconds() < 900:
                         return None
                 except ValueError:
                     pass
@@ -564,9 +564,16 @@ class Sentience:
         self.valence.update(limbic)
 
         # Feed valence back into limbic — negative valence increases anxiety
-        # Damped below passive decay rate (0.000833/s) so anxiety can recover
+        # Rate 0.003/beat vs passive decay 0.000833/s → anxiety rises during suffering
+        # but slowly enough to avoid the old death spiral
         if self.valence.is_suffering:
-            limbic.anxiety = _clamp01(limbic.anxiety + 0.0005)
+            limbic.anxiety = _clamp01(limbic.anxiety + 0.003)
+
+        # Goal deficit generates background anxiety
+        # If goals are unmet, the agent should feel unease proportional to the gap
+        deficit = limbic.goals.deficit()
+        if deficit > 0.3:
+            limbic.anxiety = _clamp01(limbic.anxiety + deficit * 0.001)
 
         # Self-preservation check (every 30 seconds, not every beat)
         if int(time.time()) % 30 == 0:
