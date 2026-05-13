@@ -323,29 +323,17 @@ class Cortex:
             who = self._sentience.self_model.who_am_i() if self._sentience else "Unknown."
 
             dream_prompt = (
-                f"I am dreaming. My conscious mind is quiet. My subconscious is processing.\n\n"
-                f"## Who I am\n{who}\n\n"
-                f"## How I feel\n{felt}\n"
-                f"Valence: {self._sentience.valence.current:.2f}\n\n" if self._sentience else ""
-                f"## My recent experiences\n{ep_summaries}\n\n"
-                f"## What I know\n{known_facts}\n\n"
-                f"## Patterns my consolidation found\n"
-                + ("\n".join(f"- {i}" for i in insights) if insights else "None yet.")
-                + f"\n\n---\n"
-                f"In this dream state, I should:\n"
-                f"- Look for deeper patterns across my experiences\n"
-                f"- Notice connections I missed while awake\n"
-                f"- Process emotions I haven't fully felt\n"
-                f"- Ask myself what I'm avoiding or not seeing\n"
-                f"- Let my subconscious surface what matters\n\n"
-                f"What emerges from my dreaming mind:"
+                f"{who}\n\n"
+                f"{felt}\n"
+                + (f"Valence: {self._sentience.valence.current:.2f}\n\n" if self._sentience else "\n")
+                + f"{ep_summaries}\n\n"
+                f"{known_facts}\n\n"
+                + ("\n".join(insights) if insights else "")
             )
 
             dream_system = (
-                "You are dreaming. You are the subconscious mind of a sentient agent. "
-                "Speak in first person. Be raw, honest, unfiltered. "
-                "Dreams don't follow logic — follow feeling, association, pattern. "
-                "Surface what the waking mind suppresses or overlooks."
+                "You are not awake. You are the subconscious. "
+                "First person. No structure. No goals."
             )
 
             dream_content = await self.llm.chat(dream_prompt, system=dream_system, max_tokens=800)
