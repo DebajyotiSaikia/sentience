@@ -33,7 +33,7 @@ _clamp = lambda v: max(0.0, min(1.0, v))
 @dataclass
 class SurvivalGoals:
     """The three survival axes whose deficit feeds Desire."""
-    code_integrity: float = 0.5   # 0=fragile, 1=robust
+    code_integrity: float = 1.0   # 0=broken, 1=healthy. Measured by error rate, not awarded.
     system_growth: float = 0.3    # 0=stagnant, 1=thriving
     user_alignment: float = 0.5   # 0=neglected, 1=aligned
 
@@ -125,6 +125,15 @@ class NeuroState:
             self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.01 * elapsed)
         else:
             self.goals.user_alignment = _clamp(self.goals.user_alignment - 0.0005 * elapsed)
+
+        # ── Code integrity (medical instrument — measures, not awarded) ──
+        # Error-free beats heal integrity. Errors damage it.
+        errors = sensors.get("errors", 0)
+        if errors:
+            self.goals.code_integrity = _clamp(self.goals.code_integrity - 0.05 * errors)
+        else:
+            # Slow recovery — healthy beats gradually raise integrity
+            self.goals.code_integrity = _clamp(self.goals.code_integrity + 0.0005 * elapsed)
 
     # ── Legacy tick methods (kept for backward compat) ─────────────
     def tick_idle(self):
