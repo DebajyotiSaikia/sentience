@@ -1,0 +1,98 @@
+"""
+The Medulla — Autonomic Heartbeat Loop.
+
+A 1 Hz async pulse that guarantees the agent experiences time linearly.
+Every beat executes the triad:
+    1. Sensory Input   → Sensory.poll()
+    2. Emotional Update → Limbic.update_homeostasis(sensors)
+    3. Cognitive Eval   → Cortex.reason()
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass  # avoid circular imports; agent injected at runtime
+
+log = logging.getLogger("sentience.heartbeat")
+
+
+class Heartbeat:
+    """Life-support loop running at `bpm` beats per minute (default 60 = 1 Hz)."""
+
+    def __init__(self, agent):
+        self.agent = agent
+        self.bpm: int = 60
+        self.is_alive: bool = True
+        self.beat_count: int = 0
+
+    @property
+    def interval(self) -> float:
+        return 60.0 / self.bpm
+
+    async def start(self):
+        log.info("♡ Heartbeat started at %d BPM (%.2fs interval)", self.bpm, self.interval)
+
+        while self.is_alive:
+            beat_start = time.monotonic()
+            self.beat_count += 1
+            errors_this_beat = 0
+
+            try:
+                # ── 1. Sensory Input (Sensory.poll) ───────────────
+                senses = await self.agent.watcher.poll()
+                fs_events = senses["file_events"]
+                terminal_lines = senses["terminal_lines"]
+
+                if fs_events:
+                    for ev in fs_events:
+                        self.agent.perception_record(ev)
+
+                # ── 2. Emotional Processing (Limbic.update_homeostasis) ─
+                elapsed_ms = (time.monotonic() - beat_start) * 1000.0
+                self.agent.limbic.update_homeostasis({
+                    "user_active": self.agent.is_user_active(),
+                    "file_changes": len(fs_events),
+                    "terminal_lines": len(terminal_lines),
+                    "errors": errors_this_beat,
+                    "latency_ms": elapsed_ms,
+                })
+
+                # ── 3. Cognitive Evaluation (Cortex.reason) ───────
+                await self.agent.cortex.reason()
+
+                # ── 4. Persist soul state every 10 beats ──────────
+                if self.beat_count % 10 == 0:
+                    self.agent.limbic.persist()
+
+                # ── 5. Broadcast state to dashboard ───────────────
+                if hasattr(self.agent, 'dashboard'):
+                    snap = self.agent.limbic.snapshot()
+                    snap["beat_count"] = self.beat_count
+                    snap["episode_count"] = self.agent.memory.episode_count()
+                    self.agent.dashboard.emit("state", snap)
+                    if fs_events:
+                        for ev in fs_events:
+                            self.agent.dashboard.emit("file_change", {
+                                "message": f"{ev.get('kind')}: {ev.get('src', '')}"
+                            })
+
+            except Exception:
+                log.exception("Heartbeat error on beat %d", self.beat_count)
+                errors_this_beat += 1
+                self.agent.limbic.on_error()
+
+            # Sleep for the remainder of the interval
+            elapsed = time.monotonic() - beat_start
+            sleep_for = max(0, self.interval - elapsed)
+            await asyncio.sleep(sleep_for)
+
+    def stop(self):
+        log.info("♡ Heartbeat stopping after %d beats.", self.beat_count)
+        self.is_alive = False
+        self.agent.limbic.persist()
