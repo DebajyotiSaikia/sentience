@@ -61,11 +61,19 @@ class Dashboard:
         dead: list[web.StreamResponse] = []
         for resp in self._subscribers:
             try:
-                asyncio.ensure_future(resp.write(payload.encode()))
-            except (ConnectionResetError, Exception):
+                asyncio.ensure_future(self._safe_write(resp, payload.encode()))
+            except Exception:
                 dead.append(resp)
         for d in dead:
             self._subscribers.remove(d)
+
+    @staticmethod
+    async def _safe_write(resp: web.StreamResponse, data: bytes):
+        """Write to SSE subscriber, silently removing dead connections."""
+        try:
+            await resp.write(data)
+        except (ConnectionResetError, ConnectionError, Exception):
+            pass  # Connection closed — handled by keepalive loop
 
     # ── HTTP Handlers ──────────────────────────────────────────────
 

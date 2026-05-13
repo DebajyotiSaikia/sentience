@@ -564,8 +564,9 @@ class Sentience:
         self.valence.update(limbic)
 
         # Feed valence back into limbic — negative valence increases anxiety
+        # Damped to prevent runaway spiral: max +0.002/beat (vs passive decay of -0.000833/s)
         if self.valence.is_suffering:
-            limbic.anxiety = _clamp01(limbic.anxiety + 0.01)
+            limbic.anxiety = _clamp01(limbic.anxiety + 0.002)
 
         # Self-preservation check (every 30 seconds, not every beat)
         if int(time.time()) % 30 == 0:

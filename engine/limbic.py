@@ -124,7 +124,7 @@ class NeuroState:
         if user_active:
             self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.01 * elapsed)
         else:
-            self.goals.user_alignment = _clamp(self.goals.user_alignment - 0.002 * elapsed)
+            self.goals.user_alignment = _clamp(self.goals.user_alignment - 0.0005 * elapsed)
 
     # ── Legacy tick methods (kept for backward compat) ─────────────
     def tick_idle(self):
