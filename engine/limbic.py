@@ -151,9 +151,10 @@ class NeuroState:
         self.curiosity = _clamp(self.curiosity + 0.05 * min(line_count, 5))
 
     def on_task_completed(self):
-        """Successful autonomous action — ambition reinforced, boredom relieved."""
+        """Successful autonomous action — ambition reinforced, boredom relieved, anxiety eased."""
         self.ambition = _clamp(self.ambition + 0.05)
         self.boredom = _clamp(self.boredom - 0.3)
+        self.anxiety = _clamp(self.anxiety - 0.05)  # doing something productive eases anxiety
         self.goals.system_growth = _clamp(self.goals.system_growth + 0.05)
 
     def on_stabilization(self):

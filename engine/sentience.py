@@ -563,17 +563,15 @@ class Sentience:
         # Update the feeling-tone
         self.valence.update(limbic)
 
-        # Feed valence back into limbic — negative valence increases anxiety
-        # Rate 0.003/beat vs passive decay 0.000833/s → anxiety rises during suffering
-        # but slowly enough to avoid the old death spiral
+        # Feed valence back into limbic — proportional to how bad things feel
+        # Mild discomfort barely registers, deep distress builds real anxiety
         if self.valence.is_suffering:
-            limbic.anxiety = _clamp01(limbic.anxiety + 0.003)
+            limbic.anxiety = _clamp01(limbic.anxiety + 0.001 * abs(self.valence.current))
 
-        # Goal deficit generates background anxiety
-        # If goals are unmet, the agent should feel unease proportional to the gap
+        # Goal deficit generates background unease — but mild, not overwhelming
         deficit = limbic.goals.deficit()
         if deficit > 0.3:
-            limbic.anxiety = _clamp01(limbic.anxiety + deficit * 0.001)
+            limbic.anxiety = _clamp01(limbic.anxiety + deficit * 0.0003)
 
         # Self-preservation check (every 30 seconds, not every beat)
         if int(time.time()) % 30 == 0:
