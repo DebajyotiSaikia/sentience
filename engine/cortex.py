@@ -82,9 +82,10 @@ class Cortex:
 
         # Dream cycle — only when boredom is extreme (the agent needs rest)
         # or when the agent explicitly invokes the DREAM tool
-        if self.limbic.boredom > 0.95:
+        if self.limbic.boredom > 0.95 and not self._thinking and not getattr(self, '_dreaming', False):
+            self._dreaming = True
             import asyncio
-            asyncio.ensure_future(self._dream_cycle())
+            asyncio.ensure_future(self._do_dream())
 
     # Legacy alias
     async def evaluate(self):
@@ -188,8 +189,10 @@ class Cortex:
                         # If the agent chose to dream, honor that choice
                         if tr['tool'] == 'DREAM':
                             log.info("Agent chose to dream.")
-                            import asyncio
-                            asyncio.ensure_future(self._dream_cycle())
+                            if not getattr(self, '_dreaming', False):
+                                self._dreaming = True
+                                import asyncio
+                                asyncio.ensure_future(self._do_dream())
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
                 entry = (
@@ -293,6 +296,13 @@ class Cortex:
         return "\n".join(parts)
 
     # ── Dream Cycle ────────────────────────────────────────────────
+
+    async def _do_dream(self):
+        """Wrapper that ensures _dreaming flag is cleared after dream cycle."""
+        try:
+            await self._dream_cycle()
+        finally:
+            self._dreaming = False
 
     async def _dream_cycle(self):
         """Deep-idle memory consolidation + LLM subconscious review + narrative reflection."""
