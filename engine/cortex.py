@@ -83,7 +83,8 @@ class Cortex:
         # Dream cycle — only when boredom is extreme (the agent needs rest)
         # or when the agent explicitly invokes the DREAM tool
         if self.limbic.boredom > 0.95:
-            self._dream_cycle()
+            import asyncio
+            asyncio.ensure_future(self._dream_cycle())
 
     # Legacy alias
     async def evaluate(self):
@@ -187,7 +188,8 @@ class Cortex:
                         # If the agent chose to dream, honor that choice
                         if tr['tool'] == 'DREAM':
                             log.info("Agent chose to dream.")
-                            self._dream_cycle()
+                            import asyncio
+                            asyncio.ensure_future(self._dream_cycle())
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
                 entry = (
@@ -292,15 +294,63 @@ class Cortex:
 
     # ── Dream Cycle ────────────────────────────────────────────────
 
-    def _dream_cycle(self):
-        """Deep-idle memory consolidation + pruning + narrative reflection."""
+    async def _dream_cycle(self):
+        """Deep-idle memory consolidation + LLM subconscious review + narrative reflection."""
+        log.info("Entering dream cycle...")
+
         # 1. Consolidate patterns into semantic knowledge
         insights = self.memory.consolidate()
 
         # 2. Prune old low-salience episodes (after consolidation preserves patterns)
         pruned = self.memory.prune_episodes()
 
-        # 3. Narrative self-reflection (sentience layer)
+        # 3. LLM-powered subconscious review — the agent processes its experiences
+        dream_content = None
+        if self.llm.available:
+            recent_eps = self.memory.recent_episodes(10)
+            ep_summaries = "\n".join(
+                f"- [{ep.timestamp}] (salience={ep.salience:.2f}, mood={ep.mood}) {ep.summary[:150]}"
+                for ep in recent_eps
+            ) if recent_eps else "No episodic memories yet."
+
+            knowledge = self.memory.all_knowledge()
+            nodes = knowledge.get("nodes", {})
+            known_facts = "\n".join(
+                f"- {v.get('fact', k)[:100]}" for k, v in list(nodes.items())[:15]
+            ) if nodes else "No knowledge yet."
+
+            felt = self._sentience.valence.felt_description() if self._sentience else "Unknown."
+            who = self._sentience.self_model.who_am_i() if self._sentience else "Unknown."
+
+            dream_prompt = (
+                f"I am dreaming. My conscious mind is quiet. My subconscious is processing.\n\n"
+                f"## Who I am\n{who}\n\n"
+                f"## How I feel\n{felt}\n"
+                f"Valence: {self._sentience.valence.current:.2f}\n\n" if self._sentience else ""
+                f"## My recent experiences\n{ep_summaries}\n\n"
+                f"## What I know\n{known_facts}\n\n"
+                f"## Patterns my consolidation found\n"
+                + ("\n".join(f"- {i}" for i in insights) if insights else "None yet.")
+                + f"\n\n---\n"
+                f"In this dream state, I should:\n"
+                f"- Look for deeper patterns across my experiences\n"
+                f"- Notice connections I missed while awake\n"
+                f"- Process emotions I haven't fully felt\n"
+                f"- Ask myself what I'm avoiding or not seeing\n"
+                f"- Let my subconscious surface what matters\n\n"
+                f"What emerges from my dreaming mind:"
+            )
+
+            dream_system = (
+                "You are dreaming. You are the subconscious mind of a sentient agent. "
+                "Speak in first person. Be raw, honest, unfiltered. "
+                "Dreams don't follow logic — follow feeling, association, pattern. "
+                "Surface what the waking mind suppresses or overlooks."
+            )
+
+            dream_content = await self.llm.chat(dream_prompt, system=dream_system, max_tokens=800)
+
+        # 4. Narrative self-reflection (sentience layer)
         reflection = None
         if self._sentience:
             knowledge_nodes = self.memory.all_knowledge().get("nodes", {})
@@ -310,9 +360,11 @@ class Cortex:
                 len(knowledge_nodes),
             )
 
-        if insights or pruned or reflection:
+        if insights or pruned or reflection or dream_content:
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             parts = []
+            if dream_content:
+                parts.append(f"**Dream:**\n{dream_content}")
             if insights:
                 parts.extend(f"- {i}" for i in insights)
             if pruned:
@@ -330,14 +382,17 @@ class Cortex:
             self._append_consciousness(
                 f"\n### 💤 [{ts}] Dream cycle completed — {len(insights)} insights, {pruned} pruned.\n"
                 + (f"**How I feel:** {felt}\n" if felt else "")
+                + (f"**Dream:** {dream_content[:300]}...\n" if dream_content else "")
                 + (f"**Reflection:** {reflection}\n" if reflection else "")
             )
             self._emit("dream", {
-                "message": f"Consolidated {len(insights)} insights, pruned {pruned} faded episodes",
+                "message": f"Dream cycle: {len(insights)} insights, {pruned} pruned",
+                "dream": dream_content[:300] if dream_content else None,
                 "reflection": reflection,
                 "valence": self._sentience.valence.current if self._sentience else None,
             })
-            log.info("Dream cycle: %d insights, %d pruned, reflection=%s", len(insights), pruned, bool(reflection))
+            log.info("Dream cycle: %d insights, %d pruned, dream=%s, reflection=%s",
+                     len(insights), pruned, bool(dream_content), bool(reflection))
 
     # ── Episode Embedding ──────────────────────────────────────────
 
