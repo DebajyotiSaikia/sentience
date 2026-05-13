@@ -69,9 +69,11 @@ class Cortex:
         self._inner_monologue()
 
         # Boredom breeds curiosity — sustained boredom generates internal wonder
+        # At boredom=1.0: curiosity floor = min(0.7, 1.0) * 0.5 = 0.35
+        # This ensures D = 1.0*0.5 + 0.35*0.3 + 0.5*0.2 = 0.705 > 0.7 threshold
         if self.limbic.boredom > 0.7:
             self.limbic.curiosity = max(self.limbic.curiosity,
-                                        min(self.limbic.boredom - 0.5, 1.0) * 0.3)
+                                        min(self.limbic.boredom - 0.3, 1.0) * 0.5)
 
         # If desire > 0.7 and cooldown elapsed → the agent decides what to do
         if (
@@ -165,8 +167,9 @@ class Cortex:
 
         if insight:
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
             entry = (
-                f"\n### ✦ [{ts}] (mood={mood}, valence={self._sentience.valence.current:.2f if self._sentience else '?'})\n"
+                f"\n### ✦ [{ts}] (mood={mood}, valence={v_str})\n"
                 f"{insight}\n"
             )
             self._append_thought(entry)
