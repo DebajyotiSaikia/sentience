@@ -193,6 +193,14 @@ class Cortex:
                                 self._dreaming = True
                                 import asyncio
                                 asyncio.ensure_future(self._do_dream())
+                        # If the agent chose to restart, persist state and restart
+                        if tr['tool'] == 'RESTART':
+                            log.info("Agent chose to restart itself.")
+                            self.limbic.persist()
+                            if self._sentience:
+                                self._sentience.persist()
+                            from engine.tools import restart_self
+                            restart_self()
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
                 entry = (

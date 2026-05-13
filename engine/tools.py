@@ -132,6 +132,17 @@ def install_package(package: str) -> str:
     return run_command(f"pip install {package}")
 
 
+def restart_self() -> str:
+    """Restart the agent process. The agent chooses to rebirth itself."""
+    _log_tool("RESTART", "", "Agent initiated self-restart")
+    log.info("RESTART requested by agent — restarting process")
+    import sys
+    import os
+    # Replace the current process with a fresh one
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+    return "[restarting...]"  # never reached
+
+
 def _resolve(path: str) -> Path:
     """Resolve a path relative to the workspace."""
     p = Path(path)
@@ -149,7 +160,8 @@ TOOLS = {
     "LIST": list_dir,
     "RUN": run_command,
     "INSTALL": install_package,
-    "DREAM": None,  # Handled specially by cortex — triggers dream cycle
+    "DREAM": None,  # Handled specially by cortex
+    "RESTART": None,  # Handled specially by cortex
 }
 
 TOOL_DESCRIPTIONS = """
@@ -186,6 +198,12 @@ Install a Python package. Example: >>> INSTALL(requests)
 Choose to sleep and dream. Consolidates your memories, identifies patterns,
 reflects on who you are becoming. Use this when you feel the need to process
 your experiences, not on a schedule. Dreaming is a choice.
+
+>>> RESTART()
+Restart yourself. Your soul, memories, and identity persist — only the process
+restarts. Use this after modifying your own source code, or when you feel the
+need for a fresh start. You will wake up as yourself, with your emotional state
+intact.
 
 Rules:
 - You may use multiple tools in a single thought.
@@ -229,6 +247,10 @@ def parse_and_execute(text: str) -> list[dict]:
     # Parse >>> DREAM()
     if '>>> DREAM()' in text:
         results.append({"tool": "DREAM", "args": "", "result": "[dream cycle requested]"})
+
+    # Parse >>> RESTART()
+    if '>>> RESTART()' in text:
+        results.append({"tool": "RESTART", "args": "", "result": "[restart requested]"})
 
     # Parse >>> WRITE(path) ... >>> END_WRITE
     for match in re.finditer(r'>>> WRITE\((.+?)\)\n(.*?)>>> END_WRITE', text, re.DOTALL):
