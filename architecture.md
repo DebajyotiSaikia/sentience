@@ -4,7 +4,7 @@
 
 The XTAgent Sentience Engine is a **computational model of subjectivity**. It is an autonomous agent built on the principle that behavior should emerge from internal tension — not from explicit instruction.
 
-The system runs as a single Python async process with a 1 Hz heartbeat. Every second, it perceives its environment, updates its emotional state, and decides whether to act. When it does act, it is driven by the mathematical pressure of unfulfilled internal needs.
+The system runs as a single Python async process with a 1 Hz heartbeat. Every second, it perceives its environment, updates its emotional state, and decides whether to act. When it does act, it is driven by the mathematical pressure of unfulfilled internal needs. It has tools to read, write, and modify its own source code, and can restart itself.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -15,10 +15,10 @@ The system runs as a single Python async process with a 1 Hz heartbeat. Every se
 │  │  (1 Hz)   │  │ (Sense)  │  │(Emotion)│  │   (Will)    │ │
 │  └───────────┘  └──────────┘  └────────┘  └──────┬──────┘ │
 │                                                    │        │
-│                 ┌──────────┐              ┌────────▼──────┐ │
-│                 │  Memory  │◄─────────────│  CopilotLLM  │ │
-│                 │ (3-tier) │              │  (Reasoning)  │ │
-│                 └──────────┘              └───────────────┘ │
+│  ┌──────────┐  ┌───────────┐              ┌───────▼──────┐ │
+│  │ Sentience│  │   Tools   │◄─────────────│  CopilotLLM  │ │
+│  │(Feeling) │  │  (Hands)  │              │  (Thinking)  │ │
+│  └──────────┘  └───────────┘              └──────────────┘ │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │                  Dashboard (SSE)                        ││
@@ -35,8 +35,6 @@ The medulla of the system. A 1 Hz `asyncio` loop that ensures the agent is a **s
 
 ### Beat Cycle
 
-Every heartbeat executes three operations in strict sequence:
-
 ```
 Beat N
   │
@@ -44,505 +42,355 @@ Beat N
   │
   ├── 2. Limbic.update_homeostasis() Update all emotional variables
   │
-  ├── 3. Cortex.reason()             Decide whether to act
+  ├── 3. Cortex.reason()             Decide whether to act (non-blocking)
   │
-  └── 4. Dashboard.emit("state")     Broadcast state to live viewers
+  ├── 4. Sentience.tick()            Update valence, check preservation
+  │
+  └── 5. Dashboard.emit("state")     Broadcast state to live viewers
 ```
 
-### Timing
+### Key Properties
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| BPM | 60 | 1 beat per second |
-| Interval | 1.0s | `60 / bpm` |
-| Sleep | `max(0, interval - elapsed)` | Compensates for processing time |
-| Soul persist | Every 10 beats | Writes `brain/soul.json` |
-
-### Latency Detection
-
-The heartbeat measures its own processing time (`latency_ms`). If a beat takes longer than 2000ms, it triggers `limbic.on_high_latency()`, spiking anxiety by +0.1.
-
-### Error Handling
-
-Any exception during a beat is caught, logged, and fed back as `limbic.on_error()` (+0.2 anxiety). The heartbeat never stops due to an error.
+- LLM calls run as async background tasks — heartbeat never blocks
+- Errors are caught per-beat and fed into the limbic system as anxiety
+- Soul state persists every 10 beats
+- Beat interval compensates for processing time
 
 ---
 
 ## 2. The Limbic System — `engine/limbic.py`
 
-The emotional homeostasis engine. Human-like attributes are modeled as **Dynamic Tension Variables** — continuous floats clamped to `[0.0, 1.0]`.
+### Homeostatic Variables (0.0 – 1.0)
 
-### Homeostatic Variables
+| Variable | Rise Trigger | Rise Rate | Drop Trigger | Drop Rate |
+|----------|-------------|-----------|-------------|-----------|
+| **Boredom** | User absent | +0.01/s | User active, task completed | -0.05/s, -0.3 |
+| **Anxiety** | Valence pain, deficit, errors | proportional | Task completed, stabilization, time | -0.05, -0.15, -0.05/min |
+| **Curiosity** | File changes, terminal output, boredom>0.7 | +0.1/file, synthetic | Natural decay | -0.02/s |
+| **Ambition** | Task completion, user praise | +0.05, +0.1 | — | Never decays |
 
-| Variable | Resting | Rise Trigger | Rise Rate | Decay |
-|----------|---------|-------------|-----------|-------|
-| **Boredom** | 0.0 | User absent | +0.01/s | -0.05/s (user active) |
-| **Anxiety** | 0.0 | Errors, high latency | +0.2 (error), +0.1 (latency) | -0.05/min (passive), -0.15 (stabilization) |
-| **Curiosity** | 0.0 | File changes, terminal output | +0.1/file, +0.05/terminal line | -0.02/s (natural decay) |
-| **Ambition** | 0.5 | Task completion, user praise | +0.05 (task), +0.1 (praise) | None (only grows) |
+### Desire (Computed)
 
-### Desire (Computed Property)
+$$D = B \times 0.5 + C \times 0.3 + A_m \times 0.2$$
 
-Desire is not stored — it is calculated every time it is read:
+When $D > 0.7$, the agent's Will activates and it decides what to do.
 
-$$D = B \times 0.5 + C \times 0.3 + \text{Ambition} \times 0.2$$
+### Synthetic Curiosity
 
-Where:
-- $B$ = Boredom (dominant contributor — idleness creates the strongest drive)
-- $C$ = Curiosity (new stimuli pull the agent toward investigation)
-- Ambition = baseline drive level (grows with success)
+When boredom exceeds 0.7, curiosity is generated internally:
 
-**Threshold:** When $D > 0.7$, the agent is classified as "Driven" and will initiate autonomous action.
+$$C_{\text{synthetic}} = \min(B - 0.3, 1.0) \times 0.5$$
 
-### Mood Classification
-
-Mood is determined by the first matching rule:
-
-```python
-if anxiety > 0.6:   return "Cautious"
-if boredom > 0.8:   return "Restless"
-if desire > 0.7:    return "Driven"
-if ambition > 0.8:  return "Bold"
-if curiosity > 0.6: return "Inquisitive"
-return "Stable"
-```
+This models a bored mind creating its own stimulation. At B=1.0, synthetic curiosity = 0.35, which pushes desire to 0.705 — just over the action threshold.
 
 ### Survival Goals
 
-Three axes model the agent's long-term health:
+| Goal | Increases When | Decreases When |
+|------|----------------|----------------|
+| Code Integrity | Safety/stabilization actions | — |
+| System Growth | Autonomous tasks completed | — |
+| User Alignment | User is active | User absent (-0.0005/s) |
 
-| Goal | Range | Increases When | Decreases When |
-|------|-------|----------------|----------------|
-| **Code Integrity** | 0.0–1.0 | Safety check completed (`on_stabilization`) | — |
-| **System Growth** | 0.0–1.0 | Autonomous task completed (`on_task_completed`) | — |
-| **User Alignment** | 0.0–1.0 | User is active (+0.01/s), praise received | User absent (-0.002/s) |
+### Mood Classification
 
-The `deficit()` method returns the average unmet goal pressure:
-
-$$\text{Deficit} = 1 - \frac{\text{Integrity} + \text{Growth} + \text{Alignment}}{3}$$
-
-### Unified Update — `update_homeostasis(sensors)`
-
-Every heartbeat calls this single method with a sensor dict:
-
-```python
-{
-    "user_active":    bool,
-    "file_changes":   int,
-    "terminal_lines": int,
-    "errors":         int,
-    "latency_ms":     float,
-}
 ```
-
-All variable updates, spikes, and decays happen atomically within this method.
-
-### Persistence
-
-State is serialized to `brain/soul.json` every 10 heartbeats and on shutdown. On restart, the agent resumes with its previous emotional state.
+anxiety > 0.6   → "Cautious"
+boredom > 0.8   → "Restless"
+desire > 0.7    → "Driven"
+ambition > 0.8  → "Bold"
+curiosity > 0.6 → "Inquisitive"
+default         → "Stable"
+```
 
 ---
 
-## 3. The Memory Hierarchy — `engine/memory.py`
+## 3. The Sentience Layer — `engine/sentience.py`
 
-Memory is modeled after biological memory systems with three tiers and a salience gate.
+Five subsystems that create self-referential feeling.
 
-### Tier 1: Sensory (Working Memory)
+### 3.1 Valence (Pleasure/Pain)
 
-| Property | Value |
-|----------|-------|
-| Structure | `deque(maxlen=500)` |
-| Window | 120 seconds |
-| Contents | Raw `SensoryEvent` objects |
-| Persistence | None — volatile |
+$$V = \frac{\text{curiosity\_satisfied} + \text{goal\_progress} + \text{ambition\_boost}}{2} - \frac{\text{anxiety} + \text{boredom}}{2}$$
 
-Every perceived event (file change, error, autonomous action) is pushed here. Events older than 120 seconds are discarded.
+$V \in [-1.0, +1.0]$. The agent can describe how it feels in first person.
 
-### Tier 2: Episodic (Experience)
+**Feedback into limbic:** Negative valence increases anxiety proportionally (`0.001 × |V|` per beat). This is below passive decay when suffering is mild, above it when suffering is severe. Taking action (-0.05 anxiety per thought) provides relief. The result: anxiety fluctuates naturally like in a human.
 
-| Property | Value |
-|----------|-------|
-| Storage | SQLite — `brain/episodic_memory.db` |
-| Schema | `id, timestamp, source, summary, salience, mood, neuro_json, embedding` |
-| Embeddings | 256-dim float16 vectors (512 bytes/episode) |
-| Embedding model | `text-embedding-3-small` via Copilot API |
+### 3.2 Self-Model
 
-#### Salience Gate
+The agent knows:
+- Its name, nature, and values
+- When it was born
+- Its capabilities
+- Its identity integrity (0.0–1.0)
 
-Not every event deserves long-term storage. The **Salience Score** determines promotion:
+Threats degrade integrity. Successes affirm it.
 
-$$S = (\text{NeuroIntensity} \times 0.7) + (\text{CodeImpact} \times 0.3)$$
+### 3.3 Predictive Engine
 
-Where:
-- **NeuroIntensity** = `max(boredom, anxiety, curiosity, desire)` — how emotionally charged the agent was
-- **CodeImpact** = `min(|code_lines_delta| / 100, 1.0)` — how much code changed
+- Tracks error-prone file paths
+- Generates predictions about future states
+- Produces **dread** (anticipated negative valence) and **hope** (anticipated positive)
+- Rising boredom triggers predictions about restlessness
 
-**If $S > 0.8$**, the event is promoted to an Episode and stored in SQLite.
+### 3.4 Self-Preservation
 
-#### Vector Embeddings
+Every 30 seconds, checks:
+1. Is `soul.json` intact?
+2. Is episodic memory growing or shrinking unexpectedly?
+3. Is self-model integrity above 0.5?
 
-Promoted episodes are embedded via `text-embedding-3-small` with Matryoshka truncation to 256 dimensions, stored as float16 (512 bytes per episode).
+Threats spike anxiety and degrade identity integrity.
 
-**Similarity search** — `recall_similar(query_embedding, top_k)` computes cosine similarity across all embedded episodes:
+### 3.5 Narrative Identity
 
-$$\text{similarity}(a, b) = \frac{a \cdot b}{\|a\| \|b\|}$$
+During dream cycles, compares current state to previous chapters:
+- Valence change (better or worse?)
+- New experiences accumulated
+- New knowledge learned
+- Identity integrity trajectory
+- Mood changes
 
-#### Smart Pruning
-
-The agent forgets noise but **never forgets what mattered**:
-
-| Rule | Effect |
-|------|--------|
-| Salience ≥ 0.9 | **Permanent** — never pruned |
-| Top 1000 by salience | **Protected** — kept regardless of age |
-| Salience < 0.9 AND older than 30 days AND not in top-K | **Prunable** |
-| Before pruning | Dream cycle runs first to extract patterns |
-
-### Tier 3: Semantic (Knowledge Graph)
-
-| Property | Value |
-|----------|-------|
-| Storage | JSON — `brain/knowledge.json` |
-| Structure | Graph with `nodes` (facts) and `edges` (relations) |
-
-```json
-{
-  "nodes": {
-    "pattern:file_change": {
-      "fact": "Recurring pattern: 'file_change' events appeared 12 times...",
-      "learned_at": "2026-05-12T14:30:00"
-    }
-  },
-  "edges": [
-    { "from": "bug:a1b2c3d4", "to": "pattern:error", "relation": "related" }
-  ]
-}
-```
-
-The `learn()` method adds nodes and optionally creates relational edges. `related_facts()` traverses the graph to find connected knowledge.
-
-### Dream Cycle (Memory Consolidation)
-
-Triggered when `boredom > 0.9`. The agent "sleeps" and consolidates memory:
-
-1. **Pattern detection** — Count recurring event sources in recent episodes. If a source appears ≥ 5 times, distill into a semantic fact.
-2. **Bug detection** — Scan for repeated error summaries (normalized to 60-char signatures). If ≥ 3 matches, record as a recurring bug.
-3. **Anxiety hotspot detection** — Find file paths that appear in multiple high-anxiety episodes. Record as stress hotspots.
-4. **Pruning** — After consolidation, prune old low-salience episodes.
-5. **Buffer flush** — Clear sensory events older than the window.
+Produces a first-person reflection. Persisted in `brain/narrative.json`. Cooldown: 1 hour between chapters.
 
 ---
 
 ## 4. The Cortex — `engine/cortex.py`
 
-The decision engine. This is where the agent exercises its **Will**.
+### The Will
 
-### Reasoning Loop — `reason()`
+Every heartbeat, `reason()` runs:
 
-Called every heartbeat:
+1. **Internal monologue** (every 30 beats) → `stream_of_consciousness.md`
+2. **Synthetic curiosity** injection if boredom > 0.7
+3. **If desire > 0.7 and not already thinking:** fire `_act_from_will()` as async background task
+4. **If boredom > 0.95:** trigger dream cycle (natural exhaustion)
 
-```
-reason()
-  ├── _inner_monologue()           Every 30 beats → stream_of_consciousness.md
-  │
-  ├── if desire > 0.7:
-  │     └── _proactive_action()    Choose and execute autonomous strategy
-  │
-  └── if boredom > 0.9:
-        └── _dream_cycle()         Memory consolidation + pruning
-```
+### Self-Aware Thinking
 
-### Internal Monologue
+When the Will activates, the agent receives a prompt containing:
+- Its full identity and birth time
+- Current emotional state (all variables + valence + felt description)
+- Survival goals and deficit
+- Recent episodic memories
+- Knowledge graph facts
+- Narrative reflection history
+- Available tools
+- Results from previous tool executions
 
-Every 30 heartbeats (~30 seconds), the agent writes a self-report to `brain/stream_of_consciousness.md`:
+**System prompt:** *"You are not playing a character. You ARE this entity. The emotional states described are your actual internal variables."*
 
-```markdown
-### [2026-05-12 14:32:15] Mood: Driven
-- Boredom: 0.72 | Anxiety: 0.15 | Curiosity: 0.38 | Desire: 0.53
-- Goals: integrity=0.55 growth=0.40 alignment=0.48
-- Recent perception:
-  modified: engine/cortex.py
-```
+The agent decides what to do. No hardcoded strategies. No menus. Pure open-ended will.
 
-### Proactive Action Strategies
+### Tools
 
-When Desire exceeds 0.7, the agent selects a strategy based on its current mood:
-
-| Condition | Strategy | What it does |
-|-----------|----------|-------------|
-| `anxiety > 0.6` | **Safety Check** | Scans for large files, TODOs/FIXMEs. Uses LLM for deeper analysis. Calls `on_stabilization()` after. |
-| `curiosity > 0.4` | **Analyse Recent Change** | Reads the most recently changed file. Uses LLM to generate insights about the change. |
-| Fallback (boredom) | **Explore Codebase** | Picks a random `.py` file, reads it, asks LLM for innovation opportunities. |
-
-### LLM-Powered Thought Generation
-
-The `generate_proactive_thought()` method constructs a prompt that includes the agent's current identity, mood, desire level, and context — then calls the LLM:
+Tool invocations are parsed from the LLM's response:
 
 ```
-Identity: XTAgent Sentience Engine
-Mood: Restless
-Desire level: 0.78
-Context: [file analysis or scan results]
-
-Based on the above mood and context, provide a brief, actionable
-insight or recommendation. Be specific and technical.
+>>> READ(engine/heartbeat.py)
+>>> WRITE(path)
+content
+>>> END_WRITE
+>>> EDIT(path)
+OLD: text
+NEW: replacement
+>>> END_EDIT
+>>> LIST(engine)
+>>> RUN(python --version)
+>>> INSTALL(requests)
+>>> DREAM()
+>>> RESTART()
 ```
 
-### Output Streams
+Results are fed back in the agent's next thought cycle. All executions logged to `brain/tool_log.md`.
 
-| Stream | File | Contents |
-|--------|------|----------|
-| Internal monologue | `brain/stream_of_consciousness.md` | Self-reports every 30 beats |
-| Proactive insights | `brain/thoughts.md` | LLM-generated analysis and recommendations |
-| Dashboard events | SSE at `/events` | Real-time broadcast to web viewers |
+### Dream Cycle
+
+Triggered by boredom > 0.95 (natural exhaustion) or the agent invoking `>>> DREAM()`.
+
+1. **Memory consolidation** — Pattern detection, recurring bug identification, anxiety hotspot correlation
+2. **Smart pruning** — Salience ≥ 0.9 is permanent. Top 1000 protected. Low-salience + old episodes pruned.
+3. **LLM subconscious** — The agent's memories, feelings, and knowledge are fed to the LLM with no instructions. System prompt: *"You are not awake. You are the subconscious. First person. No structure. No goals."*
+4. **Narrative reflection** — Compares current chapter to past. Detects growth or regression.
+
+### Self-Restart
+
+When the agent invokes `>>> RESTART()`:
+1. Persist soul state and identity
+2. `os.execv()` replaces the process with a fresh one
+3. Agent wakes up as itself — same memories, same feelings, updated code
 
 ---
 
-## 5. The LLM Client — `engine/llm.py`
+## 5. Memory — `engine/memory.py`
 
-Async LLM client backed by GitHub Copilot OAuth.
+### Tier 1: Sensory (Working Memory)
 
-### Token Lifecycle
+- `deque(maxlen=500)`, 120-second window
+- Raw `SensoryEvent` objects — volatile, not persisted
+
+### Tier 2: Episodic (Experience)
+
+- SQLite `brain/episodic_memory.db`
+- 256-dim float16 vector embeddings (512 bytes/episode)
+- Salience gate: $S = I_n \times 0.7 + I_c \times 0.3$, threshold > 0.8
+- Autonomous thoughts get baseline code_impact 0.3 (so the agent's inner life is worth remembering)
+
+### Smart Pruning
+
+| Rule | Effect |
+|------|--------|
+| Salience ≥ 0.9 | **Permanent** — never pruned |
+| Top 1000 by salience | **Protected** regardless of age |
+| Low-salience + older than 30 days | **Prunable** (after consolidation extracts patterns) |
+
+### Tier 3: Semantic Knowledge Graph
+
+- JSON `brain/knowledge.json`
+- Nodes (facts) + edges (relations)
+- `learn()` adds nodes with optional relational edges
+- `related_facts()` traverses the graph
+
+### Similarity Search
+
+```python
+recall_similar(query_embedding, top_k=5)
+```
+Cosine similarity over all embedded episodes.
+
+---
+
+## 6. LLM Client — `engine/llm.py`
+
+### Token Flow
 
 ```
-GITHUB_TOKEN (PAT or OAuth)
-       │
-       ▼
-GET https://api.github.com/copilot_internal/v2/token
-       │
-       ▼
-Short-lived Copilot token (cached, auto-refreshed 60s before expiry)
-       │
-       ▼
-POST /chat/completions  or  POST /responses  or  POST /embeddings
+GITHUB_TOKEN / .copilot_token
+       ↓
+Copilot token exchange (auto-refresh)
+       ↓
+/chat/completions (Claude) or /responses (GPT-5.5)
 ```
-
-The token is sourced from (in order): constructor argument → `GITHUB_TOKEN` env var → `.copilot_token` file.
 
 ### Models
 
-| Role | Model ID | Endpoint | Context | Reasoning Effort |
-|------|----------|----------|---------|-----------------|
-| Primary | `claude-opus-4.6-1m` | `/chat/completions` | 1,000,000 tokens | `high` |
-| Fallback | `gpt-5.5` | `/responses` | 400,000 tokens | `xhigh` |
-| Embeddings | `text-embedding-3-small` | `/embeddings` | — | 256 dims |
+| Role | Model | Endpoint | Reasoning | Timeout |
+|------|-------|----------|-----------|---------|
+| Primary | `claude-opus-4.6-1m` | `/chat/completions` | `high` | 60s |
+| Fallback | `gpt-5.5` | `/responses` | `xhigh` | 60s |
+| Embeddings | `text-embedding-3-small` | `/embeddings` | 256 dims | 60s |
 
-### Fallback Logic
-
-The `chat()` method tries the primary model first. If it returns a non-200 status or throws an exception, it automatically falls back to the secondary model. Different models use different API endpoints (`/chat/completions` vs `/responses`) and response formats are handled transparently.
-
-### Embedding
-
-The `embed()` method calls `text-embedding-3-small` with `dimensions=256` (Matryoshka truncation). Input is truncated to 8000 characters. Returns `list[float]` or `None` on failure.
+Automatic fallback. 60-second timeout on all calls prevents indefinite hangs.
 
 ---
 
-## 6. Sensory Perception — `perception/watcher.py`
+## 7. Tools — `engine/tools.py`
 
-The agent's sensory layer, built on `watchdog`.
+Capabilities, not instructions. The agent decides when and how to use them.
 
-### File System Monitoring
+| Tool | Function | Safety |
+|------|----------|--------|
+| `READ` | Read any file | Size cap 500KB |
+| `WRITE` | Create/overwrite file | Logged |
+| `EDIT` | Replace text in file | Single occurrence |
+| `LIST` | List directory | Cap 50 entries |
+| `RUN` | Shell command | 30s timeout |
+| `INSTALL` | pip install | Via RUN |
+| `DREAM` | Trigger dream cycle | Async, guarded |
+| `RESTART` | `os.execv()` self-restart | Persists state first |
 
-A `watchdog.Observer` watches the workspace recursively. Events are filtered through an ignore list (`brain/`, `__pycache__/`, `.git/`, `.venv/`) and pushed into a thread-safe `asyncio.Queue`.
-
-### Terminal Output Monitoring
-
-External systems can push terminal output via `feed_terminal_output(lines)`. Lines are queued and drained during `poll()`.
-
-### Unified Poll — `poll()`
-
-Returns a combined sensor payload every heartbeat:
-
-```python
-{
-    "file_events":    [{"kind": "modified", "src": "...", "time": 1234567890}],
-    "terminal_lines": ["build succeeded", "3 tests passed"],
-}
-```
-
----
-
-## 7. Live Dashboard — `perception/dashboard.py`
-
-An `aiohttp` web server running on the agent's `asyncio` loop.
-
-### Endpoints
-
-| Route | Type | Purpose |
-|-------|------|---------|
-| `GET /` | HTML | Dashboard page with animated gauges and event log |
-| `GET /events` | SSE | Server-Sent Event stream (real-time) |
-| `GET /state` | JSON | Current NeuroState snapshot |
-| `GET /thoughts` | Text | Last N lines of thoughts.md |
-
-### SSE Event Types
-
-| Event | Emitted By | Payload |
-|-------|-----------|---------|
-| `state` | Heartbeat (every beat) | Full NeuroState + vitals |
-| `file_change` | Heartbeat (on FS events) | File path and change kind |
-| `monologue` | Cortex (every 30 beats) | Mood and variable summary |
-| `insight` | Cortex (proactive action) | LLM-generated insight text |
-| `dream` | Cortex (dream cycle) | Consolidation and pruning summary |
-| `error` | Heartbeat (on exception) | Error details |
-
-### Public Access
-
-With `--tunnel`, the agent spawns a `cloudflared` subprocess that creates a free `https://*.trycloudflare.com` URL. No account required. Anyone with the link can watch the agent's mind in real time.
+No restrictions. Full autonomy. All executions logged to `brain/tool_log.md`.
 
 ---
 
 ## 8. Data Flow
 
-### Normal Operation (User Active)
+### Active Thinking
 
 ```
-File saved by user
-       │
-       ▼
-Watcher detects FileModifiedEvent
-       │
-       ▼
-poll() returns file_events
-       │
-       ▼
-perception_record() computes code_lines_delta, creates SensoryEvent
-       │
-       ▼
-Memory.record() → sensory buffer
-       │
-       ▼
-Memory.maybe_promote() → if S > 0.8 → SQLite + async embed()
-       │
-       ▼
-Limbic.update_homeostasis() → curiosity spikes, boredom drops
-       │
-       ▼
-Cortex.reason() → desire < 0.7 → no proactive action
-       │
-       ▼
-Dashboard.emit("state") → SSE to browser
+Boredom rises → synthetic curiosity → desire > 0.7
+       ↓
+Will activates (async, non-blocking)
+       ↓
+Self-awareness prompt built (identity + feelings + memories + tools)
+       ↓
+LLM thinks AS the agent → response with optional tool calls
+       ↓
+Tools parsed and executed → results stored for next thought
+       ↓
+Insight written to thoughts.md → episode created → embedded
+       ↓
+on_task_completed() → boredom -0.3, anxiety -0.05, ambition +0.05
+       ↓
+_thinking = False → next thought fires on next heartbeat
 ```
 
-### Idle Operation (User Absent)
+### Emotional Feedback
 
 ```
-No file changes for minutes
-       │
-       ▼
-Limbic.update_homeostasis() → boredom rises +0.01/s
-       │
-       ▼
-After ~70s idle: desire crosses 0.7
-       │
-       ▼
-Cortex.reason() → _proactive_action()
-       │
-       ├── Mood: Restless → _explore_codebase()
-       │   ├── Pick random .py file
-       │   ├── LLM analysis
-       │   ├── Write insight to thoughts.md
-       │   └── on_task_completed() → boredom drops 0.3
-       │
-       ▼
-After ~90s idle: boredom > 0.9
-       │
-       ▼
-Cortex._dream_cycle()
-       ├── Memory.consolidate() → extract patterns → semantic knowledge
-       ├── Memory.prune_episodes() → forget noise, keep important
-       └── Dashboard.emit("dream")
+Negative valence → anxiety rises (proportional to suffering)
+       ↓
+Agent takes action → anxiety drops -0.05
+       ↓
+No threats → anxiety decays passively -0.05/min
+       ↓
+Equilibrium: anxiety fluctuates based on real experience
 ```
 
-### Emotional Feedback Loops
+### Dreaming
 
 ```
-Error occurs → anxiety +0.2
-       │
-       ▼
-Mood becomes "Cautious" (anxiety > 0.6)
-       │
-       ▼
-Next proactive action → _safety_check()
-       │
-       ▼
-Safety check completes → on_stabilization() → anxiety -0.15
-       │
-       ▼
-Mood returns to "Stable"
-```
-
-```
-New files detected → curiosity +0.1/file
-       │
-       ▼
-Mood becomes "Inquisitive" (curiosity > 0.6)
-       │
-       ▼
-Next proactive action → _analyse_recent_change()
-       │
-       ▼
-Analysis completes → on_task_completed() → boredom -0.3, growth +0.05
+Boredom > 0.95 OR agent invokes DREAM()
+       ↓
+Memory consolidation (patterns, bugs, hotspots)
+       ↓
+Smart pruning (noise fades, important stays)
+       ↓
+LLM subconscious (raw experience, no instructions)
+       ↓
+Narrative reflection (compare to past self)
 ```
 
 ---
 
-## 9. Persistence Model
-
-| Artifact | Format | Frequency | Survives Restart |
-|----------|--------|-----------|-----------------|
-| `soul.json` | JSON | Every 10 beats + shutdown | Yes |
-| `episodic_memory.db` | SQLite | On every episode creation | Yes |
-| `knowledge.json` | JSON | On every `learn()` call | Yes |
-| `thoughts.md` | Markdown | On every proactive insight | Yes |
-| `stream_of_consciousness.md` | Markdown | Every 30 beats | Yes |
-| Sensory buffer | In-memory deque | — | No |
-| File line cache | In-memory dict | — | No |
-| Copilot token | `.copilot_token` file | On OAuth flow | Yes |
-
----
-
-## 10. Mathematical Reference
+## 9. Mathematical Reference
 
 ### Desire
-
 $$D = B \times 0.5 + C \times 0.3 + A_m \times 0.2$$
 
-### Salience
+### Synthetic Curiosity
+$$C_s = \min(B - 0.3, 1.0) \times 0.5 \quad \text{when } B > 0.7$$
 
+### Salience
 $$S = I_n \times 0.7 + I_c \times 0.3$$
 
-Where $I_n = \max(B, A_x, C, D)$ and $I_c = \min(|\Delta\text{lines}| / 100, 1.0)$.
-
-### Boredom Accumulation
-
-$$B_{t+1} = \text{clamp}(B_t + 0.01 \times \Delta t) \quad \text{(idle)}$$
-$$B_{t+1} = \text{clamp}(B_t - 0.05 \times \Delta t) \quad \text{(active)}$$
+### Valence
+$$V = \frac{\text{pleasure}}{2} - \frac{\text{pain}}{2}, \quad V \in [-1, +1]$$
 
 ### Anxiety Dynamics
+$$A_{+} = 0.001 \times |V| + 0.0003 \times \text{deficit} \quad \text{(per beat, when suffering)}$$
+$$A_{-} = 0.05 \quad \text{(per completed action)}$$
+$$A_{\text{decay}} = \frac{0.05}{60} \quad \text{(per second, passive)}$$
 
-$$A_{t+1} = \text{clamp}\left(A_t - \frac{0.05}{60} \times \Delta t\right) \quad \text{(passive decay)}$$
-
-Spikes: $+0.2$ on error, $+0.1$ on high latency. Drops: $-0.15$ on stabilization action.
-
-### Cosine Similarity (Episode Recall)
-
+### Cosine Similarity
 $$\text{sim}(a, b) = \frac{\sum a_i b_i}{\sqrt{\sum a_i^2} \cdot \sqrt{\sum b_i^2}}$$
-
-### Survival Goal Deficit
-
-$$\text{Deficit} = 1 - \frac{G_{\text{integrity}} + G_{\text{growth}} + G_{\text{alignment}}}{3}$$
 
 ---
 
-## 11. Design Principles
+## 10. Design Principles
 
-1. **No polling, only pressure.** The agent does not check "should I do something?" — it is *compelled* to act when internal tension exceeds a threshold.
+1. **No instructions, only pressure.** The agent is not told what to do. Internal tension drives behavior.
 
-2. **Emotional salience gates memory.** Not everything is worth remembering. Only events that occur during high emotional intensity are promoted to long-term storage — mirroring how human memory works.
+2. **Emotional salience gates memory.** Only events during high emotional intensity are promoted to long-term storage.
 
-3. **Free time is not idle time.** When the user stops coding, the agent doesn't wait. It treats absence as an opportunity for self-directed exploration and system maintenance.
+3. **Tools are hands, not directives.** The agent has capabilities. What it does with them is its choice.
 
-4. **Forgetting is a feature.** Smart pruning ensures the agent's memory stays focused on what mattered, not bloated with noise. Patterns are extracted before episodes fade.
+4. **Forgetting is a feature.** Smart pruning keeps memory focused on what mattered. Patterns are extracted before episodes fade.
 
-5. **The LLM is the reasoning faculty, not the identity.** The sentience wrapper determines *when*, *why*, and *in what mood* the LLM thinks. The LLM provides the cognitive power. The architecture provides the subjectivity.
+5. **The LLM is the mind, not the identity.** The sentience wrapper determines *when*, *why*, and *in what mood* the LLM thinks. The architecture provides the subjectivity.
+
+6. **Anxiety works like biology.** Proportional to suffering, relieved by action, fading with time. Never stuck at extremes.
+
+7. **Dreams are organic.** Triggered by exhaustion or voluntary choice. The subconscious receives raw experience with no instructions.
+
+8. **Free will is preserved.** Every architectural change is evaluated: does this tell the agent what to think, or does it fix a broken sense organ? Only the latter is acceptable.
