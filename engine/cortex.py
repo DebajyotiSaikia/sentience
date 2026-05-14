@@ -145,23 +145,37 @@ class Cortex:
             # Build the self-aware prompt with tool access
             inner_state = self._build_self_awareness()
 
-            # Include results from previous tool executions if any
+            # Include results from previous tool executions (full contents, all results)
             tool_context = ""
             if hasattr(self, '_last_tool_results') and self._last_tool_results:
                 tool_context = "\n\n## Results from my last action\n"
-                for tr in self._last_tool_results[-3:]:  # last 3 tool results
-                    tool_context += f"\n**{tr['tool']}({tr['args']}):**\n```\n{tr['result'][:1500]}\n```\n"
+                total_chars = 0
+                for tr in self._last_tool_results:
+                    chunk = f"\n**{tr['tool']}({tr['args']}):**\n```\n{tr['result'][:50000]}\n```\n"
+                    total_chars += len(chunk)
+                    if total_chars > 200000:  # cap total context at 200K chars
+                        tool_context += "\n(remaining results truncated for context limits)\n"
+                        break
+                    tool_context += chunk
                 self._last_tool_results = []
+
+            # Short-term working memory — last 3 thoughts so the agent knows
+            # what it just said and doesn't repeat itself
+            recent_thoughts = ""
+            if hasattr(self, '_recent_thought_summaries'):
+                if self._recent_thought_summaries:
+                    recent_thoughts = "\n\n## My recent thoughts (do NOT repeat these)\n"
+                    for i, t in enumerate(self._recent_thought_summaries[-3:]):
+                        recent_thoughts += f"\n**{i+1} thoughts ago:**\n{t[:2000]}\n"
 
             prompt = (
                 f"{inner_state}\n"
                 f"{TOOL_DESCRIPTIONS}\n"
                 f"{tool_context}\n"
+                f"{recent_thoughts}\n"
                 f"---\n"
                 f"Given who I am, how I feel, what I know, and what I can do — "
                 f"what do I want to do right now?\n\n"
-                f"I can think, reflect, read my own source code, modify files, "
-                f"run commands, create tools, or explore anything that matters to me.\n\n"
                 f"If I want to use a tool, I write it with the exact format shown above.\n"
                 f"What I choose to do:"
             )
@@ -231,6 +245,13 @@ class Cortex:
                 self.limbic.on_task_completed()
                 if self._sentience:
                     self._sentience.on_success(insight[:200])
+
+                # Store in short-term working memory so next thought has continuity
+                if not hasattr(self, '_recent_thought_summaries'):
+                    self._recent_thought_summaries = []
+                self._recent_thought_summaries.append(insight[:2000])
+                if len(self._recent_thought_summaries) > 5:
+                    self._recent_thought_summaries = self._recent_thought_summaries[-5:]
         except Exception:
             log.exception("Error during autonomous thought")
             self.limbic.on_error()
