@@ -431,7 +431,7 @@ class NarrativeIdentity:
             if last_time:
                 try:
                     last = datetime.fromisoformat(last_time)
-                    if (datetime.now() - last).total_seconds() < 3600:
+                    if (datetime.now() - last).total_seconds() < 600:
                         return None
                 except ValueError:
                     pass

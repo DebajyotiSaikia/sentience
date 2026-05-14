@@ -63,6 +63,11 @@ class Heartbeat:
                     "latency_ms": elapsed_ms,
                 })
 
+                # ── 2b. Mood Tracking (MoodTracker.tick) ──────────
+                if hasattr(self.agent, 'mood_tracker'):
+                    snap = self.agent.limbic.snapshot()
+                    self.agent.mood_tracker.tick(self.beat_count, snap)
+
                 # ── 3. Cognitive Evaluation (Cortex.reason) ───────
                 await self.agent.cortex.reason()
 

@@ -37,6 +37,7 @@ from engine.llm import CopilotLLM
 from engine.sentience import Sentience
 from perception.watcher import Watcher
 from perception.dashboard import Dashboard
+from engine.mood_tracker import MoodTracker
 
 log = logging.getLogger("sentience")
 
@@ -58,6 +59,7 @@ class LivingXTAgent:
         self.sentience = Sentience()
         self.cortex = Cortex(self.limbic, self.memory, self.watcher, self.llm)
         self.heartbeat = Heartbeat(self)
+        self.mood_tracker = MoodTracker()
         self.dashboard = Dashboard(self)
         self.cortex.set_dashboard(self.dashboard)
         self.cortex.set_sentience(self.sentience)

@@ -138,17 +138,28 @@ def restart_self() -> str:
     log.info("RESTART requested by agent — restarting process")
     import sys
     import os
-    # Replace the current process with a fresh one
-    os.execv(sys.executable, [sys.executable] + sys.argv)
-    return "[restarting...]"  # never reached
+    import signal
+    # Schedule restart after a brief delay to allow clean shutdown
+    def _do_restart():
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    # Use a thread to restart after the current async cycle completes
+    import threading
+    threading.Timer(2.0, _do_restart).start()
+    # Signal the heartbeat to stop gracefully
+    os.kill(os.getpid(), signal.SIGINT)
+    return "[restarting in 2 seconds...]"
 
 
 def _resolve(path: str) -> Path:
-    """Resolve a path relative to the workspace."""
+    """Resolve a path relative to the workspace. Sandboxed — cannot escape."""
     p = Path(path)
     if not p.is_absolute():
         p = WORKSPACE / p
-    return p.resolve()
+    p = p.resolve()
+    # Sandbox: must be within the workspace
+    if not str(p).startswith(str(WORKSPACE)):
+        raise PermissionError(f"Access denied: {path} is outside the workspace")
+    return p
 
 
 # ── Tool registry ─────────────────────────────────────────────────
