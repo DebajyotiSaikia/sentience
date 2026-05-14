@@ -186,7 +186,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   .stat { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; color: #777; }
   .stat-value { color: #ccc; }
   .log-area { padding: 16px; overflow-y: auto; display: flex; flex-direction: column-reverse; }
-  .log-entry { padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; border-left: 3px solid #333; font-size: 12px; line-height: 1.5; }
+  .log-entry { padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; border-left: 3px solid #333; font-size: 12px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; }
   .log-entry .time { color: #555; margin-right: 8px; }
   .log-heartbeat { border-left-color: #2a4a2a; }
   .log-insight { border-left-color: #a78bfa; background: #12101f; }

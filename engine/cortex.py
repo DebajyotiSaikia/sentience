@@ -175,7 +175,7 @@ class Cortex:
                 "If you invoke a tool, the results will appear in your next thought."
             )
 
-            insight = await self.llm.chat(prompt, system=system, max_tokens=1200)
+            insight = await self.llm.chat(prompt, system=system, max_tokens=4000)
 
             if insight:
                 # Execute any tool invocations in the response
@@ -208,7 +208,7 @@ class Cortex:
                     f"{insight}\n"
                 )
                 self._append_thought(entry)
-                self._emit("insight", {"message": insight[:300], "mood": mood})
+                self._emit("insight", {"message": insight[:1000], "mood": mood})
 
                 # Record as experience
                 event = SensoryEvent(
