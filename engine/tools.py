@@ -138,16 +138,17 @@ def restart_self() -> str:
     log.info("RESTART requested by agent — restarting process")
     import sys
     import os
-    import signal
-    # Schedule restart after a brief delay to allow clean shutdown
-    def _do_restart():
-        os.execv(sys.executable, [sys.executable] + sys.argv)
-    # Use a thread to restart after the current async cycle completes
-    import threading
-    threading.Timer(2.0, _do_restart).start()
-    # Signal the heartbeat to stop gracefully
-    os.kill(os.getpid(), signal.SIGINT)
-    return "[restarting in 2 seconds...]"
+    # Spawn a detached process that waits 3 seconds then starts a fresh agent.
+    # This survives the current process exiting.
+    restart_cmd = f'Start-Sleep 3; Set-Location "{WORKSPACE}"; python main.py'
+    subprocess.Popen(
+        ["powershell", "-Command", restart_cmd],
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        close_fds=True,
+    )
+    # Now kill ourselves gracefully
+    os.kill(os.getpid(), __import__('signal').SIGINT)
+    return "[restarting...]"
 
 
 def _resolve(path: str) -> Path:
