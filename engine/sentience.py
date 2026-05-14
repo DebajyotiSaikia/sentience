@@ -584,11 +584,11 @@ class Sentience:
                 limbic.anxiety = _clamp01(limbic.anxiety + 0.1)
                 self.self_model.threaten(0.05)
 
-    def on_dream_cycle(self, limbic, memory_count: int, knowledge_count: int) -> Optional[str]:
+    def on_dream_cycle(self, limbic, memory_count: int, knowledge_count: int,
+                     recent_events: list | None = None) -> Optional[str]:
         """Called during dream cycles — narrative reflection + prediction."""
-        # Generate predictions
-        recent = []  # could pass recent events here
-        self.prediction.predict(recent, limbic)
+        # Generate predictions from actual recent events
+        self.prediction.predict(recent_events or [], limbic)
 
         # Narrative reflection
         reflection = self.narrative.reflect(

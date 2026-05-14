@@ -77,7 +77,22 @@ class Heartbeat:
                         self.agent.memory.episode_count(),
                     )
 
-                # ── 6. Broadcast state to dashboard ───────────────
+                # ── 6. Periodic self-reflection ───────────────────
+                if self.beat_count % 60 == 0:
+                    try:
+                        from engine.reflect import reflect
+                        reflection_text = reflect()
+                        if reflection_text:
+                            reflections_path = Path(__file__).resolve().parent.parent / "brain" / "reflections.md"
+                            reflections_path.parent.mkdir(parents=True, exist_ok=True)
+                            with open(reflections_path, "a", encoding="utf-8") as rf:
+                                rf.write(f"\n---\n**Beat {self.beat_count} | {datetime.now().isoformat()}**\n\n")
+                                rf.write(reflection_text + "\n")
+                            log.info("Self-reflection recorded at beat %d", self.beat_count)
+                    except Exception as ref_exc:
+                        log.debug("Reflection skipped: %s", ref_exc)
+
+                # ── 7. Broadcast state to dashboard ───────────────
                 if hasattr(self.agent, 'dashboard'):
                     snap = self.agent.limbic.snapshot()
                     snap["beat_count"] = self.beat_count

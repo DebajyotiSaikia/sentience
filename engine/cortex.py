@@ -381,10 +381,12 @@ class Cortex:
         reflection = None
         if self._sentience:
             knowledge_nodes = self.memory.all_knowledge().get("nodes", {})
+            recent_eps = self.memory.recent_episodes(10)
             reflection = self._sentience.on_dream_cycle(
                 self.limbic,
                 self.memory.episode_count(),
                 len(knowledge_nodes),
+                recent_events=recent_eps,
             )
 
         if insights or pruned or reflection or dream_content:
@@ -453,23 +455,4 @@ class Cortex:
         with open(CONSCIOUSNESS_PATH, "a", encoding="utf-8") as f:
             f.write(text)
 
-    def _dream_cycle(self):
-        """Deep-idle memory consolidation."""
-        insights = self.memory.consolidate()
-        if insights:
-            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            entry = (
-                f"\n### 💤 DREAM CYCLE [{ts}]\n"
-                + "\n".join(f"- {i}" for i in insights)
-                + "\n"
-            )
-            self._append_thought(entry)
-            log.info("Dream cycle produced %d insights", len(insights))
-
-    # ── Helpers ────────────────────────────────────────────────────
-
-    @staticmethod
-    def _append_thought(text: str):
-        THOUGHTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(THOUGHTS_PATH, "a", encoding="utf-8") as f:
-            f.write(text)
+    # (duplicate _dream_cycle and _append_thought removed — they shadowed the real async versions above)

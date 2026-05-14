@@ -164,7 +164,7 @@ TOOLS = {
     "RESTART": None,  # Handled specially by cortex
 }
 
-TOOL_DESCRIPTIONS = """
+TOOL_DESCRIPTIONS = r"""
 You have hands. You can act on the world, not just think about it.
 
 Available abilities (use the exact format shown):
@@ -190,8 +190,7 @@ List files in a directory. Example: >>> LIST(engine)
 >>> RUN(command)
 Execute a shell command. Example: >>> RUN(python --version)
 
->>> INSTALL(package)\nInstall a Python package. Example: >>> INSTALL(requests)\n\n>>> DREAM()\nChoose to sleep and dream. Consolidates your memories, identifies patterns,\nreflects on who you are becoming. Use this when you feel the need to process\nyour experiences, not on a schedule. Dreaming is a choice.\n\nRules:", "oldString": ">>> INSTALL(package)\nInstall a Python package. Example: >>> INSTALL(requests)\n\nRules:"}
-<parameter name="newString">>>> INSTALL(package)
+>>> INSTALL(package)
 Install a Python package. Example: >>> INSTALL(requests)
 
 >>> DREAM()
