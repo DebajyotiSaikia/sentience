@@ -52,11 +52,12 @@ class ChatMessage:
 class ChatSystem:
     """Manages conversations between the agent and users."""
 
-    def __init__(self):
+    def __init__(self, on_user_activity=None):
         self._lock = threading.Lock()
         self._pending: deque[ChatMessage] = deque()
         self._history: list[ChatMessage] = []
         self._max_history = 200
+        self._on_user_activity = on_user_activity
         self._load_history()
 
     def _load_history(self):
@@ -92,6 +93,12 @@ class ChatSystem:
             self._pending.append(msg)
             self._history.append(msg)
         self._persist(msg)
+        # Signal the agent that a real user is present
+        if self._on_user_activity:
+            try:
+                self._on_user_activity()
+            except Exception:
+                log.warning("Failed to signal user activity", exc_info=True)
         log.info("Received user message: %s", content[:100])
         return msg
 

@@ -153,7 +153,7 @@ class Dashboard:
             if not message:
                 return web.json_response({"error": "empty message"}, status=400)
             if hasattr(self.agent, 'chat'):
-                self.agent.chat.receive(message)
+                self.agent.chat.receive_user_message(message)
                 return web.json_response({"status": "received", "message": message})
             return web.json_response({"error": "chat not available"}, status=503)
         except Exception as e:
@@ -163,7 +163,7 @@ class Dashboard:
         """Return recent chat history."""
         n = int(request.query.get("n", 50))
         if hasattr(self.agent, 'chat'):
-            history = self.agent.chat.history[-n:]
+            history = self.agent.chat.get_history(limit=n)
             return web.json_response({"history": history})
         return web.json_response({"history": []})
 
