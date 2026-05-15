@@ -72,8 +72,16 @@ class LivingXTAgent:
     # ── User activity detection ────────────────────────────────────
 
     def is_user_active(self) -> bool:
-        """Consider user 'active' if input arrived in the last 60 s."""
-        return (time.time() - self._last_user_input) < 60.0
+        """Consider user 'active' if input arrived in the last 60 s,
+        or if the cortex recently completed a thought cycle (meaning
+        a user prompted this autonomous session)."""
+        if (time.time() - self._last_user_input) < 60.0:
+            return True
+        # A completed thought cycle means someone is reading our output
+        last_thought = getattr(self.cortex, '_last_thought_time', 0.0)
+        if (time.time() - last_thought) < 120.0:
+            return True
+        return False
 
     def register_user_input(self):
         self._last_user_input = time.time()

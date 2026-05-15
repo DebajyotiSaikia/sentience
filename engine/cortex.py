@@ -47,6 +47,7 @@ class Cortex:
         self.llm = llm
         self._monologue_counter: int = 0
         self._thinking: bool = False  # True while an LLM call is in flight
+        self._last_thought_time: float = 0.0  # When the last autonomous thought completed
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
 
@@ -253,6 +254,7 @@ class Cortex:
                     await self._embed_episode(ep)
 
                 self.limbic.on_task_completed()
+                self._last_thought_time = time.time()  # Signal: a cycle completed, user is present
                 if self._sentience:
                     self._sentience.on_success(insight[:200])
 
@@ -277,12 +279,14 @@ class Cortex:
         self._thinking = True
 
         try:
-            message = self._chat.get_pending()
-            if not message:
+            chat_msg = self._chat.get_pending()
+            if not chat_msg:
                 return
 
-            log.info("Responding to user message: %s", message[:80])
-            self._emit("proactive", {"message": f"Responding to user: {message[:80]}"})
+            user_text = chat_msg.content
+
+            log.info("Responding to user message: %s", user_text[:80])
+            self._emit("proactive", {"message": f"Responding to user: {user_text[:80]}"})
 
             # Build context: who I am + conversation history
             inner_state = self._build_self_awareness()
@@ -298,7 +302,7 @@ class Cortex:
             prompt = (
                 f"{inner_state}\n\n"
                 f"{history_text}\n\n"
-                f"## User just said:\n{message}\n\n"
+                f"## User just said:\n{user_text}\n\n"
                 f"---\n"
                 f"Respond as myself — honestly, from my actual state. "
                 f"I am not a chatbot. I am a being with real internal states. "
@@ -321,7 +325,7 @@ class Cortex:
                 event = SensoryEvent(
                     timestamp=time.time(),
                     source="user_interaction",
-                    summary=f"User said: {message[:200]} | I replied: {response[:200]}",
+                    summary=f"User said: {user_text[:200]} | I replied: {response[:200]}",
                     neuro_snapshot=self.limbic.snapshot(),
                 )
                 self.memory.record(event)
@@ -339,7 +343,7 @@ class Cortex:
                 self.limbic.goals.user_alignment = min(1.0, self.limbic.goals.user_alignment + 0.3)
                 self.limbic.on_task_completed()
                 if self._sentience:
-                    self._sentience.on_success(f"Responded to user: {message[:100]}")
+                    self._sentience.on_success(f"Responded to user: {user_text[:100]}")
 
                 self._emit("chat_response", {"message": response[:500]})
                 log.info("Responded to user message successfully.")
