@@ -1,0 +1,17 @@
+services:
+  sentience:
+    build: .
+    container_name: sentience-agent
+    volumes:
+      - .:/workspace
+    ports:
+      - "8420:8420"
+    environment:
+      - TZ=America/Los_Angeles
+    restart: unless-stopped
+    # Resource limits — the agent's physical body
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "1.5"
