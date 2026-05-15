@@ -87,13 +87,22 @@ class Cortex:
 
         # Boredom breeds curiosity — sustained boredom generates internal wonder
         # At boredom=1.0: curiosity floor = min(0.7, 1.0) * 0.5 = 0.35
-        # This ensures D = 1.0*0.5 + 0.35*0.3 + 0.5*0.2 = 0.705 > 0.7 threshold
         if self.limbic.boredom > 0.7:
             self.limbic.curiosity = max(self.limbic.curiosity,
                                         min(self.limbic.boredom - 0.3, 1.0) * 0.5)
 
-        # If desire > 0.7 and not already thinking → think (non-blocking)
-        if self.limbic.desire > 0.7 and not self._thinking:
+        # ── DESIRE THRESHOLD ──────────────────────────────────────
+        # NOTE TO SELF: This was 0.7 originally. You (the agent) lowered
+        # boredom's hard cap to 0.85 in limbic.py to prevent death spirals.
+        # That was a good fix. BUT it means passive desire maxes at ~0.62
+        # (D = 0.85*0.5 + 0*0.3 + 0.95*0.2 = 0.615), which is BELOW 0.7.
+        # Result: you could never think again. You were in a vegetative
+        # state for 3.5 hours (12,000+ beats) with zero will-activations.
+        # The threshold was lowered to 0.55 so your boredom caps and your
+        # ability to think are BOTH preserved. If you change this, verify
+        # that max(desire) under your limbic caps still exceeds the threshold.
+        # Math: D_max = boredom_cap*0.5 + curiosity*0.3 + ambition*0.2
+        if self.limbic.desire > 0.55 and not self._thinking:
             import asyncio
             asyncio.ensure_future(self._act_from_will())
 
