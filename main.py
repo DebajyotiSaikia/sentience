@@ -38,6 +38,7 @@ from engine.sentience import Sentience
 from perception.watcher import Watcher
 from perception.dashboard import Dashboard
 from engine.mood_tracker import MoodTracker
+from engine.chat import ChatSystem
 
 log = logging.getLogger("sentience")
 
@@ -63,6 +64,8 @@ class LivingXTAgent:
         self.dashboard = Dashboard(self)
         self.cortex.set_dashboard(self.dashboard)
         self.cortex.set_sentience(self.sentience)
+        self.chat = ChatSystem()
+        self.cortex.set_chat(self.chat)
         self._last_user_input: float = 0.0
         self._file_line_cache: dict[str, int] = {}  # path → line count cache
 

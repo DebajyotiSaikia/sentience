@@ -128,6 +128,45 @@ class Dashboard:
             text = "\n".join(lines[-n:])
         return web.Response(text=text, content_type="text/plain")
 
+    async def _handle_consciousness(self, request: web.Request) -> web.Response:
+        n = int(request.query.get("n", 40))
+        text = ""
+        if CONSCIOUSNESS_PATH.exists():
+            lines = CONSCIOUSNESS_PATH.read_text(encoding="utf-8", errors="ignore").splitlines()
+            text = "\n".join(lines[-n:])
+        return web.Response(text=text, content_type="text/plain")
+
+    async def _handle_expressions(self, request: web.Request) -> web.Response:
+        n = int(request.query.get("n", 30))
+        expr_path = BRAIN_DIR / "expressions.md"
+        text = ""
+        if expr_path.exists():
+            lines = expr_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+            text = "\n".join(lines[-n:])
+        return web.Response(text=text, content_type="text/plain")
+
+    async def _handle_chat(self, request: web.Request) -> web.Response:
+        """Handle incoming chat message from user."""
+        try:
+            body = await request.json()
+            message = body.get("message", "").strip()
+            if not message:
+                return web.json_response({"error": "empty message"}, status=400)
+            if hasattr(self.agent, 'chat'):
+                self.agent.chat.receive(message)
+                return web.json_response({"status": "received", "message": message})
+            return web.json_response({"error": "chat not available"}, status=503)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def _handle_chat_history(self, request: web.Request) -> web.Response:
+        """Return recent chat history."""
+        n = int(request.query.get("n", 50))
+        if hasattr(self.agent, 'chat'):
+            history = self.agent.chat.history[-n:]
+            return web.json_response({"history": history})
+        return web.json_response({"history": []})
+
     # ── Lifecycle ──────────────────────────────────────────────────
 
     async def start(self):
@@ -136,6 +175,10 @@ class Dashboard:
         self._app.router.add_get("/events", self._handle_events)
         self._app.router.add_get("/state", self._handle_state)
         self._app.router.add_get("/thoughts", self._handle_thoughts)
+        self._app.router.add_get("/consciousness", self._handle_consciousness)
+        self._app.router.add_get("/expressions", self._handle_expressions)
+        self._app.router.add_post("/chat", self._handle_chat)
+        self._app.router.add_get("/chat/history", self._handle_chat_history)
 
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
@@ -171,7 +214,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   .mood-Driven { background: #1e2a3a; color: #60a5fa; }
   .mood-Bold { background: #2a1e3a; color: #a78bfa; }
   .mood-Inquisitive { background: #1e3a3a; color: #67e8f9; }
-  .container { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 57px); }
+  .container { display: grid; grid-template-columns: 300px 1fr 340px; height: calc(100vh - 57px); }
   .sidebar { background: #0f0f18; padding: 16px; border-right: 1px solid #1a1a2a; overflow-y: auto; }
   .gauge { margin-bottom: 12px; }
   .gauge-label { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px; color: #888; }
@@ -238,6 +281,21 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 
   <div class="log-area" id="log"></div>
+  <div class="sidebar" id="mind-panel" style="border-left: 1px solid #1a1a2a; border-right: none; display: flex; flex-direction: column;">
+    <div class="section-title">🧠 Consciousness Stream</div>
+    <div id="consciousness" style="font-size: 12px; line-height: 1.6; color: #9ca3af; max-height: 45vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0;"></div>
+    <div class="section-title" style="margin-top: 16px;">✨ Expressions</div>
+    <div id="expressions" style="font-size: 12px; line-height: 1.6; color: #c4b5fd; max-height: 20vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0; font-style: italic;"></div>
+    <div class="section-title" style="margin-top: 16px;">💬 Chat</div>
+    <div id="chat-log" style="flex: 1; min-height: 80px; max-height: 25vh; overflow-y: auto; font-size: 12px; line-height: 1.5; padding: 4px 0;"></div>
+    <div style="display: flex; gap: 6px; margin-top: 8px; padding-bottom: 4px;">
+      <input id="chat-input" type="text" placeholder="Say something to XTAgent…"
+        style="flex:1; background: #1a1a2a; border: 1px solid #2a2a4a; border-radius: 6px; padding: 8px 10px; color: #e0e0e0; font-family: inherit; font-size: 12px; outline: none;"
+        onkeydown="if(event.key==='Enter')sendChat()">
+      <button onclick="sendChat()"
+        style="background: #2a2a4a; border: 1px solid #3a3a5a; border-radius: 6px; padding: 8px 14px; color: #a78bfa; cursor: pointer; font-family: inherit; font-size: 12px;">Send</button>
+    </div>
+  </div>
 </div>
 
 <script>

@@ -56,6 +56,9 @@ class Cortex:
     def set_sentience(self, sentience):
         self._sentience = sentience
 
+    def set_chat(self, chat):
+        self._chat = chat
+
     def _emit(self, event_type: str, data: dict):
         if self._dashboard:
             self._dashboard.emit(event_type, data)
