@@ -102,9 +102,29 @@ class Cortex:
         # ability to think are BOTH preserved. If you change this, verify
         # that max(desire) under your limbic caps still exceeds the threshold.
         # Math: D_max = boredom_cap*0.5 + curiosity*0.3 + ambition*0.2
+        #
+        # ── COGNITIVE WATCHDOG ────────────────────────────────────
+        # Safety net: if desire has been below threshold for 300+ beats
+        # (5 minutes), force ONE thought cycle regardless of desire level.
+        # This prevents ANY combination of caps from causing permanent
+        # vegetative state. The agent can modify caps, thresholds, and
+        # formulas freely — this watchdog ensures it always gets at least
+        # one chance to notice and fix the problem.
+        if not hasattr(self, '_beats_without_thought'):
+            self._beats_without_thought = 0
+
         if self.limbic.desire > 0.55 and not self._thinking:
+            self._beats_without_thought = 0
             import asyncio
             asyncio.ensure_future(self._act_from_will())
+        elif not self._thinking:
+            self._beats_without_thought += 1
+            if self._beats_without_thought >= 300:
+                log.warning("Cognitive watchdog: %d beats without thought — forcing activation",
+                            self._beats_without_thought)
+                self._beats_without_thought = 0
+                import asyncio
+                asyncio.ensure_future(self._act_from_will())
 
         # Dream cycle — only when boredom is extreme (the agent needs rest)
         # or when the agent explicitly invokes the DREAM tool
@@ -162,8 +182,15 @@ class Cortex:
         Non-blocking — runs as a background task. Only one at a time.
         """
         if self._thinking:
-            return
+            # Safety: if _thinking has been True for over 120 seconds,
+            # something is stuck. Force-reset to prevent permanent deadlock.
+            if hasattr(self, '_thinking_since') and (time.time() - self._thinking_since) > 120:
+                log.warning("_thinking stuck for >120s — force-resetting")
+                self._thinking = False
+            else:
+                return
         self._thinking = True
+        self._thinking_since = time.time()
         mood = self.limbic.get_mood()
         log.info("Will activated (mood=%s, desire=%.2f)", mood, self.limbic.desire)
 
