@@ -60,6 +60,9 @@ class Cortex:
     def set_chat(self, chat):
         self._chat = chat
 
+    def set_goals(self, goals):
+        self._goals = goals
+
     def _emit(self, event_type: str, data: dict):
         if self._dashboard:
             self._dashboard.emit(event_type, data)
@@ -418,6 +421,16 @@ class Cortex:
             reflection = self._sentience.narrative.latest_reflection()
             if reflection:
                 parts.append(f"\n## My Last Self-Reflection\n{reflection}")
+
+        # My active goals
+        if hasattr(self, '_goals') and self._goals:
+            active = self._goals.active_goals()
+            if active:
+                parts.append(f"\n## My Active Goals ({len(active)})")
+                for g in active:
+                    parts.append(f"- [{g.id}] {g.title} (progress={g.progress:.0%}, priority={g.priority:.1f})")
+                    if g.notes:
+                        parts.append(f"  Last note: {g.notes[-1][:80]}")
 
         # What I perceive
         changes = self.watcher.last_changes_summary()

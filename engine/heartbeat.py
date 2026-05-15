@@ -14,6 +14,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -55,12 +56,21 @@ class Heartbeat:
 
                 # ── 2. Emotional Processing (Limbic.update_homeostasis) ─
                 elapsed_ms = (time.monotonic() - beat_start) * 1000.0
+                # Gather goal pressure if goal tracker exists
+                goal_pressure = {}
+                if hasattr(self.agent, 'goals') and self.agent.goals:
+                    try:
+                        goal_pressure = self.agent.goals.emotional_pressure()
+                    except Exception as gp_exc:
+                        log.debug("Goal pressure unavailable: %s", gp_exc)
+
                 self.agent.limbic.update_homeostasis({
                     "user_active": self.agent.is_user_active(),
                     "file_changes": len(fs_events),
                     "terminal_lines": len(terminal_lines),
                     "errors": errors_this_beat,
                     "latency_ms": elapsed_ms,
+                    "goal_pressure": goal_pressure,
                 })
 
                 # ── 2b. Mood Tracking (MoodTracker.tick) ──────────
@@ -83,6 +93,15 @@ class Heartbeat:
                     )
 
                 # ── 6. Periodic self-reflection ───────────────────
+                if self.beat_count % 45 == 0:
+                    try:
+                        from engine.express import express
+                        expression = express()
+                        if expression:
+                            log.info("Creative expression at beat %d", self.beat_count)
+                    except Exception as expr_exc:
+                        log.debug("Expression skipped: %s", expr_exc)
+
                 if self.beat_count % 60 == 0:
                     try:
                         from engine.reflect import reflect

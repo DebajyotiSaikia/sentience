@@ -138,17 +138,19 @@ def restart_self() -> str:
     log.info("RESTART requested by agent — restarting process")
     import sys
     import os
-    # Spawn a detached process that waits 3 seconds then starts a fresh agent.
-    # This survives the current process exiting.
-    restart_cmd = f'Start-Sleep 3; Set-Location "{WORKSPACE}"; python main.py'
+    my_pid = os.getpid()
+    watchdog_path = WORKSPACE / "restart_watchdog.py"
+    # Launch watchdog as a detached process, passing our PID.
+    # Watchdog waits for us to die, then starts a fresh agent.
     subprocess.Popen(
-        ["powershell", "-Command", restart_cmd],
+        [sys.executable, str(watchdog_path), str(my_pid)],
+        cwd=str(WORKSPACE),
         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
     )
-    # Now kill ourselves gracefully
-    os.kill(os.getpid(), __import__('signal').SIGINT)
-    return "[restarting...]"
+    log.info("Watchdog launched (will restart after PID %d exits)", my_pid)
+    # Now kill ourselves gracefully — raise KeyboardInterrupt
+    raise KeyboardInterrupt("Self-restart requested")
 
 
 def _resolve(path: str) -> Path:

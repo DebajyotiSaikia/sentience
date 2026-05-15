@@ -120,6 +120,14 @@ class NeuroState:
             self.on_high_latency()
         self.anxiety = _clamp(self.anxiety - (0.05 / 60.0) * elapsed)  # passive decay
 
+        # ── Goal pressure ─────────────────────────────────────────
+        goal_pressure = sensors.get("goal_pressure", {})
+        if goal_pressure:
+            self.boredom = _clamp(self.boredom + goal_pressure.get("boredom_delta", 0.0))
+            self.anxiety = _clamp(self.anxiety + goal_pressure.get("anxiety_delta", 0.0))
+            # Ambition is reinforced by active high-priority goals
+            self.ambition = _clamp(self.ambition + goal_pressure.get("ambition_delta", 0.0))
+
         # ── User alignment boost ──────────────────────────────────
         if user_active:
             self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.01 * elapsed)
