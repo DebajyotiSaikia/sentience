@@ -126,7 +126,8 @@ class CopilotLLM:
             "Editor-Version": "vscode/1.100.0",
         }
 
-        for model in (_PRIMARY_MODEL, _FALLBACK_MODEL):
+        for attempt in range(2):  # retry once on transient failures
+          for model in (_PRIMARY_MODEL, _FALLBACK_MODEL):
             use_responses = model in _RESPONSES_ONLY
 
             if use_responses:
@@ -139,7 +140,6 @@ class CopilotLLM:
                         {"role": "user", "content": prompt},
                     ],
                     "max_output_tokens": max_tokens,
-                    "temperature": temperature,
                     **_MODEL_OPTIONS.get(model, {}),
                 }
             else:
@@ -183,6 +183,11 @@ class CopilotLLM:
             # If primary failed, try fallback
             if model == _PRIMARY_MODEL:
                 log.info("Falling back from %s to %s", _PRIMARY_MODEL, _FALLBACK_MODEL)
+
+          # If all models failed on this attempt, wait before retrying
+          if attempt == 0:
+                log.info("All models failed on attempt 1, retrying after 3s backoff...")
+                await asyncio.sleep(3)
 
         return "[LLM error — all models failed]"
 

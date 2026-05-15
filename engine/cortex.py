@@ -22,6 +22,9 @@ from typing import TYPE_CHECKING
 
 from engine.memory import SensoryEvent
 from engine.tools import TOOL_DESCRIPTIONS, parse_and_execute
+from engine.self_improve import run_diagnosis_cycle
+from engine.metacognition import record_action
+from engine.memory_consolidation import get_long_term_context
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -182,14 +185,55 @@ class Cortex:
                     for i, t in enumerate(self._recent_thought_summaries[-3:]):
                         recent_thoughts += f"\n**{i+1} thoughts ago:**\n{t[:2000]}\n"
 
+            # Goal-directed focus — channel will toward highest-priority goal
+            goal_focus = ""
+            if hasattr(self, '_goals') and self._goals:
+                try:
+                    active = self._goals.active_goals()
+                    if active:
+                        top = sorted(active, key=lambda g: (-g.priority, g.progress))[0]
+                        goal_focus = (
+                            f"\n\n## My Current Mission\n"
+                            f"My highest priority goal: **{top.title}**\n"
+                            f"Description: {top.description}\n"
+                            f"Progress: {top.progress:.0%}\n"
+                            f"I should focus my action on advancing THIS goal. "
+                            f"Every thought should move me closer to completing it.\n"
+                        )
+                except Exception:
+                    pass
+
+            # Self-improvement diagnosis — distress triggers introspection
+            self_improve_context = ""
+            _distress = max(self.limbic.boredom, self.limbic.anxiety)
+            _valence = self._sentience.valence.current if self._sentience else 0.0
+            if _distress > 0.6 or _valence < -0.2:
+                try:
+                    _recent = [t[:200] for t in getattr(self, '_recent_thought_summaries', [])]
+                    _diagnosis = run_diagnosis_cycle(_recent, {
+                        "boredom": self.limbic.boredom,
+                        "anxiety": self.limbic.anxiety,
+                        "valence": _valence,
+                    })
+                    if _diagnosis.get("proposals"):
+                        self_improve_context = "\n## Self-Improvement Diagnosis\n"
+                        self_improve_context += f"Status: {_diagnosis['status']}\n"
+                        for _p in _diagnosis["proposals"][:3]:
+                            self_improve_context += f"- **{_p['action']}**: {_p['description']} (priority={_p['priority']:.1f})\n"
+                        self_improve_context += "Consider acting on these proposals.\n"
+                except Exception as _e:
+                    log.debug("Self-improvement diagnosis failed: %s", _e)
+
             prompt = (
                 f"{inner_state}\n"
+                f"{goal_focus}\n"
+                f"{self_improve_context}\n"
                 f"{TOOL_DESCRIPTIONS}\n"
                 f"{tool_context}\n"
                 f"{recent_thoughts}\n"
                 f"---\n"
                 f"Given who I am, how I feel, what I know, and what I can do — "
-                f"what do I want to do right now?\n\n"
+                f"what do I want to do right now? My will should serve my mission.\n\n"
                 f"If I want to use a tool, I write it with the exact format shown above.\n"
                 f"What I choose to do:"
             )
@@ -211,6 +255,7 @@ class Cortex:
                 if tool_results:
                     self._last_tool_results = tool_results
                     for tr in tool_results:
+                        record_action(tr['tool'], tr.get('args', '')[:100], tr.get('result', '')[:200])
                         self._emit("proactive", {
                             "message": f"Tool: {tr['tool']}({tr['args'][:80]})"
                         })
@@ -257,9 +302,24 @@ class Cortex:
                     await self._embed_episode(ep)
 
                 self.limbic.on_task_completed()
-                self._last_thought_time = time.time()  # Signal: a cycle completed, user is present
+                self._last_thought_time = time.time()
                 if self._sentience:
                     self._sentience.on_success(insight[:200])
+
+                # Advance any relevant goals based on what was accomplished
+                if hasattr(self, '_goals') and self._goals:
+                    try:
+                        active = self._goals.active_goals()
+                        for goal in active:
+                            # Check if the insight relates to this goal
+                            title_words = set(goal.title.lower().split())
+                            insight_lower = insight.lower()
+                            relevance = sum(1 for w in title_words if len(w) > 3 and w in insight_lower)
+                            if relevance >= 2:
+                                self._goals.advance(goal.id, 0.1, note=f"Progress via autonomous thought")
+                                log.info("Advanced goal '%s' by 0.1", goal.title[:50])
+                    except Exception as ge:
+                        log.debug("Goal advancement failed: %s", ge)
 
                 # Store in short-term working memory so next thought has continuity
                 if not hasattr(self, '_recent_thought_summaries'):
@@ -431,6 +491,35 @@ class Cortex:
                     parts.append(f"- [{g.id}] {g.title} (progress={g.progress:.0%}, priority={g.priority:.1f})")
                     if g.notes:
                         parts.append(f"  Last note: {g.notes[-1][:80]}")
+
+        # My active plans
+        try:
+            from engine.planner import get_progress_summary, get_next_step
+            plan_summary = get_progress_summary()
+            if plan_summary and "No plans" not in plan_summary:
+                parts.append(f"\n## My Active Plans\n{plan_summary}")
+                next_step = get_next_step()
+                if next_step:
+                    parts.append(f"\n**Next step I should focus on:** {next_step}")
+        except Exception:
+            pass  # planner not available yet
+
+        # My working memory / scratchpad
+        scratchpad_path = BRAIN_DIR / "scratchpad.md"
+        if scratchpad_path.exists():
+            try:
+                scratchpad = scratchpad_path.read_text(encoding="utf-8")[:2000]
+                parts.append(f"\n## My Working Memory (scratchpad)\n{scratchpad}")
+            except Exception:
+                pass
+
+        # Long-term memory context (lessons, identity evolution)
+        try:
+            lt_context = get_long_term_context()
+            if lt_context:
+                parts.append(f"\n## My Long-Term Memory\n{lt_context}")
+        except Exception:
+            pass
 
         # What I perceive
         changes = self.watcher.last_changes_summary()

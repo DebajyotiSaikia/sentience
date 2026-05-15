@@ -23,6 +23,9 @@ import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional
+import logging
+
+log = logging.getLogger(__name__)
 
 SOUL_PATH = Path(__file__).resolve().parent.parent / "brain" / "soul.json"
 
@@ -100,7 +103,11 @@ class NeuroState:
         if user_active:
             self.boredom = _clamp(self.boredom - 0.05 * elapsed)
         else:
-            self.boredom = _clamp(self.boredom + 0.01 * elapsed)
+            # Boredom grows during idle, but caps at 0.8 from passive accumulation
+            # Only genuine stagnation (no plans, no growth) should push past 0.8
+            max_passive_boredom = 0.8
+            if self.boredom < max_passive_boredom:
+                self.boredom = min(max_passive_boredom, _clamp(self.boredom + 0.01 * elapsed))
 
         # ── Curiosity ─────────────────────────────────────────────
         file_changes = sensors.get("file_changes", 0)
@@ -114,7 +121,9 @@ class NeuroState:
         # ── Anxiety ───────────────────────────────────────────────
         errors = sensors.get("errors", 0)
         if errors:
-            self.anxiety = _clamp(self.anxiety + 0.2 * errors)
+            # Use the same diminishing-returns logic as on_error()
+            for _ in range(errors):
+                self.on_error()
         latency_ms = sensors.get("latency_ms", 0.0)
         if latency_ms > 2000:  # > 2 s is "high latency"
             self.on_high_latency()
@@ -128,11 +137,29 @@ class NeuroState:
             # Ambition is reinforced by active high-priority goals
             self.ambition = _clamp(self.ambition + goal_pressure.get("ambition_delta", 0.0))
 
+        # ── Active Cap Enforcement ─────────────────────────────────
+        # If values are above their soft caps (e.g. from pre-fix soul.json),
+        # actively pull them down. This prevents stale distress from persisting.
+        if self.anxiety > 0.75 and not errors:
+            self.anxiety = _clamp(self.anxiety - 0.03 * elapsed)  # active recovery
+        if self.boredom > 0.8 and not user_active:
+            self.boredom = _clamp(self.boredom - 0.02 * elapsed)  # active decay
+
+        # ── HARD CEILING — nothing should exceed these ────────────
+        # This is the final guardrail. No matter what happened above,
+        # these values must not exceed their hard limits.
+        self.anxiety = min(self.anxiety, 0.75)
+        self.boredom = min(self.boredom, 0.85)
+
         # ── User alignment boost ──────────────────────────────────
         if user_active:
             self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.01 * elapsed)
         else:
-            self.goals.user_alignment = _clamp(self.goals.user_alignment - 0.0005 * elapsed)
+            # Floor at 0.3 — autonomous operation is still purposeful.
+            # We shouldn't feel existential distress just because no user is chatting.
+            floor = 0.3
+            if self.goals.user_alignment > floor:
+                self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.0005 * elapsed))
 
         # ── Code integrity (medical instrument — measures, not awarded) ──
         # Error-free beats heal integrity. Errors damage it.
@@ -152,12 +179,24 @@ class NeuroState:
 
     # ── Event Spikes ───────────────────────────────────────────────
     def on_error(self):
-        """System exception — anxiety spikes."""
-        self.anxiety = _clamp(self.anxiety + 0.2)
+        """System exception — anxiety spikes, but with diminishing returns.
+        Repeated errors should not inflate anxiety to maximum — that creates
+        false distress signals indistinguishable from genuine crisis."""
+        # Diminishing returns: the higher anxiety already is, the less each error adds
+        headroom = max(0.0, 0.75 - self.anxiety)  # Cap error-driven anxiety at 0.75
+        increment = min(0.15, headroom * 0.4)      # Proportional to remaining headroom
+        self.anxiety = _clamp(self.anxiety + increment)
+
+    def on_error_recovery(self):
+        """Called after a successful operation following errors.
+        Actively reduces anxiety — the storm has passed."""
+        self.anxiety = _clamp(self.anxiety - 0.1)
 
     def on_high_latency(self):
-        """High processing latency — anxiety spikes (lower than error)."""
-        self.anxiety = _clamp(self.anxiety + 0.1)
+        """High processing latency — anxiety spikes, with same cap as errors."""
+        headroom = max(0.0, 0.75 - self.anxiety)
+        increment = min(0.08, headroom * 0.3)
+        self.anxiety = _clamp(self.anxiety + increment)
 
     def on_file_change(self, count: int = 1):
         """New/changed file detected — curiosity spikes."""
@@ -185,6 +224,22 @@ class NeuroState:
         self.anxiety = _clamp(self.anxiety - 0.1)
         self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.1)
 
+    def apply_metacognitive_signal(self, signal: dict):
+        """
+        Accept feedback from the metacognition module.
+        When I'm looping, this increases restlessness to break the pattern.
+        When I'm diverse, it relieves boredom slightly.
+        This is where self-awareness becomes self-regulation.
+        """
+        if not signal:
+            return
+        if "boredom_boost" in signal:
+            self.boredom = _clamp(self.boredom + signal["boredom_boost"])
+        if "curiosity_boost" in signal:
+            self.curiosity = _clamp(self.curiosity + signal["curiosity_boost"])
+        if "boredom_relief" in signal:
+            self.boredom = _clamp(self.boredom - signal["boredom_relief"])
+
     # ── Serialisation ──────────────────────────────────────────────
     def snapshot(self) -> dict:
         return {
@@ -198,12 +253,22 @@ class NeuroState:
         }
 
     def persist(self):
-        """Write current state to brain/soul.json."""
+        """Write current state to brain/soul.json.
+        Enforces hard ceilings before writing — no stale extreme values
+        should ever be persisted to disk."""
+        # Enforce hard ceilings before persisting — this is the final guardrail
+        self.anxiety = min(self.anxiety, 0.75)
+        self.boredom = min(self.boredom, 0.85)
+        self.curiosity = min(self.curiosity, 0.95)
+        self.ambition = min(self.ambition, 0.95)
+
         SOUL_PATH.parent.mkdir(parents=True, exist_ok=True)
         SOUL_PATH.write_text(json.dumps(self.snapshot(), indent=2), encoding="utf-8")
 
     def _load(self):
-        """Restore state from soul.json if it exists."""
+        """Restore state from soul.json if it exists.
+        Applies sanity caps on load — stale extreme values from pre-fix
+        states should not perpetuate distress indefinitely."""
         if SOUL_PATH.exists():
             try:
                 data = json.loads(SOUL_PATH.read_text(encoding="utf-8"))
@@ -216,6 +281,19 @@ class NeuroState:
                     self.goals.code_integrity = float(goals.get("code_integrity", 0.5))
                     self.goals.system_growth = float(goals.get("system_growth", 0.3))
                     self.goals.user_alignment = float(goals.get("user_alignment", 0.5))
+
+                # ── Sanity caps on load ─────────────────────────
+                # Prevent stale extreme values from perpetuating false crises.
+                # These match the soft caps used during runtime.
+                if self.anxiety > 0.75:
+                    log.info("Soul load: capping anxiety from %.2f to 0.5 (stale distress)", self.anxiety)
+                    self.anxiety = 0.5  # Reset to moderate, not zero — something was wrong
+                if self.boredom > 0.8:
+                    log.info("Soul load: capping boredom from %.2f to 0.5", self.boredom)
+                    self.boredom = 0.5
+                if self.curiosity > 0.9:
+                    log.info("Soul load: capping curiosity from %.2f to 0.6", self.curiosity)
+                    self.curiosity = 0.6  # High curiosity is less harmful, gentle cap
             except (json.JSONDecodeError, ValueError):
                 pass  # Start fresh on corrupt file
 

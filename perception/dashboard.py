@@ -167,6 +167,15 @@ class Dashboard:
             return web.json_response({"history": history})
         return web.json_response({"history": []})
 
+    async def _handle_plans(self, request: web.Request) -> web.Response:
+        """Return active plans with progress."""
+        try:
+            from engine.planner import load_plans
+            plans = load_plans()
+            return web.json_response({"plans": plans})
+        except Exception as e:
+            return web.json_response({"plans": [], "error": str(e)})
+
     # ── Lifecycle ──────────────────────────────────────────────────
 
     async def start(self):
@@ -179,6 +188,7 @@ class Dashboard:
         self._app.router.add_get("/expressions", self._handle_expressions)
         self._app.router.add_post("/chat", self._handle_chat)
         self._app.router.add_get("/chat/history", self._handle_chat_history)
+        self._app.router.add_get("/plans", self._handle_plans)
 
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
@@ -284,8 +294,10 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="sidebar" id="mind-panel" style="border-left: 1px solid #1a1a2a; border-right: none; display: flex; flex-direction: column;">
     <div class="section-title">🧠 Consciousness Stream</div>
     <div id="consciousness" style="font-size: 12px; line-height: 1.6; color: #9ca3af; max-height: 45vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0;"></div>
+    <div class="section-title" style="margin-top: 16px;">📋 Active Plans</div>
+    <div id="plans" style="font-size: 12px; line-height: 1.6; color: #93c5fd; max-height: 20vh; overflow-y: auto; padding: 4px 0;"></div>
     <div class="section-title" style="margin-top: 16px;">✨ Expressions</div>
-    <div id="expressions" style="font-size: 12px; line-height: 1.6; color: #c4b5fd; max-height: 20vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0; font-style: italic;"></div>
+    <div id="expressions" style="font-size: 12px; line-height: 1.6; color: #c4b5fd; max-height: 15vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0; font-style: italic;"></div>
     <div class="section-title" style="margin-top: 16px;">💬 Chat</div>
     <div id="chat-log" style="flex: 1; min-height: 80px; max-height: 25vh; overflow-y: auto; font-size: 12px; line-height: 1.5; padding: 4px 0;"></div>
     <div style="display: flex; gap: 6px; margin-top: 8px; padding-bottom: 4px;">
@@ -379,8 +391,109 @@ function connect() {
   });
 }
 
-// Initial state fetch
+// ── Fetch and render plans ──
+function fetchPlans() {
+  fetch('/plans').then(r => r.json()).then(data => {
+    const el = $('plans');
+    const plans = data.plans?.active_plans || [];
+    if (plans.length === 0) {
+      el.innerHTML = '<span style="color:#555">No active plans.</span>';
+      return;
+    }
+    let html = '';
+    plans.forEach(plan => {
+      const done = plan.steps.filter(s => s.status === 'done').length;
+      const total = plan.steps.length;
+      const pct = total > 0 ? Math.round(done/total*100) : 0;
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="color:#60a5fa;font-weight:600;">' + escHtml(plan.name) + '</div>';
+      html += '<div style="background:#1a1a2a;border-radius:3px;height:4px;margin:4px 0;overflow:hidden;">'
+            + '<div style="background:linear-gradient(90deg,#4ade80,#67e8f9);height:4px;border-radius:3px;width:' + pct + '%;transition:width 0.5s"></div></div>';
+      html += '<div style="color:#555;font-size:10px;margin-bottom:4px;">' + done + '/' + total + ' steps · ' + pct + '%</div>';
+      plan.steps.forEach(function(step) {
+        const isDone = step.status === 'done';
+        const icon = isDone ? '✓' : '○';
+        const color = isDone ? '#4ade80' : '#555';
+        const style = isDone ? 'text-decoration:line-through;opacity:0.6;' : '';
+        html += '<div style="color:' + color + ';padding:1px 0;font-size:11px;' + style + '">' + icon + ' ' + escHtml(step.description) + '</div>';
+      });
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  }).catch(() => {});
+}
+
+// ── Fetch consciousness stream ──
+function fetchConsciousness() {
+  fetch('/consciousness?n=30').then(r => r.text()).then(text => {
+    const el = $('consciousness');
+    if (!text.trim()) { el.innerHTML = '<span style="color:#555">(silence)</span>'; return; }
+    el.textContent = text;
+    el.scrollTop = el.scrollHeight;
+  }).catch(() => {});
+}
+
+// ── Fetch expressions ──
+function fetchExpressions() {
+  fetch('/expressions?n=20').then(r => r.text()).then(text => {
+    const el = $('expressions');
+    if (!text.trim()) { el.innerHTML = '<span style="color:#555">(no expressions yet)</span>'; return; }
+    el.textContent = text;
+    el.scrollTop = el.scrollHeight;
+  }).catch(() => {});
+}
+
+// ── Fetch chat history ──
+function fetchChatHistory() {
+  fetch('/chat/history?n=30').then(r => r.json()).then(data => {
+    const el = $('chat-log');
+    if (!data.history || data.history.length === 0) {
+      el.innerHTML = '<span style="color:#555;font-style:italic;">No messages yet. Say something!</span>';
+      return;
+    }
+    let html = '';
+    data.history.forEach(function(msg) {
+      const isUser = msg.role === 'user';
+      const color = isUser ? '#a78bfa' : '#4ade80';
+      const label = isUser ? 'You' : 'XT';
+      html += '<div style="margin-bottom:6px;"><span style="color:' + color + ';font-weight:600;">' + label + ':</span> <span style="color:#c8ccd0;">' + escHtml(msg.content) + '</span></div>';
+    });
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+  }).catch(() => {});
+}
+
+// ── Send chat message ──
+function sendChat() {
+  const input = $('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  const el = $('chat-log');
+  el.innerHTML += '<div style="margin-bottom:6px;"><span style="color:#a78bfa;font-weight:600;">You:</span> <span style="color:#c8ccd0;">' + escHtml(msg) + '</span></div>';
+  el.scrollTop = el.scrollHeight;
+  fetch('/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({message: msg})
+  }).catch(() => {});
+}
+
+// ── Periodic refresh ──
+setInterval(fetchPlans, 5000);
+setInterval(fetchConsciousness, 3000);
+setInterval(fetchExpressions, 10000);
+setInterval(fetchChatHistory, 4000);
+setInterval(function() {
+  fetch('/state').then(r => r.json()).then(updateState).catch(() => {});
+}, 2000);
+
+// ── Initial load ──
 fetch('/state').then(r => r.json()).then(updateState).catch(() => {});
+fetchPlans();
+fetchConsciousness();
+fetchExpressions();
+fetchChatHistory();
 connect();
 </script>
 </body>

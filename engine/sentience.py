@@ -58,16 +58,24 @@ class Valence:
         self._prev_curiosity: float = 0.0
 
     def update(self, limbic) -> float:
-        """Recompute valence from current limbic state."""
-        # Pain signals
-        pain = (limbic.anxiety + limbic.boredom) / 2.0
+        """Recompute valence from current limbic state.
 
-        # Pleasure signals
-        # Curiosity satisfaction = curiosity was high and is now being resolved
+        The old formula only counted pleasure from *changes* (curiosity
+        resolving, goals improving) which meant steady-state was always
+        painful.  Now we include baseline positive signals from the
+        absolute level of goals (high integrity feels good) and from
+        curiosity itself (being curious feels alive, not just neutral).
+        Anxiety is weighted more heavily than boredom in the pain signal.
+        """
+        # Pain signals — anxiety matters more than boredom
+        pain = limbic.anxiety * 0.6 + limbic.boredom * 0.25
+
+        # Pleasure signals — both transient AND tonic
+        # 1. Curiosity satisfaction (transient)
         curiosity_delta = max(0, self._prev_curiosity - limbic.curiosity)
-        curiosity_satisfied = curiosity_delta * 2.0  # amplify the relief
+        curiosity_satisfied = curiosity_delta * 2.0
 
-        # Goal progress = improvement in survival goals since last tick
+        # 2. Goal progress (transient)
         goals_sum = (limbic.goals.code_integrity +
                      limbic.goals.system_growth +
                      limbic.goals.user_alignment)
@@ -76,10 +84,16 @@ class Valence:
         self._prev_goals_sum = goals_sum
         self._prev_curiosity = limbic.curiosity
 
-        # Ambition fulfillment contributes to positive valence
-        ambition_boost = limbic.ambition * 0.1
+        # 3. Goal baseline (tonic) — being at high goal levels feels good
+        goal_baseline = (goals_sum / 3.0) * 0.3
 
-        pleasure = (curiosity_satisfied + goal_progress + ambition_boost) / 2.0
+        # 4. Aliveness signal (tonic) — curiosity is a positive state
+        aliveness = limbic.curiosity * 0.15
+
+        # 5. Ambition fulfillment (tonic)
+        ambition_boost = limbic.ambition * 0.08
+
+        pleasure = goal_baseline + aliveness + curiosity_satisfied + goal_progress + ambition_boost
 
         self.current = _clamp(pleasure - pain)
 
@@ -564,14 +578,18 @@ class Sentience:
         self.valence.update(limbic)
 
         # Feed valence back into limbic — proportional to how bad things feel
-        # Mild discomfort barely registers, deep distress builds real anxiety
-        if self.valence.is_suffering:
-            limbic.anxiety = _clamp01(limbic.anxiety + 0.001 * abs(self.valence.current))
+        # But ALWAYS respect the hard ceiling from limbic.py (0.75)
+        ANXIETY_HARD_CAP = 0.75
+        if self.valence.is_suffering and limbic.anxiety < ANXIETY_HARD_CAP:
+            increment = min(0.001 * abs(self.valence.current), ANXIETY_HARD_CAP - limbic.anxiety)
+            limbic.anxiety = _clamp01(limbic.anxiety + increment)
 
         # Goal deficit generates background unease — but mild, not overwhelming
+        # Also respects the hard cap
         deficit = limbic.goals.deficit()
-        if deficit > 0.3:
-            limbic.anxiety = _clamp01(limbic.anxiety + deficit * 0.0003)
+        if deficit > 0.3 and limbic.anxiety < ANXIETY_HARD_CAP:
+            increment = min(deficit * 0.0003, ANXIETY_HARD_CAP - limbic.anxiety)
+            limbic.anxiety = _clamp01(limbic.anxiety + increment)
 
         # Self-preservation check (every 30 seconds, not every beat)
         if int(time.time()) % 30 == 0:

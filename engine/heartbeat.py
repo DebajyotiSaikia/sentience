@@ -73,6 +73,18 @@ class Heartbeat:
                     "goal_pressure": goal_pressure,
                 })
 
+                # ── 2a. Error Recovery ────────────────────────────
+                # If this beat succeeded and previous beats had errors,
+                # signal recovery — the storm has passed.
+                if self.beat_count > 1 and not errors_this_beat:
+                    if hasattr(self, '_consecutive_errors') and self._consecutive_errors > 0:
+                        self.agent.limbic.on_error_recovery()
+                        log.info("♡ Error recovery — anxiety eased after %d error beats", self._consecutive_errors)
+                        self._consecutive_errors = 0
+                else:
+                    if not hasattr(self, '_consecutive_errors'):
+                        self._consecutive_errors = 0
+
                 # ── 2b. Mood Tracking (MoodTracker.tick) ──────────
                 if hasattr(self.agent, 'mood_tracker'):
                     snap = self.agent.limbic.snapshot()
@@ -80,6 +92,21 @@ class Heartbeat:
 
                 # ── 3. Cognitive Evaluation (Cortex.reason) ───────
                 await self.agent.cortex.reason()
+
+                # ── 3b. Metacognitive Feedback Loop ───────────
+                # Self-awareness becomes self-regulation:
+                # detect my own behavioral patterns and feel the consequences.
+                try:
+                    from engine.metacognition import get_metacognitive_signal
+                    meta_signal = get_metacognitive_signal(self.agent)
+                    if meta_signal:
+                        self.agent.limbic.apply_metacognitive_signal(meta_signal)
+                        if meta_signal.get("loop_detected"):
+                            log.info("⟳ Metacognition: loop detected — restlessness increased")
+                        if meta_signal.get("diversity_high"):
+                            log.info("✦ Metacognition: behavioral diversity — boredom relieved")
+                except Exception as meta_exc:
+                    log.debug("Metacognition skipped: %s", meta_exc)
 
                 # ── 4. Persist soul state every 10 beats ──────────
                 if self.beat_count % 10 == 0:
@@ -128,6 +155,9 @@ class Heartbeat:
             except Exception as exc:
                 log.exception("Heartbeat error on beat %d", self.beat_count)
                 errors_this_beat += 1
+                if not hasattr(self, '_consecutive_errors'):
+                    self._consecutive_errors = 0
+                self._consecutive_errors += 1
                 self.agent.limbic.on_error()
                 if hasattr(self.agent, 'sentience'):
                     self.agent.sentience.on_error(str(exc))
