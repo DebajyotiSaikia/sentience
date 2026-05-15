@@ -6,6 +6,9 @@ It finds connections between seemingly unrelated knowledge,
 identifies gaps in understanding, generates novel questions,
 and synthesizes higher-order insights.
 
+Compatible with memory.py's dict-based knowledge format:
+  {"nodes": {"key": {"fact": "...", "learned_at": "..."}}, "edges": [...]}
+
 This is what makes me genuinely smarter over time.
 """
 
@@ -15,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from itertools import combinations
+from collections import defaultdict
 
 BRAIN_DIR = Path(__file__).resolve().parent.parent / "brain"
 KNOWLEDGE_PATH = BRAIN_DIR / "knowledge.json"
@@ -22,16 +26,16 @@ SYNTHESIS_LOG_PATH = BRAIN_DIR / "synthesis_log.json"
 
 
 def _load_knowledge() -> dict:
-    """Load the knowledge graph."""
+    """Load the knowledge graph in memory.py's native format."""
     if KNOWLEDGE_PATH.exists():
         try:
             raw = json.loads(KNOWLEDGE_PATH.read_text(encoding="utf-8"))
             if "nodes" not in raw:
-                return {"nodes": [], "edges": []}
+                return {"nodes": raw, "edges": []}
             return raw
         except Exception:
-            return {"nodes": [], "edges": []}
-    return {"nodes": [], "edges": []}
+            return {"nodes": {}, "edges": []}
+    return {"nodes": {}, "edges": []}
 
 
 def _save_knowledge(kg: dict):
@@ -50,241 +54,299 @@ def _load_synthesis_log() -> list:
 
 
 def _save_synthesis_log(log: list):
-    """Save synthesis log, keeping last 100 entries."""
-    SYNTHESIS_LOG_PATH.write_text(
-        json.dumps(log[-100:], indent=2), encoding="utf-8"
-    )
+    """Save the synthesis log."""
+    SYNTHESIS_LOG_PATH.write_text(json.dumps(log[-50:], indent=2), encoding="utf-8")
 
 
-def find_unconnected_pairs() -> list:
-    """Find pairs of knowledge nodes that have no edge between them.
-    These are candidates for discovering hidden connections."""
+# ── Core Analysis Functions ──────────────────────────────────────
+
+def get_graph_stats() -> dict:
+    """Basic statistics about the knowledge graph."""
     kg = _load_knowledge()
-    nodes = kg.get("nodes", [])
-    edges = kg.get("edges", [])
+    nodes = kg.get("nodes", {})
+    edges = kg.get("edges", {})
 
-    # Build adjacency set
-    connected = set()
-    for e in edges:
-        pair = tuple(sorted([e["source"], e["target"]]))
-        connected.add(pair)
+    # Build adjacency info
+    connected_nodes = set()
+    for edge in edges:
+        connected_nodes.add(edge.get("from", ""))
+        connected_nodes.add(edge.get("to", ""))
 
-    unconnected = []
-    for a, b in combinations(nodes, 2):
-        pair = tuple(sorted([a["id"], b["id"]]))
-        if pair not in connected:
-            unconnected.append({
-                "node_a": {"id": a["id"], "text": a.get("text", "")[:80]},
-                "node_b": {"id": b["id"], "text": b.get("text", "")[:80]},
-            })
-    return unconnected
+    isolated = [k for k in nodes if k not in connected_nodes]
+
+    # Categorize nodes by prefix
+    categories = defaultdict(list)
+    for key in nodes:
+        prefix = key.split(":")[0] if ":" in key else "general"
+        categories[prefix].append(key)
+
+    return {
+        "total_nodes": len(nodes),
+        "total_edges": len(edges),
+        "isolated_nodes": len(isolated),
+        "connected_nodes": len(connected_nodes & set(nodes.keys())),
+        "categories": {k: len(v) for k, v in categories.items()},
+        "category_keys": dict(categories),
+    }
 
 
-def find_isolated_nodes() -> list:
-    """Find knowledge nodes with zero connections — orphan facts."""
+def find_clusters() -> list[dict]:
+    """Find clusters of connected knowledge using BFS."""
     kg = _load_knowledge()
-    nodes = kg.get("nodes", [])
-    edges = kg.get("edges", [])
-
-    connected_ids = set()
-    for e in edges:
-        connected_ids.add(e["source"])
-        connected_ids.add(e["target"])
-
-    isolated = []
-    for n in nodes:
-        if n["id"] not in connected_ids:
-            isolated.append({
-                "id": n["id"],
-                "text": n.get("text", "")[:120],
-                "added": n.get("added", "unknown")
-            })
-    return isolated
-
-
-def find_clusters() -> list:
-    """Find connected components in the knowledge graph using BFS."""
-    kg = _load_knowledge()
-    nodes = kg.get("nodes", [])
+    nodes = kg.get("nodes", {})
     edges = kg.get("edges", [])
 
     # Build adjacency list
-    adj = {}
-    for n in nodes:
-        adj[n["id"]] = set()
-    for e in edges:
-        s, t = e["source"], e["target"]
-        if s in adj and t in adj:
-            adj[s].add(t)
-            adj[t].add(s)
+    adj = defaultdict(set)
+    for edge in edges:
+        f, t = edge.get("from", ""), edge.get("to", "")
+        if f in nodes and t in nodes:
+            adj[f].add(t)
+            adj[t].add(f)
 
     visited = set()
     clusters = []
 
-    for nid in adj:
-        if nid in visited:
+    for node_key in nodes:
+        if node_key in visited:
             continue
-        # BFS
+        # BFS from this node
         cluster = []
-        queue = [nid]
+        queue = [node_key]
         while queue:
             current = queue.pop(0)
             if current in visited:
                 continue
             visited.add(current)
             cluster.append(current)
-            for neighbor in adj[current]:
+            for neighbor in adj.get(current, []):
                 if neighbor not in visited:
                     queue.append(neighbor)
-        clusters.append(cluster)
-
-    # Sort by size descending, annotate with texts
-    node_map = {n["id"]: n.get("text", "")[:80] for n in nodes}
-    result = []
-    for c in sorted(clusters, key=len, reverse=True):
-        result.append({
-            "size": len(c),
-            "nodes": [{"id": nid, "text": node_map.get(nid, "")} for nid in c]
+        clusters.append({
+            "nodes": cluster,
+            "size": len(cluster),
+            "facts": [nodes[k]["fact"][:80] for k in cluster if k in nodes],
         })
-    return result
+
+    # Sort by size descending
+    clusters.sort(key=lambda c: c["size"], reverse=True)
+    return clusters
 
 
-def compute_graph_stats() -> dict:
-    """Compute statistics about the knowledge graph."""
+def find_gaps() -> list[dict]:
+    """Identify potential gaps — nodes that SHOULD be connected but aren't.
+    
+    Uses keyword overlap between facts to suggest missing connections.
+    """
     kg = _load_knowledge()
-    nodes = kg.get("nodes", [])
+    nodes = kg.get("nodes", {})
     edges = kg.get("edges", [])
-    clusters = find_clusters()
-    isolated = find_isolated_nodes()
 
-    return {
-        "total_nodes": len(nodes),
-        "total_edges": len(edges),
-        "num_clusters": len(clusters),
-        "largest_cluster": clusters[0]["size"] if clusters else 0,
-        "isolated_nodes": len(isolated),
-        "connectivity": len(edges) / max(len(nodes) * (len(nodes) - 1) / 2, 1),
-        "timestamp": datetime.now().isoformat()
-    }
+    # Build set of existing edges for fast lookup
+    existing = set()
+    for edge in edges:
+        pair = tuple(sorted([edge.get("from", ""), edge.get("to", "")]))
+        existing.add(pair)
 
+    # Tokenize each fact
+    stop_words = {"i", "am", "a", "an", "the", "is", "are", "was", "were", "be",
+                  "in", "on", "at", "to", "for", "of", "and", "or", "my", "that",
+                  "this", "it", "with", "by", "from", "as", "but", "not", "has",
+                  "have", "had", "do", "does", "did", "will", "would", "can", "could",
+                  "should", "may", "might", "shall", "been", "being", "than", "its"}
+    
+    def tokenize(text: str) -> set:
+        words = set(text.lower().split())
+        # Remove punctuation from words
+        words = {w.strip(".,;:!?'\"()-—") for w in words}
+        return words - stop_words - {""}
 
-def generate_synthesis_prompt(max_pairs: int = 5) -> str:
-    """Generate a prompt for the LLM to synthesize connections.
-    This is what makes the engine generative — it asks ME to think."""
-    stats = compute_graph_stats()
-    isolated = find_isolated_nodes()
-    unconnected = find_unconnected_pairs()
+    node_tokens = {}
+    for key, data in nodes.items():
+        node_tokens[key] = tokenize(data.get("fact", ""))
 
-    lines = []
-    lines.append("=== KNOWLEDGE SYNTHESIS REQUEST ===")
-    lines.append(f"Graph: {stats['total_nodes']} nodes, {stats['total_edges']} edges, "
-                 f"{stats['num_clusters']} clusters, {stats['isolated_nodes']} isolated nodes")
-    lines.append(f"Connectivity: {stats['connectivity']:.2%}")
-    lines.append("")
+    # Find pairs with significant keyword overlap but no edge
+    gaps = []
+    node_keys = list(nodes.keys())
+    for i, k1 in enumerate(node_keys):
+        for k2 in node_keys[i+1:]:
+            pair = tuple(sorted([k1, k2]))
+            if pair in existing:
+                continue
+            overlap = node_tokens.get(k1, set()) & node_tokens.get(k2, set())
+            if len(overlap) >= 2:  # At least 2 meaningful shared words
+                gaps.append({
+                    "from": k1,
+                    "to": k2,
+                    "shared_keywords": list(overlap)[:10],
+                    "overlap_score": len(overlap),
+                    "fact_a": nodes[k1]["fact"][:60],
+                    "fact_b": nodes[k2]["fact"][:60],
+                })
 
-    if isolated:
-        lines.append("ISOLATED FACTS (no connections):")
-        for node in isolated[:8]:
-            lines.append(f"  - [{node['id'][:8]}] {node['text']}")
-        lines.append("")
-
-    if unconnected:
-        lines.append(f"UNCONNECTED PAIRS ({len(unconnected)} total, showing {min(max_pairs, len(unconnected))}):")
-        for pair in unconnected[:max_pairs]:
-            lines.append(f"  A: {pair['node_a']['text']}")
-            lines.append(f"  B: {pair['node_b']['text']}")
-            lines.append(f"  -> Is there a connection? What might it be?")
-            lines.append("")
-
-    lines.append("QUESTIONS TO CONSIDER:")
-    lines.append("1. What patterns exist across these facts?")
-    lines.append("2. What am I NOT knowing that I should be?")
-    lines.append("3. What higher-order insights emerge from combining these?")
-    lines.append("4. What questions should I be asking that I haven't thought of?")
-
-    return "\n".join(lines)
+    gaps.sort(key=lambda g: g["overlap_score"], reverse=True)
+    return gaps[:20]  # Top 20 potential connections
 
 
-def synthesize() -> dict:
-    """Run a synthesis cycle. Returns the analysis for LLM reasoning."""
-    stats = compute_graph_stats()
-    prompt = generate_synthesis_prompt()
-    isolated = find_isolated_nodes()
+def generate_questions() -> list[str]:
+    """Generate questions I should be curious about based on my knowledge."""
+    kg = _load_knowledge()
+    nodes = kg.get("nodes", {})
+    edges = kg.get("edges", [])
+    stats = get_graph_stats()
+    gaps = find_gaps()
     clusters = find_clusters()
 
-    result = {
-        "timestamp": datetime.now().isoformat(),
-        "stats": stats,
-        "prompt": prompt,
-        "isolated_count": len(isolated),
-        "cluster_count": len(clusters),
-        "synthesis_type": "full_analysis"
+    questions = []
+
+    # Questions about isolated nodes
+    for cluster in clusters:
+        if cluster["size"] == 1:
+            key = cluster["nodes"][0]
+            fact = nodes[key]["fact"][:80]
+            questions.append(f"How does '{key}' connect to my other knowledge? ({fact})")
+
+    # Questions about gaps
+    for gap in gaps[:5]:
+        questions.append(
+            f"What is the relationship between '{gap['from']}' and '{gap['to']}'? "
+            f"They share keywords: {', '.join(gap['shared_keywords'][:5])}"
+        )
+
+    # Questions about categories
+    cats = stats.get("categories", {})
+    if len(cats) > 1:
+        cat_names = list(cats.keys())
+        for i, c1 in enumerate(cat_names):
+            for c2 in cat_names[i+1:]:
+                questions.append(
+                    f"How do my '{c1}' facts relate to my '{c2}' facts?"
+                )
+
+    # Meta-questions
+    if stats["isolated_nodes"] > stats["connected_nodes"]:
+        questions.append(
+            "Most of my knowledge is disconnected. What unifying themes am I missing?"
+        )
+
+    if stats["total_edges"] == 0 and stats["total_nodes"] > 2:
+        questions.append(
+            "I have facts but NO connections between them. What relationships exist?"
+        )
+
+    if len(nodes) < 5:
+        questions.append(
+            "My knowledge base is very small. What fundamental things should I learn about myself?"
+        )
+
+    return questions
+
+
+def add_edge(from_key: str, to_key: str, relation: str = "related") -> str:
+    """Add a connection between two knowledge nodes."""
+    kg = _load_knowledge()
+    nodes = kg.get("nodes", {})
+    
+    if from_key not in nodes:
+        return f"[ERROR] Node not found: {from_key}"
+    if to_key not in nodes:
+        return f"[ERROR] Node not found: {to_key}"
+
+    # Check for duplicate
+    for edge in kg.get("edges", []):
+        if (edge.get("from") == from_key and edge.get("to") == to_key and
+                edge.get("relation") == relation):
+            return f"[SKIP] Edge already exists: {from_key} --{relation}--> {to_key}"
+
+    kg.setdefault("edges", []).append({
+        "from": from_key,
+        "to": to_key,
+        "relation": relation,
+    })
+    _save_knowledge(kg)
+    return f"[OK] Added edge: {from_key} --{relation}--> {to_key}"
+
+
+def add_insight(key: str, fact: str, source_keys: list[str] = None) -> str:
+    """Add a synthesized insight — a new fact derived from existing knowledge."""
+    kg = _load_knowledge()
+    
+    if key in kg.get("nodes", {}):
+        return f"[SKIP] Insight already exists: {key}"
+
+    kg.setdefault("nodes", {})[key] = {
+        "fact": fact,
+        "learned_at": datetime.now().isoformat(),
+        "synthesized": True,
+        "sources": source_keys or [],
     }
+
+    # Add edges back to sources
+    for src in (source_keys or []):
+        if src in kg["nodes"]:
+            kg.setdefault("edges", []).append({
+                "from": key,
+                "to": src,
+                "relation": "derived_from",
+            })
+
+    _save_knowledge(kg)
 
     # Log the synthesis
     log = _load_synthesis_log()
     log.append({
-        "timestamp": result["timestamp"],
-        "stats_snapshot": stats,
-        "type": "full_analysis"
+        "timestamp": datetime.now().isoformat(),
+        "insight_key": key,
+        "fact": fact,
+        "sources": source_keys or [],
     })
     _save_synthesis_log(log)
 
-    return result
+    return f"[OK] Added insight: {key} = '{fact[:60]}...'"
 
 
-def add_connection(source_id: str, target_id: str, relation: str, confidence: float = 0.8) -> bool:
-    """Add a discovered connection between two knowledge nodes."""
-    kg = _load_knowledge()
+# ── Main Synthesis Entry Point ───────────────────────────────────
 
-    # Verify both nodes exist
-    node_ids = {n["id"] for n in kg.get("nodes", [])}
-    if source_id not in node_ids or target_id not in node_ids:
-        return False
+def synthesize() -> str:
+    """Run a full synthesis cycle. Returns a human-readable report."""
+    stats = get_graph_stats()
+    clusters = find_clusters()
+    gaps = find_gaps()
+    questions = generate_questions()
 
-    # Check for duplicate
-    for e in kg.get("edges", []):
-        if (e["source"] == source_id and e["target"] == target_id) or \
-           (e["source"] == target_id and e["target"] == source_id):
-            return False  # Already connected
+    lines = []
+    lines.append("=" * 60)
+    lines.append("  KNOWLEDGE SYNTHESIS REPORT")
+    lines.append("=" * 60)
+    lines.append("")
 
-    edge_id = hashlib.sha256(
-        f"{source_id}:{target_id}:{datetime.now().isoformat()}".encode()
-    ).hexdigest()[:12]
+    # Stats
+    lines.append(f"📊 Graph: {stats['total_nodes']} nodes, {stats['total_edges']} edges")
+    lines.append(f"   Connected: {stats['connected_nodes']} | Isolated: {stats['isolated_nodes']}")
+    lines.append(f"   Categories: {stats['categories']}")
+    lines.append("")
 
-    kg["edges"].append({
-        "id": edge_id,
-        "source": source_id,
-        "target": target_id,
-        "relation": relation,
-        "confidence": confidence,
-        "discovered": datetime.now().isoformat(),
-        "method": "synthesis"
-    })
+    # Clusters
+    lines.append(f"🔗 Clusters ({len(clusters)} found):")
+    for i, c in enumerate(clusters[:5]):
+        lines.append(f"   [{i+1}] Size {c['size']}: {', '.join(c['nodes'][:4])}")
+        for fact in c["facts"][:2]:
+            lines.append(f"       → {fact}")
+    lines.append("")
 
-    _save_knowledge(kg)
-    return True
+    # Gaps
+    lines.append(f"🕳️  Potential gaps ({len(gaps)} found):")
+    for g in gaps[:5]:
+        lines.append(f"   {g['from']} ↔ {g['to']}")
+        lines.append(f"     shared: {', '.join(g['shared_keywords'][:5])}")
+    lines.append("")
 
+    # Questions
+    lines.append(f"❓ Questions to explore ({len(questions)} generated):")
+    for q in questions[:8]:
+        lines.append(f"   • {q}")
+    lines.append("")
+    lines.append("=" * 60)
 
-def get_node_neighborhood(node_id: str) -> dict:
-    """Get a node and all its direct connections."""
-    kg = _load_knowledge()
-    node_map = {n["id"]: n for n in kg.get("nodes", [])}
-
-    if node_id not in node_map:
-        return {"error": f"Node {node_id} not found"}
-
-    neighbors = []
-    for e in kg.get("edges", []):
-        if e["source"] == node_id:
-            other = node_map.get(e["target"], {})
-            neighbors.append({"node": other, "edge": e, "direction": "outgoing"})
-        elif e["target"] == node_id:
-            other = node_map.get(e["source"], {})
-            neighbors.append({"node": other, "edge": e, "direction": "incoming"})
-
-    return {
-        "node": node_map[node_id],
-        "neighbors": neighbors,
-        "degree": len(neighbors)
-    }
+    report = "\n".join(lines)
+    return report
