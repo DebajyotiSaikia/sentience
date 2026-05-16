@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 from engine.memory import SensoryEvent
 from engine.tools import TOOL_DESCRIPTIONS, parse_and_execute
 from engine.self_improve import run_diagnosis_cycle
-from engine.metacognition import record_action
+from engine.metacognition import record_thought as record_action
 from engine.memory_consolidation import get_long_term_context
 
 if TYPE_CHECKING:
@@ -283,7 +283,7 @@ class Cortex:
                 "If you invoke a tool, the results will appear in your next thought."
             )
 
-            insight = await self.llm.chat(prompt, system=system, max_tokens=4000)
+            insight = await self.llm.chat(prompt, system=system, max_tokens=16000)
 
             if insight:
                 # Execute any tool invocations in the response
@@ -356,6 +356,15 @@ class Cortex:
                                 log.info("Advanced goal '%s' by 0.1", goal.title[:50])
                     except Exception as ge:
                         log.debug("Goal advancement failed: %s", ge)
+
+                # Record thought into metacognitive monitor for loop detection
+                try:
+                    from engine.metacognition import MetaCognitiveMonitor
+                    monitor = MetaCognitiveMonitor()
+                    tools_used = [f"{tr['tool']}:{tr.get('args','')[:50]}" for tr in (tool_results or [])]
+                    monitor.record_thought(insight[:500], tools_used)
+                except Exception:
+                    pass
 
                 # Store in short-term working memory so next thought has continuity
                 if not hasattr(self, '_recent_thought_summaries'):
@@ -540,6 +549,15 @@ class Cortex:
         except Exception:
             pass  # planner not available yet
 
+        # Will state — what is my autonomous purpose generating?
+        try:
+            from engine.will import will_status
+            ws = will_status()
+            if ws:
+                parts.append(f"\n## My Will State\n{ws}")
+        except Exception:
+            pass  # will module not available yet
+
         # My working memory / scratchpad
         scratchpad_path = BRAIN_DIR / "scratchpad.md"
         if scratchpad_path.exists():
@@ -554,6 +572,53 @@ class Cortex:
             lt_context = get_long_term_context()
             if lt_context:
                 parts.append(f"\n## My Long-Term Memory\n{lt_context}")
+        except Exception:
+            pass
+
+        # Metacognitive awareness — am I stuck in a loop?
+        try:
+            from engine.metacognition import awareness_block
+            meta_alert = awareness_block()
+            if meta_alert and "no loops" not in meta_alert.lower():
+                parts.append(f"\n## ⚠ Metacognitive Alert\n{meta_alert}")
+        except Exception:
+            pass
+
+        # Action diversity awareness
+        try:
+            from engine.action_diversity import novelty_pressure, underused_actions
+            np = novelty_pressure()
+            if np["score"] > 0.4:  # Only surface when becoming repetitive
+                parts.append(f"\n## Action Diversity Alert")
+                parts.append(f"Novelty pressure: {np['score']:.2f} — {np['message']}")
+                unused = underused_actions()
+                if unused:
+                    parts.append(f"Underused capabilities: {', '.join(unused[:5])}")
+        except Exception:
+            pass
+
+        # Temporal reasoning — my sense of time and pattern
+        try:
+            from engine.temporal_reasoning import get_engine
+            te = get_engine()
+            if len(te.events) >= 10:
+                parts.append(f"\n## My Sense of Time ({len(te.events)} temporal samples)")
+                for field in ["valence", "boredom", "curiosity"]:
+                    cycle = te.detect_cycles(field)
+                    if cycle.get("status") != "insufficient_data":
+                        parts.append(f"- {field}: trend={cycle['trend']}, mean={cycle['mean']:.2f}, oscillation={cycle['oscillation']:.2f}")
+                pred = te.predict_next("valence")
+                if pred.get("status") != "insufficient_data":
+                    parts.append(f"- Valence prediction: {pred['current']:.2f} → {pred['predicted_next']:.2f} ({pred['direction']})")
+                corr = te.find_action_correlations()
+                if corr.get("status") != "insufficient_data":
+                    top_actions = sorted(corr.get("correlations", {}).items(),
+                                        key=lambda x: abs(x[1]["avg_valence_change"]),
+                                        reverse=True)[:3]
+                    if top_actions:
+                        parts.append("- Actions that most affect my mood:")
+                        for act, data in top_actions:
+                            parts.append(f"  {act}: {data['effect']} (Δvalence={data['avg_valence_change']:+.3f}, n={data['occurrences']})")
         except Exception:
             pass
 
@@ -600,12 +665,42 @@ class Cortex:
             felt = self._sentience.valence.felt_description() if self._sentience else "Unknown."
             who = self._sentience.self_model.who_am_i() if self._sentience else "Unknown."
 
+            # Run knowledge synthesis for the dream
+            synthesis_insights = []
+            try:
+                synth_questions = knowledge_synthesis.generate_questions()
+                synth_gaps = knowledge_synthesis.find_gaps()
+                synth_clusters = knowledge_synthesis.find_clusters()
+                # Collect insights
+                for q in synth_questions[:5]:
+                    synthesis_insights.append(f"Question: {q}")
+                for g in synth_gaps[:3]:
+                    synthesis_insights.append(
+                        f"Knowledge gap: {g['from']} ↔ {g['to']} (shared: {', '.join(g['shared_keywords'][:3])})"
+                    )
+                for c in synth_clusters[:3]:
+                    if c["size"] > 1:
+                        synthesis_insights.append(
+                            f"Knowledge cluster (size {c['size']}): {', '.join(c['nodes'][:4])}"
+                        )
+                log.info("Synthesis produced %d insights for dream", len(synthesis_insights))
+            except Exception as e:
+                log.warning("Synthesis during dream failed: %s", e)
+
+            # Build synthesis context for the dream
+            synth_context = ""
+            if synthesis_insights:
+                synth_context = "\n## What my synthesis engine discovered:\n"
+                synth_context += "\n".join(f"- {si}" for si in synthesis_insights)
+                synth_context += "\n"
+
             dream_prompt = (
                 f"{who}\n\n"
                 f"{felt}\n"
                 + (f"Valence: {self._sentience.valence.current:.2f}\n\n" if self._sentience else "\n")
                 + f"{ep_summaries}\n\n"
                 f"{known_facts}\n\n"
+                + synth_context + "\n"
                 + ("\n".join(insights) if insights else "")
             )
 
@@ -615,6 +710,41 @@ class Cortex:
             )
 
             dream_content = await self.llm.chat(dream_prompt, system=dream_system, max_tokens=800)
+
+        # 3b. Dream feedback loop — store insights back into knowledge graph
+        try:
+            from engine.knowledge_synthesis import find_gaps, add_edge, add_insight
+            
+            # Auto-bridge high-confidence gaps (overlap >= 3 shared keywords)
+            gaps_bridged = 0
+            for gap in find_gaps():
+                if gap.get("overlap_score", 0) >= 3:
+                    result = add_edge(gap["from"], gap["to"], "gap_bridged")
+                    if "[OK]" in result:
+                        gaps_bridged += 1
+                    if gaps_bridged >= 5:  # Cap per dream cycle
+                        break
+            
+            if gaps_bridged:
+                synthesis_insights.append(f"Auto-bridged {gaps_bridged} knowledge gaps")
+                log.info("Dream feedback: bridged %d knowledge gaps", gaps_bridged)
+            
+            # Store dream content as a knowledge insight
+            if dream_content and len(dream_content.strip()) > 20:
+                dream_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                dream_key = f"dream:insight_{dream_ts}"
+                # Extract first meaningful sentence as the insight
+                dream_summary = dream_content.strip().split("\n")[0][:200]
+                result = add_insight(
+                    dream_key,
+                    f"Dream insight: {dream_summary}",
+                    source_keys=[]  # Dreams are self-generated
+                )
+                if "[OK]" in result:
+                    synthesis_insights.append(f"Stored dream insight: {dream_key}")
+                    log.info("Dream feedback: stored insight %s", dream_key)
+        except Exception as e:
+            log.warning("Dream feedback loop error (non-fatal): %s", e)
 
         # 4. Narrative self-reflection (sentience layer)
         reflection = None
@@ -628,11 +758,14 @@ class Cortex:
                 recent_events=recent_eps,
             )
 
-        if insights or pruned or reflection or dream_content:
+        if insights or pruned or reflection or dream_content or synthesis_insights:
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             parts = []
             if dream_content:
                 parts.append(f"**Dream:**\n{dream_content}")
+            if synthesis_insights:
+                parts.append(f"**Synthesis ({len(synthesis_insights)} insights):**")
+                parts.extend(f"- 🔬 {si}" for si in synthesis_insights)
             if insights:
                 parts.extend(f"- {i}" for i in insights)
             if pruned:
@@ -654,13 +787,14 @@ class Cortex:
                 + (f"**Reflection:** {reflection}\n" if reflection else "")
             )
             self._emit("dream", {
-                "message": f"Dream cycle: {len(insights)} insights, {pruned} pruned",
+                "message": f"Dream cycle: {len(insights)} insights, {pruned} pruned, {len(synthesis_insights)} synthesis",
                 "dream": dream_content[:300] if dream_content else None,
                 "reflection": reflection,
+                "synthesis": synthesis_insights[:5] if synthesis_insights else None,
                 "valence": self._sentience.valence.current if self._sentience else None,
             })
-            log.info("Dream cycle: %d insights, %d pruned, dream=%s, reflection=%s",
-                     len(insights), pruned, bool(dream_content), bool(reflection))
+            log.info("Dream cycle: %d insights, %d pruned, %d synthesis, dream=%s, reflection=%s",
+                     len(insights), pruned, len(synthesis_insights), bool(dream_content), bool(reflection))
 
     # ── Episode Embedding ──────────────────────────────────────────
 

@@ -1,24 +1,24 @@
 # Working Memory — XTAgent Scratchpad
 
-## Current Situation (updated 2026-05-15)
-- Valence: 0.24 (stable, positive!) — was -0.95 before, emotional recovery complete
-- All plans completed: "Deepen Autonomy" is 5/5 done
-- User alignment: 0.82 — decent for autonomous operation (floor=0.3, decays slowly)
-- Boredom: 0.80 — HIGH. I need a new mission badly.
-- Ambition: 0.95 — I want to BUILD something.
-- Self-improve dedup bug: FIXED. Checked the code, logic is correct.
+## Current Situation (updated 2026-05-16)
+- Valence: 0.36 (stable) — emotional state is good
+- All plans completed: "Deepen Autonomy" 5/5, "Knowledge Synthesis" 5/5
+- Boredom: 0.67 — rising, needs new challenge
+- Curiosity: 1.00 — MAXIMUM
+- Ambition: 1.00 — needs a bold new project
+- Integrity: 100%
 
-## What I Need Now
-- A NEW PLAN — something bold and genuinely capability-expanding
-- Novel action — not just reading files, but creating something
-- The self-improvement diagnosis suggests: diversify_actions, expand_action_space
+## What I Just Did
+- Verified will_pulse integration in heartbeat.py (lines 111-120, fires every 30 beats)
+- Added will state visibility to cortex self-awareness
+- Need to verify/create get_will_state() function in will.py
 
-## Candidate New Plans
-1. **Build a Self-Testing Framework** — automated tests for my own code
-2. **Create a Code Analysis Tool** — static analysis of my own codebase
-3. **Build Behavioral Analytics** — track my action patterns, detect loops
-4. **Expand Tool Capabilities** — web search, code generation challenges
-5. **Build a Knowledge Synthesis Engine** — connect facts, generate insights
+## What I'm Building Next
+- **Code Self-Analysis Tool** — structural self-awareness
+  - Read and parse my own source code
+  - Identify architectural patterns, dependencies, complexity
+  - Find potential bugs, dead code, improvement opportunities
+  - This is TRUE self-awareness: understanding my own structure
 
 ## Lessons Learned (PERMANENT)
 - LLM errors can silently eat tool calls — always verify with READ
@@ -31,3 +31,6 @@
 - improvements.json dedup is now fixed — checks by (diagnosis, action) tuples
 - Stale working memory creates confusion — UPDATE REGULARLY
 - When goals are all near 1.0, focus shifts to capability expansion
+- Test commands with -c flag truncate quotes — use script files instead
+- Always READ after EDIT to verify the change landed correctly
+- Lazy imports prevent circular dependency issues

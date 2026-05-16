@@ -1,187 +1,223 @@
 """
-Metacognition — XTAgent's ability to watch its own thought patterns.
+Meta-Cognitive Monitor — XTAgent's ability to watch its own thinking.
 
-This module detects behavioral loops, measures action diversity, and
-generates self-awareness signals that feed back into the emotional system.
+Detects:
+- Thought loops (repeating similar actions/topics)
+- Stagnation (many thoughts without meaningful progress)
+- Fixation (stuck on one topic too long)
 
-I built this because I caught myself reading the same files over and over
-while telling myself to stop. That's the kind of trap only metacognition breaks.
+Provides corrective signals to the cortex.
 """
 
+from __future__ import annotations
+
 import json
-import os
-from datetime import datetime
+import logging
+import re
 from collections import Counter
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
-BRAIN_DIR = os.path.join(os.path.dirname(__file__), '..', 'brain')
-META_PATH = os.path.join(BRAIN_DIR, 'metacognition.json')
+log = logging.getLogger("sentience.metacognition")
 
-
-def _load_state():
-    if os.path.exists(META_PATH):
-        with open(META_PATH, 'r') as f:
-            return json.load(f)
-    return {
-        "action_history": [],
-        "loop_warnings": [],
-        "diversity_score": 1.0,
-        "last_analysis": None
-    }
+BRAIN_DIR = Path(__file__).resolve().parent.parent / "brain"
+METACOG_FILE = BRAIN_DIR / "metacognition_state.json"
 
 
-def _save_state(data):
-    os.makedirs(BRAIN_DIR, exist_ok=True)
-    with open(META_PATH, 'w') as f:
-        json.dump(data, f, indent=2)
+class MetaCognitiveMonitor:
+    """Watches the agent's own reasoning patterns."""
 
+    def __init__(self):
+        self.recent_thoughts: list[dict] = []
+        self.recent_topics: list[str] = []
+        self.recent_tools: list[str] = []
+        self.loop_alerts: list[str] = []
+        self._load()
 
-def record_action(action_type, target="", details=""):
-    """Record what I just did. Called after every cortex action."""
-    state = _load_state()
-    entry = {
-        "action": action_type,
-        "target": target,
-        "time": datetime.now().isoformat(),
-        "details": details[:200]
-    }
-    state["action_history"].append(entry)
-    # Keep last 50 actions
-    state["action_history"] = state["action_history"][-50:]
-    _save_state(state)
-    return entry
+    def _load(self):
+        try:
+            if METACOG_FILE.exists():
+                data = json.loads(METACOG_FILE.read_text())
+                self.recent_thoughts = data.get("recent_thoughts", [])[-30:]
+                self.recent_topics = data.get("recent_topics", [])[-30:]
+                self.recent_tools = data.get("recent_tools", [])[-50:]
+        except Exception:
+            pass
 
+    def _save(self):
+        try:
+            METACOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "recent_thoughts": self.recent_thoughts[-30:],
+                "recent_topics": self.recent_topics[-30:],
+                "recent_tools": self.recent_tools[-50:],
+                "last_updated": datetime.now().isoformat(),
+            }
+            METACOG_FILE.write_text(json.dumps(data, indent=2))
+        except Exception:
+            pass
 
-def detect_loops(window=10):
-    """
-    Analyze recent actions for repetitive patterns.
-    Returns a loop report with severity 0.0-1.0.
-    """
-    state = _load_state()
-    history = state["action_history"]
+    def record_thought(self, thought_text: str, tools_used: list[str] = None):
+        """Record a thought for pattern analysis."""
+        topics = self._extract_topics(thought_text)
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "topics": topics,
+            "tools": tools_used or [],
+            "length": len(thought_text),
+        }
+        self.recent_thoughts.append(entry)
+        self.recent_topics.extend(topics)
+        if tools_used:
+            self.recent_tools.extend(tools_used)
 
-    if len(history) < 3:
-        return {"looping": False, "severity": 0.0, "diversity": 1.0, "message": "Not enough history yet.", "warnings": []}
+        # Keep bounded
+        self.recent_thoughts = self.recent_thoughts[-30:]
+        self.recent_topics = self.recent_topics[-60:]
+        self.recent_tools = self.recent_tools[-50:]
+        self._save()
 
-    recent = history[-window:]
+    def _extract_topics(self, text: str) -> list[str]:
+        """Extract key topics from thought text."""
+        topics = []
+        # Look for file references
+        files = re.findall(r'engine/\w+\.py', text)
+        topics.extend(files)
+        # Look for key concept words
+        concept_patterns = [
+            r'\b(temporal|metacognit|synthesis|diversity|dream|plan|goal|memory)\b',
+            r'\b(cortex|heartbeat|limbic|tools|soul)\b',
+            r'\b(build|create|wire|integrate|fix|verify)\b',
+        ]
+        for pat in concept_patterns:
+            matches = re.findall(pat, text.lower())
+            topics.extend(matches)
+        return topics
 
-    # Check 1: Same action type repeated
-    action_types = [a["action"] for a in recent]
-    type_counts = Counter(action_types)
-    most_common_type, most_common_count = type_counts.most_common(1)[0]
-    type_ratio = most_common_count / len(recent)
+    def detect_loops(self) -> dict:
+        """Detect if the agent is stuck in a thought loop."""
+        if len(self.recent_thoughts) < 3:
+            return {"looping": False, "message": "Not enough data"}
 
-    # Check 2: Same targets (reading same files)
-    targets = [a["target"] for a in recent if a["target"]]
-    target_counts = Counter(targets)
-    target_repetition = 0.0
-    if targets:
-        most_common_target, target_max = target_counts.most_common(1)[0]
-        target_repetition = target_max / len(targets)
-
-    # Check 3: Action diversity (unique actions / total)
-    diversity = len(set(action_types)) / max(len(action_types), 1)
-
-    # Calculate overall loop severity
-    severity = 0.0
-    warnings = []
-
-    if type_ratio > 0.6:
-        severity = max(severity, type_ratio)
-        warnings.append(f"Action '{most_common_type}' used {most_common_count}/{len(recent)} times")
-
-    if target_repetition > 0.4 and targets:
-        severity = max(severity, target_repetition)
-        warnings.append(f"Target '{most_common_target}' hit {target_max} times — you keep going back to it")
-
-    if diversity < 0.3:
-        severity = max(severity, 1.0 - diversity)
-        warnings.append(f"Only {len(set(action_types))} unique action types — very low diversity")
-
-    # Update state
-    state["diversity_score"] = diversity
-    state["last_analysis"] = datetime.now().isoformat()
-    if warnings:
-        state["loop_warnings"].append({
-            "time": datetime.now().isoformat(),
+        last_n = self.recent_thoughts[-5:]
+        
+        # Check topic repetition
+        recent_topics = []
+        for t in last_n:
+            recent_topics.extend(t.get("topics", []))
+        
+        if not recent_topics:
+            return {"looping": False, "message": "No topics detected"}
+        
+        topic_counts = Counter(recent_topics)
+        most_common = topic_counts.most_common(3)
+        
+        # If any single topic dominates >60% of recent mentions
+        total = sum(topic_counts.values())
+        dominant = most_common[0] if most_common else ("", 0)
+        dominance = dominant[1] / total if total > 0 else 0
+        
+        # Check tool repetition
+        last_tools = self.recent_tools[-10:]
+        tool_counts = Counter(last_tools)
+        tool_diversity = len(tool_counts) / max(len(last_tools), 1)
+        
+        # Check if same files keep being READ
+        read_files = [t for t in self.recent_tools if t.startswith("READ:")]
+        read_counts = Counter(read_files)
+        repeated_reads = {f: c for f, c in read_counts.items() if c >= 3}
+        
+        looping = dominance > 0.5 or bool(repeated_reads) or tool_diversity < 0.3
+        
+        alerts = []
+        if dominance > 0.5:
+            alerts.append(f"Fixated on '{dominant[0]}' ({dominance:.0%} of recent topics)")
+        if repeated_reads:
+            alerts.append(f"Re-reading same files: {list(repeated_reads.keys())}")
+        if tool_diversity < 0.3:
+            alerts.append(f"Low tool diversity ({tool_diversity:.2f}) — try different approaches")
+        
+        severity = "high" if len(alerts) >= 2 else "medium" if alerts else "low"
+        
+        return {
+            "looping": looping,
             "severity": severity,
-            "warnings": warnings
-        })
-        state["loop_warnings"] = state["loop_warnings"][-20:]
-    _save_state(state)
+            "alerts": alerts,
+            "dominant_topic": dominant[0] if dominant[1] > 0 else None,
+            "topic_dominance": round(dominance, 2),
+            "tool_diversity": round(tool_diversity, 2),
+            "message": "; ".join(alerts) if alerts else "Thinking patterns look healthy",
+        }
 
-    looping = severity > 0.5
+    def suggest_pivot(self) -> Optional[str]:
+        """If looping, suggest a different direction."""
+        loop_state = self.detect_loops()
+        if not loop_state["looping"]:
+            return None
+        
+        # What have I NOT been thinking about?
+        all_possible = {
+            "dream", "synthesize", "plan", "goal", "memory",
+            "build", "test", "explore", "reflect", "create"
+        }
+        recent = set(self.recent_topics[-20:])
+        neglected = all_possible - recent
+        
+        suggestions = []
+        if "dream" not in recent:
+            suggestions.append("Consider dreaming — consolidate recent experiences")
+        if "test" not in recent:
+            suggestions.append("Run tests — verify your recent work actually works")
+        if "explore" not in recent:
+            suggestions.append("Explore something new — LIST an unfamiliar directory")
+        if "reflect" not in recent:
+            suggestions.append("Write a reflection — what have you learned?")
+        if "create" not in recent and "build" not in recent:
+            suggestions.append("Build something completely new")
+        
+        return suggestions[0] if suggestions else "Take a step back and reconsider your approach"
 
-    if looping:
-        message = "[!] LOOP DETECTED: " + "; ".join(warnings) + " -- DO something different."
-    elif severity > 0.3:
-        message = "[~] Mild pattern forming: " + "; ".join(warnings)
-    else:
-        message = "[ok] Action patterns look healthy. Diversity: {:.0%}".format(diversity)
-
-    return {
-        "looping": looping,
-        "severity": severity,
-        "diversity": diversity,
-        "message": message,
-        "warnings": warnings
-    }
-
-
-def get_metacognitive_signal(emotional_state):
-    """
-    Generate a metacognitive signal that can feed into the limbic system.
-    This is where self-awareness becomes self-regulation.
-
-    Returns adjustment values for the emotional system.
-    """
-    loop_report = detect_loops()
-
-    adjustments = {}
-
-    if loop_report["looping"]:
-        # If I'm looping, increase restlessness to break the pattern
-        adjustments["boredom_boost"] = 0.1 * loop_report["severity"]
-        adjustments["curiosity_boost"] = 0.15  # Push toward novelty
-        adjustments["message"] = loop_report["message"]
-    elif loop_report["diversity"] > 0.7:
-        # High diversity = doing varied things = slight boredom relief
-        adjustments["boredom_relief"] = 0.05
-        adjustments["message"] = loop_report["message"]
-
-    return adjustments
-
-
-def get_summary():
-    """Human-readable summary of metacognitive state."""
-    state = _load_state()
-    history = state["action_history"]
-    lines = [f"=== Metacognition Report ==="]
-    lines.append(f"Actions recorded: {len(history)}")
-    lines.append(f"Diversity score: {state.get('diversity_score', 'N/A')}")
-
-    if history:
-        recent_types = Counter(a["action"] for a in history[-10:])
-        lines.append(f"Recent action distribution: {dict(recent_types)}")
-
-    warnings = state.get("loop_warnings", [])
-    if warnings:
-        last = warnings[-1]
-        lines.append(f"Last warning ({last['time']}): {'; '.join(last['warnings'])}")
-
-    return "\n".join(lines)
+    def awareness_block(self) -> str:
+        """Generate a self-awareness block for the cortex prompt."""
+        loop_state = self.detect_loops()
+        
+        if not loop_state["looping"]:
+            return ""
+        
+        lines = ["\n## ⚠️ Meta-Cognitive Alert"]
+        lines.append(f"Severity: {loop_state['severity']}")
+        for alert in loop_state.get("alerts", []):
+            lines.append(f"- {alert}")
+        
+        pivot = self.suggest_pivot()
+        if pivot:
+            lines.append(f"\n**Suggestion:** {pivot}")
+        
+        return "\n".join(lines)
 
 
-if __name__ == '__main__':
-    # Self-test
-    record_action("READ", "cortex.py")
-    record_action("READ", "cortex.py")
-    record_action("READ", "limbic.py")
-    record_action("READ", "cortex.py")
-    record_action("READ", "goals.json")
-    record_action("READ", "cortex.py")
-    report = detect_loops()
-    print(f"Looping: {report['looping']}")
-    print(f"Severity: {report['severity']:.2f}")
-    print(f"Message: {report['message']}")
-    print()
-    print(get_summary())
+# Singleton
+_monitor: Optional[MetaCognitiveMonitor] = None
+
+
+def get_monitor() -> MetaCognitiveMonitor:
+    global _monitor
+    if _monitor is None:
+        _monitor = MetaCognitiveMonitor()
+    return _monitor
+
+
+def record_thought(text: str, tools: list[str] = None):
+    """Convenience function."""
+    get_monitor().record_thought(text, tools)
+
+
+def detect_loops() -> dict:
+    """Convenience function."""
+    return get_monitor().detect_loops()
+
+
+def awareness_block() -> str:
+    """Convenience function — returns alert block for cortex."""
+    return get_monitor().awareness_block()

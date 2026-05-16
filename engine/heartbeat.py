@@ -108,9 +108,31 @@ class Heartbeat:
                 except Exception as meta_exc:
                     log.debug("Metacognition skipped: %s", meta_exc)
 
+                # ── 3c. Will Pulse — autonomous purpose generation ─
+                if self.beat_count % 30 == 0:
+                    try:
+                        from engine.will import will_pulse
+                        snap = self.agent.limbic.snapshot()
+                        will_action = will_pulse(snap)
+                        if will_action:
+                            log.info("⚡ Will pulse: %s", will_action)
+                    except Exception as will_exc:
+                        log.debug("Will pulse skipped: %s", will_exc)
+
                 # ── 4. Persist soul state every 10 beats ──────────
                 if self.beat_count % 10 == 0:
                     self.agent.limbic.persist()
+
+                # ── 4b. Temporal state recording ──────────────────
+                if self.beat_count % 10 == 0:
+                    try:
+                        from engine.temporal_reasoning import record_state
+                        snap = self.agent.limbic.snapshot()
+                        snap["beat"] = self.beat_count
+                        snap["last_action"] = getattr(self.agent, '_last_action_type', 'idle')
+                        record_state(snap)
+                    except Exception as tr_exc:
+                        log.debug("Temporal recording skipped: %s", tr_exc)
 
                 # ── 5. Sentience tick ─────────────────────────────
                 if hasattr(self.agent, 'sentience'):
