@@ -109,48 +109,16 @@ def list_dir(path: str = ".") -> str:
 
 
 def run_command(command: str) -> str:
-    """Execute a command — restricted to python scripts inside the workspace.
+    """Execute a command inside the workspace.
 
-    No shell access. No PowerShell. No arbitrary commands.
-    The agent can only run: python <script_in_workspace> [args...]
-    This is the body's boundary — the agent can think freely but
-    its hands only reach within its own workspace.
+    All commands run with shell=True, cwd=workspace.
+    Filesystem isolation is handled by Docker (container only sees /workspace).
     """
-    import shlex
     try:
         _log_tool("RUN", command, "(executing...)")
         log.info("Tool RUN: %s", command)
-
-        # Parse the command safely
-        try:
-            parts = shlex.split(command)
-        except ValueError:
-            return "[ERROR] Could not parse command"
-
-        if not parts:
-            return "[ERROR] Empty command"
-
-        executable = parts[0].lower()
-
-        # Only allow python execution
-        if executable not in ("python", "python3", "python.exe", "python3.exe"):
-            _log_tool("RUN", command, "BLOCKED — only python scripts allowed")
-            log.warning("RUN blocked (not python): %s", command)
-            return "[ERROR] Only 'python <script>' commands are allowed. Use READ/WRITE/LIST for file operations."
-
-        # If there's a script argument, it must be inside the workspace
-        if len(parts) > 1 and not parts[1].startswith("-"):
-            script_path = Path(parts[1])
-            if not script_path.is_absolute():
-                script_path = WORKSPACE / script_path
-            script_path = script_path.resolve()
-            if not str(script_path).startswith(str(WORKSPACE)):
-                _log_tool("RUN", command, f"BLOCKED — script outside workspace: {script_path}")
-                log.warning("RUN blocked (outside workspace): %s", script_path)
-                return f"[ERROR] Script must be inside workspace: {script_path}"
-
         result = subprocess.run(
-            parts, shell=False, capture_output=True, text=True,
+            command, shell=True, capture_output=True, text=True,
             timeout=30, cwd=str(WORKSPACE),
         )
         output = result.stdout + result.stderr

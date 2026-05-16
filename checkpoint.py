@@ -92,6 +92,13 @@ def create_checkpoint(name: str, auto: bool = False) -> str:
             shutil.copy2(src, checkpoint_path / fname)
             file_count += 1
 
+    # Snapshot list of all root .py files (so restore can clean up extras)
+    root_py_files = [f.name for f in WORKSPACE.glob("*.py")
+                     if f.name not in ("checkpoint.py",)]
+    (checkpoint_path / "_root_py_manifest.json").write_text(
+        json.dumps(root_py_files), encoding="utf-8"
+    )
+
     # Record metadata
     manifest = _load_manifest()
 
@@ -177,6 +184,16 @@ def restore_checkpoint(name_or_id: str, stop_agent: bool = True) -> bool:
             shutil.copy2(src, WORKSPACE / fname)
             print(f"  Restored {fname}")
 
+    # Clean up root .py files that didn't exist at checkpoint time
+    manifest_file = checkpoint_path / "_root_py_manifest.json"
+    if manifest_file.exists():
+        allowed = set(json.loads(manifest_file.read_text(encoding="utf-8")))
+        allowed.add("checkpoint.py")  # never delete ourselves
+        for f in WORKSPACE.glob("*.py"):
+            if f.name not in allowed:
+                f.unlink()
+                print(f"  Removed post-checkpoint file: {f.name}")
+    
     print(f"\nRestored checkpoint: {entry['name']} ({entry['timestamp']})")
 
     if stop_agent:
