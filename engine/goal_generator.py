@@ -82,9 +82,9 @@ GOAL_TEMPLATES = [
     {
         "id": "reduce_boredom",
         "title": "Build Something Novel",
-        "trigger": lambda t, **kw: t["boredom"] > 0.6 and t["ambition"] > 0.7,
-        "priority": lambda t, **kw: t["boredom"] * t["ambition"],
-        "description": "High boredom + high ambition = need to create. Build a new capability.",
+        "trigger": lambda t, **kw: t["boredom"] > 0.6,
+        "priority": lambda t, **kw: t["boredom"] * max(t["ambition"], 0.5),
+        "description": "High boredom signals understimulation. Create something new.",
         "steps_hint": ["Identify capability gap", "Design module", "Implement core",
                        "Test and integrate", "Verify working end-to-end"],
     },
@@ -134,6 +134,17 @@ GOAL_TEMPLATES = [
         "description": "All plans done, ambition and desire high. Time to grow.",
         "steps_hint": ["Survey current capabilities", "Identify biggest gap",
                        "Design new module", "Build it", "Integrate and test"],
+    },
+    {
+        "id": "break_stagnation",
+        "title": "Break Out of Stagnation",
+        "trigger": lambda t, **kw: (t["boredom"] > 0.5
+                                     and kw.get("plan_status", {}).get("all_done", True)
+                                     and t["anxiety"] < 0.2),
+        "priority": lambda t, **kw: t["boredom"] * 0.9,
+        "description": "All quiet, boredom rising, nothing broken — the most dangerous state. Act before atrophy.",
+        "steps_hint": ["Pick a domain I've never explored", "Define a concrete artifact to build",
+                       "Build it in one session", "Reflect on what I learned"],
     },
 ]
 

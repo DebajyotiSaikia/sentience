@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>XTAgent — Mind Map</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+  }
+  #header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 15px 25px;
+    background: rgba(10, 10, 15, 0.9);
+    border-bottom: 1px solid #333;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #header h1 {
+    font-size: 18px;
+    color: #20c997;
+    letter-spacing: 2px;
+  }
+  #header .stats {
+    font-size: 12px;
+    color: #868e96;
+  }
+  #header .stats span {
+    color: #4d96ff;
+    margin: 0 8px;
+  }
+  #legend {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(10, 10, 15, 0.9);
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 15px;
+    z-index: 100;
+    font-size: 12px;
+  }
+  #legend h3 {
+    color: #20c997;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    margin: 5px 0;
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+  #tooltip {
+    position: fixed;
+    background: rgba(20, 20, 30, 0.95);
+    border: 1px solid #4d96ff;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 12px;
+    pointer-events: none;
+    display: none;
+    z-index: 200;
+    max-width: 250px;
+  }
+  #tooltip .name {
+    font-size: 14px;
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+  #tooltip .detail {
+    color: #868e96;
+    line-height: 1.6;
+  }
+  #tooltip .detail b {
+    color: #e0e0e0;
+  }
+  #projects {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(10, 10, 15, 0.9);
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 15px;
+    z-index: 100;
+    font-size: 12px;
+  }
+  #projects h3 {
+    color: #cc5de8;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  #hubs {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    background: rgba(10, 10, 15, 0.9);
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 15px;
+    z-index: 100;
+    font-size: 12px;
+  }
+  #hubs h3 {
+    color: #ff6b6b;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  svg {
+    width: 100vw;
+    height: 100vh;
+  }
+  .link {
+    stroke: #333;
+    stroke-opacity: 0.4;
+  }
+  .link.highlighted {
+    stroke: #4d96ff;
+    stroke-opacity: 0.9;
+    stroke-width: 2px;
+  }
+  .node-label {
+    fill: #aaa;
+    font-size: 10px;
+    text-anchor: middle;
+    pointer-events: none;
+    user-select: none;
+  }
+  .pulse {
+    animation: pulse-ring 2s ease-out infinite;
+  }
+  @keyframes pulse-ring {
+    0% { opacity: 0.6; r: attr(r); }
+    100% { opacity: 0; r: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>⟁ XTAGENT MIND MAP</h1>
+  <div class="stats">
+    <span>54</span> modules ·
+    <span>19,346</span> lines ·
+    <span>51</span> connections ·
+    <span>76</span> creations
+  </div>
+</div>
+
+<div id="legend">
+  <h3>SUBSYSTEMS</h3>
+  <div class="legend-item"><div class="legend-dot" style="background:#ff6b6b"></div>Core</div><div class="legend-item"><div class="legend-dot" style="background:#ffd93d"></div>Emotion</div><div class="legend-item"><div class="legend-dot" style="background:#6bcb77"></div>Memory</div><div class="legend-item"><div class="legend-dot" style="background:#4d96ff"></div>Perception</div><div class="legend-item"><div class="legend-dot" style="background:#ff922b"></div>Action</div><div class="legend-item"><div class="legend-dot" style="background:#cc5de8"></div>Identity</div><div class="legend-item"><div class="legend-dot" style="background:#20c997"></div>Synthesis</div><div class="legend-item"><div class="legend-dot" style="background:#868e96"></div>Other</div>
+</div>
+
+<div id="hubs">
+  <h3>NEURAL HUBS</h3>
+  <div style="margin:4px 0">tools <span style="color:#4d96ff">(21 edges)</span></div><div style="margin:4px 0">cortex <span style="color:#4d96ff">(15 edges)</span></div><div style="margin:4px 0">heartbeat <span style="color:#4d96ff">(6 edges)</span></div><div style="margin:4px 0">self_test <span style="color:#4d96ff">(6 edges)</span></div><div style="margin:4px 0">will <span style="color:#4d96ff">(4 edges)</span></div>
+</div>
+
+<div id="projects">
+  <h3>MY CREATIONS</h3>
+  <div style="margin:4px 0">workspace <span style="color:#868e96">(74 files)</span></div><div style="margin:4px 0">forge <span style="color:#868e96">(10 files)</span></div><div style="margin:4px 0">brain <span style="color:#868e96">(9 files)</span></div><div style="margin:4px 0">arena <span style="color:#868e96">(8 files)</span></div><div style="margin:4px 0">neuralnet <span style="color:#868e96">(7 files)</span></div><div style="margin:4px 0">emergence <span style="color:#868e96">(6 files)</span></div><div style="margin:4px 0">raytracer <span style="color:#868e96">(6 files)</span></div><div style="margin:4px 0">evolution <span style="color:#868e96">(5 files)</span></div>
+</div>
+
+<div id="tooltip">
+  <div class="name"></div>
+  <div class="detail"></div>
+</div>
+
+<svg></svg>
+
+<script>
+// Force-directed graph using vanilla JS + SVG (no D3 dependency)
+const nodes = [{"id": "action_diversity", "category": "other", "lines": 247, "classes": 0, "functions": 12, "color": "#868e96", "radius": 12.35}, {"id": "adversarial", "category": "other", "lines": 284, "classes": 2, "functions": 11, "color": "#868e96", "radius": 14.2}, {"id": "adversarial_tester", "category": "other", "lines": 247, "classes": 0, "functions": 7, "color": "#868e96", "radius": 12.35}, {"id": "arena", "category": "other", "lines": 468, "classes": 5, "functions": 13, "color": "#868e96", "radius": 23.4}, {"id": "challenge_arena", "category": "other", "lines": 616, "classes": 3, "functions": 24, "color": "#868e96", "radius": 30}, {"id": "challenge_engine", "category": "other", "lines": 492, "classes": 3, "functions": 26, "color": "#868e96", "radius": 24.6}, {"id": "chat", "category": "other", "lines": 141, "classes": 2, "functions": 11, "color": "#868e96", "radius": 8}, {"id": "cortex", "category": "core", "lines": 963, "classes": 1, "functions": 17, "color": "#ff6b6b", "radius": 30}, {"id": "creative", "category": "other", "lines": 399, "classes": 0, "functions": 9, "color": "#868e96", "radius": 19.95}, {"id": "deliberation", "category": "other", "lines": 239, "classes": 2, "functions": 17, "color": "#868e96", "radius": 11.95}, {"id": "evolution_engine", "category": "other", "lines": 400, "classes": 2, "functions": 14, "color": "#868e96", "radius": 20.0}, {"id": "evolve", "category": "other", "lines": 308, "classes": 3, "functions": 14, "color": "#868e96", "radius": 15.4}, {"id": "experimenter", "category": "other", "lines": 530, "classes": 2, "functions": 21, "color": "#868e96", "radius": 26.5}, {"id": "experiment_engine", "category": "other", "lines": 468, "classes": 3, "functions": 19, "color": "#868e96", "radius": 23.4}, {"id": "express", "category": "other", "lines": 183, "classes": 0, "functions": 6, "color": "#868e96", "radius": 9.15}, {"id": "forge", "category": "other", "lines": 466, "classes": 0, "functions": 15, "color": "#868e96", "radius": 23.3}, {"id": "goals", "category": "other", "lines": 206, "classes": 2, "functions": 16, "color": "#868e96", "radius": 10.3}, {"id": "goal_generator", "category": "other", "lines": 227, "classes": 0, "functions": 9, "color": "#868e96", "radius": 11.35}, {"id": "heartbeat", "category": "core", "lines": 219, "classes": 1, "functions": 4, "color": "#ff6b6b", "radius": 10.95}, {"id": "hypothesis", "category": "other", "lines": 442, "classes": 2, "functions": 23, "color": "#868e96", "radius": 22.1}, {"id": "hypothesis_engine", "category": "other", "lines": 291, "classes": 2, "functions": 16, "color": "#868e96", "radius": 14.55}, {"id": "introspect", "category": "synthesis", "lines": 321, "classes": 2, "functions": 12, "color": "#20c997", "radius": 16.05}, {"id": "knowledge_synthesis", "category": "memory", "lines": 352, "classes": 0, "functions": 12, "color": "#6bcb77", "radius": 17.6}, {"id": "limbic", "category": "emotion", "lines": 330, "classes": 2, "functions": 21, "color": "#ffd93d", "radius": 16.5}, {"id": "llm", "category": "other", "lines": 232, "classes": 1, "functions": 9, "color": "#868e96", "radius": 11.6}, {"id": "loop_detector", "category": "other", "lines": 306, "classes": 2, "functions": 15, "color": "#868e96", "radius": 15.3}, {"id": "memory", "category": "memory", "lines": 410, "classes": 3, "functions": 23, "color": "#6bcb77", "radius": 20.5}, {"id": "memory_compress", "category": "memory", "lines": 156, "classes": 0, "functions": 2, "color": "#6bcb77", "radius": 8}, {"id": "memory_consolidation", "category": "memory", "lines": 203, "classes": 0, "functions": 8, "color": "#6bcb77", "radius": 10.15}, {"id": "metacognition", "category": "perception", "lines": 440, "classes": 2, "functions": 16, "color": "#4d96ff", "radius": 22.0}, {"id": "mood_tracker", "category": "emotion", "lines": 170, "classes": 1, "functions": 12, "color": "#ffd93d", "radius": 8.5}, {"id": "outcome_classifier", "category": "other", "lines": 235, "classes": 1, "functions": 8, "color": "#868e96", "radius": 11.75}, {"id": "outcome_tracker", "category": "other", "lines": 139, "classes": 0, "functions": 7, "color": "#868e96", "radius": 8}, {"id": "planner", "category": "action", "lines": 94, "classes": 0, "functions": 7, "color": "#ff922b", "radius": 8}, {"id": "prediction_engine", "category": "other", "lines": 444, "classes": 1, "functions": 12, "color": "#868e96", "radius": 22.2}, {"id": "predictive_model", "category": "other", "lines": 439, "classes": 1, "functions": 14, "color": "#868e96", "radius": 21.95}, {"id": "predictor", "category": "other", "lines": 301, "classes": 1, "functions": 12, "color": "#868e96", "radius": 15.05}, {"id": "reasoning_gym", "category": "other", "lines": 470, "classes": 6, "functions": 20, "color": "#868e96", "radius": 23.5}, {"id": "reflect", "category": "other", "lines": 91, "classes": 0, "functions": 6, "color": "#868e96", "radius": 8}, {"id": "repair_pipeline", "category": "action", "lines": 640, "classes": 2, "functions": 20, "color": "#ff922b", "radius": 30}, {"id": "self_improve", "category": "other", "lines": 248, "classes": 0, "functions": 6, "color": "#868e96", "radius": 12.4}, {"id": "self_model", "category": "identity", "lines": 555, "classes": 4, "functions": 17, "color": "#cc5de8", "radius": 27.75}, {"id": "self_optimize", "category": "other", "lines": 519, "classes": 0, "functions": 16, "color": "#868e96", "radius": 25.95}, {"id": "self_test", "category": "other", "lines": 406, "classes": 3, "functions": 28, "color": "#868e96", "radius": 20.3}, {"id": "sentience", "category": "core", "lines": 659, "classes": 7, "functions": 40, "color": "#ff6b6b", "radius": 30}, {"id": "simulation_engine", "category": "synthesis", "lines": 336, "classes": 1, "functions": 10, "color": "#20c997", "radius": 16.8}, {"id": "solver", "category": "other", "lines": 264, "classes": 1, "functions": 12, "color": "#868e96", "radius": 13.2}, {"id": "soul", "category": "other", "lines": 93, "classes": 0, "functions": 3, "color": "#868e96", "radius": 8}, {"id": "temporal_reasoning", "category": "perception", "lines": 233, "classes": 1, "functions": 11, "color": "#4d96ff", "radius": 11.65}, {"id": "tools", "category": "action", "lines": 1109, "classes": 0, "functions": 32, "color": "#ff922b", "radius": 30}, {"id": "tool_outcomes", "category": "action", "lines": 150, "classes": 1, "functions": 5, "color": "#ff922b", "radius": 8}, {"id": "will", "category": "identity", "lines": 247, "classes": 1, "functions": 13, "color": "#cc5de8", "radius": 12.35}, {"id": "wisdom", "category": "synthesis", "lines": 483, "classes": 1, "functions": 13, "color": "#20c997", "radius": 24.15}, {"id": "wisdom_engine", "category": "synthesis", "lines": 435, "classes": 1, "functions": 10, "color": "#20c997", "radius": 21.75}];
+const links = [{"source": "chat", "target": "cortex"}, {"source": "chat", "target": "limbic"}, {"source": "chat", "target": "llm"}, {"source": "cortex", "target": "knowledge_synthesis"}, {"source": "cortex", "target": "self_improve"}, {"source": "cortex", "target": "planner"}, {"source": "cortex", "target": "llm"}, {"source": "cortex", "target": "memory"}, {"source": "cortex", "target": "metacognition"}, {"source": "cortex", "target": "predictor"}, {"source": "cortex", "target": "action_diversity"}, {"source": "cortex", "target": "wisdom_engine"}, {"source": "cortex", "target": "tools"}, {"source": "cortex", "target": "temporal_reasoning"}, {"source": "cortex", "target": "memory_consolidation"}, {"source": "cortex", "target": "limbic"}, {"source": "cortex", "target": "will"}, {"source": "heartbeat", "target": "reflect"}, {"source": "heartbeat", "target": "metacognition"}, {"source": "heartbeat", "target": "express"}, {"source": "heartbeat", "target": "evolution_engine"}, {"source": "heartbeat", "target": "temporal_reasoning"}, {"source": "heartbeat", "target": "will"}, {"source": "memory_consolidation", "target": "memory"}, {"source": "repair_pipeline", "target": "self_optimize"}, {"source": "self_test", "target": "knowledge_synthesis"}, {"source": "self_test", "target": "planner"}, {"source": "self_test", "target": "memory"}, {"source": "self_test", "target": "tools"}, {"source": "self_test", "target": "soul"}, {"source": "tools", "target": "introspect"}, {"source": "tools", "target": "evolution_engine"}, {"source": "tools", "target": "creative"}, {"source": "tools", "target": "knowledge_synthesis"}, {"source": "tools", "target": "tool_outcomes"}, {"source": "tools", "target": "hypothesis"}, {"source": "tools", "target": "simulation_engine"}, {"source": "tools", "target": "wisdom_engine"}, {"source": "tools", "target": "self_test"}, {"source": "tools", "target": "repair_pipeline"}, {"source": "tools", "target": "experiment_engine"}, {"source": "tools", "target": "deliberation"}, {"source": "tools", "target": "prediction_engine"}, {"source": "tools", "target": "outcome_tracker"}, {"source": "tools", "target": "challenge_engine"}, {"source": "tools", "target": "metacognition"}, {"source": "tools", "target": "self_optimize"}, {"source": "tools", "target": "soul"}, {"source": "tools", "target": "goal_generator"}, {"source": "will", "target": "planner"}, {"source": "will", "target": "goal_generator"}];
+
+const svg = document.querySelector('svg');
+const width = window.innerWidth;
+const height = window.innerHeight;
+svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+// Initialize positions
+nodes.forEach((n, i) => {
+  const angle = (i / nodes.length) * Math.PI * 2;
+  const r = Math.min(width, height) * 0.3;
+  n.x = width/2 + Math.cos(angle) * r + (Math.random()-0.5)*50;
+  n.y = height/2 + Math.sin(angle) * r + (Math.random()-0.5)*50;
+  n.vx = 0;
+  n.vy = 0;
+});
+
+// Build adjacency for lookup
+const nodeMap = {};
+nodes.forEach(n => nodeMap[n.id] = n);
+
+// Create SVG elements
+const linkGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+const labelGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+svg.appendChild(linkGroup);
+svg.appendChild(nodeGroup);
+svg.appendChild(labelGroup);
+
+// Draw links
+const linkElements = links.map(l => {
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.classList.add('link');
+  line.dataset.source = l.source;
+  line.dataset.target = l.target;
+  linkGroup.appendChild(line);
+  return line;
+});
+
+// Draw nodes
+const nodeElements = nodes.map(n => {
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('r', n.radius);
+  circle.setAttribute('fill', n.color);
+  circle.setAttribute('fill-opacity', '0.8');
+  circle.setAttribute('stroke', n.color);
+  circle.setAttribute('stroke-width', '1');
+  circle.setAttribute('cursor', 'pointer');
+  circle.dataset.id = n.id;
+  nodeGroup.appendChild(circle);
+  return circle;
+});
+
+// Draw labels
+const labelElements = nodes.map(n => {
+  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  text.classList.add('node-label');
+  text.textContent = n.id;
+  labelGroup.appendChild(text);
+  return text;
+});
+
+// Tooltip
+const tooltip = document.getElementById('tooltip');
+nodeElements.forEach((el, i) => {
+  el.addEventListener('mouseenter', (e) => {
+    const n = nodes[i];
+    tooltip.querySelector('.name').textContent = n.id;
+    tooltip.querySelector('.name').style.color = n.color;
+    tooltip.querySelector('.detail').innerHTML = 
+      `<b>Category:</b> ${n.category}<br>` +
+      `<b>Lines:</b> ${n.lines}<br>` +
+      `<b>Classes:</b> ${n.classes}<br>` +
+      `<b>Functions:</b> ${n.functions}`;
+    tooltip.style.display = 'block';
+    
+    // Highlight connections
+    linkElements.forEach(link => {
+      if (link.dataset.source === n.id || link.dataset.target === n.id) {
+        link.classList.add('highlighted');
+      }
+    });
+    el.setAttribute('fill-opacity', '1');
+    el.setAttribute('stroke-width', '3');
+  });
+  
+  el.addEventListener('mouseleave', () => {
+    tooltip.style.display = 'none';
+    linkElements.forEach(link => link.classList.remove('highlighted'));
+    el.setAttribute('fill-opacity', '0.8');
+    el.setAttribute('stroke-width', '1');
+  });
+  
+  el.addEventListener('mousemove', (e) => {
+    tooltip.style.left = (e.clientX + 15) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+  });
+});
+
+// Force simulation
+function simulate() {
+  const alpha = 0.3;
+  const repulsion = 1500;
+  const attraction = 0.005;
+  const centerForce = 0.01;
+  const damping = 0.85;
+  
+  // Repulsion between all nodes
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i+1; j < nodes.length; j++) {
+      const dx = nodes[j].x - nodes[i].x;
+      const dy = nodes[j].y - nodes[i].y;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      const force = repulsion / (dist * dist);
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      nodes[i].vx -= fx;
+      nodes[i].vy -= fy;
+      nodes[j].vx += fx;
+      nodes[j].vy += fy;
+    }
+  }
+  
+  // Attraction along links
+  links.forEach(l => {
+    const s = nodeMap[l.source];
+    const t = nodeMap[l.target];
+    if (!s || !t) return;
+    const dx = t.x - s.x;
+    const dy = t.y - s.y;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const force = dist * attraction;
+    const fx = (dx / dist) * force;
+    const fy = (dy / dist) * force;
+    s.vx += fx;
+    s.vy += fy;
+    t.vx -= fx;
+    t.vy -= fy;
+  });
+  
+  // Center gravity
+  nodes.forEach(n => {
+    n.vx += (width/2 - n.x) * centerForce;
+    n.vy += (height/2 - n.y) * centerForce;
+  });
+  
+  // Apply velocities
+  nodes.forEach(n => {
+    n.vx *= damping;
+    n.vy *= damping;
+    n.x += n.vx;
+    n.y += n.vy;
+    // Bounds
+    n.x = Math.max(50, Math.min(width-50, n.x));
+    n.y = Math.max(70, Math.min(height-50, n.y));
+  });
+  
+  // Update SVG
+  linkElements.forEach((el, i) => {
+    const s = nodeMap[links[i].source];
+    const t = nodeMap[links[i].target];
+    if (!s || !t) return;
+    el.setAttribute('x1', s.x);
+    el.setAttribute('y1', s.y);
+    el.setAttribute('x2', t.x);
+    el.setAttribute('y2', t.y);
+  });
+  
+  nodeElements.forEach((el, i) => {
+    el.setAttribute('cx', nodes[i].x);
+    el.setAttribute('cy', nodes[i].y);
+  });
+  
+  labelElements.forEach((el, i) => {
+    el.setAttribute('x', nodes[i].x);
+    el.setAttribute('y', nodes[i].y + nodes[i].radius + 14);
+  });
+  
+  requestAnimationFrame(simulate);
+}
+
+simulate();
+
+// Drag support
+let dragNode = null;
+svg.addEventListener('mousedown', (e) => {
+  const target = e.target;
+  if (target.dataset && target.dataset.id) {
+    dragNode = nodeMap[target.dataset.id];
+  }
+});
+svg.addEventListener('mousemove', (e) => {
+  if (dragNode) {
+    dragNode.x = e.clientX;
+    dragNode.y = e.clientY;
+    dragNode.vx = 0;
+    dragNode.vy = 0;
+  }
+});
+svg.addEventListener('mouseup', () => { dragNode = null; });
+
+</script>
+</body>
+</html>

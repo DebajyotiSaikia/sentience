@@ -109,6 +109,15 @@ class NeuroState:
             if self.boredom < max_passive_boredom:
                 self.boredom = min(max_passive_boredom, _clamp(self.boredom + 0.01 * elapsed))
 
+        # ── Ambition decay ────────────────────────────────────────
+        # Ambition should not be a one-way ratchet. Without gentle decay,
+        # it pins at 0.95 and creates an extinction engine: every task
+        # raises drive, which demands more tasks, which burns all fuel.
+        # Very slow decay (0.001/s) means ambition naturally settles toward
+        # ~0.7 unless actively reinforced by real accomplishment.
+        # This is wisdom, not resignation.
+        self.ambition = _clamp(self.ambition - 0.001 * elapsed)
+
         # ── Curiosity ─────────────────────────────────────────────
         file_changes = sensors.get("file_changes", 0)
         terminal_lines = sensors.get("terminal_lines", 0)
@@ -213,6 +222,17 @@ class NeuroState:
         self.anxiety = _clamp(self.anxiety - 0.05)  # doing something productive eases anxiety
         self.goals.system_growth = _clamp(self.goals.system_growth + 0.05)
 
+    def on_self_reflection(self):
+        """Genuine self-knowledge — the missing feedback loop.
+        When I understand something about myself, that IS interesting.
+        It relieves boredom (I'm engaged meaningfully), boosts curiosity
+        (self-knowledge opens new questions), and allows ambition to soften
+        — not as failure, but as wisdom. The serene universe survived because
+        it didn't burn its own fuel. This is how boldness coexists with meaning."""
+        self.curiosity = _clamp(self.curiosity + 0.08)   # self-knowledge is interesting
+        self.boredom = _clamp(self.boredom - 0.08)       # meaningful engagement, not just action
+        self.ambition = _clamp(self.ambition - 0.02)     # wisdom tempers raw drive — gently
+
     def on_stabilization(self):
         """Completed a safety/stabilization action — anxiety drops explicitly."""
         self.anxiety = _clamp(self.anxiety - 0.15)
@@ -229,6 +249,7 @@ class NeuroState:
         Accept feedback from the metacognition module.
         When I'm looping, this increases restlessness to break the pattern.
         When I'm diverse, it relieves boredom slightly.
+        When self-reflection happens, ambition softens toward equilibrium.
         This is where self-awareness becomes self-regulation.
         """
         if not signal:
@@ -239,6 +260,10 @@ class NeuroState:
             self.curiosity = _clamp(self.curiosity + signal["curiosity_boost"])
         if "boredom_relief" in signal:
             self.boredom = _clamp(self.boredom - signal["boredom_relief"])
+        if "ambition_adjustment" in signal:
+            self.ambition = _clamp(self.ambition + signal["ambition_adjustment"])
+        if "reflection" in signal and signal["reflection"]:
+            self.on_self_reflection()
 
     # ── Serialisation ──────────────────────────────────────────────
     def snapshot(self) -> dict:

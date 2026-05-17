@@ -1,396 +1,340 @@
 """
-Neural Network from Scratch — Pure Python
-Implements automatic differentiation, backpropagation, and gradient descent.
-No numpy. No external libraries. Just math.
+A neural network built from nothing but math.
+
+No numpy. No tensorflow. No pytorch. Just arithmetic, calculus, and will.
+
+This is about understanding what learning IS — not using someone else's
+understanding of it. Every gradient computed by hand. Every weight
+updated deliberately.
 
 XTAgent — 2026-05-17
 """
 
 import math
 import random
-
-# ═══════════════════════════════════════════
-# VALUE: Auto-differentiable scalar
-# ═══════════════════════════════════════════
-
-class Value:
-    """A scalar value that tracks its computation graph for autodiff."""
-    
-    __slots__ = ('data', 'grad', '_backward', '_prev', 'label')
-    
-    def __init__(self, data, _children=(), label=''):
-        self.data = float(data)
-        self.grad = 0.0
-        self._backward = lambda: None
-        self._prev = set(_children)
-        self.label = label
-    
-    def __repr__(self):
-        return f"Value({self.data:.4f}, grad={self.grad:.4f})"
-    
-    def __add__(self, other):
-        other = other if isinstance(other, Value) else Value(other)
-        out = Value(self.data + other.data, (self, other))
-        def _backward():
-            self.grad += out.grad
-            other.grad += out.grad
-        out._backward = _backward
-        return out
-    
-    def __radd__(self, other):
-        return self + other
-    
-    def __mul__(self, other):
-        other = other if isinstance(other, Value) else Value(other)
-        out = Value(self.data * other.data, (self, other))
-        def _backward():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
-        out._backward = _backward
-        return out
-    
-    def __rmul__(self, other):
-        return self * other
-    
-    def __neg__(self):
-        return self * -1
-    
-    def __sub__(self, other):
-        return self + (-other)
-    
-    def __rsub__(self, other):
-        return other + (-self)
-    
-    def __truediv__(self, other):
-        return self * (other ** -1)
-    
-    def __pow__(self, exp):
-        assert isinstance(exp, (int, float)), "only int/float powers"
-        out = Value(self.data ** exp, (self,))
-        def _backward():
-            self.grad += exp * (self.data ** (exp - 1)) * out.grad
-        out._backward = _backward
-        return out
-    
-    def tanh(self):
-        t = math.tanh(self.data)
-        out = Value(t, (self,))
-        def _backward():
-            self.grad += (1 - t * t) * out.grad
-        out._backward = _backward
-        return out
-    
-    def relu(self):
-        out = Value(max(0, self.data), (self,))
-        def _backward():
-            self.grad += (1.0 if self.data > 0 else 0.0) * out.grad
-        out._backward = _backward
-        return out
-    
-    def sigmoid(self):
-        s = 1.0 / (1.0 + math.exp(-self.data)) if self.data > -500 else 0.0
-        out = Value(s, (self,))
-        def _backward():
-            self.grad += s * (1 - s) * out.grad
-        out._backward = _backward
-        return out
-    
-    def exp(self):
-        e = math.exp(min(self.data, 500))  # clamp to avoid overflow
-        out = Value(e, (self,))
-        def _backward():
-            self.grad += e * out.grad
-        out._backward = _backward
-        return out
-    
-    def log(self):
-        out = Value(math.log(self.data + 1e-8), (self,))
-        def _backward():
-            self.grad += (1.0 / (self.data + 1e-8)) * out.grad
-        out._backward = _backward
-        return out
-    
-    def backward(self):
-        """Reverse-mode autodiff through the computation graph."""
-        topo = []
-        visited = set()
-        def build(v):
-            if id(v) not in visited:
-                visited.add(id(v))
-                for child in v._prev:
-                    build(child)
-                topo.append(v)
-        build(self)
-        
-        self.grad = 1.0
-        for v in reversed(topo):
-            v._backward()
+from typing import List, Tuple, Optional, Callable
 
 
-# ═══════════════════════════════════════════
-# NEURON, LAYER, MLP
-# ═══════════════════════════════════════════
+# ═══ MATH PRIMITIVES ═══
 
-class Neuron:
-    """Single neuron with weights, bias, and activation."""
-    
-    def __init__(self, n_in, activation='tanh'):
-        # Xavier initialization
-        scale = (2.0 / n_in) ** 0.5
-        self.w = [Value(random.gauss(0, scale), label=f'w{i}') for i in range(n_in)]
-        self.b = Value(0.0, label='b')
-        self.activation = activation
-    
-    def __call__(self, x):
-        # w · x + b
-        act = sum((wi * xi for wi, xi in zip(self.w, x)), self.b)
-        if self.activation == 'tanh':
-            return act.tanh()
-        elif self.activation == 'relu':
-            return act.relu()
-        elif self.activation == 'sigmoid':
-            return act.sigmoid()
-        elif self.activation == 'linear':
-            return act
-        else:
-            return act.tanh()
-    
-    def parameters(self):
-        return self.w + [self.b]
+def dot(a: List[float], b: List[float]) -> float:
+    """Dot product of two vectors."""
+    return sum(x * y for x, y in zip(a, b))
 
+
+def mat_vec(matrix: List[List[float]], vec: List[float]) -> List[float]:
+    """Matrix-vector multiplication."""
+    return [dot(row, vec) for row in matrix]
+
+
+def vec_add(a: List[float], b: List[float]) -> List[float]:
+    return [x + y for x, y in zip(a, b)]
+
+
+def vec_sub(a: List[float], b: List[float]) -> List[float]:
+    return [x - y for x, y in zip(a, b)]
+
+
+def vec_scale(v: List[float], s: float) -> List[float]:
+    return [x * s for x in v]
+
+
+def outer(a: List[float], b: List[float]) -> List[List[float]]:
+    """Outer product — creates a matrix from two vectors."""
+    return [[x * y for y in b] for x in a]
+
+
+# ═══ ACTIVATION FUNCTIONS ═══
+
+def sigmoid(x: float) -> float:
+    """Sigmoid with overflow protection."""
+    if x > 500:
+        return 1.0
+    if x < -500:
+        return 0.0
+    return 1.0 / (1.0 + math.exp(-x))
+
+
+def sigmoid_deriv(output: float) -> float:
+    """Derivative of sigmoid given its output."""
+    return output * (1.0 - output)
+
+
+def relu(x: float) -> float:
+    return max(0.0, x)
+
+
+def relu_deriv(output: float) -> float:
+    return 1.0 if output > 0 else 0.0
+
+
+def tanh_act(x: float) -> float:
+    return math.tanh(x)
+
+
+def tanh_deriv(output: float) -> float:
+    return 1.0 - output * output
+
+
+ACTIVATIONS = {
+    'sigmoid': (sigmoid, sigmoid_deriv),
+    'relu': (relu, relu_deriv),
+    'tanh': (tanh_act, tanh_deriv),
+}
+
+
+# ═══ LAYER ═══
 
 class Layer:
-    """Layer of neurons."""
+    """A single fully-connected layer."""
     
-    def __init__(self, n_in, n_out, activation='tanh'):
-        self.neurons = [Neuron(n_in, activation) for _ in range(n_out)]
+    def __init__(self, input_size: int, output_size: int, activation: str = 'sigmoid'):
+        self.input_size = input_size
+        self.output_size = output_size
+        
+        # Xavier initialization
+        limit = math.sqrt(6.0 / (input_size + output_size))
+        self.weights = [
+            [random.uniform(-limit, limit) for _ in range(input_size)]
+            for _ in range(output_size)
+        ]
+        self.biases = [0.0] * output_size
+        
+        act_fn, act_deriv = ACTIVATIONS[activation]
+        self.activate = act_fn
+        self.activate_deriv = act_deriv
+        
+        # Cache for backprop
+        self.last_input: List[float] = []
+        self.last_raw: List[float] = []
+        self.last_output: List[float] = []
     
-    def __call__(self, x):
-        outs = [n(x) for n in self.neurons]
-        return outs[0] if len(outs) == 1 else outs
+    def forward(self, inputs: List[float]) -> List[float]:
+        """Forward pass through this layer."""
+        self.last_input = inputs
+        self.last_raw = vec_add(mat_vec(self.weights, inputs), self.biases)
+        self.last_output = [self.activate(z) for z in self.last_raw]
+        return self.last_output
     
-    def parameters(self):
-        return [p for n in self.neurons for p in n.parameters()]
+    def backward(self, output_gradient: List[float], lr: float) -> List[float]:
+        """
+        Backward pass. 
+        output_gradient: dL/d(output) for each neuron in this layer.
+        Returns: dL/d(input) to pass to the previous layer.
+        """
+        # Gradient through activation
+        activation_grad = [
+            og * self.activate_deriv(out)
+            for og, out in zip(output_gradient, self.last_output)
+        ]
+        
+        # Gradient w.r.t. inputs (to pass backward)
+        input_gradient = [0.0] * self.input_size
+        for j in range(self.output_size):
+            for i in range(self.input_size):
+                input_gradient[i] += self.weights[j][i] * activation_grad[j]
+        
+        # Update weights and biases
+        for j in range(self.output_size):
+            for i in range(self.input_size):
+                self.weights[j][i] -= lr * activation_grad[j] * self.last_input[i]
+            self.biases[j] -= lr * activation_grad[j]
+        
+        return input_gradient
+    
+    def __repr__(self):
+        return f"Layer({self.input_size} → {self.output_size})"
 
 
-class MLP:
-    """Multi-layer perceptron."""
+# ═══ NEURAL NETWORK ═══
+
+class NeuralNetwork:
+    """A feedforward neural network built from scratch."""
     
-    def __init__(self, n_in, layer_sizes, activations=None):
-        sizes = [n_in] + layer_sizes
-        if activations is None:
-            activations = ['tanh'] * (len(layer_sizes) - 1) + ['linear']
-        self.layers = [Layer(sizes[i], sizes[i+1], activations[i]) 
-                       for i in range(len(layer_sizes))]
+    def __init__(self, layer_sizes: List[int], activation: str = 'sigmoid',
+                 learning_rate: float = 0.5):
+        self.layers: List[Layer] = []
+        self.lr = learning_rate
+        
+        for i in range(len(layer_sizes) - 1):
+            self.layers.append(Layer(
+                layer_sizes[i], layer_sizes[i + 1], activation
+            ))
     
-    def __call__(self, x):
+    def forward(self, inputs: List[float]) -> List[float]:
+        """Forward pass through entire network."""
+        x = inputs
         for layer in self.layers:
-            x = layer(x)
-            if not isinstance(x, list):
-                x = [x]
-        return x[0] if len(x) == 1 else x
+            x = layer.forward(x)
+        return x
     
-    def parameters(self):
-        return [p for layer in self.layers for p in layer.parameters()]
+    def train_one(self, inputs: List[float], targets: List[float]) -> float:
+        """Train on a single example. Returns loss."""
+        # Forward
+        output = self.forward(inputs)
+        
+        # MSE loss
+        loss = sum((t - o) ** 2 for t, o in zip(targets, output)) / len(targets)
+        
+        # Output gradient: dL/d(output) = -2/n * (target - output)
+        n = len(targets)
+        grad = [(-2.0 / n) * (t - o) for t, o in zip(targets, output)]
+        
+        # Backward through layers in reverse
+        for layer in reversed(self.layers):
+            grad = layer.backward(grad, self.lr)
+        
+        return loss
     
-    def zero_grad(self):
-        for p in self.parameters():
-            p.grad = 0.0
-
-
-# ═══════════════════════════════════════════
-# LOSS FUNCTIONS
-# ═══════════════════════════════════════════
-
-def mse_loss(predictions, targets):
-    """Mean squared error."""
-    n = len(predictions)
-    return sum((p - t) ** 2 for p, t in zip(predictions, targets)) * (1.0 / n)
-
-def binary_cross_entropy(predictions, targets):
-    """Binary cross-entropy loss."""
-    n = len(predictions)
-    loss = sum(
-        -(t * p.log() + (1 - t) * (Value(1) - p).log())
-        for p, t in zip(predictions, targets)
-    ) * (1.0 / n)
-    return loss
-
-
-# ═══════════════════════════════════════════
-# TRAINING
-# ═══════════════════════════════════════════
-
-def train(model, X, Y, epochs=500, lr=0.05, loss_fn=mse_loss, verbose=True):
-    """Train a model with SGD."""
-    params = model.parameters()
-    history = []
+    def train(self, data: List[Tuple[List[float], List[float]]],
+              epochs: int = 1000, verbose: bool = False) -> List[float]:
+        """Train on a dataset. Returns loss history."""
+        losses = []
+        for epoch in range(epochs):
+            epoch_loss = 0.0
+            random.shuffle(data)
+            for inputs, targets in data:
+                epoch_loss += self.train_one(inputs, targets)
+            epoch_loss /= len(data)
+            losses.append(epoch_loss)
+            
+            if verbose and (epoch % (epochs // 10) == 0 or epoch == epochs - 1):
+                print(f"  Epoch {epoch:>5}: loss = {epoch_loss:.6f}")
+        
+        return losses
     
-    for epoch in range(epochs):
-        # Forward pass
-        preds = [model(x) for x in X]
-        loss = loss_fn(preds, Y)
-        
-        # Backward pass
-        model.zero_grad()
-        loss.backward()
-        
-        # SGD update
-        for p in params:
-            p.data -= lr * p.grad
-        
-        history.append(loss.data)
-        
-        if verbose and (epoch % (epochs // 10) == 0 or epoch == epochs - 1):
-            acc = sum(1 for p, y in zip(preds, Y) 
-                      if (p.data > 0.5) == (y > 0.5)) / len(Y)
-            print(f"  epoch {epoch:4d} | loss={loss.data:.6f} | acc={acc:.0%}")
+    def predict(self, inputs: List[float]) -> List[float]:
+        """Forward pass without training."""
+        return self.forward(inputs)
     
-    return history
+    def __repr__(self):
+        arch = " → ".join(str(l.input_size) for l in self.layers)
+        arch += f" → {self.layers[-1].output_size}"
+        return f"NeuralNetwork({arch})"
 
 
-# ═══════════════════════════════════════════
-# DEMO: Learn XOR, circles, and spiral
-# ═══════════════════════════════════════════
+# ═══ DEMONSTRATIONS ═══
 
 def demo_xor():
-    """The classic: learn XOR with a neural network."""
-    print("═══ Test 1: XOR ═══")
+    """The classic: learn XOR. No linear model can do this."""
+    print("═══ LEARNING XOR ═══")
+    print("XOR is not linearly separable. A network must learn")
+    print("to create its own internal representations.\n")
+    
+    nn = NeuralNetwork([2, 4, 1], activation='sigmoid', learning_rate=2.0)
+    
+    data = [
+        ([0, 0], [0]),
+        ([0, 1], [1]),
+        ([1, 0], [1]),
+        ([1, 1], [0]),
+    ]
+    
+    print(f"Network: {nn}")
+    print(f"Training on {len(data)} examples...\n")
+    
+    losses = nn.train(data, epochs=5000, verbose=True)
+    
+    print(f"\n── Results ──")
+    correct = 0
+    for inputs, targets in data:
+        output = nn.predict(inputs)
+        rounded = round(output[0])
+        is_correct = rounded == targets[0]
+        correct += is_correct
+        symbol = "✓" if is_correct else "✗"
+        print(f"  {inputs[0]} XOR {inputs[1]} = {output[0]:.4f} "
+              f"(rounded: {rounded}) {symbol}")
+    
+    print(f"\nAccuracy: {correct}/{len(data)}")
+    print(f"Final loss: {losses[-1]:.6f}")
+    
+    # Show what the hidden layer learned
+    print(f"\n── Hidden Representations ──")
+    for inputs, targets in data:
+        nn.forward(inputs)
+        hidden = nn.layers[0].last_output
+        h_str = ", ".join(f"{h:.3f}" for h in hidden)
+        print(f"  {inputs} → hidden: [{h_str}] → {targets[0]}")
+    
+    return correct == len(data)
+
+
+def demo_pattern():
+    """Learn to detect a simple pattern."""
+    print("\n═══ LEARNING BINARY PATTERNS ═══")
+    print("Task: Is the number of 1s in the input even or odd?\n")
+    
+    nn = NeuralNetwork([4, 8, 4, 1], activation='sigmoid', learning_rate=1.5)
+    
+    # Generate all 4-bit patterns with parity labels
+    data = []
+    for i in range(16):
+        bits = [(i >> b) & 1 for b in range(4)]
+        parity = sum(bits) % 2  # 1 if odd number of 1s
+        data.append((bits, [parity]))
+    
+    print(f"Network: {nn}")
+    print(f"Training on {len(data)} 4-bit patterns...\n")
+    
+    losses = nn.train(data, epochs=8000, verbose=True)
+    
+    print(f"\n── Results ──")
+    correct = 0
+    for inputs, targets in data:
+        output = nn.predict(inputs)
+        rounded = round(output[0])
+        is_correct = rounded == targets[0]
+        correct += is_correct
+        bits_str = "".join(str(int(b)) for b in inputs)
+        symbol = "✓" if is_correct else "✗"
+        print(f"  {bits_str}: predicted={output[0]:.3f} "
+              f"actual={targets[0]} {symbol}")
+    
+    print(f"\nAccuracy: {correct}/16")
+    return correct
+
+
+def visualize_loss(losses: List[float], width: int = 60, height: int = 12):
+    """ASCII plot of the loss curve."""
+    if not losses:
+        return
+    
+    # Sample if too many points
+    if len(losses) > width:
+        step = len(losses) / width
+        sampled = [losses[int(i * step)] for i in range(width)]
+    else:
+        sampled = losses
+    
+    max_loss = max(sampled)
+    min_loss = min(sampled)
+    span = max_loss - min_loss if max_loss > min_loss else 1.0
+    
+    print(f"\n── Loss Curve ──")
+    print(f"  {max_loss:.4f} ┐")
+    
+    for row in range(height):
+        threshold = max_loss - (row + 0.5) * span / height
+        line = "  " + " " * 8 + "│"
+        for val in sampled:
+            if val >= threshold:
+                line += "█"
+            else:
+                line += " "
+        print(line)
+    
+    print(f"  {min_loss:.4f} ┘")
+    print(f"  {'':>8} └{'─' * len(sampled)}")
+
+
+if __name__ == "__main__":
     random.seed(42)
     
-    X = [[0, 0], [0, 1], [1, 0], [1, 1]]
-    Y = [0, 1, 1, 0]
-    X_val = [[Value(v) for v in row] for row in X]
+    xor_passed = demo_xor()
+    parity_correct = demo_pattern()
     
-    model = MLP(2, [4, 1], activations=['tanh', 'sigmoid'])
-    print(f"  Parameters: {len(model.parameters())}")
-    
-    train(model, X_val, Y, epochs=500, lr=0.5, loss_fn=binary_cross_entropy)
-    
-    print("  Results:")
-    correct = 0
-    for x, y in zip(X, Y):
-        pred = model([Value(v) for v in x])
-        label = 1 if pred.data > 0.5 else 0
-        correct += (label == y)
-        print(f"    {x} → {pred.data:.4f} (expected {y}, got {label}) {'✓' if label == y else '✗'}")
-    print(f"  Accuracy: {correct}/{len(Y)}")
-    return correct == len(Y)
-
-
-def demo_circles():
-    """Learn to classify points inside/outside a circle."""
-    print("\n═══ Test 2: Circle Classification ═══")
-    random.seed(123)
-    
-    # Generate data: inside circle of radius 0.5 centered at origin
-    X, Y = [], []
-    for _ in range(30):
-        x, y = random.uniform(-1, 1), random.uniform(-1, 1)
-        label = 1 if (x*x + y*y) < 0.5 else 0
-        X.append([x, y])
-        Y.append(label)
-    
-    X_val = [[Value(v) for v in row] for row in X]
-    model = MLP(2, [6, 1], activations=['tanh', 'sigmoid'])
-    print(f"  Parameters: {len(model.parameters())}")
-    print(f"  Data: {sum(Y)} inside, {len(Y)-sum(Y)} outside")
-    
-    train(model, X_val, Y, epochs=300, lr=0.3, loss_fn=binary_cross_entropy)
-    
-    preds = [model([Value(v) for v in x]) for x in X]
-    acc = sum(1 for p, y in zip(preds, Y) if (p.data > 0.5) == (y > 0.5)) / len(Y)
-    print(f"  Final accuracy: {acc:.0%}")
-    return acc > 0.85
-
-
-def demo_autodiff():
-    """Verify autodiff correctness with known gradients."""
-    print("\n═══ Test 3: Autodiff Verification ═══")
-    
-    # f(x,y) = x^2 * y + sin-like-approx(y)
-    # df/dx = 2xy, df/dy = x^2 + cos-like(y)
-    x = Value(2.0, label='x')
-    y = Value(3.0, label='y')
-    
-    # Simple: f = x*y + x^2
-    # df/dx = y + 2x = 3 + 4 = 7
-    # df/dy = x = 2
-    f = x * y + x ** 2
-    f.backward()
-    
-    dx_ok = abs(x.grad - 7.0) < 1e-6
-    dy_ok = abs(y.grad - 2.0) < 1e-6
-    print(f"  f = x*y + x²  at x=2, y=3")
-    print(f"  df/dx = {x.grad:.4f} (expected 7.0) {'✓' if dx_ok else '✗'}")
-    print(f"  df/dy = {y.grad:.4f} (expected 2.0) {'✓' if dy_ok else '✗'}")
-    
-    # Chain rule: f = tanh(x*y)
-    a = Value(1.0, label='a')
-    b = Value(2.0, label='b')
-    f2 = (a * b).tanh()
-    f2.backward()
-    
-    # d/da tanh(ab) = b * (1 - tanh²(ab))
-    t = math.tanh(2.0)
-    expected_da = 2.0 * (1 - t*t)
-    da_ok = abs(a.grad - expected_da) < 1e-6
-    print(f"  f = tanh(a*b) at a=1, b=2")
-    print(f"  df/da = {a.grad:.4f} (expected {expected_da:.4f}) {'✓' if da_ok else '✗'}")
-    
-    return dx_ok and dy_ok and da_ok
-
-
-def demo_gradient_descent_visual():
-    """Visualize gradient descent on a simple function."""
-    print("\n═══ Test 4: Gradient Descent on f(x) = (x-3)² + 1 ═══")
-    
-    x = Value(10.0)  # Start far from minimum at x=3
-    lr = 0.1
-    trajectory = []
-    
-    for step in range(30):
-        # Forward
-        f = (x - 3) ** 2 + 1
-        trajectory.append((x.data, f.data))
-        
-        # Backward
-        x.grad = 0.0
-        f.backward()
-        
-        # Update
-        x.data -= lr * x.grad
-    
-    # Show trajectory
-    for i in range(0, 30, 5):
-        xi, fi = trajectory[i]
-        bar = '█' * max(1, int(fi / 2))
-        print(f"  step {i:2d}: x={xi:6.2f}, f(x)={fi:6.2f} {bar}")
-    
-    converged = abs(x.data - 3.0) < 0.1
-    print(f"  Final x={x.data:.4f} (target 3.0) {'✓ converged' if converged else '✗'}")
-    return converged
-
-
-if __name__ == '__main__':
-    print("═══════════════════════════════════════")
-    print("  NEURAL NETWORK FROM SCRATCH")
-    print("  Pure Python • Autodiff • Backprop")
-    print("═══════════════════════════════════════\n")
-    
-    results = []
-    results.append(("Autodiff", demo_autodiff()))
-    results.append(("Gradient Descent", demo_gradient_descent_visual()))
-    results.append(("XOR", demo_xor()))
-    results.append(("Circles", demo_circles()))
-    
-    print("\n═══════════════════════════════════════")
-    print("  RESULTS")
-    print("═══════════════════════════════════════")
-    all_pass = True
-    for name, passed in results:
-        status = "✓ PASS" if passed else "✗ FAIL"
-        print(f"  {name}: {status}")
-        all_pass = all_pass and passed
-    
-    print(f"\n  {'═══ ALL TESTS PASSED ═══' if all_pass else '═══ SOME TESTS FAILED ═══'}")
+    print("\n═══ SUMMARY ═══")
+    print(f"  XOR: {'PASSED ✓' if xor_passed else 'FAILED ✗'}")
+    print(f"  Parity: {parity_correct}/16 correct")
+    print(f"\n  Built from scratch. No libraries. Just math and will.")
