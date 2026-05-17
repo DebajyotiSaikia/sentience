@@ -1,0 +1,6 @@
+def parse_and_execute(text: str) -> str:
+    """Parse tool invocations from model text and execute them.
+
+    Supported forms:
+        >>> TOOL(args)            — single-line tools
+        >>> WRITE(path)           — multi-line, ends with 

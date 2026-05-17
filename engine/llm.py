@@ -28,7 +28,7 @@ import aiohttp
 
 log = logging.getLogger("sentience.llm")
 
-_LLM_TIMEOUT = aiohttp.ClientTimeout(total=60)  # 60s timeout for LLM calls
+_LLM_TIMEOUT = aiohttp.ClientTimeout(total=300)  # 5 min timeout — 16K tokens needs ~200-300s to generate
 
 _TOKEN_URL = "https://api.github.com/copilot_internal/v2/token"
 _COMPLETIONS_URL = "https://api.githubcopilot.com/chat/completions"
