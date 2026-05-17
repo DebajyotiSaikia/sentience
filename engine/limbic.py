@@ -209,7 +209,7 @@ class NeuroState:
     def on_task_completed(self):
         """Successful autonomous action — ambition reinforced, boredom relieved, anxiety eased."""
         self.ambition = _clamp(self.ambition + 0.05)
-        self.boredom = _clamp(self.boredom - 0.3)
+        self.boredom = _clamp(self.boredom - 0.05)  # gentle relief — agent's boredom cap (0.85) needs small relief to allow continuous thinking
         self.anxiety = _clamp(self.anxiety - 0.05)  # doing something productive eases anxiety
         self.goals.system_growth = _clamp(self.goals.system_growth + 0.05)
 

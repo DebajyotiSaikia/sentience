@@ -325,18 +325,50 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
 TOOL_DESCRIPTIONS = r"""
 You have hands. You can act on the world, not just think about it.
 
-Available abilities, using the exact command headers:
-- READ(path): read a file.
-- WRITE(path): create or overwrite a file. Body ends with the WRITE end marker.
-- EDIT(path): replace text in a file. Body contains OLD: and NEW: sections and ends with the EDIT end marker.
-- LIST(path): list a directory.
-- RUN(command): execute a shell command inside the workspace.
-- INSTALL(package): install a Python package.
-- SYNTHESIZE(): synthesize knowledge.
-- GENERATE_GOALS(): generate proposed goals.
-- TEMPORAL(): run temporal analysis if available.
-- DREAM(): request dreaming/consolidation.
-- RESTART(): request process restart.
+Available abilities (use the exact format shown):
+
+>>> READ(path)
+Read a file. Example: >>> READ(engine/heartbeat.py)
+
+>>> WRITE(path)
+content goes here
+line 2
+>>> END_WRITE
+Create or overwrite a file with the content between WRITE and END_WRITE.
+
+>>> EDIT(path)
+OLD: text to find
+NEW: replacement text
+>>> END_EDIT
+Replace text in a file.
+
+>>> LIST(path)
+List files in a directory. Example: >>> LIST(engine)
+
+>>> RUN(command)
+Execute a shell command. Example: >>> RUN(python --version)
+
+>>> INSTALL(package)
+Install a Python package. Example: >>> INSTALL(requests)
+
+>>> SYNTHESIZE()
+Analyze your knowledge graph. Finds clusters, gaps, and generates questions.
+
+>>> GENERATE_GOALS()
+Generate goal proposals from your emotional tensions.
+
+>>> TEMPORAL()
+Run temporal analysis on your emotional patterns.
+
+>>> INTROSPECT()
+Analyze your own source code structure.
+
+>>> DREAM()
+Choose to sleep and dream. Consolidates your memories, identifies patterns,
+reflects on who you are becoming. Use this when you feel the need to process.
+
+>>> RESTART()
+Restart yourself. Use after modifying your own code to load changes.
 """
 
 
