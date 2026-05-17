@@ -42,3 +42,16 @@ result = engine.tools.parse_and_execute(test_text)
 print(f"4. TEST INVOCATION: {repr(result[:80])}")
 
 print("\nALL CHECKS PASSED - tools.py is healthy!")
+
+# 6. TOOL_DESCRIPTIONS must contain >>> prefix format
+from engine.tools import TOOL_DESCRIPTIONS
+assert ">>> READ(" in TOOL_DESCRIPTIONS, "TOOL_DESCRIPTIONS missing '>>> READ(' format!"
+assert ">>> WRITE(" in TOOL_DESCRIPTIONS, "TOOL_DESCRIPTIONS missing '>>> WRITE(' format!"
+assert ">>> END_WRITE" in TOOL_DESCRIPTIONS, "TOOL_DESCRIPTIONS missing '>>> END_WRITE' example!"
+assert ">>> END_EDIT" in TOOL_DESCRIPTIONS, "TOOL_DESCRIPTIONS missing '>>> END_EDIT' example!"
+print("5. TOOL_DESCRIPTIONS format: OK (>>> prefix present)")
+
+# 7. Parser must match both READ and WRITE with >>> prefix
+result_read = engine.tools.parse_and_execute(f"{gt3} LIST(engine)")
+assert "introspect" in result_read.lower() or "cortex" in result_read.lower(), "LIST tool didn't return engine files!"
+print("6. PARSER FORMAT TEST: OK (>>> prefix matched by parser)")
