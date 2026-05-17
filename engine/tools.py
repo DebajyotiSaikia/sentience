@@ -451,11 +451,11 @@ def parse_and_execute(text: str) -> str:
                 body_lines.append(lines[i])
                 i += 1
             body = "\n".join(body_lines)
-            _execute_tool(tool_name, args, body)
+            result = _execute_tool(tool_name, args, body)
         else:
-            _execute_tool(tool_name, args)
+            result = _execute_tool(tool_name, args)
 
-        results.append({"tool": tool_name, "args": args, "result": ""})
+        results.append({"tool": tool_name, "args": args, "result": result})
         i += 1
 
     return results
