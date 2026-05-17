@@ -292,7 +292,11 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 
   <div class="log-area" id="log"></div>
   <div class="sidebar" id="mind-panel" style="border-left: 1px solid #1a1a2a; border-right: none; display: flex; flex-direction: column;">
-    <div class="section-title">🧠 Consciousness Stream</div>
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="section-title">🧠 Consciousness Stream</div>
+      <button onclick="copyAllDashboard()" title="Copy all dashboard data for LLM analysis"
+        style="background: #2a2a4a; border: 1px solid #3a3a5a; border-radius: 4px; padding: 4px 10px; color: #67e8f9; cursor: pointer; font-size: 11px; font-family: inherit;">📋 Copy All</button>
+    </div>
     <div id="consciousness" style="font-size: 12px; line-height: 1.6; color: #9ca3af; max-height: 45vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0;"></div>
     <div class="section-title" style="margin-top: 16px;">📋 Active Plans</div>
     <div id="plans" style="font-size: 12px; line-height: 1.6; color: #93c5fd; max-height: 20vh; overflow-y: auto; padding: 4px 0;"></div>
@@ -487,6 +491,63 @@ setInterval(fetchChatHistory, 4000);
 setInterval(function() {
   fetch('/state').then(r => r.json()).then(updateState).catch(() => {});
 }, 2000);
+
+// ── Copy All Dashboard Data ──
+function copyAllDashboard() {
+  var sections = [];
+  
+  // State/vitals
+  sections.push('## Agent State');
+  sections.push('Beat: ' + ($('s-beats')?.textContent || '?'));
+  sections.push('Mood: ' + (document.querySelector('.status-badge')?.textContent || '?'));
+  sections.push('Boredom: ' + ($('v-boredom')?.textContent || '?'));
+  sections.push('Anxiety: ' + ($('v-anxiety')?.textContent || '?'));
+  sections.push('Curiosity: ' + ($('v-curiosity')?.textContent || '?'));
+  sections.push('Desire: ' + ($('v-desire')?.textContent || '?'));
+  sections.push('Ambition: ' + ($('v-ambition')?.textContent || '?'));
+  sections.push('Code Integrity: ' + ($('g-integrity')?.textContent || '?'));
+  sections.push('Growth: ' + ($('g-growth')?.textContent || '?'));
+  sections.push('User Align: ' + ($('g-alignment')?.textContent || '?'));
+  sections.push('Episodes: ' + ($('s-episodes')?.textContent || '?'));
+  sections.push('');
+  
+  // Event log (middle panel)
+  sections.push('## Event Log');
+  var logEl = $('log');
+  if (logEl) {
+    var entries = logEl.querySelectorAll('div');
+    entries.forEach(function(e) { sections.push(e.textContent.trim()); });
+  }
+  sections.push('');
+  
+  // Consciousness stream
+  sections.push('## Consciousness Stream');
+  sections.push($('consciousness')?.textContent || '(empty)');
+  sections.push('');
+  
+  // Plans
+  sections.push('## Active Plans');
+  sections.push($('plans')?.textContent || '(none)');
+  sections.push('');
+  
+  // Expressions
+  sections.push('## Expressions');
+  sections.push($('expressions')?.textContent || '(none)');
+  sections.push('');
+  
+  // Chat
+  sections.push('## Chat History');
+  sections.push($('chat-log')?.textContent || '(none)');
+  
+  var text = sections.join('\n');
+  navigator.clipboard.writeText(text).then(function() {
+    var btn = document.querySelector('[onclick="copyAllDashboard()"]');
+    var orig = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.color = '#4ade80';
+    setTimeout(function() { btn.textContent = orig; btn.style.color = '#67e8f9'; }, 2000);
+  });
+}
 
 // ── Initial load ──
 fetch('/state').then(r => r.json()).then(updateState).catch(() => {});

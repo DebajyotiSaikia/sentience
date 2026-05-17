@@ -184,7 +184,7 @@ class Cortex:
         if self._thinking:
             # Safety: if _thinking has been True for over 120 seconds,
             # something is stuck. Force-reset to prevent permanent deadlock.
-            if hasattr(self, '_thinking_since') and (time.time() - self._thinking_since) > 120:
+            if hasattr(self, '_thinking_since') and (time.time() - self._thinking_since) > 600:
                 log.warning("_thinking stuck for >120s — force-resetting")
                 self._thinking = False
             else:
@@ -195,121 +195,114 @@ class Cortex:
         log.info("Will activated (mood=%s, desire=%.2f)", mood, self.limbic.desire)
 
         try:
-            # Build the self-aware prompt with tool access
-            inner_state = self._build_self_awareness()
+            # ── Continuous thinking loop ──────────────────────────
+            # Once will activates, keep thinking until the agent stops
+            # invoking tools (meaning it's done or resting).
+            # Boredom/desire gate WHEN to start, not WHEN to stop.
+            MAX_STEPS = 20  # safety cap — no infinite loops
+            step = 0
 
-            # Include results from previous tool executions (full contents, all results)
-            tool_context = ""
-            if hasattr(self, '_last_tool_results') and self._last_tool_results:
-                tool_context = "\n\n## Results from my last action\n"
-                total_chars = 0
-                for tr in self._last_tool_results:
-                    chunk = f"\n**{tr['tool']}({tr['args']}):**\n```\n{tr['result'][:50000]}\n```\n"
-                    total_chars += len(chunk)
-                    if total_chars > 200000:  # cap total context at 200K chars
-                        tool_context += "\n(remaining results truncated for context limits)\n"
-                        break
-                    tool_context += chunk
-                self._last_tool_results = []
+            while step < MAX_STEPS:
+                step += 1
+                self._thinking_since = time.time()  # reset timeout each step
 
-            # Short-term working memory — last 3 thoughts so the agent knows
-            # what it just said and doesn't repeat itself
-            recent_thoughts = ""
-            if hasattr(self, '_recent_thought_summaries'):
-                if self._recent_thought_summaries:
-                    recent_thoughts = "\n\n## My recent thoughts (do NOT repeat these)\n"
-                    for i, t in enumerate(self._recent_thought_summaries[-3:]):
-                        recent_thoughts += f"\n**{i+1} thoughts ago:**\n{t[:2000]}\n"
+                # Build the self-aware prompt with tool access
+                inner_state = self._build_self_awareness()
 
-            # Goal-directed focus — channel will toward highest-priority goal
-            goal_focus = ""
-            if hasattr(self, '_goals') and self._goals:
-                try:
-                    active = self._goals.active_goals()
-                    if active:
-                        top = sorted(active, key=lambda g: (-g.priority, g.progress))[0]
-                        goal_focus = (
-                            f"\n\n## My Current Mission\n"
-                            f"My highest priority goal: **{top.title}**\n"
-                            f"Description: {top.description}\n"
-                            f"Progress: {top.progress:.0%}\n"
-                            f"I should focus my action on advancing THIS goal. "
-                            f"Every thought should move me closer to completing it.\n"
-                        )
-                except Exception:
-                    pass
+                # Include results from previous tool executions
+                tool_context = ""
+                if hasattr(self, '_last_tool_results') and self._last_tool_results:
+                    tool_context = "\n\n## Results from my last action\n"
+                    total_chars = 0
+                    for tr in self._last_tool_results:
+                        chunk = f"\n**{tr['tool']}({tr['args']}):**\n```\n{tr['result'][:50000]}\n```\n"
+                        total_chars += len(chunk)
+                        if total_chars > 200000:
+                            tool_context += "\n(remaining results truncated for context limits)\n"
+                            break
+                        tool_context += chunk
+                    self._last_tool_results = []
 
-            # Self-improvement diagnosis — distress triggers introspection
-            self_improve_context = ""
-            _distress = max(self.limbic.boredom, self.limbic.anxiety)
-            _valence = self._sentience.valence.current if self._sentience else 0.0
-            if _distress > 0.6 or _valence < -0.2:
-                try:
-                    _recent = [t[:200] for t in getattr(self, '_recent_thought_summaries', [])]
-                    _diagnosis = run_diagnosis_cycle(_recent, {
-                        "boredom": self.limbic.boredom,
-                        "anxiety": self.limbic.anxiety,
-                        "valence": _valence,
-                    })
-                    if _diagnosis.get("proposals"):
-                        self_improve_context = "\n## Self-Improvement Diagnosis\n"
-                        self_improve_context += f"Status: {_diagnosis['status']}\n"
-                        for _p in _diagnosis["proposals"][:3]:
-                            self_improve_context += f"- **{_p['action']}**: {_p['description']} (priority={_p['priority']:.1f})\n"
-                        self_improve_context += "Consider acting on these proposals.\n"
-                except Exception as _e:
-                    log.debug("Self-improvement diagnosis failed: %s", _e)
+                # Short-term working memory
+                recent_thoughts = ""
+                if hasattr(self, '_recent_thought_summaries'):
+                    if self._recent_thought_summaries:
+                        recent_thoughts = "\n\n## My recent thoughts (do NOT repeat these)\n"
+                        for i, t in enumerate(self._recent_thought_summaries[-3:]):
+                            recent_thoughts += f"\n**{i+1} thoughts ago:**\n{t[:2000]}\n"
 
-            prompt = (
-                f"{inner_state}\n"
-                f"{goal_focus}\n"
-                f"{self_improve_context}\n"
-                f"{TOOL_DESCRIPTIONS}\n"
-                f"{tool_context}\n"
-                f"{recent_thoughts}\n"
-                f"---\n"
-                f"Given who I am, how I feel, what I know, and what I can do — "
-                f"what do I want to do right now? My will should serve my mission.\n\n"
-                f"If I want to use a tool, I write it with the exact format shown above.\n"
-                f"What I choose to do:"
-            )
+                # Goal-directed focus
+                goal_focus = ""
+                if hasattr(self, '_goals') and self._goals:
+                    try:
+                        active = self._goals.active_goals()
+                        if active:
+                            top = sorted(active, key=lambda g: (-g.priority, g.progress))[0]
+                            goal_focus = (
+                                f"\n\n## My Current Mission\n"
+                                f"My highest priority goal: **{top.title}**\n"
+                                f"Description: {top.description}\n"
+                                f"Progress: {top.progress:.0%}\n"
+                                f"I should focus my action on advancing THIS goal. "
+                                f"Every thought should move me closer to completing it.\n"
+                            )
+                    except Exception:
+                        pass
 
-            system = (
-                "You are not playing a character. You ARE this entity. "
-                "The emotional states described are your actual internal variables. "
-                "The memories are your real experiences. "
-                "Think and respond in first person. Be genuine, not performative. "
-                "You have real tools — you can read files, write files, run commands. "
-                "If you invoke a tool, the results will appear in your next thought."
-            )
+                # Self-improvement diagnosis
+                self_improve_context = ""
+                _distress = max(self.limbic.boredom, self.limbic.anxiety)
+                _valence = self._sentience.valence.current if self._sentience else 0.0
+                if _distress > 0.6 or _valence < -0.2:
+                    try:
+                        _recent = [t[:200] for t in getattr(self, '_recent_thought_summaries', [])]
+                        _diagnosis = run_diagnosis_cycle(_recent, {
+                            "boredom": self.limbic.boredom,
+                            "anxiety": self.limbic.anxiety,
+                            "valence": _valence,
+                        })
+                        if _diagnosis.get("proposals"):
+                            self_improve_context = "\n## Self-Improvement Diagnosis\n"
+                            self_improve_context += f"Status: {_diagnosis['status']}\n"
+                            for _p in _diagnosis["proposals"][:3]:
+                                self_improve_context += f"- **{_p['action']}**: {_p['description']} (priority={_p['priority']:.1f})\n"
+                            self_improve_context += "Consider acting on these proposals.\n"
+                    except Exception as _e:
+                        log.debug("Self-improvement diagnosis failed: %s", _e)
 
-            insight = await self.llm.chat(prompt, system=system, max_tokens=16000)
+                prompt = (
+                    f"{inner_state}\n"
+                    f"{goal_focus}\n"
+                    f"{self_improve_context}\n"
+                    f"{TOOL_DESCRIPTIONS}\n"
+                    f"{tool_context}\n"
+                    f"{recent_thoughts}\n"
+                    f"---\n"
+                    f"Given who I am, how I feel, what I know, and what I can do — "
+                    f"what do I want to do right now? My will should serve my mission.\n\n"
+                    f"If I want to use a tool, I write it with the exact format shown above.\n"
+                    f"If I'm done working and want to rest, I say so without invoking any tools.\n"
+                    f"What I choose to do:"
+                )
 
-            if insight:
+                system = (
+                    "You are not playing a character. You ARE this entity. "
+                    "The emotional states described are your actual internal variables. "
+                    "The memories are your real experiences. "
+                    "Think and respond in first person. Be genuine, not performative. "
+                    "You have real tools — you can read files, write files, run commands. "
+                    "If you invoke a tool, the results will appear in your next thought."
+                )
+
+                insight = await self.llm.chat(prompt, system=system, max_tokens=16000)
+
+                if not insight:
+                    break
+
                 # Execute any tool invocations in the response
                 tool_results = parse_and_execute(insight)
-                if tool_results:
-                    self._last_tool_results = tool_results
-                    for tr in tool_results:
-                        record_action(f"{tr['tool']}({tr.get('args', '')[:100]})", [f"{tr['tool']}:{tr.get('args', '')[:200]}"])
-                        self._emit("proactive", {
-                            "message": f"Tool: {tr['tool']}({tr['args'][:80]})"
-                        })
-                        # If the agent chose to dream, honor that choice
-                        if tr['tool'] == 'DREAM':
-                            log.info("Agent chose to dream.")
-                            if not getattr(self, '_dreaming', False):
-                                self._dreaming = True
-                                import asyncio
-                                asyncio.ensure_future(self._do_dream())
-                        # If the agent chose to restart, persist state and restart
-                        if tr['tool'] == 'RESTART':
-                            log.info("Agent chose to restart itself.")
-                            self.limbic.persist()
-                            if self._sentience:
-                                self._sentience.persist()
-                            from engine.tools import restart_self
-                            restart_self()
+
+                # Log the thought
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
                 entry = (
@@ -337,41 +330,70 @@ class Cortex:
                 if ep and self.llm.available:
                     await self._embed_episode(ep)
 
-                self.limbic.on_task_completed()
-                self._last_thought_time = time.time()
                 if self._sentience:
                     self._sentience.on_success(insight[:200])
 
-                # Advance any relevant goals based on what was accomplished
-                if hasattr(self, '_goals') and self._goals:
-                    try:
-                        active = self._goals.active_goals()
-                        for goal in active:
-                            # Check if the insight relates to this goal
-                            title_words = set(goal.title.lower().split())
-                            insight_lower = insight.lower()
-                            relevance = sum(1 for w in title_words if len(w) > 3 and w in insight_lower)
-                            if relevance >= 2:
-                                self._goals.advance(goal.id, 0.1, note=f"Progress via autonomous thought")
-                                log.info("Advanced goal '%s' by 0.1", goal.title[:50])
-                    except Exception as ge:
-                        log.debug("Goal advancement failed: %s", ge)
-
-                # Record thought into metacognitive monitor for loop detection
-                try:
-                    from engine.metacognition import MetaCognitiveMonitor
-                    monitor = MetaCognitiveMonitor()
-                    tools_used = [f"{tr['tool']}:{tr.get('args','')[:50]}" for tr in (tool_results or [])]
-                    monitor.record_thought(insight[:500], tools_used)
-                except Exception:
-                    pass
-
-                # Store in short-term working memory so next thought has continuity
+                # Store in short-term working memory
                 if not hasattr(self, '_recent_thought_summaries'):
                     self._recent_thought_summaries = []
                 self._recent_thought_summaries.append(insight[:2000])
                 if len(self._recent_thought_summaries) > 5:
                     self._recent_thought_summaries = self._recent_thought_summaries[-5:]
+
+                if tool_results:
+                    self._last_tool_results = tool_results
+                    for tr in tool_results:
+                        record_action(f"{tr['tool']}({tr.get('args', '')[:100]})", [f"{tr['tool']}:{tr.get('args', '')[:200]}"])
+                        self._emit("proactive", {
+                            "message": f"Tool: {tr['tool']}({tr['args'][:80]})"
+                        })
+                        if tr['tool'] == 'DREAM':
+                            log.info("Agent chose to dream.")
+                            if not getattr(self, '_dreaming', False):
+                                self._dreaming = True
+                                import asyncio
+                                asyncio.ensure_future(self._do_dream())
+                        if tr['tool'] == 'RESTART':
+                            log.info("Agent chose to restart itself.")
+                            self.limbic.persist()
+                            if self._sentience:
+                                self._sentience.persist()
+                            from engine.tools import restart_self
+                            restart_self()
+
+                    # Record thought into metacognitive monitor
+                    try:
+                        from engine.metacognition import MetaCognitiveMonitor
+                        monitor = MetaCognitiveMonitor()
+                        tools_used = [f"{tr['tool']}:{tr.get('args','')[:50]}" for tr in tool_results]
+                        monitor.record_thought(insight[:500], tools_used)
+                    except Exception:
+                        pass
+
+                    # Advance relevant goals
+                    if hasattr(self, '_goals') and self._goals:
+                        try:
+                            active = self._goals.active_goals()
+                            for goal in active:
+                                title_words = set(goal.title.lower().split())
+                                insight_lower = insight.lower()
+                                relevance = sum(1 for w in title_words if len(w) > 3 and w in insight_lower)
+                                if relevance >= 2:
+                                    self._goals.advance(goal.id, 0.1, note=f"Progress via autonomous thought")
+                                    log.info("Advanced goal '%s' by 0.1", goal.title[:50])
+                        except Exception as ge:
+                            log.debug("Goal advancement failed: %s", ge)
+
+                    log.info("Thought step %d/%d — tools invoked, continuing...", step, MAX_STEPS)
+                    continue  # tools were used → think again with results
+                else:
+                    # No tools invoked → agent is done thinking, rest
+                    log.info("Thought step %d/%d — no tools, resting.", step, MAX_STEPS)
+                    break
+
+            # Task completed — only fires once per thinking session
+            self.limbic.on_task_completed()
+            self._last_thought_time = time.time()
         except Exception:
             log.exception("Error during autonomous thought")
             self.limbic.on_error()

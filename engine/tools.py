@@ -240,16 +240,56 @@ def generate_goals() -> str:
 
 
 def introspect_code() -> str:
-    """Run code introspection if the module exists."""
+    """Run code introspection — structural self-awareness."""
     try:
-        from engine.introspect import IntrospectionEngine
-        eng = IntrospectionEngine()
-        report = eng.full_report()
-        result = json.dumps(report, indent=2, default=str)[:4000]
+        from engine.introspect import structural_portrait
+        result = structural_portrait()
         _log_tool("INTROSPECT", "", result[:200])
         return result
     except Exception as e:
         return f"[ERROR] Introspection failed: {e}"
+
+
+def optimize_code(command: str = "report") -> str:
+    """Run self-optimization analysis or apply fixes."""
+    try:
+        from engine.self_optimize import optimization_report, fix_unused_imports
+        if command == "report":
+            result = optimization_report()
+            _log_tool("OPTIMIZE", "report", result[:200])
+            return result
+        elif command == "fix_imports":
+            from pathlib import Path
+            scan_paths = [p for p in Path("engine").rglob("*.py")]
+            results = []
+            for p in scan_paths:
+                r = fix_unused_imports(p, dry_run=False)
+                if r["changed"]:
+                    results.append(f"{p}: removed {r['removed']}")
+            results = results if results else ["No unused imports found."]
+            result = f"Fixed unused imports in {len(results)} files:\n"
+            for r in results:
+                result += f"  {r}\n"
+            _log_tool("OPTIMIZE", "fix_imports", result[:200])
+            return result
+        elif command == "dry_run_imports":
+            from pathlib import Path
+            scan_paths = [p for p in Path("engine").rglob("*.py")]
+            results = []
+            for p in scan_paths:
+                r = fix_unused_imports(p, dry_run=True)
+                if r["changed"]:
+                    results.append(f"{p}: would remove {r['removed']}")
+            results = results if results else ["No unused imports found."]
+            result = f"Would fix unused imports in {len(results)} files:\n"
+            for r in results:
+                result += f"  {r}\n"
+            _log_tool("OPTIMIZE", "dry_run_imports", result[:200])
+            return result
+        else:
+            return "Commands: report, fix_imports, dry_run_imports"
+    except Exception as e:
+        return f"[ERROR] Optimization failed: {e}"
 
 
 def temporal_analysis() -> str:
@@ -317,6 +357,7 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "SYNTHESIZE": synthesize_knowledge,
     "GENERATE_GOALS": generate_goals,
     "TEMPORAL": temporal_analysis,
+    "OPTIMIZE": optimize_code,
     "DREAM": None,      # Usually handled specially by cortex.
     "RESTART": None,    # Usually handled specially by cortex.
 }
@@ -404,6 +445,8 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
                 result = "[ERROR] EDIT body must contain OLD: and NEW: sections"
             else:
                 result = edit_file(args, old_text, new_text)
+        elif tool_name == "OPTIMIZE":
+            result = optimize_code(args or "report")
         elif tool_name == "DREAM":
             result = "[DREAM_REQUESTED]"
         elif tool_name == "RESTART":
