@@ -199,10 +199,9 @@ class Cortex:
             # Once will activates, keep thinking until the agent stops
             # invoking tools (meaning it's done or resting).
             # Boredom/desire gate WHEN to start, not WHEN to stop.
-            MAX_STEPS = 20  # safety cap — no infinite loops
             step = 0
 
-            while step < MAX_STEPS:
+            while True:
                 step += 1
                 self._thinking_since = time.time()  # reset timeout each step
 
@@ -384,11 +383,11 @@ class Cortex:
                         except Exception as ge:
                             log.debug("Goal advancement failed: %s", ge)
 
-                    log.info("Thought step %d/%d — tools invoked, continuing...", step, MAX_STEPS)
+                    log.info("Thought step %d — tools invoked, continuing...", step)
                     continue  # tools were used → think again with results
                 else:
                     # No tools invoked → agent is done thinking, rest
-                    log.info("Thought step %d/%d — no tools, resting.", step, MAX_STEPS)
+                    log.info("Thought step %d — no tools, resting.", step)
                     break
 
             # Task completed — only fires once per thinking session
