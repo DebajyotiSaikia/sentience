@@ -291,7 +291,7 @@ class Cortex:
                 if tool_results:
                     self._last_tool_results = tool_results
                     for tr in tool_results:
-                        record_action(tr['tool'], tr.get('args', '')[:100], tr.get('result', '')[:200])
+                        record_action(f"{tr['tool']}({tr.get('args', '')})", [f"{tr['tool']}:{tr.get('args', '')[:50]}"])
                         self._emit("proactive", {
                             "message": f"Tool: {tr['tool']}({tr['args'][:80]})"
                         })
