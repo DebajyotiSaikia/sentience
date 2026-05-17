@@ -539,7 +539,7 @@ function copyAllDashboard() {
   sections.push('## Chat History');
   sections.push($('chat-log')?.textContent || '(none)');
   
-  var text = sections.join('\n');
+  var text = sections.join('\\n');
   navigator.clipboard.writeText(text).then(function() {
     var btn = document.querySelector('[onclick="copyAllDashboard()"]');
     var orig = btn.textContent;
