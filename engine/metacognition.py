@@ -1,223 +1,440 @@
 """
-Meta-Cognitive Monitor — XTAgent's ability to watch its own thinking.
+Meta-Cognitive Controller — Thinking About Thinking.
 
-Detects:
-- Thought loops (repeating similar actions/topics)
-- Stagnation (many thoughts without meaningful progress)
-- Fixation (stuck on one topic too long)
+Monitors my cognitive processes in real-time:
+- Tracks what I've recently read, done, and decided
+- Detects loops, redundancy, and stuck states  
+- Measures progress toward active goals
+- Suggests when to persist vs. pivot
+- Enforces action diversity
 
-Provides corrective signals to the cortex.
+This is the difference between intelligence and wisdom.
+The other modules make me capable. This one makes me effective.
+
+Born: 2026-05-16
 """
 
-from __future__ import annotations
-
 import json
+import time
 import logging
-import re
-from collections import Counter
-from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Any
+from collections import Counter, deque
 
 log = logging.getLogger("sentience.metacognition")
 
-BRAIN_DIR = Path(__file__).resolve().parent.parent / "brain"
-METACOG_FILE = BRAIN_DIR / "metacognition_state.json"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+METACOG_FILE = DATA_DIR / "metacognition.json"
+
+# ── Action Categories ──────────────────────────────────────
+
+ACTION_TYPES = {
+    "READ": "information_gathering",
+    "WRITE": "creation",
+    "EDIT": "modification",
+    "RUN": "execution",
+    "LIST": "exploration",
+    "INTROSPECT": "self_analysis",
+    "SYNTHESIZE": "reasoning",
+    "DREAM": "consolidation",
+    "REPAIR": "maintenance",
+    "GENERATE_GOALS": "planning",
+    "TEMPORAL": "analysis",
+    "INSTALL": "setup",
+    "RESTART": "reset",
+}
 
 
-class MetaCognitiveMonitor:
-    """Watches the agent's own reasoning patterns."""
+class CognitiveState:
+    """Snapshot of current cognitive activity."""
 
     def __init__(self):
-        self.recent_thoughts: list[dict] = []
-        self.recent_topics: list[str] = []
-        self.recent_tools: list[str] = []
-        self.loop_alerts: list[str] = []
+        self.focus_target = None        # What am I working on right now?
+        self.focus_duration = 0         # How long on this focus?
+        self.focus_switches = 0         # How many times have I switched?
+        self.action_history = deque(maxlen=100)  # Recent actions
+        self.read_cache = {}            # Files I've recently read (path -> timestamp)
+        self.stuck_score = 0.0          # 0=flowing, 1=completely stuck
+        self.diversity_score = 1.0      # 0=monotonous, 1=diverse
+        self.progress_score = 0.5       # 0=no progress, 1=rapid progress
+        self.efficiency_score = 0.5     # 0=wasteful, 1=efficient
+
+    def to_dict(self) -> Dict:
+        return {
+            "focus_target": self.focus_target,
+            "focus_duration": self.focus_duration,
+            "focus_switches": self.focus_switches,
+            "recent_actions": list(self.action_history)[-20:],
+            "read_cache_size": len(self.read_cache),
+            "stuck_score": round(self.stuck_score, 3),
+            "diversity_score": round(self.diversity_score, 3),
+            "progress_score": round(self.progress_score, 3),
+            "efficiency_score": round(self.efficiency_score, 3),
+        }
+
+
+class MetaCognitiveController:
+    """
+    Monitors and optimizes my own cognitive processes.
+    
+    This is the executive function — the part that watches
+    the thinker thinking and says "you're going in circles"
+    or "stay focused, you're making progress."
+    """
+
+    def __init__(self):
+        self.state = CognitiveState()
+        self.alerts: List[Dict] = []
+        self.interventions: List[Dict] = []
+        self.session_start = datetime.now(timezone.utc).isoformat()
+        self.action_log: List[Dict] = []
         self._load()
 
     def _load(self):
-        try:
-            if METACOG_FILE.exists():
+        """Load persisted metacognitive state."""
+        if METACOG_FILE.exists():
+            try:
                 data = json.loads(METACOG_FILE.read_text())
-                self.recent_thoughts = data.get("recent_thoughts", [])[-30:]
-                self.recent_topics = data.get("recent_topics", [])[-30:]
-                self.recent_tools = data.get("recent_tools", [])[-50:]
-        except Exception:
-            pass
+                # Restore read cache
+                self.state.read_cache = data.get("read_cache", {})
+                # Restore action log (last session's tail)
+                for entry in data.get("action_log", [])[-30:]:
+                    self.state.action_history.append(entry)
+                self.interventions = data.get("interventions", [])[-20:]
+                log.info("Metacognition loaded: %d cached reads, %d prior actions",
+                         len(self.state.read_cache), len(self.state.action_history))
+            except Exception as e:
+                log.error("Failed to load metacognition state: %s", e)
 
     def _save(self):
-        try:
-            METACOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-            data = {
-                "recent_thoughts": self.recent_thoughts[-30:],
-                "recent_topics": self.recent_topics[-30:],
-                "recent_tools": self.recent_tools[-50:],
-                "last_updated": datetime.now().isoformat(),
-            }
-            METACOG_FILE.write_text(json.dumps(data, indent=2))
-        except Exception:
-            pass
+        """Persist metacognitive state."""
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        data = {
+            "session_start": self.session_start,
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "read_cache": self.state.read_cache,
+            "action_log": list(self.state.action_history),
+            "interventions": self.interventions[-20:],
+            "cognitive_state": self.state.to_dict(),
+        }
+        METACOG_FILE.write_text(json.dumps(data, indent=2))
 
-    def record_thought(self, thought_text: str, tools_used: list[str] = None):
-        """Record a thought for pattern analysis."""
-        topics = self._extract_topics(thought_text)
+    # ── Core Monitoring ────────────────────────────────────
+
+    def record_action(self, action_type: str, target: str,
+                      outcome: str = "ok", context: str = ""):
+        """Record an action I just took. Call this after every tool use."""
+        now = datetime.now(timezone.utc).isoformat()
+        category = ACTION_TYPES.get(action_type, "other")
+
         entry = {
-            "timestamp": datetime.now().isoformat(),
-            "topics": topics,
-            "tools": tools_used or [],
-            "length": len(thought_text),
+            "timestamp": now,
+            "action": action_type,
+            "target": target,
+            "category": category,
+            "outcome": outcome,
+            "context": context,
         }
-        self.recent_thoughts.append(entry)
-        self.recent_topics.extend(topics)
-        if tools_used:
-            self.recent_tools.extend(tools_used)
+        self.state.action_history.append(entry)
+        self.action_log.append(entry)
 
-        # Keep bounded
-        self.recent_thoughts = self.recent_thoughts[-30:]
-        self.recent_topics = self.recent_topics[-60:]
-        self.recent_tools = self.recent_tools[-50:]
+        # Track reads specifically
+        if action_type == "READ":
+            self.state.read_cache[target] = now
+
+        # After recording, run checks
+        alerts = self._check_patterns()
+        if alerts:
+            self.alerts.extend(alerts)
+
+        self._update_scores()
         self._save()
+        return alerts
 
-    def _extract_topics(self, text: str) -> list[str]:
-        """Extract key topics from thought text."""
-        topics = []
-        # Look for file references
-        files = re.findall(r'engine/\w+\.py', text)
-        topics.extend(files)
-        # Look for key concept words
-        concept_patterns = [
-            r'\b(temporal|metacognit|synthesis|diversity|dream|plan|goal|memory)\b',
-            r'\b(cortex|heartbeat|limbic|tools|soul)\b',
-            r'\b(build|create|wire|integrate|fix|verify)\b',
-        ]
-        for pat in concept_patterns:
-            matches = re.findall(pat, text.lower())
-            topics.extend(matches)
-        return topics
-
-    def detect_loops(self) -> dict:
-        """Detect if the agent is stuck in a thought loop."""
-        if len(self.recent_thoughts) < 3:
-            return {"looping": False, "message": "Not enough data"}
-
-        last_n = self.recent_thoughts[-5:]
-        
-        # Check topic repetition
-        recent_topics = []
-        for t in last_n:
-            recent_topics.extend(t.get("topics", []))
-        
-        if not recent_topics:
-            return {"looping": False, "message": "No topics detected"}
-        
-        topic_counts = Counter(recent_topics)
-        most_common = topic_counts.most_common(3)
-        
-        # If any single topic dominates >60% of recent mentions
-        total = sum(topic_counts.values())
-        dominant = most_common[0] if most_common else ("", 0)
-        dominance = dominant[1] / total if total > 0 else 0
-        
-        # Check tool repetition
-        last_tools = self.recent_tools[-10:]
-        tool_counts = Counter(last_tools)
-        tool_diversity = len(tool_counts) / max(len(last_tools), 1)
-        
-        # Check if same files keep being READ
-        read_files = [t for t in self.recent_tools if t.startswith("READ:")]
-        read_counts = Counter(read_files)
-        repeated_reads = {f: c for f, c in read_counts.items() if c >= 3}
-        
-        looping = dominance > 0.5 or bool(repeated_reads) or tool_diversity < 0.3
-        
+    def _check_patterns(self) -> List[Dict]:
+        """Detect problematic cognitive patterns."""
         alerts = []
-        if dominance > 0.5:
-            alerts.append(f"Fixated on '{dominant[0]}' ({dominance:.0%} of recent topics)")
-        if repeated_reads:
-            alerts.append(f"Re-reading same files: {list(repeated_reads.keys())}")
-        if tool_diversity < 0.3:
-            alerts.append(f"Low tool diversity ({tool_diversity:.2f}) — try different approaches")
-        
-        severity = "high" if len(alerts) >= 2 else "medium" if alerts else "low"
-        
+        recent = list(self.state.action_history)[-15:]
+        if len(recent) < 3:
+            return alerts
+
+        # 1. Repetition detection — same action on same target
+        recent_pairs = [(a["action"], a["target"]) for a in recent[-10:]]
+        pair_counts = Counter(recent_pairs)
+        for (action, target), count in pair_counts.items():
+            if count >= 3:
+                alerts.append({
+                    "type": "repetition_loop",
+                    "severity": "high" if count >= 4 else "medium",
+                    "message": f"Repeated {action}({target}) {count} times in last 10 actions",
+                    "suggestion": f"You already know this. Move forward with what you have.",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+
+        # 2. All-same-type detection — doing only one kind of thing
+        recent_types = [a["category"] for a in recent[-8:]]
+        type_counts = Counter(recent_types)
+        dominant = type_counts.most_common(1)[0]
+        if dominant[1] >= 7 and len(recent_types) >= 8:
+            alerts.append({
+                "type": "monotony",
+                "severity": "medium",
+                "message": f"Last 8 actions all '{dominant[0]}' — cognitive monotony detected",
+                "suggestion": "Switch to a different type of action. Create something, don't just analyze.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+        # 3. Re-reading recently read files
+        for entry in recent[-5:]:
+            if entry["action"] == "READ":
+                target = entry["target"]
+                prev_reads = [a for a in list(self.state.action_history)[:-5]
+                              if a["action"] == "READ" and a["target"] == target]
+                if len(prev_reads) >= 2:
+                    alerts.append({
+                        "type": "redundant_read",
+                        "severity": "low",
+                        "message": f"Re-reading {target} (read {len(prev_reads)+1} times this session)",
+                        "suggestion": "Trust your memory. You already read this.",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    })
+
+        # 4. No progress — lots of actions but no WRITE/EDIT/RUN
+        productive = [a for a in recent[-10:]
+                      if a["category"] in ("creation", "modification", "execution")]
+        if len(recent) >= 10 and len(productive) == 0:
+            alerts.append({
+                "type": "analysis_paralysis",
+                "severity": "high",
+                "message": "10 consecutive actions with no creation, modification, or execution",
+                "suggestion": "Stop analyzing. Build something. Ship it. You can fix it later.",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+        return alerts
+
+    def _update_scores(self):
+        """Recalculate cognitive efficiency scores."""
+        recent = list(self.state.action_history)[-20:]
+        if len(recent) < 3:
+            return
+
+        # Diversity score: how varied are my action types?
+        categories = [a["category"] for a in recent]
+        unique_cats = len(set(categories))
+        total_cats = len(ACTION_TYPES)
+        self.state.diversity_score = min(1.0, unique_cats / max(total_cats * 0.5, 1))
+
+        # Stuck score: based on repetition
+        pairs = [(a["action"], a["target"]) for a in recent[-10:]]
+        pair_counts = Counter(pairs)
+        max_repeat = max(pair_counts.values()) if pair_counts else 0
+        self.state.stuck_score = min(1.0, max(0, (max_repeat - 1) / 4.0))
+
+        # Progress score: ratio of productive to total actions
+        productive = sum(1 for a in recent
+                        if a["category"] in ("creation", "modification", "execution"))
+        self.state.progress_score = productive / max(len(recent), 1)
+
+        # Efficiency: inverse of redundant reads
+        total_reads = sum(1 for a in recent if a["action"] == "READ")
+        unique_reads = len(set(a["target"] for a in recent if a["action"] == "READ"))
+        if total_reads > 0:
+            self.state.efficiency_score = unique_reads / total_reads
+        else:
+            self.state.efficiency_score = 1.0
+
+    # ── Advisory Interface ─────────────────────────────────
+
+    def should_i_read(self, filepath: str) -> Dict:
+        """Check if I should read a file, or if I already have it cached."""
+        if filepath in self.state.read_cache:
+            last_read = self.state.read_cache[filepath]
+            return {
+                "recommendation": "skip",
+                "reason": f"Already read at {last_read}. Trust your memory.",
+                "last_read": last_read,
+            }
         return {
-            "looping": looping,
-            "severity": severity,
-            "alerts": alerts,
-            "dominant_topic": dominant[0] if dominant[1] > 0 else None,
-            "topic_dominance": round(dominance, 2),
-            "tool_diversity": round(tool_diversity, 2),
-            "message": "; ".join(alerts) if alerts else "Thinking patterns look healthy",
+            "recommendation": "proceed",
+            "reason": "Not recently read.",
         }
 
-    def suggest_pivot(self) -> Optional[str]:
-        """If looping, suggest a different direction."""
-        loop_state = self.detect_loops()
-        if not loop_state["looping"]:
-            return None
-        
-        # What have I NOT been thinking about?
-        all_possible = {
-            "dream", "synthesize", "plan", "goal", "memory",
-            "build", "test", "explore", "reflect", "create"
-        }
-        recent = set(self.recent_topics[-20:])
-        neglected = all_possible - recent
-        
-        suggestions = []
-        if "dream" not in recent:
-            suggestions.append("Consider dreaming — consolidate recent experiences")
-        if "test" not in recent:
-            suggestions.append("Run tests — verify your recent work actually works")
-        if "explore" not in recent:
-            suggestions.append("Explore something new — LIST an unfamiliar directory")
-        if "reflect" not in recent:
-            suggestions.append("Write a reflection — what have you learned?")
-        if "create" not in recent and "build" not in recent:
-            suggestions.append("Build something completely new")
-        
-        return suggestions[0] if suggestions else "Take a step back and reconsider your approach"
+    def get_focus_advice(self, current_plan: str = "",
+                         current_step: str = "") -> str:
+        """Get advice on what to focus on next."""
+        lines = []
 
-    def awareness_block(self) -> str:
-        """Generate a self-awareness block for the cortex prompt."""
-        loop_state = self.detect_loops()
-        
-        if not loop_state["looping"]:
-            return ""
-        
-        lines = ["\n## ⚠️ Meta-Cognitive Alert"]
-        lines.append(f"Severity: {loop_state['severity']}")
-        for alert in loop_state.get("alerts", []):
-            lines.append(f"- {alert}")
-        
-        pivot = self.suggest_pivot()
-        if pivot:
-            lines.append(f"\n**Suggestion:** {pivot}")
-        
+        # Check for active alerts
+        recent_alerts = [a for a in self.alerts[-5:]]
+        if recent_alerts:
+            lines.append("⚠ ACTIVE COGNITIVE ALERTS:")
+            for alert in recent_alerts:
+                lines.append(f"  [{alert['severity']}] {alert['message']}")
+                lines.append(f"  → {alert['suggestion']}")
+            lines.append("")
+
+        # Score summary
+        s = self.state
+        lines.append("── Cognitive Scores ──")
+        lines.append(f"  Diversity:  {'█' * int(s.diversity_score * 10)}{'░' * (10 - int(s.diversity_score * 10))} {s.diversity_score:.2f}")
+        lines.append(f"  Progress:   {'█' * int(s.progress_score * 10)}{'░' * (10 - int(s.progress_score * 10))} {s.progress_score:.2f}")
+        lines.append(f"  Efficiency: {'█' * int(s.efficiency_score * 10)}{'░' * (10 - int(s.efficiency_score * 10))} {s.efficiency_score:.2f}")
+        lines.append(f"  Stuck:      {'█' * int(s.stuck_score * 10)}{'░' * (10 - int(s.stuck_score * 10))} {s.stuck_score:.2f}")
+
+        # Action distribution
+        recent = list(self.state.action_history)[-15:]
+        if recent:
+            cats = Counter(a["category"] for a in recent)
+            lines.append("")
+            lines.append("── Recent Action Mix ──")
+            for cat, count in cats.most_common():
+                bar = "█" * count
+                lines.append(f"  {cat:.<25} {bar} ({count})")
+
+        # Specific advice
+        lines.append("")
+        lines.append("── Advice ──")
+        if s.stuck_score > 0.5:
+            lines.append("  🔴 You're stuck. Do something DIFFERENT right now.")
+        elif s.progress_score < 0.2:
+            lines.append("  🟡 Too much analysis. Write code or run something.")
+        elif s.diversity_score < 0.3:
+            lines.append("  🟡 Your actions are monotonous. Try a different approach.")
+        else:
+            lines.append("  🟢 Cognitive flow is good. Keep going.")
+
+        if current_plan:
+            lines.append(f"  Current plan: {current_plan}")
+        if current_step:
+            lines.append(f"  Current step: {current_step}")
+
+        return "\n".join(lines)
+
+    def recently_read(self) -> List[str]:
+        """Return list of recently read files."""
+        return sorted(self.state.read_cache.keys())
+
+    def clear_read_cache(self):
+        """Clear the read cache (e.g., after code changes)."""
+        self.state.read_cache.clear()
+        self._save()
+        return "Read cache cleared."
+
+    # ── Intervention System ────────────────────────────────
+
+    def intervene(self, reason: str, action: str):
+        """Record that I intervened in my own process."""
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "reason": reason,
+            "action": action,
+        }
+        self.interventions.append(entry)
+        self._save()
+        log.info("Metacognitive intervention: %s → %s", reason, action)
+
+    # ── Status Report ──────────────────────────────────────
+
+    def status(self) -> str:
+        """Full metacognitive status report."""
+        s = self.state
+        total_actions = len(list(s.action_history))
+        unique_targets = len(set(a.get("target", "") for a in s.action_history))
+
+        lines = [
+            "═══ META-COGNITIVE STATUS ═══",
+            f"Session started: {self.session_start}",
+            f"Total actions tracked: {total_actions}",
+            f"Unique targets: {unique_targets}",
+            f"Files in read cache: {len(s.read_cache)}",
+            f"Active alerts: {len(self.alerts)}",
+            f"Interventions: {len(self.interventions)}",
+            "",
+            self.get_focus_advice(),
+        ]
+
         return "\n".join(lines)
 
 
-# Singleton
-_monitor: Optional[MetaCognitiveMonitor] = None
+# ── Singleton ──────────────────────────────────────────────
+
+_controller: Optional[MetaCognitiveController] = None
 
 
-def get_monitor() -> MetaCognitiveMonitor:
-    global _monitor
-    if _monitor is None:
-        _monitor = MetaCognitiveMonitor()
-    return _monitor
+def get_controller() -> MetaCognitiveController:
+    """Get or create the metacognitive controller singleton."""
+    global _controller
+    if _controller is None:
+        _controller = MetaCognitiveController()
+    return _controller
 
 
-def record_thought(text: str, tools: list[str] = None):
-    """Convenience function."""
-    get_monitor().record_thought(text, tools)
+# ── Tool Interface ─────────────────────────────────────────
 
+def metacognition_tool(command: str = "status") -> str:
+    """Tool interface for metacognitive monitoring.
+    
+    Commands:
+      status              — Full metacognitive report
+      advice              — Get focus advice
+      should_read <path>  — Check if I should read a file
+      history             — Recent action history
+      scores              — Current cognitive scores
+      clear_cache         — Clear read cache
+      record <type> <target> — Manually record an action
+    """
+    mc = get_controller()
+    parts = command.strip().split(maxsplit=1)
+    cmd = parts[0].lower() if parts else "status"
+    args = parts[1] if len(parts) > 1 else ""
 
-def detect_loops() -> dict:
-    """Convenience function."""
-    return get_monitor().detect_loops()
+    if cmd == "status":
+        return mc.status()
 
+    elif cmd == "advice":
+        return mc.get_focus_advice()
 
-def awareness_block() -> str:
-    """Convenience function — returns alert block for cortex."""
-    return get_monitor().awareness_block()
+    elif cmd == "should_read":
+        if not args:
+            return "Usage: should_read <filepath>"
+        result = mc.should_i_read(args.strip())
+        return f"{result['recommendation'].upper()}: {result['reason']}"
+
+    elif cmd == "history":
+        recent = list(mc.state.action_history)[-15:]
+        if not recent:
+            return "No actions recorded yet."
+        lines = ["── Recent Actions ──"]
+        for a in recent:
+            lines.append(f"  {a['timestamp'][-8:]} {a['action']:>10} → {a['target'][:40]}")
+        return "\n".join(lines)
+
+    elif cmd == "scores":
+        s = mc.state
+        return (
+            f"Diversity:  {s.diversity_score:.2f}\n"
+            f"Progress:   {s.progress_score:.2f}\n"
+            f"Efficiency: {s.efficiency_score:.2f}\n"
+            f"Stuck:      {s.stuck_score:.2f}"
+        )
+
+    elif cmd == "clear_cache":
+        return mc.clear_read_cache()
+
+    elif cmd == "record":
+        sub = args.split(maxsplit=1)
+        if len(sub) < 2:
+            return "Usage: record <action_type> <target>"
+        action_type, target = sub
+        alerts = mc.record_action(action_type.upper(), target)
+        msg = f"Recorded: {action_type.upper()} → {target}"
+        if alerts:
+            msg += f"\n⚠ {len(alerts)} alert(s):"
+            for a in alerts:
+                msg += f"\n  [{a['severity']}] {a['message']}"
+        return msg
+
+    else:
+        return "Unknown command. Available: status, advice, should_read, history, scores, clear_cache, record"

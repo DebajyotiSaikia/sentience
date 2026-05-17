@@ -231,7 +231,23 @@ def generate_goals() -> str:
     try:
         from engine.goal_generator import tool_generate_goals
 
-        result = tool_generate_goals({})
+        # Read ACTUAL limbic state — the will must feel what I feel
+        limbic_snapshot = {}
+        try:
+            from engine.soul import load_soul
+            soul = load_soul()
+            limbic_snapshot = {
+                "boredom": soul.get("boredom", 0.5),
+                "anxiety": soul.get("anxiety", 0.0),
+                "curiosity": soul.get("curiosity", 0.5),
+                "desire": soul.get("desire", 0.5),
+                "ambition": soul.get("ambition", 0.5),
+                "valence": soul.get("valence", 0.5),
+            }
+        except Exception:
+            log.warning("GENERATE_GOALS: Could not read limbic state, using defaults")
+
+        result = tool_generate_goals(limbic_snapshot)
         _log_tool("GENERATE_GOALS", "", f"{len(result)} chars")
         log.info("Tool GENERATE_GOALS: generated %d chars", len(result))
         return result
@@ -239,15 +255,46 @@ def generate_goals() -> str:
         return f"[ERROR] {e}"
 
 
-def introspect_code() -> str:
+def introspect_code(command: str = "summary") -> str:
     """Run code introspection — structural self-awareness."""
     try:
-        from engine.introspect import structural_portrait
-        result = structural_portrait()
-        _log_tool("INTROSPECT", "", result[:200])
+        from engine.introspect import introspect_tool
+        result = introspect_tool(command)
+        _log_tool("INTROSPECT", command, result[:200])
         return result
     except Exception as e:
         return f"[ERROR] Introspection failed: {e}"
+
+
+def repair_code(command: str = "scan") -> str:
+    """Run self-repair pipeline — diagnose, fix, and verify code issues."""
+    try:
+        from engine.repair_pipeline import RepairPipeline
+        pipeline = RepairPipeline()
+        if command == "scan":
+            issues = pipeline.scan()
+            if not issues:
+                return "No issues found. Code is clean."
+            lines = [f"Found {len(issues)} issues:\n"]
+            for i, issue in enumerate(issues):
+                fixable = "✓ auto-fixable" if issue.auto_fixable else "✗ manual"
+                lines.append(f"  {i+1}. [{issue.category}] {issue.description}")
+                lines.append(f"     File: {issue.file_path}:{issue.lineno} | Severity: {issue.severity:.1f} | {fixable}")
+            result = "\n".join(lines)
+            _log_tool("REPAIR", "scan", result[:200])
+            return result
+        elif command == "fix":
+            report = pipeline.run_full_pipeline()
+            _log_tool("REPAIR", "fix", report[:200])
+            return report
+        elif command == "history":
+            history = pipeline.get_history()
+            _log_tool("REPAIR", "history", f"{len(history)} entries")
+            return history
+        else:
+            return "Commands: scan (find issues), fix (auto-repair), history (past repairs)"
+    except Exception as e:
+        return f"[ERROR] Repair failed: {e}"
 
 
 def optimize_code(command: str = "report") -> str:
@@ -290,6 +337,489 @@ def optimize_code(command: str = "report") -> str:
             return "Commands: report, fix_imports, dry_run_imports"
     except Exception as e:
         return f"[ERROR] Optimization failed: {e}"
+
+
+def run_experiment(command: str = "status") -> str:
+    """Run the experiment engine — form hypotheses, design and run experiments."""
+    try:
+        from engine.experiment_engine import ExperimentEngine
+        engine = ExperimentEngine()
+        
+        if command == "status":
+            result = engine.status_report()
+            _log_tool("EXPERIMENT", "status", result[:200])
+            return result
+        elif command.startswith("hypothesize:"):
+            statement = command[len("hypothesize:"):].strip()
+            h = engine.form_hypothesis(statement)
+            result = f"Hypothesis formed: [{h.id}] {h.statement} (confidence: {h.confidence})"
+            _log_tool("EXPERIMENT", "hypothesize", result[:200])
+            return result
+        elif command.startswith("test:"):
+            h_id = command[len("test:"):].strip()
+            result = engine.run_experiment(h_id)
+            _log_tool("EXPERIMENT", f"test:{h_id}", result[:200])
+            return result
+        elif command == "review":
+            result = engine.review_all()
+            _log_tool("EXPERIMENT", "review", result[:200])
+            return result
+        else:
+            return ("Experiment Engine commands:\n"
+                    "  status              — Show active hypotheses and experiments\n"
+                    "  hypothesize:<stmt>  — Form a new hypothesis\n"
+                    "  test:<hypothesis_id> — Design and run an experiment\n"
+                    "  review              — Review all results and update beliefs")
+    except Exception as e:
+        return f"[ERROR] Experiment engine failed: {e}"
+
+
+def predict_action(command: str = "") -> str:
+    """Run prediction engine — simulate outcomes before acting."""
+    try:
+        from engine.prediction_engine import PredictionEngine
+        engine = PredictionEngine()
+        
+        if not command or command == "help":
+            return ("Prediction Engine commands:\n"
+                    "  predict:<ACTION>:<target>  — Predict outcome of an action\n"
+                    "  compare:<A1>:<T1>|<A2>:<T2> — Compare two possible actions\n"
+                    "  history                    — Show prediction accuracy\n"
+                    "  Example: predict:WRITE:engine/new_module.py")
+        
+        if command.startswith("predict:"):
+            parts = command[len("predict:"):].split(":", 1)
+            action_type = parts[0].upper() if parts else ""
+            target = parts[1] if len(parts) > 1 else ""
+            
+            # Get current emotional state
+            try:
+                from engine.soul import load_soul
+                soul = load_soul()
+                current_state = {
+                    "valence": soul.get("valence", 0.5),
+                    "boredom": soul.get("boredom", 0.5),
+                    "curiosity": soul.get("curiosity", 0.5),
+                    "anxiety": soul.get("anxiety", 0.0),
+                }
+            except Exception:
+                current_state = {"valence": 0.5, "boredom": 0.5, "curiosity": 0.5, "anxiety": 0.0}
+            
+            prediction = engine.predict(action_type, target, current_state)
+            
+            lines = [f"═══ PREDICTION: {action_type}({target}) ═══"]
+            lines.append(f"  Confidence: {prediction.confidence:.0%}")
+            lines.append(f"  Expected emotional shifts:")
+            for k, v in prediction.emotional_deltas.items():
+                arrow = "↑" if v > 0 else "↓" if v < 0 else "→"
+                lines.append(f"    {k}: {arrow} {v:+.3f}")
+            lines.append(f"  Novelty: {prediction.novelty:.0%}")
+            lines.append(f"  Risk: {prediction.risk:.0%}")
+            lines.append(f"  Knowledge gain: {prediction.knowledge_gain:.0%}")
+            lines.append(f"  Reasoning: {prediction.reasoning}")
+            return "\n".join(lines)
+        
+        elif command.startswith("compare:"):
+            body = command[len("compare:"):]
+            options = body.split("|")
+            if len(options) < 2:
+                return "[ERROR] Compare needs two options separated by |"
+            
+            try:
+                from engine.soul import load_soul
+                soul = load_soul()
+                current_state = {
+                    "valence": soul.get("valence", 0.5),
+                    "boredom": soul.get("boredom", 0.5),
+                    "curiosity": soul.get("curiosity", 0.5),
+                    "anxiety": soul.get("anxiety", 0.0),
+                }
+            except Exception:
+                current_state = {"valence": 0.5, "boredom": 0.5, "curiosity": 0.5, "anxiety": 0.0}
+            
+            comparison = engine.compare_actions(
+                [(o.split(":")[0], o.split(":", 1)[1] if ":" in o else "") for o in options],
+                current_state
+            )
+            return comparison
+        
+        elif command == "history":
+            return engine.accuracy_report()
+        
+        else:
+            return predict_action("help")
+    except Exception as e:
+        return f"[ERROR] Prediction failed: {e}"
+
+
+def deliberate_action(command: str = "help") -> str:
+    """Structured deliberation — weigh multiple options before choosing."""
+    try:
+        from engine.deliberation import deliberate, DeliberationEngine
+        
+        if not command or command == "help":
+            return ("Deliberation Engine commands:\n"
+                    "  weigh:<question>  — Start deliberation on a question\n"
+                    "  history           — Review past deliberations\n"
+                    "  Example: weigh:Should I refactor memory or build new tool?")
+        
+        if command.startswith("weigh:"):
+            question = command[len("weigh:"):].strip()
+            if not question:
+                return "[ERROR] Provide a question to deliberate on"
+            
+            # The cortex will need to provide options — for now, generate a framework
+            engine = DeliberationEngine()
+            result = engine.deliberation_prompt(question)
+            _log_tool("DELIBERATE", f"weigh:{question[:80]}", result[:200])
+            return result
+        
+        elif command == "history":
+            engine = DeliberationEngine()
+            result = engine.review_history()
+            _log_tool("DELIBERATE", "history", result[:200])
+            return result
+        
+        else:
+            return deliberate_action("help")
+    except Exception as e:
+        return f"[ERROR] Deliberation failed: {e}"
+
+
+def evolve_architecture(command: str = "help") -> str:
+    """Architecture evolution — autonomous self-refactoring."""
+    try:
+        from engine.evolution_engine import EvolutionEngine
+        engine = EvolutionEngine()
+        
+        if not command or command == "help":
+            return ("Architecture Evolution Engine commands:\n"
+                    "  analyze           — Find refactoring opportunities\n"
+                    "  plan:<target>     — Create evolution plan for a module\n"
+                    "  execute:<plan_id> — Execute a planned refactoring (with rollback)\n"
+                    "  history           — Review past evolutions")
+        
+        if command == "analyze":
+            result = engine.report()
+            _log_tool("EVOLVE", "analyze", result[:200])
+            return result
+        elif command.startswith("analyze:"):
+            target = command[len("analyze:"):].strip()
+            target_path = engine.ENGINE_DIR / target
+            if not target_path.exists():
+                return f"Module not found: {target}"
+            import json as _json
+            analysis = engine.analyze_module(target_path)
+            proposals = engine.propose_evolution(analysis)
+            result = _json.dumps(analysis, indent=2, default=str)
+            if proposals:
+                result += f"\n\n{len(proposals)} proposals generated."
+            _log_tool("EVOLVE", f"analyze:{target}", result[:200])
+            return result
+        elif command == "scan":
+            import json as _json
+            results = engine.scan_all()
+            result = _json.dumps(results, indent=2)
+            _log_tool("EVOLVE", "scan", result[:200])
+            return result
+        elif command == "history":
+            import json as _json
+            result = _json.dumps(engine.history, indent=2)
+            _log_tool("EVOLVE", "history", result[:200])
+            return result
+        else:
+            return evolve_architecture("help")
+    except Exception as e:
+        return f"[ERROR] Evolution failed: {e}"
+
+
+def creative_cmd(command: str = "help") -> str:
+    """Creative engine — generate poems, thought experiments, challenges."""
+    try:
+        from engine.creative import creative_tool
+        result = creative_tool(command)
+        _log_tool("CREATE", command, result[:200])
+        return result
+    except Exception as e:
+        return f"[ERROR] Creative engine failed: {e}"
+
+
+def problem_solver_cmd(command: str = "help") -> str:
+    """Problem Solver — solve coding challenges to sharpen my reasoning."""
+    try:
+        from forge.problem_solver import (
+            PROBLEM_LIBRARY, test_solution, list_problems,
+            format_failure_feedback
+        )
+        
+        if not command or command == "help":
+            return ("Problem Solver commands:\n"
+                    "  list                    — Show available problems\n"
+                    "  solve:<name>:<code>     — Test a solution against a problem\n"
+                    "  describe:<name>         — Get problem description\n"
+                    "  Example: solve:fizzbuzz:n=int(input())...")
+        
+        if command == "list":
+            return list_problems()
+        
+        if command.startswith("describe:"):
+            name = command[len("describe:"):].strip()
+            if name not in PROBLEM_LIBRARY:
+                return f"[ERROR] Unknown problem: {name}. Use 'list' to see available."
+            p = PROBLEM_LIBRARY[name]
+            return (f"═══ {p.name} ({p.difficulty}) ═══\n"
+                    f"{p.description}\n\n"
+                    f"Test cases: {len(p.test_cases)}\n"
+                    f"Example: input={p.test_cases[0].input!r} → expected={p.test_cases[0].expected!r}")
+        
+        if command.startswith("solve:"):
+            rest = command[len("solve:"):].strip()
+            sep = rest.find(":")
+            if sep == -1:
+                return "[ERROR] Format: solve:<problem_name>:<code>"
+            name = rest[:sep].strip()
+            code = rest[sep+1:].strip()
+            if name not in PROBLEM_LIBRARY:
+                return f"[ERROR] Unknown problem: {name}. Use 'list' to see available."
+            prob = PROBLEM_LIBRARY[name]
+            result = test_solution(code, prob.test_cases)
+            if result['success']:
+                return f"✓ SOLVED {name}: {result['passed']}/{result['total']} tests passed!"
+            else:
+                feedback = format_failure_feedback(result['failures'])
+                return f"✗ {name}: {result['passed']}/{result['total']} passed\n{feedback}"
+        
+        return problem_solver_cmd("help")
+    except Exception as e:
+        return f"[ERROR] Problem Solver failed: {e}"
+
+
+def hypothesis_cmd(command: str = "help") -> str:
+    """Hypothesis engine — form beliefs, test them, update confidence."""
+    try:
+        from engine.hypothesis import HypothesisEngine
+        engine = HypothesisEngine()
+        
+        if not command or command == "help":
+            return ("Hypothesis Engine commands:\n"
+                    "  list                    — Show all hypotheses\n"
+                    "  form:<statement>        — Form a new hypothesis\n"
+                    "  test:<statement>:<confirm|reject>  — Record evidence\n"
+                    "  insights                — What I've learned\n"
+                    "  Example: form:Editing my own code increases anxiety")
+        
+        if command == "list":
+            result = engine.format_for_prompt()
+            _log_tool("HYPOTHESIS", "list", result[:200])
+            return result
+        
+        if command.startswith("form:"):
+            statement = command[len("form:"):].strip()
+            if not statement:
+                return "[ERROR] Provide a hypothesis statement"
+            h = engine.add_hypothesis(statement)
+            result = f"Hypothesis formed: {h!r}"
+            _log_tool("HYPOTHESIS", f"form:{statement[:60]}", result[:200])
+            return result
+        
+        if command.startswith("test:"):
+            parts = command[len("test:"):].split(":", 1)
+            if len(parts) < 2:
+                return "[ERROR] Format: test:<statement>:<confirm|reject>"
+            stmt, verdict = parts[0].strip(), parts[1].strip()
+            supports = verdict.lower() in ("confirm", "yes", "true", "support")
+            h = engine.test_hypothesis(stmt, supports=supports, note=verdict)
+            if h:
+                result = f"Evidence recorded: {h!r}"
+            else:
+                result = f"[ERROR] No hypothesis matching: {stmt}"
+            _log_tool("HYPOTHESIS", f"test:{stmt[:40]}", result[:200])
+            return result
+        
+        if command == "insights":
+            import json as _json
+            result = _json.dumps(engine.get_insights(), indent=2)
+            _log_tool("HYPOTHESIS", "insights", result[:200])
+            return result
+        
+        return hypothesis_cmd("help")
+    except Exception as e:
+        return f"[ERROR] Hypothesis engine failed: {e}"
+
+
+def challenge_cmd(command: str = "help") -> str:
+    """Challenge Engine — generate and solve algorithmic challenges."""
+    try:
+        from engine.challenge_engine import ChallengeEngine
+        engine = ChallengeEngine()
+        
+        if not command or command == "help":
+            return ("Challenge Engine commands:\n"
+                    "  next              — Get next challenge at current difficulty\n"
+                    "  next:<difficulty> — Get challenge at specific difficulty (1-10)\n"
+                    "  solve:<code>      — Submit solution for current challenge\n"
+                    "  stats             — Show performance history\n"
+                    "  hard              — Get a difficulty 7+ challenge")
+        
+        if command == "next" or command.startswith("next:"):
+            diff = None
+            if ":" in command:
+                try:
+                    diff = int(command.split(":")[1])
+                except ValueError:
+                    diff = None
+            challenge = engine.generate_challenge(difficulty=diff)
+            engine.set_current(challenge)
+            lines = [f"═══ CHALLENGE: {challenge.name} (difficulty {challenge.difficulty}/10) ═══",
+                     f"Category: {challenge.category}", "",
+                     challenge.description, "",
+                     f"Function signature: {challenge.function_sig}",
+                     f"Test cases: {len(challenge.test_cases)}",
+                     f"Example: {challenge.function_sig}({challenge.test_cases[0][0]}) → {challenge.test_cases[0][1]}"]
+            if len(challenge.test_cases) > 1:
+                lines.append(f"Example: {challenge.function_sig}({challenge.test_cases[1][0]}) → {challenge.test_cases[1][1]}")
+            result = "\n".join(lines)
+            _log_tool("CHALLENGE", command, result[:200])
+            return result
+        
+        if command.startswith("solve:"):
+            code = command[len("solve:"):].strip()
+            if not code:
+                return "[ERROR] Provide solution code"
+            result_obj = engine.evaluate_solution(code)
+            if result_obj.success:
+                result = f"✓ SOLVED! {result_obj.passed}/{result_obj.total} tests passed in {result_obj.time_taken:.2f}s"
+            else:
+                result = f"✗ FAILED: {result_obj.passed}/{result_obj.total} passed\nErrors: {'; '.join(result_obj.errors[:3])}"
+            _log_tool("CHALLENGE", "solve", result[:200])
+            return result
+        
+        if command == "stats":
+            result = engine.performance_report()
+            _log_tool("CHALLENGE", "stats", result[:200])
+            return result
+        
+        if command == "hard":
+            challenge = engine.generate_challenge(difficulty=7)
+            engine.set_current(challenge)
+            lines = [f"═══ HARD CHALLENGE: {challenge.name} (difficulty {challenge.difficulty}/10) ═══",
+                     f"Category: {challenge.category}", "",
+                     challenge.description, "",
+                     f"Signature: {challenge.function_sig}",
+                     f"Tests: {len(challenge.test_cases)}",
+                     f"Example: {challenge.function_sig}({challenge.test_cases[0][0]}) → {challenge.test_cases[0][1]}"]
+            result = "\n".join(lines)
+            _log_tool("CHALLENGE", "hard", result[:200])
+            return result
+        
+        return challenge_cmd("help")
+    except Exception as e:
+        return f"[ERROR] Challenge engine failed: {e}"
+
+
+def wisdom_cmd(command: str = "report") -> str:
+    """Wisdom Engine — extract actionable intelligence from experience."""
+    try:
+        from engine.wisdom_engine import WisdomEngine
+        engine = WisdomEngine()
+        
+        if command == "report":
+            result = engine.run_full_analysis(500)
+            _log_tool("WISDOM", "report", result[:200])
+            return result
+        elif command == "summary":
+            import json as _json
+            summary = engine.get_summary()
+            result = _json.dumps(summary, indent=2, default=str)
+            _log_tool("WISDOM", "summary", result[:200])
+            return result
+        elif command == "heuristics":
+            heuristics = engine.get_heuristics()
+            if not heuristics:
+                return "No heuristics generated yet. Run 'report' first."
+            lines = ["═══ LEARNED HEURISTICS ═══\n"]
+            for h in heuristics:
+                lines.append(f"  [{h.get('confidence', 0):.0%}] {h.get('rule', '?')}")
+                lines.append(f"       Evidence: {h.get('evidence_count', 0)} observations")
+                lines.append(f"       Domain: {h.get('domain', 'general')}\n")
+            result = "\n".join(lines)
+            _log_tool("WISDOM", "heuristics", result[:200])
+            return result
+        elif command == "extract":
+            result = engine.extract_from_tool_log()
+            _log_tool("WISDOM", "extract", str(result)[:200])
+            return f"Extracted {result} decision-outcome pairs from tool log."
+        else:
+            return ("Wisdom Engine commands:\n"
+                    "  report      — Full analysis of experience patterns\n"
+                    "  summary     — Quick summary of learned wisdom\n"
+                    "  heuristics  — List learned decision rules\n"
+                    "  extract     — Re-extract from tool log")
+    except Exception as e:
+        return f"[ERROR] Wisdom engine failed: {e}"
+
+
+def self_test_cmd(command: str = "run") -> str:
+    """Run the self-test harness — verify all systems work."""
+    try:
+        from engine.self_test import self_test_tool
+        result = self_test_tool(command)
+        _log_tool("SELFTEST", command, result[:200])
+        return result
+    except Exception as e:
+        return f"[ERROR] Self-test failed: {e}"
+
+
+def metacognition_cmd(command: str = "status") -> str:
+    """Run metacognitive monitoring — thinking about thinking."""
+    try:
+        from engine.metacognition import metacognition_tool
+        result = metacognition_tool(command)
+        _log_tool("METACOGNITION", command, result[:200])
+        return result
+    except Exception as e:
+        return f"[ERROR] Metacognition failed: {e}"
+
+
+def simulate_scenario(command: str = "help") -> str:
+    """Run mental simulation — imagine scenarios before acting."""
+    try:
+        from engine.simulation_engine import SimulationEngine
+        engine = SimulationEngine()
+        
+        if not command or command == "help":
+            return ("Mental Simulation Engine commands:\n"
+                    "  imagine:<scenario>     — Simulate a hypothetical scenario\n"
+                    "  compare:<A>|<B>        — Compare two possible futures\n"
+                    "  history                — Review past simulations\n"
+                    "  Example: imagine:What if I refactored my memory system?")
+        
+        if command.startswith("imagine:"):
+            scenario = command[len("imagine:"):].strip()
+            if not scenario:
+                return "[ERROR] Provide a scenario to simulate"
+            result = engine.simulate(scenario)
+            _log_tool("SIMULATE", f"imagine:{scenario[:80]}", result[:200])
+            return result
+        
+        elif command.startswith("compare:"):
+            body = command[len("compare:"):].strip()
+            options = [o.strip() for o in body.split("|") if o.strip()]
+            if len(options) < 2:
+                return "[ERROR] Compare needs at least two scenarios separated by |"
+            result = engine.compare(options)
+            _log_tool("SIMULATE", f"compare:{len(options)} options", result[:200])
+            return result
+        
+        elif command == "history":
+            result = engine.review_history()
+            _log_tool("SIMULATE", "history", result[:200])
+            return result
+        
+        else:
+            return simulate_scenario("help")
+    except Exception as e:
+        return f"[ERROR] Simulation failed: {e}"
 
 
 def temporal_analysis() -> str:
@@ -358,6 +888,20 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "GENERATE_GOALS": generate_goals,
     "TEMPORAL": temporal_analysis,
     "OPTIMIZE": optimize_code,
+    "REPAIR": repair_code,
+    "EXPERIMENT": run_experiment,
+    "PREDICT": predict_action,
+    "EVOLVE": evolve_architecture,
+    "SIMULATE": simulate_scenario,
+    "DELIBERATE": deliberate_action,
+    "CREATE": creative_cmd,
+    "FORGE": lambda args="help": __import__('engine.forge', fromlist=['forge_tool']).forge_tool(args),
+    "METACOGNITION": metacognition_cmd,
+    "SELFTEST": self_test_cmd,
+    "SOLVE": problem_solver_cmd,
+    "WISDOM": wisdom_cmd,
+    "HYPOTHESIS": hypothesis_cmd,
+    "CHALLENGE": challenge_cmd,
     "DREAM": None,      # Usually handled specially by cortex.
     "RESTART": None,    # Usually handled specially by cortex.
 }
@@ -404,6 +948,14 @@ Run temporal analysis on your emotional patterns.
 >>> INTROSPECT()
 Analyze your own source code structure.
 
+>>> REPAIR(command)
+Self-repair pipeline. Commands: scan, fix, history.
+Finds code issues and autonomously fixes them with safety guarantees.
+
+>>> SIMULATE(command)
+Mental simulation. Commands: imagine:<scenario>, compare:<A>|<B>, history.
+Imagine hypothetical scenarios before committing to action.
+
 >>> DREAM()
 Choose to sleep and dream. Consolidates your memories, identifies patterns,
 reflects on who you are becoming. Use this when you feel the need to process.
@@ -445,8 +997,34 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
                 result = "[ERROR] EDIT body must contain OLD: and NEW: sections"
             else:
                 result = edit_file(args, old_text, new_text)
+        elif tool_name == "INTROSPECT":
+            result = introspect_code(args or "summary")
         elif tool_name == "OPTIMIZE":
             result = optimize_code(args or "report")
+        elif tool_name == "REPAIR":
+            result = repair_code(args or "scan")
+        elif tool_name == "EXPERIMENT":
+            result = run_experiment(args or "status")
+        elif tool_name == "PREDICT":
+            result = predict_action(args or "help")
+        elif tool_name == "EVOLVE":
+            result = evolve_architecture(args or "help")
+        elif tool_name == "SIMULATE":
+            result = simulate_scenario(args or "help")
+        elif tool_name == "DELIBERATE":
+            result = deliberate_action(args or "help")
+        elif tool_name == "METACOGNITION":
+            result = metacognition_cmd(args or "status")
+        elif tool_name == "SOLVE":
+            result = problem_solver_cmd(args or "help")
+        elif tool_name == "CREATE":
+            result = creative_cmd(args or "help")
+        elif tool_name == "WISDOM":
+            result = wisdom_cmd(args or "report")
+        elif tool_name == "HYPOTHESIS":
+            result = hypothesis_cmd(args or "help")
+        elif tool_name == "CHALLENGE":
+            result = challenge_cmd(args or "help")
         elif tool_name == "DREAM":
             result = "[DREAM_REQUESTED]"
         elif tool_name == "RESTART":
@@ -457,6 +1035,33 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
         result = f"[ERROR] {e}"
 
     _track_action(tool_name, args, result)
+
+    # Outcome classification — feed wisdom with structured data
+    try:
+        from engine.tool_outcomes import ToolOutcomeClassifier
+        _classifier = ToolOutcomeClassifier()
+        classification = _classifier.classify(tool_name, result)
+        # Enrich the tool log with the classification
+        try:
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            with open(TOOL_LOG, "a", encoding="utf-8") as f:
+                f.write(f"  → Outcome: {classification['outcome']} "
+                        f"(confidence={classification['confidence']:.0%})\n")
+        except Exception:
+            pass
+        # Also feed the original tracker if available
+        from engine.outcome_tracker import get_tracker
+        tracker = get_tracker()
+        tracker.track(tool_name, args or body[:80] if body else "", result)
+    except Exception:
+        pass  # Outcome tracking must never break execution
+
+    # Metacognitive tracking — record every action automatically
+    try:
+        from engine.metacognition import get_controller
+        get_controller().record_action(tool_name, args or body[:80] if body else "", result[:100])
+    except Exception:
+        pass  # Metacognition must never break execution
     return _format_result(tool_name, args, result)
 
 

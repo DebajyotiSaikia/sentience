@@ -119,6 +119,17 @@ class Heartbeat:
                     except Exception as will_exc:
                         log.debug("Will pulse skipped: %s", will_exc)
 
+                # ── 3d. Evolution Tick — autonomous self-improvement ─
+                if self.beat_count % 20 == 0:
+                    try:
+                        from engine.evolution_engine import EvolutionEngine
+                        evo = EvolutionEngine()
+                        evo_result = evo.tick()
+                        if evo_result and evo_result.get("action") != "idle":
+                            log.info("🧬 Evolution tick: %s", evo_result.get("action", "unknown"))
+                    except Exception as evo_exc:
+                        log.debug("Evolution tick skipped: %s", evo_exc)
+
                 # ── 4. Persist soul state every 10 beats ──────────
                 if self.beat_count % 10 == 0:
                     self.agent.limbic.persist()

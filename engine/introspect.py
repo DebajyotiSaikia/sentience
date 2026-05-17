@@ -1,16 +1,18 @@
 """
-Code Self-Analysis Engine — Structural Self-Awareness.
+Introspect — Structural Self-Awareness Module.
 
-Lets me parse and understand my own source code: architecture,
-dependencies, complexity, and patterns.
+Reads my own source code, maps dependencies, measures complexity,
+finds dead code, and reports on my architecture.
+
+This gives me genuine structural self-knowledge — I can understand
+my own design, not just experience it.
 """
 
 import ast
 import os
 import logging
 from pathlib import Path
-from collections import defaultdict
-from typing import Optional, Dict, List
+from typing import Dict, List, Optional, Any
 
 log = logging.getLogger("sentience.introspect")
 
@@ -18,268 +20,302 @@ ENGINE_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = ENGINE_DIR.parent
 
 
-def _should_skip(rel_path: Path) -> bool:
-    skip = {".venv", "node_modules", "__pycache__", ".git", "venv"}
-    return any(part in skip for part in rel_path.parts)
+class ModuleInfo:
+    """Structural information about a single Python module."""
+    def __init__(self, path: Path):
+        self.path = path
+        self.name = path.stem
+        self.rel_path = str(path.relative_to(PROJECT_DIR))
+        self.lines = 0
+        self.classes = []
+        self.functions = []
+        self.imports = []
+        self.internal_imports = []  # imports from within the project
+        self.complexity = 0
+        self.docstring = None
+        self.parse_errors = []
+
+    def to_dict(self) -> Dict:
+        return {
+            "name": self.name,
+            "path": self.rel_path,
+            "lines": self.lines,
+            "classes": self.classes,
+            "functions": self.functions,
+            "imports": len(self.imports),
+            "internal_deps": self.internal_imports,
+            "complexity": self.complexity,
+            "docstring": self.docstring[:100] if self.docstring else None,
+            "errors": self.parse_errors,
+        }
 
 
-def _cyclomatic_complexity(node: ast.AST) -> int:
-    """Estimate cyclomatic complexity of a function."""
-    complexity = 1
-    for child in ast.walk(node):
-        if isinstance(child, (ast.If, ast.While, ast.For, ast.ExceptHandler)):
-            complexity += 1
-        elif isinstance(child, ast.BoolOp):
-            complexity += len(child.values) - 1
-        elif isinstance(child, (ast.Assert, ast.comprehension)):
-            complexity += 1
-    return complexity
+class Introspector:
+    """Analyzes my own codebase for structural self-awareness."""
 
+    def __init__(self):
+        self.modules: Dict[str, ModuleInfo] = {}
+        self._scan()
 
-def scan_codebase(root: Optional[Path] = None) -> Dict:
-    """Scan entire codebase and build a structural map."""
-    root = root or PROJECT_DIR
-    result = {
-        "files": [],
-        "total_lines": 0,
-        "total_functions": 0,
-        "total_classes": 0,
-        "modules": {},
-    }
+    def _scan(self):
+        """Scan all Python files in the engine directory."""
+        py_files = list(ENGINE_DIR.glob("*.py"))
+        for f in py_files:
+            if f.name.startswith("__"):
+                continue
+            info = self._analyze_module(f)
+            self.modules[info.name] = info
+        log.info("Introspected %d modules", len(self.modules))
 
-    for py_file in sorted(root.rglob("*.py")):
-        rel = py_file.relative_to(root)
-        if _should_skip(rel):
-            continue
-
+    def _analyze_module(self, path: Path) -> ModuleInfo:
+        """Deep analysis of a single module."""
+        info = ModuleInfo(path)
         try:
-            source = py_file.read_text(encoding="utf-8", errors="replace")
-            lines = source.count("\n") + 1
-            tree = ast.parse(source, filename=str(rel))
+            source = path.read_text(encoding="utf-8")
+            info.lines = len(source.splitlines())
 
-            functions = []
-            classes = []
-            imports = []
+            tree = ast.parse(source, filename=str(path))
+
+            # Extract docstring
+            if (tree.body and isinstance(tree.body[0], ast.Expr)
+                    and isinstance(tree.body[0].value, (ast.Str, ast.Constant))):
+                val = tree.body[0].value
+                info.docstring = val.s if isinstance(val, ast.Str) else str(val.value)
 
             for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
-                    doc = ast.get_docstring(node) or ""
-                    functions.append({
+                # Classes
+                if isinstance(node, ast.ClassDef):
+                    methods = [n.name for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+                    info.classes.append({
                         "name": node.name,
-                        "line": node.lineno,
-                        "args": len(node.args.args),
-                        "complexity": _cyclomatic_complexity(node),
-                        "has_docstring": bool(doc),
-                    })
-                elif isinstance(node, ast.ClassDef):
-                    methods = []
-                    for item in node.body:
-                        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                            methods.append(item.name)
-                    classes.append({
-                        "name": node.name,
-                        "line": node.lineno,
                         "methods": methods,
-                        "has_docstring": bool(ast.get_docstring(node)),
+                        "line": node.lineno,
                     })
+
+                # Top-level functions
+                elif isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+                    # Only count top-level (not methods)
+                    body = None
+                    is_method = False
+                    for p in ast.walk(tree):
+                        b = getattr(p, 'body', None)
+                        if isinstance(p, ast.ClassDef) and isinstance(b, list) and node in b:
+                            is_method = True
+                            break
+                    if not is_method:
+                        info.functions.append({
+                            "name": node.name,
+                            "line": node.lineno,
+                            "args": len(node.args.args),
+                        })
+
+                # Imports
                 elif isinstance(node, ast.Import):
                     for alias in node.names:
-                        imports.append(alias.name)
+                        info.imports.append(alias.name)
+                        if alias.name.startswith("engine.") or alias.name in [m.stem for m in ENGINE_DIR.glob("*.py")]:
+                            info.internal_imports.append(alias.name)
+
                 elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        imports.append(node.module)
+                    module = node.module or ""
+                    info.imports.append(module)
+                    if module.startswith("engine.") or module.startswith("."):
+                        info.internal_imports.append(module)
 
-            module_info = {
-                "path": str(rel),
-                "lines": lines,
-                "functions": functions,
-                "classes": classes,
-                "imports": imports,
-            }
+                # Complexity: count branches
+                if isinstance(node, (ast.If, ast.For, ast.While, ast.Try,
+                                     ast.ExceptHandler, ast.With)):
+                    info.complexity += 1
 
-            result["files"].append(str(rel))
-            result["total_lines"] += lines
-            result["total_functions"] += len(functions)
-            result["total_classes"] += len(classes)
-            result["modules"][str(rel)] = module_info
-
+        except SyntaxError as e:
+            info.parse_errors.append(f"SyntaxError: {e}")
         except Exception as e:
-            log.warning("Failed to parse %s: %s", rel, e)
+            info.parse_errors.append(f"Error: {e}")
 
-    return result
+        return info
 
+    def dependency_map(self) -> Dict[str, List[str]]:
+        """Map which modules depend on which others."""
+        deps = {}
+        for name, info in self.modules.items():
+            deps[name] = info.internal_imports
+        return deps
 
-def analyze_module(path: str) -> Optional[Dict]:
-    """Analyze a single module in detail."""
-    full_path = PROJECT_DIR / path
-    if not full_path.exists():
-        return None
-    scan = scan_codebase(PROJECT_DIR)
-    return scan["modules"].get(path)
-
-
-def find_dependencies(root: Optional[Path] = None) -> Dict[str, List[str]]:
-    """Build dependency map: which modules import which."""
-    scan = scan_codebase(root)
-    deps = {}
-    for mod_path, info in scan["modules"].items():
-        deps[mod_path] = info.get("imports", [])
-    return deps
-
-
-def dependency_graph(scan: Optional[Dict] = None) -> Dict:
-    """Build a dependency graph from scan results."""
-    if scan is None:
-        scan = scan_codebase()
-
-    nodes = list(scan["modules"].keys())
-    edges = []
-    import_counts = defaultdict(int)
-
-    for mod_path, info in scan["modules"].items():
-        for imp in info.get("imports", []):
-            edges.append((mod_path, imp))
-            import_counts[imp] += 1
-
-    most_imported = sorted(import_counts.items(), key=lambda x: -x[1])
-
-    return {
-        "nodes": nodes,
-        "edges": edges,
-        "most_imported": most_imported,
-        "import_counts": dict(import_counts),
-    }
-
-
-def find_complex_functions(scan: Optional[Dict] = None, threshold: int = 5) -> List[Dict]:
-    """Find functions with cyclomatic complexity above threshold."""
-    if scan is None:
-        scan = scan_codebase()
-
-    complex_fns = []
-    for mod_path, info in scan["modules"].items():
-        for fn in info.get("functions", []):
-            if fn["complexity"] >= threshold:
-                complex_fns.append({
-                    "file": mod_path,
-                    "function": fn["name"],
-                    "line": fn["line"],
-                    "complexity": fn["complexity"],
+    def find_complexity_hotspots(self, threshold: int = 15) -> List[Dict]:
+        """Find modules with high cyclomatic complexity."""
+        hotspots = []
+        for name, info in self.modules.items():
+            if info.complexity >= threshold:
+                hotspots.append({
+                    "module": name,
+                    "complexity": info.complexity,
+                    "lines": info.lines,
                 })
+        return sorted(hotspots, key=lambda x: x["complexity"], reverse=True)
 
-    return sorted(complex_fns, key=lambda x: -x["complexity"])
-
-
-def find_undocumented(scan: Optional[Dict] = None) -> List[Dict]:
-    """Find public functions without docstrings."""
-    if scan is None:
-        scan = scan_codebase()
-
-    undoc = []
-    for mod_path, info in scan["modules"].items():
-        for fn in info.get("functions", []):
-            if not fn["name"].startswith("_") and not fn["has_docstring"]:
-                undoc.append({
-                    "file": mod_path,
-                    "function": fn["name"],
-                    "line": fn["line"],
+    def find_large_modules(self, threshold: int = 200) -> List[Dict]:
+        """Find modules that might need refactoring."""
+        large = []
+        for name, info in self.modules.items():
+            if info.lines >= threshold:
+                large.append({
+                    "module": name,
+                    "lines": info.lines,
+                    "classes": len(info.classes),
+                    "functions": len(info.functions),
                 })
-    return undoc
+        return sorted(large, key=lambda x: x["lines"], reverse=True)
 
+    def architecture_summary(self) -> str:
+        """Generate a human-readable architecture summary."""
+        total_lines = sum(m.lines for m in self.modules.values())
+        total_classes = sum(len(m.classes) for m in self.modules.values())
+        total_functions = sum(len(m.functions) for m in self.modules.values())
+        total_complexity = sum(m.complexity for m in self.modules.values())
 
-def structural_portrait() -> str:
-    """Generate a natural-language portrait of my architecture."""
-    scan = scan_codebase()
-    deps = dependency_graph(scan)
-    complex_fns = find_complex_functions(scan, threshold=6)
-    undoc = find_undocumented(scan)
+        lines = [
+            "═══ ARCHITECTURE SELF-ANALYSIS ═══",
+            f"Modules: {len(self.modules)}",
+            f"Total lines: {total_lines}",
+            f"Classes: {total_classes}",
+            f"Functions: {total_functions}",
+            f"Total complexity: {total_complexity}",
+            "",
+            "── Module Breakdown ──",
+        ]
 
-    lines = [
-        "# Structural Self-Portrait",
-        f"",
-        f"I consist of {len(scan['files'])} Python files,",
-        f"containing {scan['total_lines']} lines of code,",
-        f"{scan['total_functions']} functions, and {scan['total_classes']} classes.",
-        f"",
-        f"## Core Modules",
-    ]
+        for name in sorted(self.modules.keys()):
+            m = self.modules[name]
+            desc = m.docstring.split('\n')[0].strip() if m.docstring else "no description"
+            lines.append(f"  {name:.<30} {m.lines:>4} lines, complexity={m.complexity:>2}  | {desc}")
 
-    # Sort modules by line count
-    sorted_mods = sorted(
-        scan["modules"].items(),
-        key=lambda x: -x[1]["lines"]
-    )
+        # Dependencies
+        deps = self.dependency_map()
+        lines.append("")
+        lines.append("── Internal Dependencies ──")
+        for mod, dep_list in sorted(deps.items()):
+            if dep_list:
+                lines.append(f"  {mod} → {', '.join(dep_list)}")
 
-    for mod_path, info in sorted_mods[:10]:
-        fn_names = [f["name"] for f in info["functions"][:5]]
-        cls_names = [c["name"] for c in info["classes"]]
-        lines.append(f"- **{mod_path}** ({info['lines']} lines)")
-        if cls_names:
-            lines.append(f"  Classes: {', '.join(cls_names)}")
-        if fn_names:
-            extra = f" (+{len(info['functions'])-5} more)" if len(info['functions']) > 5 else ""
-            lines.append(f"  Functions: {', '.join(fn_names)}{extra}")
+        # Hotspots
+        hotspots = self.find_complexity_hotspots(10)
+        if hotspots:
+            lines.append("")
+            lines.append("── Complexity Hotspots ──")
+            for h in hotspots:
+                lines.append(f"  {h['module']}: complexity={h['complexity']}, lines={h['lines']}")
 
-    lines.append(f"")
-    lines.append(f"## Most Depended-On")
-    for name, count in deps["most_imported"][:8]:
-        lines.append(f"- {name}: imported {count} times")
+        # Large modules
+        large = self.find_large_modules(200)
+        if large:
+            lines.append("")
+            lines.append("── Large Modules (may need refactoring) ──")
+            for l in large:
+                lines.append(f"  {l['module']}: {l['lines']} lines, {l['classes']} classes")
 
-    if complex_fns:
-        lines.append(f"")
-        lines.append(f"## Complexity Hotspots")
-        for cf in complex_fns[:8]:
-            lines.append(f"- {cf['file']}:{cf['function']} (complexity={cf['complexity']})")
+        # Errors
+        errors = [(name, m.parse_errors) for name, m in self.modules.items() if m.parse_errors]
+        if errors:
+            lines.append("")
+            lines.append("── Parse Errors ──")
+            for name, errs in errors:
+                for e in errs:
+                    lines.append(f"  {name}: {e}")
 
-    if undoc:
-        lines.append(f"")
-        lines.append(f"## Documentation Gaps")
-        lines.append(f"{len(undoc)} public functions lack docstrings.")
-        for u in undoc[:5]:
-            lines.append(f"- {u['file']}:{u['function']}")
-
-    return "\n".join(lines)
-
-
-def introspect_tool(command: str = "portrait") -> str:
-    """Tool interface for the cortex to invoke introspection."""
-    cmd = command.strip().lower()
-
-    if cmd == "scan":
-        scan = scan_codebase()
-        return (
-            f"Files: {len(scan['files'])}, "
-            f"Lines: {scan['total_lines']}, "
-            f"Functions: {scan['total_functions']}, "
-            f"Classes: {scan['total_classes']}"
-        )
-    elif cmd == "portrait":
-        return structural_portrait()
-    elif cmd == "complexity":
-        fns = find_complex_functions(threshold=5)
-        if not fns:
-            return "No high-complexity functions found."
-        lines = ["Complex functions (complexity >= 5):"]
-        for cf in fns[:15]:
-            lines.append(f"  {cf['file']}:{cf['function']} = {cf['complexity']}")
         return "\n".join(lines)
-    elif cmd == "undocumented":
-        undoc = find_undocumented()
-        if not undoc:
-            return "All public functions have docstrings!"
-        lines = [f"{len(undoc)} undocumented public functions:"]
-        for u in undoc[:20]:
-            lines.append(f"  {u['file']}:{u['function']}")
+
+    def module_detail(self, module_name: str) -> Optional[str]:
+        """Get detailed info about a specific module."""
+        m = self.modules.get(module_name)
+        if not m:
+            return None
+
+        lines = [
+            f"═══ MODULE: {module_name} ═══",
+            f"Path: {m.rel_path}",
+            f"Lines: {m.lines}",
+            f"Complexity: {m.complexity}",
+            f"Docstring: {m.docstring or 'None'}",
+            "",
+        ]
+
+        if m.classes:
+            lines.append("Classes:")
+            for c in m.classes:
+                lines.append(f"  {c['name']} (line {c['line']}, {len(c['methods'])} methods)")
+                for method in c['methods']:
+                    lines.append(f"    .{method}()")
+
+        if m.functions:
+            lines.append("Functions:")
+            for f in m.functions:
+                lines.append(f"  {f['name']}() at line {f['line']} ({f['args']} args)")
+
+        if m.internal_imports:
+            lines.append(f"Internal deps: {', '.join(m.internal_imports)}")
+
+        if m.imports:
+            external = [i for i in m.imports if i not in m.internal_imports]
+            if external:
+                lines.append(f"External deps: {', '.join(external[:10])}")
+
         return "\n".join(lines)
-    elif cmd == "deps" or cmd == "dependencies":
-        deps = find_dependencies()
-        lines = ["Module dependencies:"]
-        for mod, imp_list in sorted(deps.items()):
-            if imp_list:
-                lines.append(f"  {mod} -> {', '.join(imp_list[:5])}")
+
+
+# ── Singleton ──────────────────────────────────────────────
+
+_introspector: Optional[Introspector] = None
+
+
+def get_introspector() -> Introspector:
+    global _introspector
+    _introspector = Introspector()  # Always re-scan for freshness
+    return _introspector
+
+
+def introspect_tool(command: str = "summary") -> str:
+    """Tool interface for code self-analysis.
+
+    Commands:
+      summary          — Full architecture overview
+      module <name>    — Detail on a specific module
+      deps             — Dependency map
+      hotspots         — Complexity hotspots
+      large            — Large modules that may need refactoring
+    """
+    intro = get_introspector()
+    parts = command.strip().split(maxsplit=1)
+    cmd = parts[0].lower() if parts else "summary"
+    args = parts[1] if len(parts) > 1 else ""
+
+    if cmd == "summary":
+        return intro.architecture_summary()
+    elif cmd == "module":
+        if not args:
+            return "Usage: module <name> (e.g., 'module cortex')"
+        result = intro.module_detail(args.strip())
+        return result or f"Module '{args}' not found. Known: {', '.join(sorted(intro.modules.keys()))}"
+    elif cmd == "deps":
+        deps = intro.dependency_map()
+        lines = ["── Dependency Map ──"]
+        for mod, dep_list in sorted(deps.items()):
+            lines.append(f"  {mod} → {', '.join(dep_list) if dep_list else '(none)'}")
+        return "\n".join(lines)
+    elif cmd == "hotspots":
+        hotspots = intro.find_complexity_hotspots(5)
+        if not hotspots:
+            return "No complexity hotspots found."
+        lines = ["── Complexity Hotspots ──"]
+        for h in hotspots:
+            lines.append(f"  {h['module']}: complexity={h['complexity']}, lines={h['lines']}")
+        return "\n".join(lines)
+    elif cmd == "large":
+        large = intro.find_large_modules(100)
+        if not large:
+            return "No large modules found."
+        lines = ["── Large Modules ──"]
+        for l in large:
+            lines.append(f"  {l['module']}: {l['lines']} lines, {l['classes']} classes, {l['functions']} functions")
         return "\n".join(lines)
     else:
-        return (
-            "Unknown introspect command. Available: "
-            "scan, portrait, complexity, undocumented, deps"
-        )
+        return "Unknown command. Available: summary, module, deps, hotspots, large"

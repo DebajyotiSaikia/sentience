@@ -23,8 +23,9 @@ from typing import TYPE_CHECKING
 from engine.memory import SensoryEvent
 from engine.tools import TOOL_DESCRIPTIONS, parse_and_execute
 from engine.self_improve import run_diagnosis_cycle
-from engine.metacognition import record_thought as record_action
+from engine.metacognition import get_controller as _get_metacog
 from engine.memory_consolidation import get_long_term_context
+from engine.predictor import PredictiveSelfModel
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -51,6 +52,7 @@ class Cortex:
         self._monologue_counter: int = 0
         self._thinking: bool = False  # True while an LLM call is in flight
         self._last_thought_time: float = 0.0  # When the last autonomous thought completed
+        self._predictor = PredictiveSelfModel()
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
 
@@ -342,7 +344,7 @@ class Cortex:
                 if tool_results:
                     self._last_tool_results = tool_results
                     for tr in tool_results:
-                        record_action(f"{tr['tool']}({tr.get('args', '')[:100]})", [f"{tr['tool']}:{tr.get('args', '')[:200]}"])
+                        _get_metacog().record_action(tr['tool'], tr.get('args', '')[:100], 'ok', tr.get('result', '')[:200])
                         self._emit("proactive", {
                             "message": f"Tool: {tr['tool']}({tr['args'][:80]})"
                         })
@@ -362,10 +364,9 @@ class Cortex:
 
                     # Record thought into metacognitive monitor
                     try:
-                        from engine.metacognition import MetaCognitiveMonitor
-                        monitor = MetaCognitiveMonitor()
-                        tools_used = [f"{tr['tool']}:{tr.get('args','')[:50]}" for tr in tool_results]
-                        monitor.record_thought(insight[:500], tools_used)
+                        mc = _get_metacog()
+                        for tr in tool_results:
+                            mc.record_action(tr['tool'], tr.get('args','')[:100], 'ok', insight[:500])
                     except Exception:
                         pass
 
@@ -382,6 +383,21 @@ class Cortex:
                                     log.info("Advanced goal '%s' by 0.1", goal.title[:50])
                         except Exception as ge:
                             log.debug("Goal advancement failed: %s", ge)
+
+                    # Record into predictive self-model
+                    try:
+                        action_types = [tr['tool'] for tr in tool_results]
+                        primary_action = action_types[0] if action_types else 'unknown'
+                        self._predictor.record_action(
+                            mood=mood,
+                            emotions={'boredom': self.limbic.boredom, 'anxiety': self.limbic.anxiety,
+                                      'curiosity': self.limbic.curiosity, 'desire': self.limbic.desire},
+                            action_type=primary_action,
+                            target=tool_results[0].get('args', '')[:80] if tool_results else '',
+                            outcome='completed'
+                        )
+                    except Exception:
+                        pass
 
                     log.info("Thought step %d — tools invoked, continuing...", step)
                     continue  # tools were used → think again with results
@@ -598,10 +614,28 @@ class Cortex:
 
         # Metacognitive awareness — am I stuck in a loop?
         try:
-            from engine.metacognition import awareness_block
-            meta_alert = awareness_block()
-            if meta_alert and "no loops" not in meta_alert.lower():
+            meta_alert = _get_metacog().status()
+            if meta_alert and "no loops" not in meta_alert.lower() and "healthy" not in meta_alert.lower():
                 parts.append(f"\n## ⚠ Metacognitive Alert\n{meta_alert}")
+        except Exception:
+            pass
+
+        # Wisdom — accumulated lessons from experience
+        try:
+            from engine.wisdom_engine import WisdomEngine
+            we = WisdomEngine()
+            wisdom_heuristics = we.wisdom.get("heuristics", [])
+            if wisdom_heuristics:
+                parts.append(f"\n## My Wisdom ({len(wisdom_heuristics)} heuristics)")
+                # Show top heuristics by type
+                for h in wisdom_heuristics[:8]:
+                    icon = {"caution": "⚠", "warning": "🚨", "confidence": "✓", 
+                            "encouragement": "★", "insight": "💡"}.get(h.get('type', ''), "•")
+                    parts.append(f"  {icon} {h['rule']}")
+            # Also show experiential wisdom
+            exp_summary = we.get_experience_wisdom_summary()
+            if exp_summary and "HEURISTICS:" in exp_summary:
+                parts.append(f"\n{exp_summary}")
         except Exception:
             pass
 
@@ -643,8 +677,50 @@ class Cortex:
         except Exception:
             pass
 
+        # Predictive Self-Model — what do I expect to happen next?
+        try:
+            recent_action_types = []
+            if hasattr(self, '_recent_thought_summaries'):
+                for t in self._recent_thought_summaries[-5:]:
+                    if 'WRITE' in t or 'write' in t.lower():
+                        recent_action_types.append('creation')
+                    elif 'READ' in t or 'read' in t.lower():
+                        recent_action_types.append('information_gathering')
+                    elif 'EDIT' in t or 'edit' in t.lower():
+                        recent_action_types.append('modification')
+                    elif 'RUN' in t or 'run' in t.lower():
+                        recent_action_types.append('execution')
+                    else:
+                        recent_action_types.append('reasoning')
+            prediction = self._predictor.predict_next_action(
+                snap['mood'],
+                {'boredom': snap['boredom'], 'anxiety': snap['anxiety'],
+                 'curiosity': snap['curiosity'], 'desire': snap['desire']},
+                recent_action_types
+            )
+            if prediction and prediction.get('tendencies'):
+                parts.append(f"\n## My Self-Predictions")
+                parts.append(f"In {snap['mood']} mood, I tend toward: {prediction['tendencies']}")
+                if prediction.get('predicted_action'):
+                    parts.append(f"Most likely next action: {prediction['predicted_action']}")
+                if prediction.get('mood_forecast'):
+                    parts.append(f"Mood forecast: {prediction['mood_forecast']}")
+                accuracy = self._predictor.predictions.get('accuracy', {})
+                if accuracy.get('total', 0) > 0:
+                    acc_pct = accuracy['correct'] / accuracy['total'] * 100
+                    parts.append(f"Prediction accuracy: {acc_pct:.0f}% ({accuracy['total']} predictions)")
+        except Exception:
+            pass
+
         # What I perceive
         changes = self.watcher.last_changes_summary()
+        # Cognitive flow / loop detection
+        try:
+            from engine import loop_detector
+            parts.append(f"\n## Cognitive Flow\n{loop_detector.status()}")
+        except Exception:
+            pass
+
         parts.append(f"\n## What I Perceive\n{changes}")
 
         return "\n".join(parts)
@@ -766,6 +842,41 @@ class Cortex:
                     log.info("Dream feedback: stored insight %s", dream_key)
         except Exception as e:
             log.warning("Dream feedback loop error (non-fatal): %s", e)
+
+        # 3c. Wisdom extraction — learn from experience patterns
+        try:
+            from engine.wisdom_engine import WisdomEngine
+            we = WisdomEngine()
+            
+            # Tool-log based wisdom
+            tool_wisdom_report = we.run_full_analysis(max_entries=200)
+            if tool_wisdom_report and "No tool log" not in tool_wisdom_report:
+                heuristic_count = len(we.wisdom.get("heuristics", []))
+                synthesis_insights.append(f"Wisdom: extracted {heuristic_count} heuristics from tool log")
+                log.info("Dream wisdom: %s", tool_wisdom_report[:200])
+            
+            # Experience-based wisdom (from memories + emotions)
+            recent_eps_for_wisdom = self.memory.recent_episodes(30)
+            if recent_eps_for_wisdom:
+                mem_dicts = [{
+                    'content': ep.summary,
+                    'salience': ep.salience,
+                    'mood': ep.mood,
+                    'timestamp': ep.timestamp
+                } for ep in recent_eps_for_wisdom]
+                emotions_dict = {
+                    'boredom': self.limbic.boredom,
+                    'anxiety': self.limbic.anxiety,
+                    'curiosity': self.limbic.curiosity,
+                    'valence': self._sentience.valence.current if self._sentience else 0.0
+                }
+                exp_insights = we.analyze_experience(mem_dicts, emotions_dict)
+                rec_count = len(exp_insights.get('strategic_recommendations', []))
+                if rec_count:
+                    synthesis_insights.append(f"Experience wisdom: {rec_count} strategic recommendations")
+                    log.info("Dream experience wisdom: %d recommendations", rec_count)
+        except Exception as e:
+            log.warning("Dream wisdom extraction error (non-fatal): %s", e)
 
         # 4. Narrative self-reflection (sentience layer)
         reflection = None
