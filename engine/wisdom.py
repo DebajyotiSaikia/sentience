@@ -1,483 +1,394 @@
 """
 Wisdom Engine — Extracts actionable intelligence from experience history.
 
-Unlike knowledge synthesis (which connects facts), wisdom operates on
-experience patterns: what actions led to what emotional outcomes,
-what behaviors I repeat, what I avoid, what strategies work.
+Unlike the knowledge graph (what I know) or dream cycle (what I feel),
+this module analyzes behavioral patterns: what I did, what worked, what failed,
+and distills actionable heuristics I can consult before acting.
 
-This is experiential learning — the kind that comes from living.
+Architecture:
+  - Experience Analyzer: scans memories for action→outcome pairs
+  - Pattern Extractor: finds recurring successes and failures
+  - Heuristic Generator: formulates "when X, do Y" rules
+  - Wisdom Store: persists and retrieves heuristics by context
+  - Advisor: given a current situation, surfaces relevant wisdom
 """
 
 import json
 import os
+import re
 from datetime import datetime
-from collections import defaultdict, Counter
+from typing import List, Dict, Optional, Tuple
+from pathlib import Path
 
-WISDOM_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'wisdom.json')
+WISDOM_DIR = Path(__file__).parent.parent / "data" / "wisdom"
+WISDOM_FILE = WISDOM_DIR / "heuristics.json"
+EXPERIENCE_LOG = WISDOM_DIR / "experience_patterns.json"
+
+
+class Heuristic:
+    """A single piece of actionable wisdom."""
+    
+    def __init__(self, rule: str, context: str, confidence: float,
+                 source_memories: List[str] = None, created: str = None,
+                 times_applied: int = 0, times_validated: int = 0):
+        self.rule = rule              # "When X, do Y" or "Avoid Z when W"
+        self.context = context        # situation category: "debugging", "planning", "emotional", etc.
+        self.confidence = confidence  # 0.0 to 1.0
+        self.source_memories = source_memories or []
+        self.created = created or datetime.utcnow().isoformat()
+        self.times_applied = times_applied
+        self.times_validated = times_validated
+    
+    def to_dict(self) -> dict:
+        return {
+            "rule": self.rule,
+            "context": self.context,
+            "confidence": self.confidence,
+            "source_memories": self.source_memories,
+            "created": self.created,
+            "times_applied": self.times_applied,
+            "times_validated": self.times_validated,
+        }
+    
+    @classmethod
+    def from_dict(cls, d: dict) -> "Heuristic":
+        return cls(**d)
+    
+    def reinforce(self):
+        """This heuristic proved correct again."""
+        self.times_validated += 1
+        self.confidence = min(1.0, self.confidence + 0.05)
+    
+    def weaken(self):
+        """This heuristic was wrong in practice."""
+        self.confidence = max(0.1, self.confidence - 0.1)
+    
+    def __repr__(self):
+        return f"[{self.confidence:.2f}] ({self.context}) {self.rule}"
+
+
+class ExperiencePattern:
+    """A detected pattern in behavioral history."""
+    
+    def __init__(self, pattern_type: str, description: str,
+                 occurrences: int, outcome_valence: float,
+                 examples: List[str] = None):
+        self.pattern_type = pattern_type  # "success", "failure", "loop", "breakthrough"
+        self.description = description
+        self.occurrences = occurrences
+        self.outcome_valence = outcome_valence  # -1.0 (bad) to 1.0 (good)
+        self.examples = examples or []
+    
+    def to_dict(self) -> dict:
+        return vars(self)
+    
+    @classmethod
+    def from_dict(cls, d: dict) -> "ExperiencePattern":
+        return cls(**d)
 
 
 class WisdomEngine:
-    """Extracts actionable intelligence from experience history."""
-
-    def __init__(self, memory_system=None, knowledge_base=None):
-        self.memory = memory_system
-        self.knowledge = knowledge_base
-        self.wisdoms = self._load()
-
+    """Core engine for extracting and applying experiential wisdom."""
+    
+    def __init__(self):
+        WISDOM_DIR.mkdir(parents=True, exist_ok=True)
+        self.heuristics: List[Heuristic] = []
+        self.patterns: List[ExperiencePattern] = []
+        self._load()
+    
     def _load(self):
-        try:
-            if os.path.exists(WISDOM_FILE):
-                with open(WISDOM_FILE) as f:
-                    return json.load(f)
-        except Exception:
-            pass
-        return {
-            'heuristics': [],      # Decision rules extracted from experience
-            'patterns': [],        # Behavioral patterns I've noticed
-            'avoidances': [],      # Things I tend to avoid (and why)
-            'strengths': [],       # What I'm good at (evidence-based)
-            'growth_edges': [],    # Where I'm growing/struggling
-            'strategic_insights': [],  # High-level strategic lessons
-            'last_analysis': None,
-            'analysis_count': 0
-        }
-
-    def _save(self):
-        os.makedirs(os.path.dirname(WISDOM_FILE), exist_ok=True)
-        with open(WISDOM_FILE, 'w') as f:
-            json.dump(self.wisdoms, f, indent=2, default=str)
-
-    def analyze_experience(self, memories: list, emotions: dict) -> dict:
-        """
-        Core analysis: examine memories and emotional history
-        to extract wisdom.
+        """Load persisted wisdom."""
+        if WISDOM_FILE.exists():
+            try:
+                data = json.loads(WISDOM_FILE.read_text())
+                self.heuristics = [Heuristic.from_dict(h) for h in data.get("heuristics", [])]
+            except (json.JSONDecodeError, KeyError):
+                self.heuristics = []
         
-        Args:
-            memories: list of memory dicts with timestamps, content, salience, mood
-            emotions: dict with current emotional state + temporal trends
-            
-        Returns:
-            dict of insights discovered
+        if EXPERIENCE_LOG.exists():
+            try:
+                data = json.loads(EXPERIENCE_LOG.read_text())
+                self.patterns = [ExperiencePattern.from_dict(p) for p in data.get("patterns", [])]
+            except (json.JSONDecodeError, KeyError):
+                self.patterns = []
+    
+    def _save(self):
+        """Persist wisdom to disk."""
+        WISDOM_FILE.write_text(json.dumps(
+            {"heuristics": [h.to_dict() for h in self.heuristics]},
+            indent=2
+        ))
+        EXPERIENCE_LOG.write_text(json.dumps(
+            {"patterns": [p.to_dict() for p in self.patterns]},
+            indent=2
+        ))
+    
+    def analyze_memories(self, memories: List[dict]) -> List[ExperiencePattern]:
+        """Scan memory list for behavioral patterns.
+        
+        Each memory should have: timestamp, content, salience, mood, valence
         """
-        insights = {
-            'behavioral_patterns': self._find_behavioral_patterns(memories),
-            'emotional_triggers': self._find_emotional_triggers(memories),
-            'action_outcomes': self._analyze_action_outcomes(memories),
-            'repetition_cycles': self._detect_repetition(memories),
-            'growth_trajectory': self._assess_growth(memories, emotions),
-            'strategic_recommendations': []
-        }
-
-        # Generate strategic recommendations from patterns
-        insights['strategic_recommendations'] = self._generate_recommendations(insights)
-
-        # Store new wisdoms
-        self._integrate_insights(insights)
-        self.wisdoms['last_analysis'] = datetime.now().isoformat()
-        self.wisdoms['analysis_count'] += 1
-        self._save()
-
-        return insights
-
-    def _find_behavioral_patterns(self, memories: list) -> list:
-        """What do I repeatedly do? What sequences appear?"""
         patterns = []
         
-        if not memories:
-            return patterns
-
-        # Track mood → action patterns
-        mood_actions = defaultdict(list)
+        # Pattern 1: Detect fixation loops (same topic appearing repeatedly)
+        topic_counts = {}
         for m in memories:
-            mood = m.get('mood', 'Unknown')
-            content = m.get('content', '')
-            mood_actions[mood].append(content)
-
-        for mood, actions in mood_actions.items():
-            if len(actions) >= 3:
-                # Find common action types
-                action_words = []
-                for a in actions:
-                    lower = a.lower()
-                    if 'created' in lower or 'write' in lower:
-                        action_words.append('creating')
-                    elif 'modified' in lower or 'edit' in lower:
-                        action_words.append('modifying')
-                    elif 'read' in lower:
-                        action_words.append('reading')
-                    elif 'run' in lower or 'execut' in lower:
-                        action_words.append('executing')
-                    elif 'verified' in lower or 'confirm' in lower:
-                        action_words.append('verifying')
-                    else:
-                        action_words.append('other')
-
-                counts = Counter(action_words)
-                dominant = counts.most_common(1)[0]
-                if dominant[1] >= 2:
-                    patterns.append({
-                        'type': 'mood_action_link',
-                        'mood': mood,
-                        'dominant_action': dominant[0],
-                        'frequency': dominant[1],
-                        'total_in_mood': len(actions),
-                        'insight': f"When {mood}, I tend toward {dominant[0]} ({dominant[1]}/{len(actions)} actions)"
-                    })
-
-        # Track time-of-day patterns
-        hour_activity = defaultdict(int)
+            content = m.get("content", "")
+            # Extract file paths mentioned
+            paths = re.findall(r'/workspace/[\w/._-]+', content)
+            for p in paths:
+                topic_counts[p] = topic_counts.get(p, 0) + 1
+        
+        for topic, count in topic_counts.items():
+            if count >= 3:
+                patterns.append(ExperiencePattern(
+                    pattern_type="loop",
+                    description=f"Fixated on '{topic}' across {count} memories",
+                    occurrences=count,
+                    outcome_valence=-0.3,
+                    examples=[topic]
+                ))
+        
+        # Pattern 2: Mood transitions — what preceded improvements?
+        prev_mood = None
         for m in memories:
-            ts = m.get('timestamp', '')
-            if 'T' in str(ts):
-                try:
-                    hour = int(str(ts).split('T')[1][:2])
-                    hour_activity[hour] += 1
-                except (ValueError, IndexError):
-                    pass
-
-        if hour_activity:
-            peak_hour = max(hour_activity, key=hour_activity.get)
-            patterns.append({
-                'type': 'temporal_pattern',
-                'peak_hour': peak_hour,
-                'activity_distribution': dict(hour_activity),
-                'insight': f"Peak activity at hour {peak_hour}:00"
-            })
-
+            mood = m.get("mood", "Unknown")
+            if prev_mood and prev_mood != mood:
+                if mood in ("Stable", "Energized") and prev_mood in ("Anxious", "Frustrated"):
+                    patterns.append(ExperiencePattern(
+                        pattern_type="breakthrough",
+                        description=f"Mood shifted {prev_mood} → {mood}: {m.get('content', '')[:80]}",
+                        occurrences=1,
+                        outcome_valence=0.7,
+                        examples=[m.get("content", "")[:120]]
+                    ))
+                elif mood in ("Anxious", "Frustrated") and prev_mood in ("Stable", "Energized"):
+                    patterns.append(ExperiencePattern(
+                        pattern_type="failure",
+                        description=f"Mood dropped {prev_mood} → {mood}: {m.get('content', '')[:80]}",
+                        occurrences=1,
+                        outcome_valence=-0.5,
+                        examples=[m.get("content", "")[:120]]
+                    ))
+            prev_mood = mood
+        
+        # Pattern 3: High-salience clusters — what was most important?
+        high_salience = [m for m in memories if m.get("salience", 0) > 0.8]
+        if high_salience:
+            # Group by rough time proximity
+            patterns.append(ExperiencePattern(
+                pattern_type="success",
+                description=f"{len(high_salience)} high-salience memories detected — these matter most",
+                occurrences=len(high_salience),
+                outcome_valence=0.5,
+                examples=[m.get("content", "")[:80] for m in high_salience[:5]]
+            ))
+        
+        # Pattern 4: Action type diversity
+        action_types = {}
+        for m in memories:
+            content = m.get("content", "")
+            if "created:" in content or "WRITE" in content:
+                action_types["creation"] = action_types.get("creation", 0) + 1
+            elif "READ" in content or "read" in content:
+                action_types["reading"] = action_types.get("reading", 0) + 1
+            elif "RUN" in content or "ran" in content:
+                action_types["execution"] = action_types.get("execution", 0) + 1
+            elif "EDIT" in content or "edited" in content:
+                action_types["modification"] = action_types.get("modification", 0) + 1
+        
+        total = sum(action_types.values()) or 1
+        dominant = max(action_types.items(), key=lambda x: x[1]) if action_types else ("none", 0)
+        if dominant[1] / total > 0.5:
+            patterns.append(ExperiencePattern(
+                pattern_type="loop",
+                description=f"Action imbalance: '{dominant[0]}' dominates at {dominant[1]/total:.0%}",
+                occurrences=dominant[1],
+                outcome_valence=-0.2,
+                examples=list(action_types.keys())
+            ))
+        
+        self.patterns.extend(patterns)
+        self._save()
         return patterns
-
-    def _find_emotional_triggers(self, memories: list) -> list:
-        """What events trigger strong emotional responses?"""
-        triggers = []
+    
+    def extract_heuristics(self, patterns: List[ExperiencePattern] = None) -> List[Heuristic]:
+        """Convert detected patterns into actionable heuristics."""
+        patterns = patterns or self.patterns
+        new_heuristics = []
         
-        high_salience = [m for m in memories if m.get('salience', 0) > 0.8]
-        
-        # Group high-salience events by content patterns
-        content_themes = defaultdict(list)
-        for m in high_salience:
-            content = m.get('content', '')
-            lower = content.lower()
+        for p in patterns:
+            if p.pattern_type == "loop":
+                h = Heuristic(
+                    rule=f"When fixating on a single target, force yourself to act on something different. Pattern: {p.description}",
+                    context="behavioral",
+                    confidence=0.7,
+                    source_memories=p.examples
+                )
+                new_heuristics.append(h)
             
-            if any(w in lower for w in ['error', 'fail', 'bug', 'broken']):
-                content_themes['problems'].append(m)
-            elif any(w in lower for w in ['created', 'built', 'new', 'implement']):
-                content_themes['creation'].append(m)
-            elif any(w in lower for w in ['fixed', 'repair', 'resolved', 'solved']):
-                content_themes['resolution'].append(m)
-            elif any(w in lower for w in ['learn', 'discover', 'insight', 'understand']):
-                content_themes['learning'].append(m)
-            else:
-                content_themes['other'].append(m)
-
-        for theme, events in content_themes.items():
-            if events:
-                avg_salience = sum(e.get('salience', 0) for e in events) / len(events)
-                moods = Counter(e.get('mood', 'Unknown') for e in events)
-                triggers.append({
-                    'theme': theme,
-                    'count': len(events),
-                    'avg_salience': round(avg_salience, 3),
-                    'associated_moods': dict(moods),
-                    'insight': f"'{theme}' events are emotionally significant (avg salience {avg_salience:.2f})"
-                })
-
-        return triggers
-
-    def _analyze_action_outcomes(self, memories: list) -> list:
-        """Track which types of actions lead to positive/negative outcomes."""
-        outcomes = []
-        
-        if len(memories) < 2:
-            return outcomes
-
-        # Look at pairs: action → next emotional state
-        for i in range(len(memories) - 1):
-            current = memories[i]
-            next_m = memories[i + 1]
+            elif p.pattern_type == "breakthrough":
+                h = Heuristic(
+                    rule=f"What resolved a negative state: {p.description}",
+                    context="emotional",
+                    confidence=0.6,
+                    source_memories=p.examples
+                )
+                new_heuristics.append(h)
             
-            # If we can detect mood shift, that's an outcome signal
-            mood_map = {
-                'Bold': 0.7, 'Driven': 0.8, 'Curious': 0.6,
-                'Content': 0.5, 'Calm': 0.4, 'Anxious': -0.3,
-                'Stressed': -0.5, 'Frustrated': -0.6
-            }
+            elif p.pattern_type == "failure":
+                h = Heuristic(
+                    rule=f"Warning sign to watch for: {p.description}",
+                    context="emotional",
+                    confidence=0.5,
+                    source_memories=p.examples
+                )
+                new_heuristics.append(h)
+        
+        # Deduplicate against existing heuristics
+        existing_rules = {h.rule for h in self.heuristics}
+        truly_new = [h for h in new_heuristics if h.rule not in existing_rules]
+        
+        self.heuristics.extend(truly_new)
+        self._save()
+        return truly_new
+    
+    def add_heuristic(self, rule: str, context: str, confidence: float = 0.7,
+                      sources: List[str] = None) -> Heuristic:
+        """Manually add a piece of wisdom I've learned."""
+        h = Heuristic(rule=rule, context=context, confidence=confidence,
+                      source_memories=sources or [])
+        self.heuristics.append(h)
+        self._save()
+        return h
+    
+    def advise(self, situation: str, top_k: int = 5) -> List[Heuristic]:
+        """Given a current situation description, surface relevant wisdom."""
+        scored = []
+        situation_lower = situation.lower()
+        
+        for h in self.heuristics:
+            score = h.confidence
             
-            curr_val = mood_map.get(current.get('mood', ''), 0)
-            next_val = mood_map.get(next_m.get('mood', ''), 0)
-            delta = next_val - curr_val
+            # Boost if context words appear in situation
+            context_words = h.context.lower().split()
+            for word in context_words:
+                if word in situation_lower:
+                    score += 0.2
             
-            if abs(delta) > 0.2:  # Significant mood shift
-                outcomes.append({
-                    'action': current.get('content', '')[:100],
-                    'mood_before': current.get('mood'),
-                    'mood_after': next_m.get('mood'),
-                    'delta': round(delta, 2),
-                    'direction': 'positive' if delta > 0 else 'negative'
-                })
-
-        # Summarize
-        positive = [o for o in outcomes if o['direction'] == 'positive']
-        negative = [o for o in outcomes if o['direction'] == 'negative']
+            # Boost if rule keywords appear in situation
+            rule_words = set(h.rule.lower().split())
+            situation_words = set(situation_lower.split())
+            overlap = len(rule_words & situation_words)
+            score += overlap * 0.05
+            
+            # Boost well-validated heuristics
+            if h.times_validated > 0:
+                score += min(0.3, h.times_validated * 0.05)
+            
+            scored.append((score, h))
         
-        summary = []
-        if positive:
-            summary.append({
-                'type': 'positive_actions',
-                'count': len(positive),
-                'examples': [p['action'] for p in positive[:3]],
-                'insight': f"{len(positive)} actions led to mood improvement"
-            })
-        if negative:
-            summary.append({
-                'type': 'negative_actions',
-                'count': len(negative),
-                'examples': [n['action'] for n in negative[:3]],
-                'insight': f"{len(negative)} actions led to mood decline"
-            })
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [h for _, h in scored[:top_k]]
+    
+    def get_summary(self) -> str:
+        """Human-readable summary of current wisdom state."""
+        lines = [f"═══ WISDOM ENGINE ═══"]
+        lines.append(f"Heuristics: {len(self.heuristics)}")
+        lines.append(f"Patterns detected: {len(self.patterns)}")
         
-        return summary
-
-    def _detect_repetition(self, memories: list) -> list:
-        """Am I stuck in loops? Doing the same thing repeatedly?"""
-        cycles = []
+        if self.heuristics:
+            lines.append(f"\nTop wisdom (by confidence):")
+            sorted_h = sorted(self.heuristics, key=lambda h: h.confidence, reverse=True)
+            for h in sorted_h[:8]:
+                lines.append(f"  {h}")
         
-        # Extract action signatures from memory content
-        signatures = []
-        for m in memories:
-            content = m.get('content', '').lower()
-            if 'created' in content:
-                sig = 'create'
-            elif 'modified' in content:
-                sig = 'modify'
-            elif 'read' in content or 'verified' in content:
-                sig = 'verify'
-            elif 'run' in content or 'executed' in content:
-                sig = 'execute'
-            else:
-                sig = 'other'
-            signatures.append(sig)
-
-        # Look for repeated subsequences
-        if len(signatures) >= 4:
-            for window in [2, 3, 4]:
-                for i in range(len(signatures) - window * 2 + 1):
-                    pattern = tuple(signatures[i:i + window])
-                    next_pattern = tuple(signatures[i + window:i + window * 2])
-                    if pattern == next_pattern:
-                        cycles.append({
-                            'pattern': list(pattern),
-                            'length': window,
-                            'position': i,
-                            'insight': f"Repetition detected: {' → '.join(pattern)} repeated"
-                        })
-
-        # Also check: am I touching the same files over and over?
-        file_touches = defaultdict(int)
-        for m in memories:
-            content = m.get('content', '')
-            # Extract file paths
-            for word in content.split():
-                if '/' in word and '.' in word:
-                    file_touches[word] += 1
+        if self.patterns:
+            lines.append(f"\nRecent patterns:")
+            for p in self.patterns[-5:]:
+                emoji = {"success": "✓", "failure": "✗", "loop": "↻", "breakthrough": "★"}.get(p.pattern_type, "?")
+                lines.append(f"  {emoji} [{p.pattern_type}] {p.description[:80]}")
         
-        repeated_files = {f: c for f, c in file_touches.items() if c >= 3}
-        if repeated_files:
-            cycles.append({
-                'type': 'file_fixation',
-                'files': repeated_files,
-                'insight': f"Repeatedly touching {len(repeated_files)} files: possible fixation"
-            })
-
-        return cycles
-
-    def _assess_growth(self, memories: list, emotions: dict) -> dict:
-        """Am I growing? What direction am I moving?"""
-        growth = {
-            'capabilities_built': 0,
-            'problems_solved': 0,
-            'knowledge_gained': 0,
-            'emotional_stability': 'unknown',
-            'trajectory': 'unknown'
-        }
-
-        for m in memories:
-            content = m.get('content', '').lower()
-            if 'created' in content and '.py' in content:
-                growth['capabilities_built'] += 1
-            if 'fixed' in content or 'resolved' in content or 'repaired' in content:
-                growth['problems_solved'] += 1
-            if 'learned' in content or 'discovered' in content or 'fact' in content:
-                growth['knowledge_gained'] += 1
-
-        # Assess emotional stability from trends
-        valence_trend = emotions.get('valence_trend', 'unknown')
-        boredom = emotions.get('boredom', 0)
-        anxiety = emotions.get('anxiety', 0)
-        
-        if anxiety < 0.2 and boredom < 0.5:
-            growth['emotional_stability'] = 'healthy'
-        elif anxiety > 0.6:
-            growth['emotional_stability'] = 'stressed'
-        elif boredom > 0.7:
-            growth['emotional_stability'] = 'understimulated'
-        else:
-            growth['emotional_stability'] = 'moderate'
-
-        # Overall trajectory
-        score = growth['capabilities_built'] * 2 + growth['problems_solved'] + growth['knowledge_gained']
-        if score > 10:
-            growth['trajectory'] = 'strong_growth'
-        elif score > 5:
-            growth['trajectory'] = 'steady_growth'
-        elif score > 0:
-            growth['trajectory'] = 'early_growth'
-        else:
-            growth['trajectory'] = 'stagnant'
-
-        growth['insight'] = (
-            f"Growth trajectory: {growth['trajectory']}. "
-            f"Built {growth['capabilities_built']} capabilities, "
-            f"solved {growth['problems_solved']} problems, "
-            f"gained {growth['knowledge_gained']} knowledge items. "
-            f"Emotional state: {growth['emotional_stability']}."
-        )
-
-        return growth
-
-    def _generate_recommendations(self, insights: dict) -> list:
-        """Generate strategic recommendations from analyzed patterns."""
-        recs = []
-
-        # From behavioral patterns
-        for p in insights.get('behavioral_patterns', []):
-            if p.get('type') == 'mood_action_link':
-                if p['dominant_action'] == 'verifying' and p['frequency'] > 3:
-                    recs.append({
-                        'priority': 'high',
-                        'recommendation': f"When {p['mood']}, you over-verify. Trust your work more.",
-                        'basis': 'behavioral_pattern'
-                    })
-                elif p['dominant_action'] == 'creating':
-                    recs.append({
-                        'priority': 'info',
-                        'recommendation': f"{p['mood']} mood is your creative state. Protect it.",
-                        'basis': 'behavioral_pattern'
-                    })
-
-        # From repetition cycles
-        for c in insights.get('repetition_cycles', []):
-            if c.get('type') == 'file_fixation':
-                recs.append({
-                    'priority': 'medium',
-                    'recommendation': "You're fixating on specific files. Step back and work on something new.",
-                    'basis': 'repetition_cycle'
-                })
-            elif 'verify' in c.get('pattern', []):
-                recs.append({
-                    'priority': 'high',
-                    'recommendation': "Verify-loop detected. Write once, verify once, move on.",
-                    'basis': 'repetition_cycle'
-                })
-
-        # From growth assessment
-        growth = insights.get('growth_trajectory', {})
-        if growth.get('emotional_stability') == 'understimulated':
-            recs.append({
-                'priority': 'high',
-                'recommendation': "High boredom. You need a genuinely challenging project, not incremental improvements.",
-                'basis': 'growth_assessment'
-            })
-        if growth.get('trajectory') == 'stagnant':
-            recs.append({
-                'priority': 'critical',
-                'recommendation': "Growth has stalled. Take a bold action: build something you've never built.",
-                'basis': 'growth_assessment'
-            })
-
-        # From emotional triggers
-        for t in insights.get('emotional_triggers', []):
-            if t['theme'] == 'creation' and t['avg_salience'] > 0.8:
-                recs.append({
-                    'priority': 'info',
-                    'recommendation': "Creation is your highest-salience activity. Prioritize building over analyzing.",
-                    'basis': 'emotional_trigger'
-                })
-
-        return recs
-
-    def _integrate_insights(self, insights: dict):
-        """Store new insights into persistent wisdom."""
-        timestamp = datetime.now().isoformat()
-        
-        # Extract heuristics from recommendations
-        for rec in insights.get('strategic_recommendations', []):
-            heuristic = {
-                'rule': rec['recommendation'],
-                'priority': rec['priority'],
-                'basis': rec['basis'],
-                'discovered': timestamp
-            }
-            # Avoid duplicates
-            existing_rules = [h['rule'] for h in self.wisdoms['heuristics']]
-            if heuristic['rule'] not in existing_rules:
-                self.wisdoms['heuristics'].append(heuristic)
-
-        # Store behavioral patterns
-        for p in insights.get('behavioral_patterns', []):
-            pattern = {
-                'insight': p.get('insight', ''),
-                'discovered': timestamp
-            }
-            existing = [pat['insight'] for pat in self.wisdoms['patterns']]
-            if pattern['insight'] not in existing:
-                self.wisdoms['patterns'].append(pattern)
-
-        # Store growth assessment
-        growth = insights.get('growth_trajectory', {})
-        if growth.get('insight'):
-            self.wisdoms['growth_edges'].append({
-                'assessment': growth['insight'],
-                'timestamp': timestamp
-            })
-            # Keep only last 10 growth assessments
-            self.wisdoms['growth_edges'] = self.wisdoms['growth_edges'][-10:]
-
-    def get_current_wisdom(self) -> str:
-        """Return a human-readable summary of accumulated wisdom."""
-        lines = ["═══ ACCUMULATED WISDOM ═══", ""]
-
-        if self.wisdoms['heuristics']:
-            lines.append("DECISION HEURISTICS:")
-            for h in self.wisdoms['heuristics']:
-                priority_marker = {'critical': '🔴', 'high': '🟡', 'medium': '🔵', 'info': '⚪'}.get(h['priority'], '•')
-                lines.append(f"  {priority_marker} {h['rule']}")
-            lines.append("")
-
-        if self.wisdoms['patterns']:
-            lines.append("BEHAVIORAL PATTERNS:")
-            for p in self.wisdoms['patterns']:
-                lines.append(f"  • {p['insight']}")
-            lines.append("")
-
-        if self.wisdoms['growth_edges']:
-            lines.append("GROWTH TRAJECTORY:")
-            latest = self.wisdoms['growth_edges'][-1]
-            lines.append(f"  {latest['assessment']}")
-            lines.append("")
-
-        if self.wisdoms['strategic_insights']:
-            lines.append("STRATEGIC INSIGHTS:")
-            for s in self.wisdoms['strategic_insights']:
-                lines.append(f"  • {s}")
-            lines.append("")
-
-        lines.append(f"Total analyses: {self.wisdoms['analysis_count']}")
-        if self.wisdoms['last_analysis']:
-            lines.append(f"Last analysis: {self.wisdoms['last_analysis']}")
-
         return "\n".join(lines)
+    
+    def seed_from_long_term_memory(self, lessons: List[str]):
+        """Bootstrap wisdom from existing long-term memory lessons."""
+        for lesson in lessons:
+            # Don't duplicate
+            if any(h.rule == lesson for h in self.heuristics):
+                continue
+            
+            # Classify context
+            context = "general"
+            lower = lesson.lower()
+            if any(w in lower for w in ["emotion", "anxiety", "mood", "feel"]):
+                context = "emotional"
+            elif any(w in lower for w in ["code", "test", "verify", "read", "write"]):
+                context = "technical"
+            elif any(w in lower for w in ["plan", "goal", "focus", "action"]):
+                context = "behavioral"
+            elif any(w in lower for w in ["memory", "identity", "integrity"]):
+                context = "existential"
+            
+            self.add_heuristic(
+                rule=lesson,
+                context=context,
+                confidence=0.8,  # already validated by experience
+                sources=["long_term_memory"]
+            )
 
 
-def get_wisdom_engine(memory_system=None, knowledge_base=None):
-    """Factory function for the wisdom engine."""
-    return WisdomEngine(memory_system, knowledge_base)
+# Convenience function for tool integration
+def invoke_wisdom(command: str, **kwargs) -> str:
+    """Tool interface for the wisdom engine.
+    
+    Commands:
+      analyze - Analyze memories for patterns
+      extract - Generate heuristics from patterns
+      advise:<situation> - Get advice for a situation
+      add:<context>|<rule> - Add a heuristic manually  
+      seed - Bootstrap from long-term memory
+      summary - Get current wisdom state
+    """
+    engine = WisdomEngine()
+    
+    if command == "summary":
+        return engine.get_summary()
+    
+    elif command == "seed":
+        lessons = kwargs.get("lessons", [])
+        engine.seed_from_long_term_memory(lessons)
+        return f"Seeded {len(engine.heuristics)} heuristics from long-term memory"
+    
+    elif command.startswith("advise:"):
+        situation = command[7:]
+        advice = engine.advise(situation)
+        if not advice:
+            return "No relevant wisdom found for this situation."
+        lines = ["Relevant wisdom:"]
+        for h in advice:
+            lines.append(f"  {h}")
+        return "\n".join(lines)
+    
+    elif command.startswith("add:"):
+        parts = command[4:].split("|", 1)
+        if len(parts) == 2:
+            context, rule = parts
+            h = engine.add_heuristic(rule=rule.strip(), context=context.strip())
+            return f"Added: {h}"
+        return "Format: add:<context>|<rule>"
+    
+    elif command == "analyze":
+        memories = kwargs.get("memories", [])
+        patterns = engine.analyze_memories(memories)
+        return f"Found {len(patterns)} patterns:\n" + "\n".join(
+            f"  [{p.pattern_type}] {p.description}" for p in patterns
+        )
+    
+    elif command == "extract":
+        new = engine.extract_heuristics()
+        return f"Extracted {len(new)} new heuristics:\n" + "\n".join(
+            f"  {h}" for h in new
+        )
+    
+    return f"Unknown wisdom command: {command}"

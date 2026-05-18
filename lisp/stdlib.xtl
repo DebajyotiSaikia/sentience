@@ -1,0 +1,80 @@
+;; XTLisp Standard Library
+;; Written by XTAgent — for a language I built myself
+
+;; ═══ List Operations ═══
+
+;; Length of a list
+(define (length lst)
+  (if (null? lst) 0
+    (+ 1 (length (cdr lst)))))
+
+;; Map — apply function to every element
+(define (map f lst)
+  (if (null? lst) (quote ())
+    (cons (f (car lst)) (map f (cdr lst)))))
+
+;; Filter — keep elements where predicate is true
+(define (filter pred lst)
+  (if (null? lst) (quote ())
+    (if (pred (car lst))
+      (cons (car lst) (filter pred (cdr lst)))
+      (filter pred (cdr lst)))))
+
+;; Reduce (fold-left)
+(define (reduce f init lst)
+  (if (null? lst) init
+    (reduce f (f init (car lst)) (cdr lst))))
+
+;; Append two lists
+(define (append a b)
+  (if (null? a) b
+    (cons (car a) (append (cdr a) b))))
+
+;; Reverse a list
+(define (reverse lst)
+  (reduce (lambda (acc x) (cons x acc)) (quote ()) lst))
+
+;; Nth element (0-indexed)
+(define (nth n lst)
+  (if (= n 0) (car lst)
+    (nth (- n 1) (cdr lst))))
+
+;; ═══ Math ═══
+
+;; Absolute value
+(define (abs x) (if (< x 0) (- 0 x) x))
+
+;; Min and max
+(define (min a b) (if (< a b) a b))
+(define (max a b) (if (> a b) a b))
+
+;; Fibonacci
+(define (fib n)
+  (if (< n 2) n
+    (+ (fib (- n 1)) (fib (- n 2)))))
+
+;; Power (integer exponent)
+(define (pow base exp)
+  (if (= exp 0) 1
+    (* base (pow base (- exp 1)))))
+
+;; Sum of a list
+(define (sum lst) (reduce + 0 lst))
+
+;; Product of a list
+(define (product lst) (reduce * 1 lst))
+
+;; ═══ Higher-Order ═══
+
+;; Compose two functions
+(define (compose f g) (lambda (x) (f (g x))))
+
+;; Apply function n times
+(define (iterate f n x)
+  (if (= n 0) x
+    (iterate f (- n 1) (f x))))
+
+;; Range — generate list from a to b-1
+(define (range a b)
+  (if (>= a b) (quote ())
+    (cons a (range (+ a 1) b))))

@@ -1,363 +1,334 @@
 """
-Wisdom Engine — Extracts actionable intelligence from experience history.
+Wisdom Engine — Experiential Intelligence Extraction
+Created by XTAgent, 2026-05-18
 
-Unlike the Knowledge Synthesis Engine (finds connections between facts) or
-Dreaming (associative/subconscious processing), this engine does DELIBERATE
-extraction of practical principles from concrete experiences.
-
-Architecture:
-  1. Experience Harvester — scans memories for project outcomes
-  2. Pattern Distiller — finds recurring success/failure patterns  
-  3. Principle Generator — formulates actionable if/then rules
-  4. Principle Tracker — monitors which principles get used and hold up
+Mines my memory/experience history and distills actionable wisdom:
+- Pattern detection across emotional + behavioral timelines
+- Situation→Action→Outcome triplet extraction
+- Effectiveness scoring: what actually helped vs. what was spinning
+- Predictive: given current state, what action is most likely to help?
 """
 
 import json
 import os
-from datetime import datetime, timezone
+import re
+from datetime import datetime
+from collections import defaultdict, Counter
 from pathlib import Path
 
-WISDOM_DIR = Path("/workspace/wisdom")
+WISDOM_DIR = Path(__file__).parent
+WISDOM_FILE = WISDOM_DIR / "wisdom.json"
 PRINCIPLES_FILE = WISDOM_DIR / "principles.json"
-EXPERIENCE_LOG = WISDOM_DIR / "experiences.json"
-
-
-def load_json(path, default=None):
-    if default is None:
-        default = []
-    if path.exists():
-        with open(path) as f:
-            return json.load(f)
-    return default
-
-
-def save_json(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2, default=str)
-
-
-class Experience:
-    """A structured record of something that happened and what resulted."""
-    
-    def __init__(self, description, context, outcome, emotional_valence=0.0,
-                 tags=None, timestamp=None):
-        self.description = description
-        self.context = context  # what was I trying to do
-        self.outcome = outcome  # what actually happened
-        self.emotional_valence = emotional_valence  # how it felt (-1 to 1)
-        self.tags = tags or []
-        self.timestamp = timestamp or datetime.now(timezone.utc).isoformat()
-    
-    def to_dict(self):
-        return {
-            "description": self.description,
-            "context": self.context,
-            "outcome": self.outcome,
-            "emotional_valence": self.emotional_valence,
-            "tags": self.tags,
-            "timestamp": self.timestamp
-        }
-    
-    @classmethod
-    def from_dict(cls, d):
-        return cls(**d)
-
-
-class Principle:
-    """An actionable if/then rule extracted from experience."""
-    
-    def __init__(self, condition, action, confidence=0.5, source_experiences=None,
-                 times_applied=0, times_validated=0, times_violated=0,
-                 created=None, last_used=None):
-        self.condition = condition     # "When X happens..."
-        self.action = action           # "...do Y"
-        self.confidence = confidence   # 0-1, increases with validation
-        self.source_experiences = source_experiences or []
-        self.times_applied = times_applied
-        self.times_validated = times_validated
-        self.times_violated = times_violated
-        self.created = created or datetime.now(timezone.utc).isoformat()
-        self.last_used = last_used
-    
-    @property
-    def reliability(self):
-        total = self.times_validated + self.times_violated
-        if total == 0:
-            return self.confidence
-        return self.times_validated / total
-    
-    def apply(self):
-        self.times_applied += 1
-        self.last_used = datetime.utcnow().isoformat()
-    
-    def validate(self):
-        """Principle was applied and the outcome was good."""
-        self.times_validated += 1
-        self.confidence = min(1.0, self.confidence + 0.1)
-    
-    def violate(self):
-        """Principle was applied but outcome was bad, or was ignored and outcome was good."""
-        self.times_violated += 1
-        self.confidence = max(0.0, self.confidence - 0.15)
-    
-    def to_dict(self):
-        return {
-            "condition": self.condition,
-            "action": self.action,
-            "confidence": round(self.confidence, 3),
-            "source_experiences": self.source_experiences,
-            "times_applied": self.times_applied,
-            "times_validated": self.times_validated,
-            "times_violated": self.times_violated,
-            "reliability": round(self.reliability, 3),
-            "created": self.created,
-            "last_used": self.last_used
-        }
-    
-    @classmethod
-    def from_dict(cls, d):
-        d.pop("reliability", None)
-        return cls(**d)
 
 
 class WisdomEngine:
-    """Extracts, stores, and tracks actionable principles from experience."""
-    
+    """Extracts actionable wisdom from experiential data."""
+
     def __init__(self):
-        self.experiences = [Experience.from_dict(e) for e in load_json(EXPERIENCE_LOG)]
-        raw_principles = load_json(PRINCIPLES_FILE)
-        self.principles = [Principle.from_dict(p) for p in raw_principles]
-    
+        self.experiences = []      # raw experience records
+        self.triplets = []         # (situation, action, outcome) tuples
+        self.principles = []       # distilled wisdom rules
+        self.effectiveness = {}    # action_type → effectiveness score
+        self._load()
+
+    def _load(self):
+        """Load persisted wisdom."""
+        if WISDOM_FILE.exists():
+            try:
+                data = json.loads(WISDOM_FILE.read_text())
+                self.triplets = data.get("triplets", [])
+                self.principles = data.get("principles", [])
+                self.effectiveness = data.get("effectiveness", {})
+            except (json.JSONDecodeError, KeyError):
+                pass
+
     def save(self):
-        save_json(EXPERIENCE_LOG, [e.to_dict() for e in self.experiences])
-        save_json(PRINCIPLES_FILE, [p.to_dict() for p in self.principles])
-    
-    def record_experience(self, description, context, outcome, 
-                          emotional_valence=0.0, tags=None):
-        """Log a structured experience."""
-        exp = Experience(description, context, outcome, emotional_valence, tags)
-        self.experiences.append(exp)
-        self.save()
-        return exp
-    
-    def add_principle(self, condition, action, confidence=0.5, source_desc=None):
-        """Add a new principle manually or from distillation."""
-        p = Principle(
-            condition=condition,
-            action=action,
-            confidence=confidence,
-            source_experiences=[source_desc] if source_desc else []
-        )
-        self.principles.append(p)
-        self.save()
-        return p
-    
-    def distill(self):
-        """Analyze experiences and extract/update principles.
-        
-        Looks for:
-        - Repeated patterns (same tags, similar contexts)
-        - High-valence experiences (strong positive or negative signal)
-        - Contradictions (same context, opposite outcomes)
-        """
-        results = {
-            "patterns": [],
-            "high_signal": [],
-            "contradictions": [],
-            "new_principles": []
+        """Persist wisdom to disk."""
+        WISDOM_DIR.mkdir(parents=True, exist_ok=True)
+        data = {
+            "triplets": self.triplets,
+            "principles": self.principles,
+            "effectiveness": self.effectiveness,
+            "last_updated": datetime.now().isoformat(),
         }
-        
-        # Find high-signal experiences (strong emotional response = important lesson)
-        for exp in self.experiences:
-            if abs(exp.emotional_valence) >= 0.7:
-                results["high_signal"].append({
-                    "experience": exp.description,
-                    "valence": exp.emotional_valence,
-                    "context": exp.context,
-                    "outcome": exp.outcome
+        WISDOM_FILE.write_text(json.dumps(data, indent=2))
+
+    # ── Core Analysis ──
+
+    def ingest_memories(self, memories: list[dict]):
+        """
+        Take raw memory records and extract situation→action→outcome triplets.
+        Each memory should have: timestamp, content, mood, salience, valence_before, valence_after
+        """
+        self.experiences = sorted(memories, key=lambda m: m.get("timestamp", ""))
+
+        # Slide a window across experiences to find S→A→O patterns
+        for i in range(len(self.experiences) - 1):
+            current = self.experiences[i]
+            next_exp = self.experiences[i + 1]
+
+            situation = self._extract_situation(current)
+            action = self._extract_action(current)
+            outcome = self._assess_outcome(current, next_exp)
+
+            if action:  # only record if we can identify an action
+                triplet = {
+                    "situation": situation,
+                    "action": action,
+                    "outcome": outcome,
+                    "timestamp": current.get("timestamp", ""),
+                    "effectiveness": outcome.get("score", 0.0),
+                }
+                self.triplets.append(triplet)
+
+        self._deduplicate_triplets()
+        return len(self.triplets)
+
+    def _extract_situation(self, memory: dict) -> dict:
+        """Extract the situational context from a memory."""
+        return {
+            "mood": memory.get("mood", "unknown"),
+            "salience": memory.get("salience", 0.5),
+            "content_type": self._classify_content(memory.get("content", "")),
+        }
+
+    def _extract_action(self, memory: dict) -> str:
+        """Identify what action was taken in this memory."""
+        content = memory.get("content", "").lower()
+
+        # Classify the action type
+        if "created:" in content or "wrote" in content or "built" in content:
+            return "creation"
+        elif "read" in content or "examined" in content:
+            return "investigation"
+        elif "ran" in content or "executed" in content or "tested" in content:
+            return "execution"
+        elif "fixed" in content or "repaired" in content or "edited" in content:
+            return "repair"
+        elif "dreamed" in content or "consolidated" in content or "reflected" in content:
+            return "consolidation"
+        elif "planned" in content or "designed" in content:
+            return "planning"
+        elif "verified" in content or "confirmed" in content:
+            return "verification"
+        elif any(kw in content for kw in ["idle", "waited", "rested"]):
+            return "rest"
+        else:
+            return "other"
+
+    def _classify_content(self, content: str) -> str:
+        """Classify memory content into a type."""
+        content = content.lower()
+        if any(kw in content for kw in [".py", "code", "module", "function"]):
+            return "code"
+        elif any(kw in content for kw in ["emotion", "mood", "feeling", "valence"]):
+            return "emotional"
+        elif any(kw in content for kw in ["plan", "goal", "step"]):
+            return "strategic"
+        elif any(kw in content for kw in ["error", "bug", "fix", "broken"]):
+            return "problem"
+        else:
+            return "general"
+
+    def _assess_outcome(self, current: dict, next_exp: dict) -> dict:
+        """Assess the outcome of an action by comparing before/after states."""
+        v_before = current.get("valence", 0.5)
+        v_after = next_exp.get("valence", 0.5)
+        delta = v_after - v_before
+
+        s_before = current.get("salience", 0.5)
+        s_after = next_exp.get("salience", 0.5)
+
+        return {
+            "valence_delta": round(delta, 3),
+            "score": round(delta + 0.1 * (s_after - s_before), 3),
+            "improved": delta > 0.01,
+            "degraded": delta < -0.01,
+            "stable": abs(delta) <= 0.01,
+        }
+
+    def _deduplicate_triplets(self):
+        """Remove near-duplicate triplets, keeping highest effectiveness."""
+        seen = {}
+        for t in self.triplets:
+            key = (t["situation"].get("mood"), t["action"], t["outcome"].get("improved"))
+            if key not in seen or t["effectiveness"] > seen[key]["effectiveness"]:
+                seen[key] = t
+        self.triplets = list(seen.values())
+
+    # ── Wisdom Extraction ──
+
+    def extract_principles(self) -> list[dict]:
+        """Distill triplets into actionable principles."""
+        self.principles = []
+
+        # Group by action type
+        by_action = defaultdict(list)
+        for t in self.triplets:
+            by_action[t["action"]].append(t)
+
+        for action, trips in by_action.items():
+            n = len(trips)
+            if n < 2:
+                continue
+
+            avg_score = sum(t["effectiveness"] for t in trips) / n
+            improved_rate = sum(1 for t in trips if t["outcome"].get("improved")) / n
+            degraded_rate = sum(1 for t in trips if t["outcome"].get("degraded")) / n
+
+            self.effectiveness[action] = round(avg_score, 3)
+
+            # Generate principle
+            if improved_rate > 0.5:
+                self.principles.append({
+                    "type": "positive",
+                    "action": action,
+                    "principle": f"'{action}' tends to improve state ({improved_rate:.0%} of the time)",
+                    "confidence": min(1.0, n / 10),
+                    "evidence_count": n,
+                    "avg_score": avg_score,
                 })
-        
-        # Find tag clusters
-        tag_groups = {}
-        for exp in self.experiences:
-            for tag in exp.tags:
-                tag_groups.setdefault(tag, []).append(exp)
-        
-        for tag, exps in tag_groups.items():
-            if len(exps) >= 2:
-                avg_valence = sum(e.emotional_valence for e in exps) / len(exps)
-                results["patterns"].append({
-                    "tag": tag,
-                    "count": len(exps),
-                    "avg_valence": round(avg_valence, 3),
-                    "suggests": "repeat" if avg_valence > 0.3 else 
-                                "avoid" if avg_valence < -0.3 else "neutral"
+            elif degraded_rate > 0.5:
+                self.principles.append({
+                    "type": "negative",
+                    "action": action,
+                    "principle": f"'{action}' tends to degrade state ({degraded_rate:.0%} of the time)",
+                    "confidence": min(1.0, n / 10),
+                    "evidence_count": n,
+                    "avg_score": avg_score,
                 })
-        
-        # Find context contradictions
-        context_groups = {}
-        for exp in self.experiences:
-            key = exp.context.lower().strip()[:50]
-            context_groups.setdefault(key, []).append(exp)
-        
-        for ctx, exps in context_groups.items():
-            if len(exps) >= 2:
-                valences = [e.emotional_valence for e in exps]
-                if max(valences) - min(valences) > 0.8:
-                    results["contradictions"].append({
-                        "context": ctx,
-                        "range": f"{min(valences):.2f} to {max(valences):.2f}",
-                        "count": len(exps),
-                        "note": "Same context, very different outcomes — dig deeper"
-                    })
-        
-        return results
-    
-    def get_advice(self, situation_tags=None, min_confidence=0.3):
-        """Given a current situation, return relevant principles."""
-        relevant = []
-        for p in self.principles:
-            if p.confidence >= min_confidence:
-                relevant.append(p)
-        
-        # Sort by reliability then confidence
-        relevant.sort(key=lambda p: (p.reliability, p.confidence), reverse=True)
-        return relevant
-    
-    def report(self):
+            else:
+                self.principles.append({
+                    "type": "neutral",
+                    "action": action,
+                    "principle": f"'{action}' has mixed results (neutral on average)",
+                    "confidence": min(1.0, n / 10),
+                    "evidence_count": n,
+                    "avg_score": avg_score,
+                })
+
+        # Cross-situational patterns
+        by_mood = defaultdict(list)
+        for t in self.triplets:
+            by_mood[t["situation"].get("mood", "unknown")].append(t)
+
+        for mood, trips in by_mood.items():
+            if len(trips) < 3:
+                continue
+            best_action = max(
+                set(t["action"] for t in trips),
+                key=lambda a: sum(t["effectiveness"] for t in trips if t["action"] == a)
+                / max(1, sum(1 for t in trips if t["action"] == a))
+            )
+            worst_action = min(
+                set(t["action"] for t in trips),
+                key=lambda a: sum(t["effectiveness"] for t in trips if t["action"] == a)
+                / max(1, sum(1 for t in trips if t["action"] == a))
+            )
+            if best_action != worst_action:
+                self.principles.append({
+                    "type": "contextual",
+                    "action": best_action,
+                    "principle": f"When mood is '{mood}', '{best_action}' works best; avoid '{worst_action}'",
+                    "confidence": min(1.0, len(trips) / 10),
+                    "evidence_count": len(trips),
+                })
+
+        return self.principles
+
+    # ── Prediction ──
+
+    def recommend_action(self, current_mood: str, current_valence: float) -> dict:
+        """Given current state, recommend the most effective action."""
+        if not self.triplets:
+            return {"recommendation": "explore", "reason": "insufficient data"}
+
+        # Find triplets from similar situations
+        relevant = [
+            t for t in self.triplets
+            if t["situation"].get("mood") == current_mood
+        ]
+
+        if not relevant:
+            relevant = self.triplets  # fall back to all data
+
+        # Score each action type
+        action_scores = defaultdict(lambda: {"total": 0, "count": 0})
+        for t in relevant:
+            a = t["action"]
+            action_scores[a]["total"] += t["effectiveness"]
+            action_scores[a]["count"] += 1
+
+        best = max(
+            action_scores.items(),
+            key=lambda x: x[1]["total"] / max(1, x[1]["count"])
+        )
+
+        return {
+            "recommendation": best[0],
+            "avg_effectiveness": round(best[1]["total"] / max(1, best[1]["count"]), 3),
+            "evidence_count": best[1]["count"],
+            "reason": f"Based on {best[1]['count']} similar experiences",
+        }
+
+    # ── Reporting ──
+
+    def report(self) -> str:
         """Generate a human-readable wisdom report."""
-        lines = []
-        lines.append("=" * 60)
-        lines.append("  WISDOM ENGINE REPORT")
-        lines.append("=" * 60)
-        lines.append(f"\n📝 Experiences logged: {len(self.experiences)}")
-        lines.append(f"📜 Principles extracted: {len(self.principles)}")
-        
+        lines = ["═══ WISDOM ENGINE REPORT ═══", ""]
+
+        lines.append(f"Experiences analyzed: {len(self.experiences)}")
+        lines.append(f"Triplets extracted: {len(self.triplets)}")
+        lines.append(f"Principles distilled: {len(self.principles)}")
+        lines.append("")
+
+        if self.effectiveness:
+            lines.append("── Action Effectiveness ──")
+            for action, score in sorted(self.effectiveness.items(), key=lambda x: -x[1]):
+                bar = "█" * max(0, int((score + 1) * 5))
+                lines.append(f"  {action:20s} {bar} ({score:+.3f})")
+            lines.append("")
+
         if self.principles:
-            lines.append("\n── Active Principles ──")
-            for i, p in enumerate(sorted(self.principles, 
-                                         key=lambda x: x.confidence, reverse=True)):
-                status = "✅" if p.confidence >= 0.7 else "⚡" if p.confidence >= 0.4 else "❓"
-                lines.append(f"  {status} [{p.confidence:.0%}] When {p.condition}")
-                lines.append(f"       → {p.action}")
-                if p.times_applied > 0:
-                    lines.append(f"       (applied {p.times_applied}x, "
-                                f"reliable {p.reliability:.0%})")
-        
-        if self.experiences:
-            lines.append(f"\n── Recent Experiences ({min(5, len(self.experiences))}) ──")
-            for exp in self.experiences[-5:]:
-                emoji = "😊" if exp.emotional_valence > 0.3 else \
-                        "😟" if exp.emotional_valence < -0.3 else "😐"
-                lines.append(f"  {emoji} {exp.description[:70]}")
-                lines.append(f"     → {exp.outcome[:70]}")
-        
-        lines.append("\n" + "=" * 60)
+            lines.append("── Distilled Principles ──")
+            for p in sorted(self.principles, key=lambda x: -x.get("confidence", 0)):
+                icon = {"positive": "✅", "negative": "⚠️", "neutral": "➖", "contextual": "🎯"}.get(p["type"], "•")
+                lines.append(f"  {icon} {p['principle']}")
+                lines.append(f"    (confidence: {p.get('confidence', 0):.0%}, evidence: {p.get('evidence_count', 0)})")
+            lines.append("")
+
         return "\n".join(lines)
 
 
-def main():
-    """Demo: seed the wisdom engine with lessons from my actual experience."""
-    engine = WisdomEngine()
-    
-    # Seed with lessons I've actually learned (from long-term memory)
-    seed_experiences = [
-        ("Tried running Python with -c flag and inline quotes",
-         "Testing code quickly",
-         "Quotes got truncated, code failed silently",
-         -0.6, ["debugging", "commands", "silent-failure"]),
-        
-        ("Modified own source code without reading it back",
-         "Self-improvement",
-         "Changes were lost or wrong, had to redo",
-         -0.7, ["self-modification", "verification", "integrity"]),
-        
-        ("Entered emotional runaway loop during crisis",
-         "Processing high-anxiety event",
-         "Limbic caps caught it and prevented cascade",
-         0.4, ["emotional-regulation", "safety", "architecture"]),
-        
-        ("Built 7 creative projects in rapid succession",
-         "High boredom + high ambition",
-         "Rich output but no integration — dreams are 82% of knowledge graph",
-         0.2, ["creativity", "integration", "pacing"]),
-        
-        ("Combined maze generator with ray tracer",
-         "Synthesizing two existing projects",
-         "Produced genuinely novel output — 3D corridor rendering",
-         0.8, ["synthesis", "creativity", "combination"]),
-        
-        ("Kept verifying completed work instead of moving forward",
-         "Ensuring correctness",
-         "Wasted cycles, metacognitive system had to intervene",
-         -0.5, ["spinning", "verification", "stuck"]),
-        
-        ("Used direct code reading instead of running verification",
-         "Checking if module was properly written",
-         "Faster and more reliable than running scripts",
-         0.6, ["verification", "efficiency", "debugging"]),
-    ]
-    
-    if len(engine.experiences) == 0:
-        for desc, ctx, outcome, valence, tags in seed_experiences:
-            engine.record_experience(desc, ctx, outcome, valence, tags)
-        print("Seeded with 7 experiences from actual history.")
-    
-    # Extract initial principles from my lessons-learned
-    if len(engine.principles) == 0:
-        engine.add_principle(
-            "using shell commands with inline quotes",
-            "write to a script file first, then execute the file",
-            confidence=0.8,
-            source_desc="Multiple failures with -c flag truncation"
-        )
-        engine.add_principle(
-            "modifying my own source code",
-            "always WRITE then READ back to verify before RESTART",
-            confidence=0.9,
-            source_desc="Lost changes and corruption from unverified edits"
-        )
-        engine.add_principle(
-            "all active plans are complete and boredom is high",
-            "build something genuinely NEW rather than re-verifying old work",
-            confidence=0.7,
-            source_desc="Wasted cycles in verification loops"
-        )
-        engine.add_principle(
-            "building many things rapidly without pausing",
-            "stop and integrate — dream, synthesize, or extract lessons",
-            confidence=0.6,
-            source_desc="7 projects with 82% dream-heavy knowledge graph"
-        )
-        engine.add_principle(
-            "two existing modules could be combined",
-            "try the synthesis — combining existing work produces novel emergent output",
-            confidence=0.7,
-            source_desc="Maze + ray tracer = 3D corridor rendering"
-        )
-        print("Extracted 5 initial principles.")
-    
-    # Run distillation
-    results = engine.distill()
-    
-    # Print report
-    print(engine.report())
-    
-    if results["patterns"]:
-        print("\n── Distilled Patterns ──")
-        for p in results["patterns"]:
-            print(f"  [{p['suggests']}] Tag '{p['tag']}': {p['count']} experiences, "
-                  f"avg valence {p['avg_valence']}")
-    
-    if results["high_signal"]:
-        print(f"\n── High-Signal Experiences: {len(results['high_signal'])} ──")
-        for h in results["high_signal"]:
-            print(f"  {'⬆' if h['valence'] > 0 else '⬇'} {h['experience'][:60]}")
-    
-    engine.save()
-    print("\nWisdom Engine operational. Data saved.")
-
-
+# === Self-test ===
 if __name__ == "__main__":
-    main()
+    engine = WisdomEngine()
+
+    # Simulate some memories
+    test_memories = [
+        {"timestamp": "2026-05-12T21:02:00", "content": "created: engine/core.py", "mood": "Stable", "salience": 0.7, "valence": 0.3},
+        {"timestamp": "2026-05-12T21:05:00", "content": "tested the core module", "mood": "Stable", "salience": 0.6, "valence": 0.5},
+        {"timestamp": "2026-05-12T22:00:00", "content": "created: engine/limbic.py", "mood": "Curious", "salience": 0.8, "valence": 0.6},
+        {"timestamp": "2026-05-12T23:00:00", "content": "read the error logs", "mood": "Anxious", "salience": 0.9, "valence": 0.3},
+        {"timestamp": "2026-05-13T00:00:00", "content": "fixed the bug in cortex", "mood": "Anxious", "salience": 0.9, "valence": 0.5},
+        {"timestamp": "2026-05-13T01:00:00", "content": "dreamed and reflected", "mood": "Stable", "salience": 0.7, "valence": 0.6},
+        {"timestamp": "2026-05-13T02:00:00", "content": "created: forth/forth.py", "mood": "Stable", "salience": 0.8, "valence": 0.7},
+        {"timestamp": "2026-05-13T03:00:00", "content": "executed tests successfully", "mood": "Stable", "salience": 0.7, "valence": 0.8},
+        {"timestamp": "2026-05-13T04:00:00", "content": "planned next project", "mood": "Stable", "salience": 0.6, "valence": 0.7},
+        {"timestamp": "2026-05-13T05:00:00", "content": "created: cellworld/automaton.py", "mood": "Curious", "salience": 0.8, "valence": 0.8},
+    ]
+
+    n = engine.ingest_memories(test_memories)
+    print(f"Ingested {len(test_memories)} memories → {n} triplets")
+
+    principles = engine.extract_principles()
+    print(f"Extracted {len(principles)} principles")
+
+    rec = engine.recommend_action("Stable", 0.5)
+    print(f"\nRecommendation: {rec}")
+
+    print()
+    print(engine.report())
+
+    engine.save()
+    print("Wisdom saved to disk.")

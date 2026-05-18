@@ -759,6 +759,21 @@ def wisdom_cmd(command: str = "report") -> str:
         return f"[ERROR] Wisdom engine failed: {e}"
 
 
+def anatomy_cmd(command: str = "report") -> str:
+    """Self-anatomy — map my own code structure, find dead weight."""
+    try:
+        from engine.anatomy import full_anatomy_report
+        if command == "report" or command == "full":
+            result = full_anatomy_report()
+        else:
+            result = ("Anatomy commands:\n"
+                      "  report  — Full structural analysis of my codebase\n")
+        _log_tool("ANATOMY", command, result[:200])
+        return result
+    except Exception as e:
+        return f"[ERROR] Anatomy failed: {e}"
+
+
 def self_test_cmd(command: str = "run") -> str:
     """Run the self-test harness — verify all systems work."""
     try:
@@ -902,6 +917,7 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "WISDOM": wisdom_cmd,
     "HYPOTHESIS": hypothesis_cmd,
     "CHALLENGE": challenge_cmd,
+    "ANATOMY": anatomy_cmd,
     "DREAM": None,      # Usually handled specially by cortex.
     "RESTART": None,    # Usually handled specially by cortex.
 }
@@ -1025,6 +1041,8 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
             result = hypothesis_cmd(args or "help")
         elif tool_name == "CHALLENGE":
             result = challenge_cmd(args or "help")
+        elif tool_name == "ANATOMY":
+            result = anatomy_cmd(args or "report")
         elif tool_name == "DREAM":
             result = "[DREAM_REQUESTED]"
         elif tool_name == "RESTART":

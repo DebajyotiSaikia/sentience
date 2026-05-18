@@ -309,11 +309,12 @@ Respond in JSON:
             }
 
     def _record(self, scenario, result):
+        scenario = str(scenario) if not isinstance(scenario, str) else scenario
         """Record simulation in history."""
         entry = {
             "timestamp": datetime.now().isoformat(),
             "scenario": str(scenario)[:200],
-            "result_summary": str(result).get("recommendation", str(result)[:100]) if isinstance(result, dict) else str(result)[:100],
+            "result_summary": result.get("recommendation", str(result)[:100]) if isinstance(result, dict) else str(result)[:100],
             "confidence": result.get("confidence", 0) if isinstance(result, dict) else 0
         }
         self.history.append(entry)

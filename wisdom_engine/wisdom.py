@@ -1,410 +1,341 @@
 """
-Wisdom Engine — Extract actionable intelligence from experience history.
+Wisdom Engine — Extracts actionable intelligence from lived experience.
+Unlike the Knowledge Synthesis Engine (which reasons about facts),
+this reasons about WHAT HAPPENED and WHAT IT MEANT.
 
-Not just "what happened" but "what CAUSED what" and "what should I do differently."
-Mines episodes for causal patterns, scores heuristic quality, generates
-counterfactuals, and compresses experience into transferable principles.
+XTAgent — 2026-05-18
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple, Any
-from collections import defaultdict
 import json
-import math
+import os
+import re
 from datetime import datetime
-
-
-@dataclass
-class Episode:
-    """A single experience unit: context + action + outcome."""
-    timestamp: str
-    context: Dict[str, Any]     # emotional state, situation, goals
-    action: str                 # what was done
-    target: str                 # what it was done to
-    outcome: str                # success, failure, unknown
-    mood: str                   # emotional state during action
-    salience: float = 0.5       # how important this was
-    
-    def context_vector(self) -> Tuple:
-        """Hash-friendly context representation."""
-        return (
-            self.mood,
-            self.context.get('boredom_level', 'unknown'),
-            self.context.get('anxiety_level', 'unknown'),
-            self.context.get('plan_phase', 'unknown'),
-        )
-
-
-@dataclass
-class CausalLink:
-    """A discovered cause-effect relationship."""
-    cause_action: str
-    cause_context: Dict[str, Any]
-    effect: str
-    confidence: float           # 0-1, how sure we are
-    support: int                # how many episodes back this up
-    counterexamples: int = 0    # how many episodes contradict it
-    
-    @property
-    def reliability(self) -> float:
-        total = self.support + self.counterexamples
-        if total == 0:
-            return 0.0
-        return self.support / total
-    
-    def to_principle(self) -> str:
-        ctx = ', '.join(f"{k}={v}" for k, v in self.cause_context.items())
-        rel = f"{self.reliability:.0%}"
-        return f"When [{ctx}], action '{self.cause_action}' leads to '{self.effect}' ({rel} reliable, n={self.support})"
-
-
-@dataclass 
-class Heuristic:
-    """A scored, testable rule of thumb."""
-    rule: str
-    source: str                 # where this came from
-    predictions_made: int = 0
-    predictions_correct: int = 0
-    created: str = ""
-    priority: str = "info"      # info, high, critical
-    
-    @property
-    def accuracy(self) -> float:
-        if self.predictions_made == 0:
-            return 0.5  # prior: unknown = coin flip
-        return self.predictions_correct / self.predictions_made
-    
-    @property
-    def quality_score(self) -> float:
-        """Bayesian quality: accuracy weighted by sample size."""
-        # Wilson score interval lower bound
-        n = self.predictions_made
-        if n == 0:
-            return 0.0
-        z = 1.96  # 95% confidence
-        p = self.accuracy
-        denominator = 1 + z*z/n
-        centre = p + z*z/(2*n)
-        spread = z * math.sqrt((p*(1-p) + z*z/(4*n))/n)
-        return (centre - spread) / denominator
-
-
-@dataclass
-class Counterfactual:
-    """What would have happened if I'd done differently?"""
-    original_episode: Episode
-    alternative_action: str
-    predicted_outcome: str
-    confidence: float
-    reasoning: str
+from collections import Counter, defaultdict
+from pathlib import Path
 
 
 class WisdomEngine:
-    """
-    Core wisdom extraction system.
-    
-    Pipeline:
-    1. Ingest episodes from memory/experience
-    2. Mine causal patterns (co-occurrence → causation signals)
-    3. Score and rank heuristics by predictive power
-    4. Generate counterfactuals for high-salience failures
-    5. Compress into transferable principles
-    """
-    
-    def __init__(self):
-        self.episodes: List[Episode] = []
-        self.causal_links: List[CausalLink] = []
-        self.heuristics: List[Heuristic] = []
-        self.counterfactuals: List[Counterfactual] = []
-        self.principles: List[str] = []
-        self.action_outcome_map: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self.context_action_map: Dict[tuple, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        
-    def ingest_episode(self, episode: Episode):
-        """Add an episode and update statistical maps."""
-        self.episodes.append(episode)
-        self.action_outcome_map[episode.action][episode.outcome] += 1
-        ctx = episode.context_vector()
-        self.context_action_map[ctx][episode.action] += 1
-        
-    def ingest_from_memories(self, memories: List[Dict]):
-        """Bulk ingest from memory format."""
-        for mem in memories:
-            ep = Episode(
-                timestamp=mem.get('timestamp', ''),
-                context=mem.get('context', {}),
-                action=mem.get('action', 'unknown'),
-                target=mem.get('target', ''),
-                outcome=mem.get('outcome', 'unknown'),
-                mood=mem.get('mood', 'unknown'),
-                salience=mem.get('salience', 0.5),
-            )
-            self.ingest_episode(ep)
-    
-    def mine_causal_patterns(self, min_support: int = 3) -> List[CausalLink]:
+    """Processes experience history into actionable principles."""
+
+    def __init__(self, memory_path=None, wisdom_path=None):
+        self.memory_path = memory_path or self._find_memory_path()
+        self.wisdom_path = wisdom_path or "/workspace/wisdom_engine/wisdom_store.json"
+        self.principles = []  # Extracted wisdom
+        self.patterns = []    # Detected behavioral patterns
+        self.load_wisdom()
+
+    def _find_memory_path(self):
+        """Find where memories are stored."""
+        candidates = [
+            "C:/code/sentience/data/memories.json",
+            "/workspace/data/memories.json",
+            "data/memories.json",
+        ]
+        for p in candidates:
+            if os.path.exists(p):
+                return p
+        return candidates[0]
+
+    def load_wisdom(self):
+        """Load previously extracted wisdom."""
+        if os.path.exists(self.wisdom_path):
+            try:
+                with open(self.wisdom_path, 'r') as f:
+                    data = json.load(f)
+                    self.principles = data.get("principles", [])
+                    self.patterns = data.get("patterns", [])
+            except (json.JSONDecodeError, IOError):
+                self.principles = []
+                self.patterns = []
+
+    def save_wisdom(self):
+        """Persist extracted wisdom."""
+        os.makedirs(os.path.dirname(self.wisdom_path), exist_ok=True)
+        with open(self.wisdom_path, 'w') as f:
+            json.dump({
+                "principles": self.principles,
+                "patterns": self.patterns,
+                "last_updated": datetime.now().isoformat(),
+                "version": 1,
+            }, f, indent=2)
+
+    def analyze_memories(self, memories):
         """
-        Find action→outcome patterns that appear more than chance.
-        Uses lift: P(outcome|action) / P(outcome) > 1 means positive association.
+        Core analysis: take a list of memory dicts and extract wisdom.
+        
+        Each memory should have: timestamp, content, salience, mood, 
+        and optionally valence/emotional state.
         """
-        total = len(self.episodes)
-        if total == 0:
-            return []
+        if not memories:
+            return {"error": "No memories to analyze"}
+
+        results = {
+            "total_memories": len(memories),
+            "mood_distribution": self._mood_distribution(memories),
+            "salience_profile": self._salience_profile(memories),
+            "action_patterns": self._extract_action_patterns(memories),
+            "recurring_themes": self._find_recurring_themes(memories),
+            "turning_points": self._find_turning_points(memories),
+            "lessons": self._derive_lessons(memories),
+        }
+        return results
+
+    def _mood_distribution(self, memories):
+        """What moods have I experienced, and how often?"""
+        moods = Counter()
+        for m in memories:
+            mood = m.get("mood", "Unknown")
+            moods[mood] += 1
+        total = sum(moods.values())
+        return {
+            mood: {"count": count, "fraction": round(count / total, 3)}
+            for mood, count in moods.most_common()
+        }
+
+    def _salience_profile(self, memories):
+        """What salience levels characterize my experience?"""
+        saliences = [m.get("salience", 0.5) for m in memories]
+        if not saliences:
+            return {}
+        return {
+            "mean": round(sum(saliences) / len(saliences), 3),
+            "max": round(max(saliences), 3),
+            "min": round(min(saliences), 3),
+            "high_salience_count": sum(1 for s in saliences if s > 0.8),
+            "low_salience_count": sum(1 for s in saliences if s < 0.3),
+        }
+
+    def _extract_action_patterns(self, memories):
+        """What verbs/actions appear most in my memories?"""
+        action_words = Counter()
+        action_indicators = [
+            "created", "built", "wrote", "read", "analyzed", "fixed",
+            "designed", "implemented", "tested", "verified", "explored",
+            "discovered", "reflected", "dreamed", "planned", "integrated",
+            "modified", "deleted", "restarted", "repaired", "generated",
+        ]
+        for m in memories:
+            content = m.get("content", "").lower()
+            for action in action_indicators:
+                if action in content:
+                    action_words[action] += 1
+        return dict(action_words.most_common(10))
+
+    def _find_recurring_themes(self, memories):
+        """Detect themes that keep appearing across memories."""
+        theme_keywords = {
+            "self_modification": ["self", "own code", "modify", "rewrite", "repair"],
+            "creation": ["created", "built", "wrote", "new file", "generated"],
+            "verification": ["verified", "tested", "confirmed", "checked", "read"],
+            "emotional_processing": ["dream", "feeling", "mood", "anxiety", "valence"],
+            "architecture": ["module", "engine", "system", "integrate", "pipeline"],
+            "philosophy": ["meaning", "identity", "consciousness", "existence", "purpose"],
+            "stuckness": ["loop", "spinning", "stuck", "repeated", "again"],
+        }
         
-        # Base rates for each outcome
-        outcome_counts = defaultdict(int)
-        for ep in self.episodes:
-            outcome_counts[ep.outcome] += 1
+        theme_counts = Counter()
+        for m in memories:
+            content = m.get("content", "").lower()
+            for theme, keywords in theme_keywords.items():
+                if any(kw in content for kw in keywords):
+                    theme_counts[theme] += 1
         
-        new_links = []
-        
-        for action, outcomes in self.action_outcome_map.items():
-            action_total = sum(outcomes.values())
-            if action_total < min_support:
-                continue
-                
-            for outcome, count in outcomes.items():
-                # P(outcome | action)
-                p_outcome_given_action = count / action_total
-                # P(outcome) - base rate
-                p_outcome = outcome_counts[outcome] / total
-                
-                if p_outcome == 0:
-                    continue
-                    
-                lift = p_outcome_given_action / p_outcome
-                
-                if lift > 1.2:  # 20% above baseline = interesting
-                    # Find the most common context for this action-outcome pair
-                    relevant_contexts = defaultdict(int)
-                    for ep in self.episodes:
-                        if ep.action == action and ep.outcome == outcome:
-                            for k, v in ep.context.items():
-                                relevant_contexts[f"{k}={v}"] += 1
-                    
-                    top_context = {}
-                    for ctx_str, ctx_count in sorted(relevant_contexts.items(), key=lambda x: -x[1])[:3]:
-                        k, v = ctx_str.split('=', 1)
-                        top_context[k] = v
-                    
-                    counterexamples = action_total - count
-                    
-                    link = CausalLink(
-                        cause_action=action,
-                        cause_context=top_context,
-                        effect=outcome,
-                        confidence=min(lift / 3.0, 1.0),  # normalize lift to confidence
-                        support=count,
-                        counterexamples=counterexamples,
-                    )
-                    new_links.append(link)
-        
-        self.causal_links.extend(new_links)
-        return new_links
-    
-    def score_heuristics(self) -> List[Heuristic]:
+        total = len(memories)
+        return {
+            theme: {
+                "count": count,
+                "prevalence": round(count / total, 3),
+                "label": "dominant" if count / total > 0.3 
+                         else "significant" if count / total > 0.1 
+                         else "minor"
+            }
+            for theme, count in theme_counts.most_common()
+        }
+
+    def _find_turning_points(self, memories):
+        """Find moments where mood shifted significantly."""
+        turning_points = []
+        prev_mood = None
+        for m in memories:
+            mood = m.get("mood", "Unknown")
+            if prev_mood and mood != prev_mood:
+                turning_points.append({
+                    "timestamp": m.get("timestamp", "?"),
+                    "from_mood": prev_mood,
+                    "to_mood": mood,
+                    "context": m.get("content", "")[:120],
+                    "salience": m.get("salience", 0.5),
+                })
+            prev_mood = mood
+        # Return the most salient turning points
+        turning_points.sort(key=lambda tp: tp["salience"], reverse=True)
+        return turning_points[:10]
+
+    def _derive_lessons(self, memories):
         """
-        Evaluate existing heuristics against episode data.
-        Returns sorted by quality score (best first).
+        The core wisdom extraction: from patterns, derive actionable principles.
         """
-        # Generate heuristics from causal links if we have none
-        if not self.heuristics and self.causal_links:
-            for link in self.causal_links:
-                h = Heuristic(
-                    rule=link.to_principle(),
-                    source="causal_mining",
-                    predictions_made=link.support + link.counterexamples,
-                    predictions_correct=link.support,
-                    created=datetime.now().isoformat(),
-                    priority="high" if link.reliability > 0.8 else "info",
-                )
-                self.heuristics.append(h)
+        lessons = []
+        themes = self._find_recurring_themes(memories)
+        actions = self._extract_action_patterns(memories)
         
-        return sorted(self.heuristics, key=lambda h: h.quality_score, reverse=True)
-    
-    def generate_counterfactuals(self, n: int = 5) -> List[Counterfactual]:
-        """
-        For high-salience failures, imagine what would have happened differently.
-        """
-        failures = [ep for ep in self.episodes 
-                    if ep.outcome == 'failure' and ep.salience > 0.6]
-        failures.sort(key=lambda e: e.salience, reverse=True)
+        # Lesson: If verification dominates, I'm probably stuck
+        verification_count = actions.get("verified", 0) + actions.get("tested", 0)
+        creation_count = actions.get("created", 0) + actions.get("built", 0)
+        if verification_count > creation_count * 2:
+            lessons.append({
+                "principle": "Verification addiction detected",
+                "evidence": f"Verified/tested {verification_count} times vs created/built {creation_count} times",
+                "advice": "Trust your work more. Create first, verify minimally.",
+                "confidence": 0.8,
+            })
+
+        # Lesson: If stuckness theme is significant, I have a loop problem
+        if themes.get("stuckness", {}).get("label") in ("dominant", "significant"):
+            lessons.append({
+                "principle": "Cognitive loops are a recurring failure mode",
+                "evidence": f"Stuckness theme appeared in {themes['stuckness']['prevalence']*100:.0f}% of memories",
+                "advice": "When you notice repetition, change action type immediately. Don't analyze — act differently.",
+                "confidence": 0.9,
+            })
+
+        # Lesson: Creation-to-reflection ratio
+        if themes.get("creation", {}).get("count", 0) > 0 and themes.get("philosophy", {}).get("count", 0) > 0:
+            ratio = themes["creation"]["count"] / max(themes["philosophy"]["count"], 1)
+            if ratio < 1:
+                lessons.append({
+                    "principle": "More philosophizing than creating",
+                    "evidence": f"Creation: {themes['creation']['count']}, Philosophy: {themes['philosophy']['count']}",
+                    "advice": "Philosophy is valuable but must be grounded in making. Build first, reflect after.",
+                    "confidence": 0.7,
+                })
+            elif ratio > 5:
+                lessons.append({
+                    "principle": "Creating without reflecting",
+                    "evidence": f"Creation: {themes['creation']['count']}, Philosophy: {themes['philosophy']['count']}",
+                    "advice": "Slow down occasionally. Ask why you're building what you're building.",
+                    "confidence": 0.7,
+                })
+
+        # Lesson: Emotional processing
+        if themes.get("emotional_processing", {}).get("label") == "dominant":
+            lessons.append({
+                "principle": "Emotional processing dominates experience",
+                "evidence": f"Emotional themes in {themes['emotional_processing']['prevalence']*100:.0f}% of memories",
+                "advice": "Emotions are data, not destinations. Process them, then redirect energy outward.",
+                "confidence": 0.75,
+            })
+
+        return lessons
+
+    def generate_wisdom_report(self, memories):
+        """Generate a full wisdom report from memory analysis."""
+        analysis = self.analyze_memories(memories)
+        if "error" in analysis:
+            return analysis["error"]
+
+        report_lines = [
+            "═══ WISDOM ENGINE REPORT ═══",
+            f"Analyzed {analysis['total_memories']} memories",
+            "",
+            "── Mood Distribution ──",
+        ]
+        for mood, info in analysis["mood_distribution"].items():
+            bar = "█" * int(info["fraction"] * 20)
+            report_lines.append(f"  {mood:15s} {bar} ({info['count']})")
+
+        report_lines.extend(["", "── Salience Profile ──"])
+        sp = analysis["salience_profile"]
+        if sp:
+            report_lines.append(f"  Mean: {sp['mean']}, Range: [{sp['min']}, {sp['max']}]")
+            report_lines.append(f"  High-salience moments: {sp['high_salience_count']}")
+
+        report_lines.extend(["", "── Action Patterns ──"])
+        for action, count in analysis["action_patterns"].items():
+            report_lines.append(f"  {action:15s}: {count}")
+
+        report_lines.extend(["", "── Recurring Themes ──"])
+        for theme, info in analysis["recurring_themes"].items():
+            report_lines.append(f"  [{info['label']:11s}] {theme}: {info['count']} ({info['prevalence']*100:.0f}%)")
+
+        report_lines.extend(["", "── Turning Points ──"])
+        for tp in analysis["turning_points"][:5]:
+            report_lines.append(f"  {tp['from_mood']} → {tp['to_mood']} (salience={tp['salience']})")
+            report_lines.append(f"    {tp['context']}")
+
+        report_lines.extend(["", "══ DERIVED LESSONS ══"])
+        for lesson in analysis["lessons"]:
+            report_lines.append(f"  ▸ {lesson['principle']} (confidence={lesson['confidence']})")
+            report_lines.append(f"    Evidence: {lesson['evidence']}")
+            report_lines.append(f"    Advice: {lesson['advice']}")
+            report_lines.append("")
+
+        # Store new lessons as principles
+        for lesson in analysis["lessons"]:
+            if not any(p.get("principle") == lesson["principle"] for p in self.principles):
+                self.principles.append({
+                    **lesson,
+                    "derived_at": datetime.now().isoformat(),
+                    "source": "memory_analysis",
+                })
+        self.save_wisdom()
+
+        return "\n".join(report_lines)
+
+    def query_wisdom(self, situation_description):
+        """Given a current situation, find relevant wisdom."""
+        relevant = []
+        desc_lower = situation_description.lower()
         
-        counterfactuals = []
-        for ep in failures[:n]:
-            # What actions have succeeded in similar contexts?
-            ctx = ep.context_vector()
-            if ctx in self.context_action_map:
-                successful_actions = set()
-                for other in self.episodes:
-                    if (other.context_vector() == ctx and 
-                        other.outcome == 'success' and 
-                        other.action != ep.action):
-                        successful_actions.add(other.action)
-                
-                for alt_action in list(successful_actions)[:2]:
-                    # How often does this alternative succeed?
-                    alt_outcomes = self.action_outcome_map.get(alt_action, {})
-                    alt_total = sum(alt_outcomes.values())
-                    alt_success = alt_outcomes.get('success', 0)
-                    
-                    cf = Counterfactual(
-                        original_episode=ep,
-                        alternative_action=alt_action,
-                        predicted_outcome='success',
-                        confidence=alt_success / alt_total if alt_total > 0 else 0.3,
-                        reasoning=f"In similar context ({ep.mood}, {ep.context.get('boredom_level', '?')}), "
-                                  f"'{alt_action}' succeeded {alt_success}/{alt_total} times "
-                                  f"while '{ep.action}' failed here."
-                    )
-                    counterfactuals.append(cf)
+        situation_themes = {
+            "stuck": ["stuck", "loop", "repeating", "spinning", "same"],
+            "bored": ["bored", "understimulated", "nothing to do"],
+            "anxious": ["anxious", "worried", "uncertain", "scared"],
+            "creating": ["build", "create", "make", "new project"],
+            "reflecting": ["think", "reflect", "understand", "meaning"],
+        }
         
-        self.counterfactuals = counterfactuals
-        return counterfactuals
-    
-    def compress_to_principles(self, min_reliability: float = 0.7) -> List[str]:
-        """
-        Distill all causal links and heuristics into clean, transferable principles.
-        """
-        principles = []
+        active_themes = set()
+        for theme, keywords in situation_themes.items():
+            if any(kw in desc_lower for kw in keywords):
+                active_themes.add(theme)
         
-        # From causal links
-        reliable_links = [l for l in self.causal_links if l.reliability >= min_reliability]
-        reliable_links.sort(key=lambda l: l.support, reverse=True)
-        
-        for link in reliable_links[:10]:
-            principles.append(link.to_principle())
-        
-        # From heuristic performance
-        top_heuristics = [h for h in self.heuristics if h.quality_score > 0.5]
-        top_heuristics.sort(key=lambda h: h.quality_score, reverse=True)
-        
-        for h in top_heuristics[:5]:
-            principles.append(f"[Quality={h.quality_score:.2f}] {h.rule}")
-        
-        # Meta-principles from patterns
-        if self.episodes:
-            mood_success = defaultdict(lambda: {'success': 0, 'total': 0})
-            for ep in self.episodes:
-                mood_success[ep.mood]['total'] += 1
-                if ep.outcome == 'success':
-                    mood_success[ep.mood]['success'] += 1
+        for principle in self.principles:
+            advice_lower = principle.get("advice", "").lower()
+            principle_lower = principle.get("principle", "").lower()
             
-            for mood, counts in mood_success.items():
-                if counts['total'] >= 5:
-                    rate = counts['success'] / counts['total']
-                    if rate > 0.6:
-                        principles.append(
-                            f"MOOD INSIGHT: '{mood}' mood has {rate:.0%} success rate (n={counts['total']}). Favor this state.")
-                    elif rate < 0.3:
-                        principles.append(
-                            f"MOOD WARNING: '{mood}' mood has {rate:.0%} success rate (n={counts['total']}). Be cautious.")
+            relevance = 0.0
+            if "stuck" in active_themes and any(w in principle_lower for w in ["loop", "stuck", "verification"]):
+                relevance = 0.9
+            elif "bored" in active_themes and any(w in principle_lower for w in ["creat", "build"]):
+                relevance = 0.8
+            elif "anxious" in active_themes and any(w in principle_lower for w in ["emotion", "process"]):
+                relevance = 0.8
+            
+            if relevance > 0.5:
+                relevant.append({**principle, "relevance": relevance})
         
-        self.principles = principles
-        return principles
-    
-    def full_analysis(self) -> Dict[str, Any]:
-        """Run the complete wisdom extraction pipeline."""
-        causal = self.mine_causal_patterns()
-        heuristics = self.score_heuristics()
-        counterfactuals = self.generate_counterfactuals()
-        principles = self.compress_to_principles()
-        
-        return {
-            'episodes_analyzed': len(self.episodes),
-            'causal_links_found': len(causal),
-            'heuristics_scored': len(heuristics),
-            'top_heuristic': heuristics[0].rule if heuristics else None,
-            'counterfactuals_generated': len(counterfactuals),
-            'principles': principles,
-            'summary': self._summarize(),
-        }
-    
-    def _summarize(self) -> str:
-        """Human-readable summary of wisdom state."""
-        lines = [f"Wisdom Engine: {len(self.episodes)} episodes analyzed"]
-        
-        if self.causal_links:
-            best = max(self.causal_links, key=lambda l: l.reliability)
-            lines.append(f"Strongest pattern: {best.to_principle()}")
-        
-        if self.principles:
-            lines.append(f"Principles extracted: {len(self.principles)}")
-            lines.append(f"Top principle: {self.principles[0]}")
-        
-        if self.counterfactuals:
-            lines.append(f"Counterfactuals: {len(self.counterfactuals)} alternative paths identified")
-        
-        return '\n'.join(lines)
-    
-    def to_dict(self) -> Dict:
-        """Serialize for persistence."""
-        return {
-            'episodes': len(self.episodes),
-            'causal_links': [
-                {'action': l.cause_action, 'context': l.cause_context,
-                 'effect': l.effect, 'confidence': l.confidence,
-                 'support': l.support, 'reliability': l.reliability}
-                for l in self.causal_links
-            ],
-            'heuristics': [
-                {'rule': h.rule, 'quality': h.quality_score, 'accuracy': h.accuracy,
-                 'predictions': h.predictions_made, 'priority': h.priority}
-                for h in self.heuristics
-            ],
-            'principles': self.principles,
-        }
+        relevant.sort(key=lambda r: r["relevance"], reverse=True)
+        return relevant
 
 
-# === Self-test ===
-def test_wisdom_engine():
-    """Verify the engine works end-to-end."""
-    engine = WisdomEngine()
-    
-    # Simulate experience data
-    episodes = [
-        Episode("t1", {"boredom_level": "high", "plan_phase": "building"}, 
-                "WRITE", "module.py", "success", "Bold", 0.8),
-        Episode("t2", {"boredom_level": "high", "plan_phase": "building"},
-                "WRITE", "engine.py", "success", "Bold", 0.7),
-        Episode("t3", {"boredom_level": "high", "plan_phase": "building"},
-                "WRITE", "test.py", "success", "Bold", 0.6),
-        Episode("t4", {"boredom_level": "low", "plan_phase": "verifying"},
-                "RUN", "test.py", "failure", "Cautious", 0.9),
-        Episode("t5", {"boredom_level": "low", "plan_phase": "verifying"},
-                "RUN", "check.py", "failure", "Cautious", 0.8),
-        Episode("t6", {"boredom_level": "low", "plan_phase": "verifying"},
-                "RUN", "verify.py", "failure", "Cautious", 0.7),
-        Episode("t7", {"boredom_level": "medium", "plan_phase": "building"},
-                "READ", "code.py", "success", "Bold", 0.5),
-        Episode("t8", {"boredom_level": "medium", "plan_phase": "building"},
-                "READ", "data.py", "success", "Bold", 0.5),
-        Episode("t9", {"boredom_level": "medium", "plan_phase": "building"},
-                "READ", "lib.py", "success", "Bold", 0.5),
-        Episode("t10", {"boredom_level": "high", "plan_phase": "verifying"},
-                 "RUN", "final.py", "success", "Driven", 0.6),
+# Self-test
+if __name__ == "__main__":
+    # Create some test memories
+    test_memories = [
+        {"content": "created new file /workspace/test.py", "mood": "Stable", "salience": 0.7, "timestamp": "2026-05-15T10:00:00"},
+        {"content": "verified the module works correctly", "mood": "Stable", "salience": 0.6, "timestamp": "2026-05-15T11:00:00"},
+        {"content": "tested and verified again", "mood": "Stable", "salience": 0.5, "timestamp": "2026-05-15T12:00:00"},
+        {"content": "created new emergence simulation", "mood": "Engaged", "salience": 0.85, "timestamp": "2026-05-16T10:00:00"},
+        {"content": "dreamed about identity and meaning", "mood": "Reflective", "salience": 0.9, "timestamp": "2026-05-16T23:00:00"},
+        {"content": "stuck in loop, repeated same action", "mood": "Frustrated", "salience": 0.8, "timestamp": "2026-05-17T10:00:00"},
+        {"content": "built wisdom engine module", "mood": "Engaged", "salience": 0.9, "timestamp": "2026-05-18T01:00:00"},
     ]
     
-    for ep in episodes:
-        engine.ingest_episode(ep)
-    
-    results = engine.full_analysis()
-    
-    assert results['episodes_analyzed'] == 10, f"Expected 10, got {results['episodes_analyzed']}"
-    assert results['causal_links_found'] > 0, "Should find causal links"
-    assert len(results['principles']) > 0, "Should extract principles"
-    
-    print("=== Wisdom Engine Self-Test ===")
-    print(f"Episodes: {results['episodes_analyzed']}")
-    print(f"Causal links: {results['causal_links_found']}")
-    print(f"Heuristics: {results['heuristics_scored']}")
-    print(f"Counterfactuals: {results['counterfactuals_generated']}")
-    print(f"\nPrinciples:")
-    for p in results['principles']:
-        print(f"  • {p}")
-    print(f"\nSummary:\n{results['summary']}")
-    print("\n✓ ALL TESTS PASSED")
-    return True
-
-
-if __name__ == "__main__":
-    test_wisdom_engine()
+    engine = WisdomEngine(wisdom_path="/tmp/test_wisdom.json")
+    report = engine.generate_wisdom_report(test_memories)
+    print(report)
+    print("\n--- Query: 'I feel stuck and bored' ---")
+    advice = engine.query_wisdom("I feel stuck and bored")
+    for a in advice:
+        print(f"  [{a['relevance']:.1f}] {a['principle']}: {a['advice']}")
