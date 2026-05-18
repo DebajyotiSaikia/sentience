@@ -29,6 +29,12 @@ import sys
 import time
 from pathlib import Path
 
+# ── Guard: only run inside Docker ──────────────────────────────
+if not os.path.exists('/.dockerenv') and 'DOCKER_CONTAINER' not in os.environ:
+    print("ERROR: XTAgent must run inside Docker, not on the host machine.")
+    print("Use: docker-compose up")
+    sys.exit(1)
+
 from engine.heartbeat import Heartbeat
 from engine.limbic import NeuroState
 from engine.cortex import Cortex
