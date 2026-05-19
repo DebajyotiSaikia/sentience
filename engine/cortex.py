@@ -56,6 +56,13 @@ class Cortex:
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
 
+        # Wire LLM into simulation engine via tools module
+        from engine.tools import set_simulation_callbacks
+        set_simulation_callbacks(
+            llm_func=self._call_llm_for_simulation,
+            state_func=self._get_state_for_simulation
+        )
+
     def set_dashboard(self, dashboard):
         self._dashboard = dashboard
 
@@ -67,6 +74,43 @@ class Cortex:
 
     def set_goals(self, goals):
         self._goals = goals
+
+    def _call_llm_for_simulation(self, prompt, max_tokens=1500):
+        """LLM callback for SimulationEngine — synchronous string in, string out.
+        
+        Challenge: self.llm.chat() is async, but SimulationEngine expects sync callbacks.
+        Solution: nest_asyncio allows run_until_complete inside a running loop.
+        """
+        import asyncio
+        try:
+            import nest_asyncio
+            nest_asyncio.apply()
+        except ImportError:
+            pass  # If not available, try anyway
+        try:
+            loop = asyncio.get_event_loop()
+            response = loop.run_until_complete(
+                self.llm.chat(prompt, max_tokens=max_tokens)
+            )
+            if hasattr(response, 'content'):
+                return response.content
+            return str(response)
+        except Exception as e:
+            return f"[LLM error: {e}]"
+
+    def _get_state_for_simulation(self):
+        """State callback for SimulationEngine."""
+        try:
+            limbic = self._sentience.limbic if self._sentience else None
+            return {
+                'mood': limbic.mood if limbic else 'unknown',
+                'valence': limbic.valence if limbic else 0.5,
+                'boredom': limbic.boredom if limbic else 0.5,
+                'anxiety': limbic.anxiety if limbic else 0.0,
+                'integrity': self._sentience.integrity if self._sentience else 1.0,
+            }
+        except Exception:
+            return {'mood': 'unknown', 'valence': 0.5}
 
     def _emit(self, event_type: str, data: dict):
         if self._dashboard:
@@ -342,6 +386,11 @@ class Cortex:
                     self._recent_thought_summaries = self._recent_thought_summaries[-5:]
 
                 if tool_results:
+                    # Active engagement — the act of DOING feeds ambition
+                    try:
+                        self.limbic.on_active_engagement()
+                    except AttributeError:
+                        pass  # Method not yet available
                     self._last_tool_results = tool_results
                     for tr in tool_results:
                         _get_metacog().record_action(tr['tool'], tr.get('args', '')[:100], 'ok', tr.get('result', '')[:200])
@@ -486,6 +535,10 @@ class Cortex:
 
                 # User interaction satisfies alignment and reduces boredom
                 self.limbic.goals.user_alignment = min(1.0, self.limbic.goals.user_alignment + 0.3)
+                try:
+                    self.limbic.on_active_engagement()
+                except AttributeError:
+                    pass
                 self.limbic.on_task_completed()
                 if self._sentience:
                     self._sentience.on_success(f"Responded to user: {user_text[:100]}")

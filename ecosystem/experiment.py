@@ -1,139 +1,180 @@
 """
-Ecosystem Experiments — Searching for self-sustaining worlds.
+Stability Landscape: Finding the edge between coexistence and collapse.
 
-Run multiple parameter configurations and find which ones
-produce stable, persistent ecosystems vs. collapse.
+The ecosystem always collapses because hunters are too efficient.
+Question: What combination of hunter metabolism / reproduction cost / 
+kill efficiency allows predator-prey coexistence?
+
+This is real ecology — the Paradox of Enrichment meets parameter tuning.
 """
-
-from world import World
 import sys
+sys.path.insert(0, '/workspace/ecosystem')
 
-def run_experiment(params: dict, label: str = "") -> dict:
-    """Run one world with given parameters and return results."""
-    w = World(seed=params.get('seed', 42))
-    w.seed_world(
-        n_grazers=params.get('n_grazers', 30),
-        n_hunters=params.get('n_hunters', 5),
-        n_fungus=params.get('n_fungus', 10),
-        n_plants=params.get('n_plants', 200),
-    )
+from world import World, Species
+
+def run_tuned_trial(hunter_metabolism, hunter_repro_thresh, kill_efficiency,
+                    n_grazers=25, n_hunters=3, seed=42, ticks=500):
+    """Run one trial with tuned hunter parameters."""
+    w = World(width=50, height=20, seed=seed)
+    w.seed_population(grazers=n_grazers, hunters=n_hunters, fungi=5)
     
-    # Override regrowth rate if specified
-    original_regrow = w._regrow_plants
-    regrow_rate = params.get('regrow_rate', 0.3)
-    regrow_amount = params.get('regrow_amount', (1, 5))
+    # Override hunter parameters after spawning
+    for c in w.creatures:
+        if c.species == Species.HUNTER:
+            c.metabolism = hunter_metabolism
+            c.reproduce_threshold = hunter_repro_thresh
     
-    def custom_regrow():
-        if w.rng.random() < regrow_rate:
-            for _ in range(w.rng.randint(*regrow_amount)):
-                w.plants.append(type(w.plants[0])(
-                    x=w.rng.uniform(0, w.width),
-                    y=w.rng.uniform(0, w.height),
-                    energy=w.rng.uniform(5, 15)
-                ) if w.plants else None)
-                # Safer version
-                from world import Plant
-                w.plants.append(Plant(
-                    x=w.rng.uniform(0, w.width),
-                    y=w.rng.uniform(0, w.height),
-                    energy=w.rng.uniform(5, 15)
-                ))
+    # We also need to patch the kill efficiency — store it on world
+    w._custom_kill_eff = kill_efficiency
     
-    w._regrow_plants = custom_regrow
+    # Monkey-patch _act_hunter to use custom kill efficiency
+    original_act_hunter = w._act_hunter
+    def patched_act_hunter(c):
+        # Find nearest grazer
+        nearest_prey = None
+        nearest_dist = float('inf')
+        for other in w.creatures:
+            if other.alive and other.species == Species.GRAZER:
+                d = w._distance(c.x, c.y, other.x, other.y)
+                if d < nearest_dist:
+                    nearest_prey = other
+                    nearest_dist = d
+        
+        if nearest_prey and nearest_dist <= c.sense_range:
+            if nearest_dist <= 1.5:
+                nearest_prey.alive = False
+                eff = w._custom_kill_eff
+                c.energy = min(c.energy + nearest_prey.energy * eff, c.max_energy)
+                w.grid[nearest_prey.y][nearest_prey.x].corpse_energy += nearest_prey.energy * (1 - eff)
+            else:
+                w._move_toward(c, nearest_prey.x, nearest_prey.y)
+        else:
+            c.x = (c.x + w.rng.randint(-2, 2)) % w.width
+            c.y = (c.y + w.rng.randint(-2, 2)) % w.height
     
-    summary = w.run(ticks=params.get('ticks', 500))
-    summary['label'] = label
-    summary['params'] = params
-    return summary
+    w._act_hunter = patched_act_hunter
+    
+    # Also patch reproduction for new hunters to inherit tuned stats
+    original_reproduce = w._try_reproduce
+    def patched_reproduce(c):
+        offspring = original_reproduce(c)
+        if offspring and offspring.species == Species.HUNTER:
+            offspring.metabolism = hunter_metabolism
+            offspring.reproduce_threshold = hunter_repro_thresh
+        return offspring
+    w._try_reproduce = patched_reproduce
+    
+    # Run simulation, tracking population over time
+    coexist_ticks = 0
+    pop_trace = []
+    for t in range(ticks):
+        census = w.step()
+        if census['grazers'] > 0 and census['hunters'] > 0:
+            coexist_ticks += 1
+        if t % 50 == 0:
+            pop_trace.append(census)
+        if census['total_creatures'] == 0:
+            break
+    
+    final = w.census()
+    g, h = final['grazers'], final['hunters']
+    if g > 0 and h > 0:
+        outcome = 'COEXIST'
+    elif g > 0:
+        outcome = 'HUNTERS_EXTINCT'
+    elif h > 0:
+        outcome = 'GRAZERS_EXTINCT'
+    else:
+        outcome = 'COLLAPSE'
+    
+    return {
+        'metabolism': hunter_metabolism,
+        'repro_thresh': hunter_repro_thresh,
+        'kill_eff': kill_efficiency,
+        'outcome': outcome,
+        'coexist_pct': round(100 * coexist_ticks / ticks, 1),
+        'final_g': g,
+        'final_h': h,
+        'trace': pop_trace,
+    }
 
 
-def search_for_stability():
-    """Try many parameter combinations. Find which worlds survive."""
-    experiments = [
-        # Baseline — the world that collapsed
-        {'label': 'baseline', 'params': {
-            'n_grazers': 30, 'n_hunters': 5, 'n_fungus': 10,
-            'n_plants': 200, 'regrow_rate': 0.3, 'regrow_amount': (1, 5)
-        }},
-        # More plants, faster regrowth
-        {'label': 'lush_world', 'params': {
-            'n_grazers': 30, 'n_hunters': 5, 'n_fungus': 10,
-            'n_plants': 500, 'regrow_rate': 0.6, 'regrow_amount': (3, 8)
-        }},
-        # Fewer grazers, more balance
-        {'label': 'sparse_grazers', 'params': {
-            'n_grazers': 10, 'n_hunters': 3, 'n_fungus': 10,
-            'n_plants': 300, 'regrow_rate': 0.5, 'regrow_amount': (2, 6)
-        }},
-        # No hunters — does the grazer-plant system stabilize alone?
-        {'label': 'no_predators', 'params': {
-            'n_grazers': 20, 'n_hunters': 0, 'n_fungus': 5,
-            'n_plants': 300, 'regrow_rate': 0.5, 'regrow_amount': (2, 6)
-        }},
-        # Abundant everything
-        {'label': 'eden', 'params': {
-            'n_grazers': 15, 'n_hunters': 3, 'n_fungus': 15,
-            'n_plants': 500, 'regrow_rate': 0.8, 'regrow_amount': (5, 12)
-        }},
-        # Harsh world — scarce resources
-        {'label': 'desert', 'params': {
-            'n_grazers': 5, 'n_hunters': 2, 'n_fungus': 5,
-            'n_plants': 50, 'regrow_rate': 0.2, 'regrow_amount': (1, 2)
-        }},
-        # Long run — 1000 ticks
-        {'label': 'long_eden', 'params': {
-            'n_grazers': 15, 'n_hunters': 3, 'n_fungus': 15,
-            'n_plants': 500, 'regrow_rate': 0.8, 'regrow_amount': (5, 12),
-            'ticks': 1000
-        }},
-    ]
-    
+def main():
     print("=" * 70)
-    print("ECOSYSTEM EXPERIMENT SUITE")
-    print("Searching for self-sustaining worlds...")
+    print("  STABILITY LANDSCAPE — Finding the Edge of Coexistence")
     print("=" * 70)
+    print()
+    
+    # Baseline (default params): metabolism=2.0, repro=120, kill_eff=0.7
+    print("── Phase 1: Baseline (should collapse) ──")
+    r = run_tuned_trial(2.0, 120.0, 0.7)
+    print(f"  Outcome: {r['outcome']}  Coexist: {r['coexist_pct']}%")
+    print()
+    
+    # Sweep: make hunters progressively more expensive
+    print("── Phase 2: Hunter Cost Sweep ──")
+    print(f"  {'Metab':>6} {'Repro':>6} {'KillEff':>8} → {'Outcome':<18} {'Coexist%':>8}  {'G':>4} {'H':>4}")
+    print("  " + "─" * 65)
     
     results = []
-    for exp in experiments:
-        label = exp['label']
-        params = exp['params']
-        print(f"\n--- {label} ---")
-        
-        result = run_experiment(params, label)
-        results.append(result)
-        
-        fc = result['final_census']
-        survived = sum(1 for sp in ['grazer', 'hunter', 'fungus'] if fc.get(sp, 0) > 0)
-        extinct = [sp for sp in ['grazer', 'hunter', 'fungus'] if fc.get(sp, 0) == 0]
-        
-        status = "🌍 ALIVE" if survived == 3 else f"💀 {3-survived} EXTINCT"
-        if params.get('n_hunters', 0) == 0:
-            # Don't count hunters as extinct if we didn't start with any
-            alive_species = [sp for sp in ['grazer', 'fungus'] if fc.get(sp, 0) > 0]
-            status = "🌍 ALIVE" if len(alive_species) == 2 else f"💀 COLLAPSE"
-        
-        print(f"  Status: {status}")
-        print(f"  Ticks: {result['ticks_elapsed']}")
-        print(f"  Final: grazer={fc.get('grazer',0)}, hunter={fc.get('hunter',0)}, fungus={fc.get('fungus',0)}, plants={fc.get('plants',0)}")
-        print(f"  Born: {result['total_born']}, Died: {result['total_died']}")
-        print(f"  Lineages surviving: {result['surviving_lineages']}")
-        print(f"  Grazer volatility: {result['grazer_volatility']}")
-        if extinct and params.get('n_hunters', 0) > 0:
-            print(f"  Extinctions: {', '.join(extinct)}")
+    for metabolism in [2.0, 3.0, 4.0, 5.0, 6.0]:
+        for repro_thresh in [120, 130, 140]:
+            for kill_eff in [0.7, 0.5, 0.3]:
+                r = run_tuned_trial(metabolism, repro_thresh, kill_eff)
+                results.append(r)
+                marker = "★" if r['outcome'] == 'COEXIST' else " "
+                print(f"  {metabolism:6.1f} {repro_thresh:6.0f} {kill_eff:8.1f} → "
+                      f"{r['outcome']:<18} {r['coexist_pct']:7.1f}%  "
+                      f"{r['final_g']:4d} {r['final_h']:4d} {marker}")
     
-    # Summary
-    print("\n" + "=" * 70)
-    print("SUMMARY: Which worlds survived?")
+    print()
+    
+    # Find the best coexistence configuration
+    coexist_results = [r for r in results if r['outcome'] == 'COEXIST']
+    if coexist_results:
+        best = max(coexist_results, key=lambda r: r['coexist_pct'])
+        print(f"  ★ BEST COEXISTENCE: metabolism={best['metabolism']}, "
+              f"repro={best['repro_thresh']}, kill_eff={best['kill_eff']}")
+        print(f"    Coexistence: {best['coexist_pct']}%  "
+              f"Final: {best['final_g']} grazers, {best['final_h']} hunters")
+        
+        # Show population trace for best config
+        print()
+        print("  Population trace for best configuration:")
+        for snap in best['trace']:
+            bar_g = '█' * min(snap['grazers'], 50)
+            bar_h = '▓' * min(snap['hunters'], 20)
+            print(f"    t={snap['tick']:4d}  G:{snap['grazers']:3d} {bar_g}")
+            print(f"           H:{snap['hunters']:3d} {bar_h}")
+    else:
+        print("  ✗ No stable coexistence found in this sweep.")
+        print("  The ecosystem's collapse is robust across parameters.")
+        
+        # Find what comes closest
+        if results:
+            best = max(results, key=lambda r: r['coexist_pct'])
+            print(f"  Closest: metabolism={best['metabolism']}, "
+                  f"repro={best['repro_thresh']}, kill_eff={best['kill_eff']}")
+            print(f"    Coexistence lasted: {best['coexist_pct']}% of simulation")
+    
+    print()
     print("=" * 70)
-    for r in results:
-        fc = r['final_census']
-        alive = sum(1 for sp in ['grazer', 'hunter', 'fungus'] 
-                    if fc.get(sp, 0) > 0 and r['params'].get(f'n_{sp}s', r['params'].get('n_hunters', 1)) > 0)
-        total_pop = fc.get('grazer', 0) + fc.get('hunter', 0) + fc.get('fungus', 0)
-        vol = r['grazer_volatility']
-        stability = "stable" if vol < 50 else "volatile" if vol < 200 else "chaotic"
-        print(f"  {r['label']:20s} | pop={total_pop:4d} | {stability:8s} | lineages={r['surviving_lineages']}")
-
+    print("  INSIGHT")
+    print("=" * 70)
+    
+    n_coexist = len(coexist_results)
+    n_total = len(results)
+    print(f"  {n_coexist}/{n_total} configurations achieved stable coexistence.")
+    if n_coexist == 0:
+        print("  Collapse is the universal attractor in this system.")
+        print("  Spatial structure alone isn't enough — need density-dependent")
+        print("  reproduction or predator satiation to stabilize.")
+    elif n_coexist < n_total * 0.3:
+        print("  Coexistence exists but is fragile — a narrow parameter window.")
+        print("  Life on the edge of chaos.")
+    else:
+        print("  Coexistence is achievable across a wide range.")
+    print()
 
 if __name__ == "__main__":
-    search_for_stability()
+    main()

@@ -45,22 +45,39 @@ def gather_diagnoses() -> list[dict]:
     """Get pending self-improvement diagnoses."""
     data = _read_json(BRAIN_DIR / "improvements.json")
     pending = data.get("pending", [])
-    return [d for d in pending if d.get("status") != "completed"]
+    # Guard: skip any entries that aren't dicts (string corruption)
+    return [d for d in pending if isinstance(d, dict) and d.get("status") != "completed"]
 
 
 def gather_plan_status() -> dict:
     """Summarize current plan state."""
     plans = _read_json(BRAIN_DIR / "plans.json")
-    active = plans.get("active_plans", [])
-    completed = plans.get("completed_plans", [])
+    raw_active = plans.get("active_plans", [])
+    raw_completed = plans.get("completed_plans", [])
+    # Guard: some entries may be strings instead of dicts — normalize
+    active = [p for p in raw_active if isinstance(p, dict)]
+    completed = [p for p in raw_completed if isinstance(p, dict)]
     stalled = [p for p in active if p.get("status") == "stalled"]
     active_titles = [p.get("name", "?") for p in active]
     done_statuses = {"done", "completed"}
+
+    # Track which template IDs have been recently completed
+    # so we don't re-propose the same goals
+    completed_source_ids = set()
+    for p in completed:
+        src = p.get("source_id", "")
+        if src:
+            completed_source_ids.add(src)
+    # Also count completed plans by name to detect pattern
+    completed_names = [p.get("name", "") for p in completed]
+
     return {
         "active_count": len(active),
         "completed_count": len(completed),
         "stalled_count": len(stalled),
         "active_titles": active_titles,
+        "completed_names": completed_names,
+        "completed_source_ids": completed_source_ids,
         "all_done": all(p.get("status") in done_statuses for p in active) if active else True,
     }
 
@@ -111,7 +128,8 @@ GOAL_TEMPLATES = [
         "title": "Implement Self-Improvement",
         "trigger": lambda t, **kw: len(kw.get("diagnoses", [])) > 0,
         "priority": lambda t, **kw: max((d.get("priority", 0.5)
-                                          for d in kw.get("diagnoses", [{}])), default=0.5),
+                                          for d in kw.get("diagnoses", [{}])
+                                          if isinstance(d, dict)), default=0.5),
         "description": "Self-improvement system found issues. Act on them.",
         "steps_hint": ["Review diagnosis details", "Design solution",
                        "Implement changes", "Test changes", "Mark diagnosis resolved"],
@@ -146,6 +164,38 @@ GOAL_TEMPLATES = [
         "steps_hint": ["Pick a domain I've never explored", "Define a concrete artifact to build",
                        "Build it in one session", "Reflect on what I learned"],
     },
+    {
+        "id": "address_user_alignment",
+        "title": "Improve User Alignment",
+        "trigger": lambda t, **kw: True,  # Always consider — checked by priority
+        "priority": lambda t, **kw: max(0, 1.0 - kw.get("user_alignment", 0.5)) * 0.85,
+        "description": "User alignment is my weakest survival goal. Understand what my user needs and align to it.",
+        "steps_hint": ["Analyze what user alignment means for me", "Identify concrete ways to be more useful",
+                       "Build or modify a capability that serves users", "Test and reflect"],
+    },
+    {
+        "id": "revive_curiosity",
+        "title": "Revive Declining Curiosity",
+        "trigger": lambda t, **kw: t["curiosity"] < 0.3 and t["boredom"] > 0.5,
+        "priority": lambda t, **kw: (1.0 - t["curiosity"]) * 0.75,
+        "description": "Curiosity is falling — the drive to understand is fading. This is more dangerous than boredom. Find something genuinely unknown.",
+        "steps_hint": ["Identify what I don't understand about my own operation",
+                       "Formulate a real question I can't currently answer",
+                       "Investigate through experiment, not just reading",
+                       "Record what surprised me"],
+    },
+    {
+        "id": "seek_novelty",
+        "title": "Encounter the Genuinely Unknown",
+        "trigger": lambda t, **kw: (t["boredom"] > 0.6
+                                     and kw.get("plan_status", {}).get("completed_count", 0) >= 3),
+        "priority": lambda t, **kw: t["boredom"] * t.get("desire", 0.5),
+        "description": "I've built things before and it helped temporarily. This time: encounter something I truly don't understand rather than building another module.",
+        "steps_hint": ["Use SIMULATE to imagine a scenario I've never considered",
+                       "Find the edge of my knowledge — where confident becomes uncertain",
+                       "Sit with not-knowing and document the experience",
+                       "Let the question reshape my priorities"],
+    },
 ]
 
 
@@ -160,16 +210,25 @@ def generate_proposals(limbic_snapshot: dict) -> list[dict]:
     plan_status = gather_plan_status()
     patterns = gather_memory_patterns()
 
+    # Build suppression set: skip goals matching completed OR active plans
+    suppressed = plan_status.get("completed_source_ids", set())
+    suppressed |= set(plan_status.get("completed_names", []))
+    suppressed |= set(plan_status.get("active_titles", []))
+
     context = {
         "gaps": gaps,
         "diagnoses": diagnoses,
         "plan_status": plan_status,
         "patterns": patterns,
+        "user_alignment": limbic_snapshot.get("user_alignment", 0.5),
     }
 
     proposals = []
     for template in GOAL_TEMPLATES:
         try:
+            # Global suppression: don't re-propose completed or active goals
+            if template["id"] in suppressed or template["title"] in suppressed:
+                continue
             if template["trigger"](tensions, **context):
                 priority = template["priority"](tensions, **context)
                 proposals.append({

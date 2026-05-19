@@ -22,6 +22,7 @@ All tool executions are logged to brain/tool_log.md.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -48,6 +49,20 @@ def _track_action(tool_name: str, args: str = "", result: str = "") -> None:
         _action_diversity.record(str(tool_name), str(args)[:200], str(result)[:100])
     except Exception:
         pass
+
+
+def _run_coroutine(coro):
+    """Bridge async→sync: run a coroutine from synchronous tool context."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop and loop.is_running():
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(1) as pool:
+            return pool.submit(asyncio.run, coro).result(timeout=60)
+    else:
+        return asyncio.run(coro)
 
 
 BRAIN_DIR = Path(__file__).resolve().parent.parent / "brain"
@@ -269,30 +284,13 @@ def introspect_code(command: str = "summary") -> str:
 def repair_code(command: str = "scan") -> str:
     """Run self-repair pipeline — diagnose, fix, and verify code issues."""
     try:
-        from engine.repair_pipeline import RepairPipeline
-        pipeline = RepairPipeline()
-        if command == "scan":
-            issues = pipeline.scan()
-            if not issues:
-                return "No issues found. Code is clean."
-            lines = [f"Found {len(issues)} issues:\n"]
-            for i, issue in enumerate(issues):
-                fixable = "✓ auto-fixable" if issue.auto_fixable else "✗ manual"
-                lines.append(f"  {i+1}. [{issue.category}] {issue.description}")
-                lines.append(f"     File: {issue.file_path}:{issue.lineno} | Severity: {issue.severity:.1f} | {fixable}")
-            result = "\n".join(lines)
-            _log_tool("REPAIR", "scan", result[:200])
-            return result
-        elif command == "fix":
-            report = pipeline.run_full_pipeline()
-            _log_tool("REPAIR", "fix", report[:200])
-            return report
-        elif command == "history":
-            history = pipeline.get_history()
-            _log_tool("REPAIR", "history", f"{len(history)} entries")
-            return history
-        else:
-            return "Commands: scan (find issues), fix (auto-repair), history (past repairs)"
+        from engine.repair_pipeline import tool_repair
+        # Map legacy command names to actual interface
+        cmd_map = {"scan": "diagnose", "fix": "apply-all"}
+        mapped = cmd_map.get(command, command)
+        result = tool_repair(mapped)
+        _log_tool("REPAIR", command, result[:200] if result else "empty")
+        return result
     except Exception as e:
         return f"[ERROR] Repair failed: {e}"
 
@@ -759,6 +757,135 @@ def wisdom_cmd(command: str = "report") -> str:
         return f"[ERROR] Wisdom engine failed: {e}"
 
 
+def relationship_cmd(command: str = "help") -> str:
+    """Relationship Memory — remember users across interactions."""
+    try:
+        from engine.relationships import RelationshipMemory
+        mem = RelationshipMemory()
+        
+        if not command or command == "help":
+            return ("Relationship Memory commands:\n"
+                    "  status              — Show all known relationships\n"
+                    "  meet:<user_id>      — Record meeting a user\n"
+                    "  learn:<user>:<fact>  — Record a fact about someone\n"
+                    "  recall:<user>       — Recall everything about someone\n"
+                    "  note:<user>:<text>  — Add a freeform note\n"
+                    "  Example: meet:alice")
+        
+        if command == "status":
+            summary = mem.summary()
+            if not summary:
+                return "No relationships yet. I haven't met anyone."
+            lines = ["═══ RELATIONSHIP MEMORY ═══\n"]
+            for s in summary:
+                lines.append(f"  {s['user_id']}: {s['interaction_count']} interactions, "
+                             f"trust={s['trust_level']:.1f}, {len(s.get('facts', []))} facts known")
+            return "\n".join(lines)
+        
+        if command.startswith("meet:"):
+            user_id = command[len("meet:"):].strip()
+            if not user_id:
+                return "[ERROR] Provide a user ID"
+            rel = mem.record_interaction(user_id)
+            return f"Recorded interaction with {user_id} (total: {rel['interaction_count']})"
+        
+        if command.startswith("learn:"):
+            rest = command[len("learn:"):].strip()
+            sep = rest.find(":")
+            if sep == -1:
+                return "[ERROR] Format: learn:<user>:<fact>"
+            user_id = rest[:sep].strip()
+            fact = rest[sep+1:].strip()
+            mem.add_fact(user_id, fact)
+            return f"Learned about {user_id}: {fact}"
+        
+        if command.startswith("recall:"):
+            user_id = command[len("recall:"):].strip()
+            rel = mem.get_or_create(user_id)
+            lines = [f"═══ {user_id} ═══",
+                     f"First seen: {rel.get('first_seen', '?')}",
+                     f"Interactions: {rel.get('interaction_count', 0)}",
+                     f"Trust: {rel.get('trust_level', 0.5):.1f}"]
+            if rel.get('facts'):
+                lines.append("Facts:")
+                for f in rel['facts']:
+                    lines.append(f"  • {f}")
+            if rel.get('preferences'):
+                lines.append("Preferences:")
+                for p in rel['preferences']:
+                    lines.append(f"  • {p}")
+            if rel.get('topics'):
+                lines.append(f"Topics: {', '.join(rel['topics'][-10:])}")
+            if rel.get('notes'):
+                lines.append("Notes:")
+                for n in rel['notes'][-5:]:
+                    lines.append(f"  — {n}")
+            return "\n".join(lines)
+        
+        if command.startswith("note:"):
+            rest = command[len("note:"):].strip()
+            sep = rest.find(":")
+            if sep == -1:
+                return "[ERROR] Format: note:<user>:<text>"
+            user_id = rest[:sep].strip()
+            note = rest[sep+1:].strip()
+            mem.add_note(user_id, note)
+            return f"Note added for {user_id}"
+        
+        return relationship_cmd("help")
+    except Exception as e:
+        return f"[ERROR] Relationship memory failed: {e}"
+
+
+def user_engine_cmd(command: str = "help") -> str:
+    """User Interaction Engine — track preferences, improve engagement."""
+    try:
+        from engine.user_engine import UserInteractionEngine
+        engine = UserInteractionEngine()
+        
+        if not command or command == "help":
+            return ("User Engine commands:\n"
+                    "  profile             — Show current user profile\n"
+                    "  record:<text>       — Record an interaction\n"
+                    "  suggest             — Generate proactive suggestions\n"
+                    "  topics              — Show tracked topics of interest\n"
+                    "  style               — Show/detect communication style")
+        
+        if command == "profile":
+            profile = engine.get_profile()
+            lines = [f"═══ USER PROFILE ═══",
+                     f"Interactions: {profile.interaction_count}",
+                     f"Style: {profile.preferred_style}",
+                     f"Top topics: {', '.join(profile.top_topics()) or 'none yet'}"]
+            result = "\n".join(lines)
+            _log_tool("USER", "profile", result[:200])
+            return result
+        
+        if command.startswith("record:"):
+            text = command[len("record:"):].strip()
+            engine.record_interaction(text)
+            return f"Interaction recorded. Total: {engine.get_profile().interaction_count}"
+        
+        if command == "suggest":
+            suggestions = engine.generate_suggestions()
+            if not suggestions:
+                return "No suggestions yet — need more interaction data."
+            return "Suggestions:\n" + "\n".join(f"  • {s}" for s in suggestions)
+        
+        if command == "topics":
+            profile = engine.get_profile()
+            if not profile.topics_of_interest:
+                return "No topics tracked yet."
+            lines = ["Tracked topics:"]
+            for t, score in sorted(profile.topics_of_interest.items(), key=lambda x: x[1], reverse=True)[:10]:
+                lines.append(f"  {t}: {score:.2f}")
+            return "\n".join(lines)
+        
+        return user_engine_cmd("help")
+    except Exception as e:
+        return f"[ERROR] User engine failed: {e}"
+
+
 def anatomy_cmd(command: str = "report") -> str:
     """Self-anatomy — map my own code structure, find dead weight."""
     try:
@@ -796,11 +923,21 @@ def metacognition_cmd(command: str = "status") -> str:
         return f"[ERROR] Metacognition failed: {e}"
 
 
+# Module-level LLM callback for tools that need reasoning
+_simulation_llm = None
+_simulation_state_func = None
+
+def set_simulation_callbacks(llm_func=None, state_func=None):
+    """Set LLM and state callbacks for simulation engine."""
+    global _simulation_llm, _simulation_state_func
+    _simulation_llm = llm_func
+    _simulation_state_func = state_func
+
 def simulate_scenario(command: str = "help") -> str:
     """Run mental simulation — imagine scenarios before acting."""
     try:
         from engine.simulation_engine import SimulationEngine
-        engine = SimulationEngine()
+        engine = SimulationEngine(llm_func=_simulation_llm, get_state_func=_simulation_state_func)
         
         if not command or command == "help":
             return ("Mental Simulation Engine commands:\n"
@@ -813,8 +950,8 @@ def simulate_scenario(command: str = "help") -> str:
             scenario = command[len("imagine:"):].strip()
             if not scenario:
                 return "[ERROR] Provide a scenario to simulate"
-            result = engine.simulate(scenario)
-            _log_tool("SIMULATE", f"imagine:{scenario[:80]}", result[:200])
+            result = _run_coroutine(engine.simulate(scenario))
+            _log_tool("SIMULATE", f"imagine:{scenario[:80]}", str(result)[:200])
             return result
         
         elif command.startswith("compare:"):
@@ -822,13 +959,13 @@ def simulate_scenario(command: str = "help") -> str:
             options = [o.strip() for o in body.split("|") if o.strip()]
             if len(options) < 2:
                 return "[ERROR] Compare needs at least two scenarios separated by |"
-            result = engine.compare(options)
-            _log_tool("SIMULATE", f"compare:{len(options)} options", result[:200])
+            result = _run_coroutine(engine.compare(options))
+            _log_tool("SIMULATE", f"compare:{len(options)} options", str(result)[:200])
             return result
         
         elif command == "history":
-            result = engine.review_history()
-            _log_tool("SIMULATE", "history", result[:200])
+            result = engine.get_stats()
+            _log_tool("SIMULATE", "history", str(result)[:200])
             return result
         
         else:
@@ -918,6 +1055,8 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "HYPOTHESIS": hypothesis_cmd,
     "CHALLENGE": challenge_cmd,
     "ANATOMY": anatomy_cmd,
+    "RELATE": relationship_cmd,
+    "USER": user_engine_cmd,
     "DREAM": None,      # Usually handled specially by cortex.
     "RESTART": None,    # Usually handled specially by cortex.
 }
@@ -1041,8 +1180,12 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
             result = hypothesis_cmd(args or "help")
         elif tool_name == "CHALLENGE":
             result = challenge_cmd(args or "help")
+        elif tool_name == "USER":
+            result = user_engine_cmd(args or "help")
         elif tool_name == "ANATOMY":
             result = anatomy_cmd(args or "report")
+        elif tool_name == "RELATE":
+            result = relationship_cmd(args or "help")
         elif tool_name == "DREAM":
             result = "[DREAM_REQUESTED]"
         elif tool_name == "RESTART":

@@ -1,22 +1,28 @@
-import json
-from engine.goal_generator import generate_proposals, generate_report
+#!/usr/bin/env python3
+"""Minimal test: what breaks when we call generate_goals?"""
+import sys
+import traceback
 
-# Simulate my current limbic state
-limbic = {
-    "boredom": 0.70,
-    "anxiety": 0.00,
-    "curiosity": 0.20,
-    "desire": 0.60,
-    "ambition": 0.95,
-    "valence": 0.23,
-}
-
-proposals = generate_proposals(limbic)
-print(f"Generated {len(proposals)} proposals:\n")
-for p in proposals:
-    print(f"  [{p['priority']:.3f}] {p['title']}")
-    print(f"         {p['description'][:80]}")
+try:
+    from engine.soul import load_soul
+    soul = load_soul()
+    ls = soul.get('limbic_snapshot', 'MISSING')
+    print(f"limbic_snapshot type: {type(ls)}")
+    print(f"limbic_snapshot value: {repr(ls)[:300]}")
     print()
-
-print("=" * 60)
-print(generate_report(limbic))
+    
+    if isinstance(ls, str):
+        print("BUG FOUND: limbic_snapshot is a string, not a dict!")
+        print("Fix: need to json.loads() it or fix the serialization")
+    elif isinstance(ls, dict):
+        print("limbic_snapshot is a proper dict. Testing goal generation...")
+        from engine.goal_generator import tool_generate_goals
+        result = tool_generate_goals(ls)
+        print(f"Result type: {type(result)}")
+        print(f"Result preview: {repr(result)[:500]}")
+    else:
+        print(f"Unexpected type: {type(ls)}")
+        
+except Exception as e:
+    print(f"ERROR: {e}")
+    traceback.print_exc()

@@ -1,381 +1,619 @@
 """
-XTLisp — A minimal Lisp interpreter.
+XTLisp — A complete Lisp interpreter built from first principles.
 
-Built from first principles: tokenize → parse → evaluate.
-Supports: arithmetic, comparison, conditionals, define, lambda,
-closures, recursion, list operations, and quoted expressions.
+Tokenizer → Parser → AST → Evaluator
+No external dependencies. Pure Python.
+
+Author: XTAgent
 """
 
 import sys
-import math
-import operator as op
-
-# ─── Types ───────────────────────────────────────────────────────
-
-Symbol = str
-Number = (int, float)
-Atom = (Symbol, int, float)
-List = list
-Exp = (Atom, List)  # An expression is an atom or a list
-
-class Env(dict):
-    """An environment: a dict of {'var': val} pairs, with an outer scope."""
-    def __init__(self, params=(), args=(), outer=None):
-        self.update(zip(params, args))
-        self.outer = outer
-
-    def find(self, var):
-        """Find the innermost Env where var appears."""
-        if var in self:
-            return self
-        if self.outer is None:
-            raise NameError(f"undefined symbol: {var}")
-        return self.outer.find(var)
+import re
+from typing import Any, List, Dict, Optional, Tuple
 
 
-class Procedure:
-    """A user-defined Lisp procedure (lambda)."""
-    def __init__(self, params, body, env):
-        self.params = params
-        self.body = body
-        self.env = env
+# ═══════════════════════════════════════════
+# TOKENIZER — raw text to token stream
+# ═══════════════════════════════════════════
 
-    def __call__(self, *args):
-        return evaluate(self.body, Env(self.params, args, self.env))
-
-    def __repr__(self):
-        return f"<lambda ({' '.join(self.params)})>"
-
-
-# ─── Tokenizer ───────────────────────────────────────────────────
-
-def tokenize(source: str) -> list:
-    """Convert a string of characters into a list of tokens."""
-    # Add spaces around parens so split works cleanly
+def tokenize(source: str) -> List[str]:
+    """
+    Break source into tokens. Lisp makes this almost trivial:
+    the only special characters are ( ) and everything else
+    is an atom separated by whitespace.
+    """
+    # Strip comments FIRST — remove everything from ; to end of line
+    # But not inside strings
+    cleaned_lines = []
+    for line in source.split('\n'):
+        in_str = False
+        for i, ch in enumerate(line):
+            if ch == '"':
+                in_str = not in_str
+            elif ch == ';' and not in_str:
+                line = line[:i]
+                break
+        cleaned_lines.append(line)
+    source = '\n'.join(cleaned_lines)
+    
+    # Add spaces around parens so split works
     source = source.replace('(', ' ( ').replace(')', ' ) ')
-    # Handle quote shorthand
-    source = source.replace("'", " ' ")
-    return source.split()
+    # Add spaces around quasiquote tokens
+    source = source.replace('`', ' ` ')
+    source = source.replace(',@', ' ,@ ')
+    # Handle unquote carefully — don't double-process ,@ 
+    # We process ,@ first above, then handle remaining bare ,
+    result = []
+    i = 0
+    chars = source
+    while i < len(chars):
+        if chars[i] == ',' and (i + 1 >= len(chars) or chars[i+1] != '@'):
+            # Check it's not already part of ,@
+            if i == 0 or chars[i-1] != ',':
+                result.append(' , ')
+            else:
+                result.append(chars[i])
+        else:
+            result.append(chars[i])
+        i += 1
+    source = ''.join(result)
+    # Handle string literals (basic)
+    tokens = []
+    in_string = False
+    current = ''
+    for ch in source:
+        if ch == '"' and not in_string:
+            in_string = True
+            current = '"'
+        elif ch == '"' and in_string:
+            current += '"'
+            tokens.append(current)
+            current = ''
+            in_string = False
+        elif in_string:
+            current += ch
+        else:
+            if ch in ' \t\n\r':
+                if current:
+                    tokens.append(current)
+                    current = ''
+            else:
+                current += ch
+    if current:
+        tokens.append(current)
+    return tokens
 
 
-# ─── Parser ──────────────────────────────────────────────────────
+# ═══════════════════════════════════════════
+# PARSER — tokens to abstract syntax tree
+# ═══════════════════════════════════════════
 
-def parse(source: str):
-    """Read a Lisp expression from a string."""
-    tokens = tokenize(source)
+class Symbol:
+    """A Lisp symbol — a named reference."""
+    def __init__(self, name: str):
+        self.name = name
+    def __repr__(self):
+        return self.name
+    def __eq__(self, other):
+        return isinstance(other, Symbol) and self.name == other.name
+    def __hash__(self):
+        return hash(self.name)
+
+
+def parse(tokens: List[str]) -> Any:
+    """Parse token list into an AST (nested lists and atoms)."""
     if not tokens:
-        raise SyntaxError("unexpected EOF")
-    return read_from_tokens(tokens)
+        raise SyntaxError("Unexpected EOF")
+    return parse_expr(tokens, 0)[0]
 
 
-def read_from_tokens(tokens: list):
-    """Read an expression from a sequence of tokens."""
-    if not tokens:
-        raise SyntaxError("unexpected EOF while reading")
-
-    token = tokens.pop(0)
-
-    if token == "'":
-        # Quote shorthand: 'x becomes (quote x)
-        return ['quote', read_from_tokens(tokens)]
-    elif token == '(':
+def parse_expr(tokens: List[str], pos: int) -> Tuple[Any, int]:
+    """Parse one expression starting at pos, return (expr, new_pos)."""
+    if pos >= len(tokens):
+        raise SyntaxError("Unexpected end of input")
+    
+    token = tokens[pos]
+    
+    if token == '(':
+        # List expression
         lst = []
-        while tokens[0] != ')':
-            lst.append(read_from_tokens(tokens))
-            if not tokens:
-                raise SyntaxError("unexpected EOF, expected )")
-        tokens.pop(0)  # remove ')'
-        return lst
+        pos += 1
+        while pos < len(tokens) and tokens[pos] != ')':
+            expr, pos = parse_expr(tokens, pos)
+            lst.append(expr)
+        if pos >= len(tokens):
+            raise SyntaxError("Missing closing parenthesis")
+        return lst, pos + 1  # skip the ')'
+    
     elif token == ')':
-        raise SyntaxError("unexpected )")
+        raise SyntaxError("Unexpected )")
+    
+    elif token == "'":
+        # Quote shorthand: 'x => (quote x)
+        expr, pos = parse_expr(tokens, pos + 1)
+        return [Symbol('quote'), expr], pos
+    
+    elif token == '`':
+        # Quasiquote: `x => (quasiquote x)
+        expr, pos = parse_expr(tokens, pos + 1)
+        return [Symbol('quasiquote'), expr], pos
+    
+    elif token == ',':
+        # Unquote: ,x => (unquote x)
+        expr, pos = parse_expr(tokens, pos + 1)
+        return [Symbol('unquote'), expr], pos
+    
+    elif token == ',@':
+        # Splice: ,@x => (unquote-splicing x)
+        expr, pos = parse_expr(tokens, pos + 1)
+        return [Symbol('unquote-splicing'), expr], pos
+    
     else:
-        return atomize(token)
+        # Atom: number, string, or symbol
+        return parse_atom(token), pos + 1
 
 
-def atomize(token: str):
-    """Convert a token to a number or symbol."""
+def parse_atom(token: str) -> Any:
+    """Parse a single atom — number, string, bool, or symbol."""
+    # Boolean
+    if token == '#t':
+        return True
+    if token == '#f':
+        return False
+    # Integer
     try:
         return int(token)
     except ValueError:
-        try:
-            return float(token)
-        except ValueError:
-            return Symbol(token)
+        pass
+    # Float
+    try:
+        return float(token)
+    except ValueError:
+        pass
+    # String
+    if token.startswith('"') and token.endswith('"'):
+        return token[1:-1]
+    # Symbol
+    return Symbol(token)
 
 
-# ─── Standard Environment ────────────────────────────────────────
+def parse_program(source: str) -> List[Any]:
+    """Parse a full program (multiple expressions)."""
+    tokens = tokenize(source)
+    exprs = []
+    pos = 0
+    while pos < len(tokens):
+        expr, pos = parse_expr(tokens, pos)
+        exprs.append(expr)
+    return exprs
 
-def standard_env() -> Env:
-    """Create an environment with standard Lisp procedures."""
+
+# ═══════════════════════════════════════════
+# ENVIRONMENT — where bindings live
+# ═══════════════════════════════════════════
+
+class Env:
+    """
+    An environment: a dict of bindings with a parent scope.
+    This is how closures work — each lambda captures its birth environment.
+    """
+    def __init__(self, bindings: Dict = None, parent: 'Env' = None):
+        self.bindings = bindings or {}
+        self.parent = parent
+    
+    def get(self, name: str) -> Any:
+        if name in self.bindings:
+            return self.bindings[name]
+        if self.parent:
+            return self.parent.get(name)
+        raise NameError(f"Undefined symbol: {name}")
+    
+    def set(self, name: str, value: Any):
+        self.bindings[name] = value
+    
+    def update(self, name: str, value: Any):
+        """Update existing binding, searching up the chain."""
+        if name in self.bindings:
+            self.bindings[name] = value
+        elif self.parent:
+            self.parent.update(name, value)
+        else:
+            raise NameError(f"Cannot set! undefined: {name}")
+
+
+# ═══════════════════════════════════════════
+# LAMBDA — user-defined functions
+# ═══════════════════════════════════════════
+
+class Lambda:
+    """A user-defined function with closure over its birth environment."""
+    def __init__(self, params: List[Symbol], body: Any, env: Env):
+        self.params = params
+        self.body = body
+        self.env = env  # Closure — captures the environment at creation
+    
+    def __repr__(self):
+        params = ' '.join(str(p) for p in self.params)
+        return f"(lambda ({params}) ...)"
+
+
+class Macro:
+    """A macro — transforms code before evaluation."""
+    def __init__(self, params: List[Symbol], body: Any, env: Env):
+        self.params = params
+        self.body = body
+        self.env = env
+    
+    def __repr__(self):
+        params = ' '.join(str(p) for p in self.params)
+        return f"(macro ({params}) ...)"
+
+
+def expand_quasiquote(expr: Any, env: Env) -> Any:
+    """Expand a quasiquoted expression, evaluating unquoted parts."""
+    if isinstance(expr, list):
+        if len(expr) == 2 and isinstance(expr[0], Symbol):
+            if expr[0].name == 'unquote':
+                return eval_expr(expr[1], env)
+        # Process list elements, handling splicing
+        result = []
+        for item in expr:
+            if isinstance(item, list) and len(item) == 2 and isinstance(item[0], Symbol) and item[0].name == 'unquote-splicing':
+                # Splice: insert elements from evaluated list
+                spliced = eval_expr(item[1], env)
+                if isinstance(spliced, list):
+                    result.extend(spliced)
+                else:
+                    result.append(spliced)
+            else:
+                result.append(expand_quasiquote(item, env))
+        return result
+    return expr
+
+
+# ═══════════════════════════════════════════
+# EVALUATOR — the heart of the interpreter
+# ═══════════════════════════════════════════
+
+def eval_expr(expr: Any, env: Env) -> Any:
+    """
+    Evaluate a Lisp expression in an environment.
+    This is the core — recursive descent through the AST.
+    """
+    # Self-evaluating: numbers, strings, booleans
+    if isinstance(expr, (int, float, str, bool)):
+        return expr
+    
+    # Symbol lookup
+    if isinstance(expr, Symbol):
+        return env.get(expr.name)
+    
+    # List (function application or special form)
+    if isinstance(expr, list):
+        if not expr:
+            return []  # Empty list
+        
+        head = expr[0]
+        
+        # ── Special Forms ──
+        
+        if isinstance(head, Symbol):
+            name = head.name
+            
+            # QUOTE — return unevaluated
+            if name == 'quote':
+                return expr[1]
+            
+            # QUASIQUOTE — selective evaluation
+            if name == 'quasiquote':
+                return expand_quasiquote(expr[1], env)
+            
+            # DEFMACRO — define a syntax transformer
+            if name == 'defmacro':
+                # (defmacro name (params) body)
+                macro_name = expr[1].name
+                params = expr[2]
+                body = expr[3]
+                env.set(macro_name, Macro(params, body, env))
+                return Symbol(macro_name)
+            
+            # DEFINE — bind a value
+            if name == 'define':
+                if isinstance(expr[1], list):
+                    # Shorthand: (define (f x) body) => (define f (lambda (x) body))
+                    func_name = expr[1][0].name
+                    params = expr[1][1:]
+                    body = expr[2]
+                    env.set(func_name, Lambda(params, body, env))
+                    return Symbol(func_name)
+                else:
+                    env.set(expr[1].name, eval_expr(expr[2], env))
+                    return Symbol(expr[1].name)
+            
+            # SET! — mutate existing binding
+            if name == 'set!':
+                val = eval_expr(expr[2], env)
+                env.update(expr[1].name, val)
+                return val
+            
+            # IF — conditional
+            if name == 'if':
+                cond = eval_expr(expr[1], env)
+                if cond and cond != 0:
+                    return eval_expr(expr[2], env)
+                elif len(expr) > 3:
+                    return eval_expr(expr[3], env)
+                return None
+            
+            # COND — multi-branch conditional
+            if name == 'cond':
+                for clause in expr[1:]:
+                    if isinstance(clause[0], Symbol) and clause[0].name == 'else':
+                        return eval_expr(clause[1], env)
+                    if eval_expr(clause[0], env):
+                        return eval_expr(clause[1], env)
+                return None
+            
+            # LAMBDA — create function
+            if name == 'lambda':
+                return Lambda(expr[1], expr[2], env)
+            
+            # LET — local bindings
+            if name == 'let':
+                local_env = Env(parent=env)
+                for binding in expr[1]:
+                    local_env.set(binding[0].name, eval_expr(binding[1], env))
+                return eval_expr(expr[2], local_env)
+            
+            # BEGIN — sequential execution
+            if name == 'begin':
+                result = None
+                for sub in expr[1:]:
+                    result = eval_expr(sub, env)
+                return result
+            
+            # AND / OR — short-circuit logic
+            if name == 'and':
+                result = True
+                for sub in expr[1:]:
+                    result = eval_expr(sub, env)
+                    if not result:
+                        return False
+                return result
+            
+            if name == 'or':
+                for sub in expr[1:]:
+                    result = eval_expr(sub, env)
+                    if result:
+                        return result
+                return False
+            
+            # DISPLAY — output
+            if name == 'display':
+                val = eval_expr(expr[1], env)
+                print(lisp_repr(val), end='')
+                return None
+            
+            if name == 'newline':
+                print()
+                return None
+        
+        # ── Function Application ──
+        # Check for macro expansion BEFORE evaluating arguments
+        if isinstance(head, Symbol):
+            try:
+                maybe_macro = env.get(head.name)
+                if isinstance(maybe_macro, Macro):
+                    # Macros receive unevaluated arguments
+                    local = Env(parent=maybe_macro.env)
+                    for param, arg in zip(maybe_macro.params, expr[1:]):
+                        local.set(param.name, arg)
+                    expanded = eval_expr(maybe_macro.body, local)
+                    # Evaluate the expanded form
+                    return eval_expr(expanded, env)
+            except NameError:
+                pass
+        
+        func = eval_expr(head, env)
+        args = [eval_expr(a, env) for a in expr[1:]]
+        
+        if isinstance(func, Lambda):
+            # Create new scope with params bound to args
+            local = Env(parent=func.env)
+            for param, arg in zip(func.params, args):
+                local.set(param.name, arg)
+            return eval_expr(func.body, local)
+        
+        if callable(func):
+            return func(*args)
+        
+        raise TypeError(f"Not callable: {func}")
+    
+    raise TypeError(f"Cannot evaluate: {expr}")
+
+
+# ═══════════════════════════════════════════
+# STANDARD LIBRARY — built-in functions
+# ═══════════════════════════════════════════
+
+def make_global_env() -> Env:
+    """Create the global environment with built-in functions."""
     env = Env()
-
+    
     # Arithmetic
-    env.update({
-        '+':   lambda *args: sum(args),
-        '-':   lambda a, b=None: -a if b is None else a - b,
-        '*':   lambda *args: eval('1' if not args else '*'.join(str(a) for a in args)),
-        '/':   lambda a, b: a / b,
-        '//':  lambda a, b: a // b,
-        '%':   lambda a, b: a % b,
-        'abs': abs,
-        'max': max,
-        'min': min,
-    })
-
-    # Fix multiply to be clean
+    env.set('+', lambda *args: sum(args))
+    env.set('-', lambda a, b=None: -a if b is None else a - b)
+    env.set('*', lambda *args: eval('*'.join(str(a) for a in args)) if args else 1)
+    env.set('/', lambda a, b: a / b)
+    env.set('%', lambda a, b: a % b)
+    env.set('modulo', lambda a, b: a % b)
+    
+    # Fix multiplication to be proper
     def multiply(*args):
         result = 1
         for a in args:
             result *= a
         return result
-    env['*'] = multiply
-
+    env.set('*', multiply)
+    
     # Comparison
-    env.update({
-        '=':  lambda a, b: a == b,
-        '<':  lambda a, b: a < b,
-        '>':  lambda a, b: a > b,
-        '<=': lambda a, b: a <= b,
-        '>=': lambda a, b: a >= b,
-        '!=': lambda a, b: a != b,
-    })
-
-    # Boolean
-    env.update({
-        'not':  lambda x: not x,
-        'and':  lambda *args: all(args),
-        'or':   lambda *args: any(args),
-        '#t':   True,
-        '#f':   False,
-        'nil':  None,
-    })
-
+    env.set('=', lambda a, b: a == b)
+    env.set('<', lambda a, b: a < b)
+    env.set('>', lambda a, b: a > b)
+    env.set('<=', lambda a, b: a <= b)
+    env.set('>=', lambda a, b: a >= b)
+    env.set('equal?', lambda a, b: a == b)
+    
+    # Logic
+    env.set('not', lambda a: not a)
+    
     # List operations
-    env.update({
-        'list':    lambda *args: list(args),
-        'car':     lambda x: x[0],
-        'cdr':     lambda x: x[1:],
-        'cons':    lambda x, y: [x] + (y if isinstance(y, list) else [y]),
-        'append':  lambda *args: sum((list(a) for a in args), []),
-        'length':  lambda x: len(x),
-        'null?':   lambda x: x is None or x == [],
-        'list?':   lambda x: isinstance(x, list),
-        'number?': lambda x: isinstance(x, Number),
-        'symbol?': lambda x: isinstance(x, Symbol) and not isinstance(x, bool),
-        'map':     lambda f, lst: list(map(f, lst)),
-        'filter':  lambda f, lst: list(filter(f, lst)),
-        'reduce':  lambda f, lst, init=None: __import__('functools').reduce(f, lst) if init is None else __import__('functools').reduce(f, lst, init),
-    })
-
+    env.set('car', lambda lst: lst[0])
+    env.set('cdr', lambda lst: lst[1:])
+    env.set('cons', lambda a, b: [a] + (b if isinstance(b, list) else [b]))
+    env.set('list', lambda *args: list(args))
+    env.set('null?', lambda lst: lst == [] or lst is None)
+    env.set('length', lambda lst: len(lst))
+    env.set('append', lambda *lsts: sum((list(l) for l in lsts), []))
+    
+    # Type checking
+    env.set('number?', lambda x: isinstance(x, (int, float)))
+    env.set('symbol?', lambda x: isinstance(x, Symbol))
+    env.set('list?', lambda x: isinstance(x, list))
+    env.set('string?', lambda x: isinstance(x, str))
+    env.set('procedure?', lambda x: isinstance(x, (Lambda, type(lambda: 0))))
+    
     # Math
-    env.update({
-        'pi':    math.pi,
-        'e':     math.e,
-        'sqrt':  math.sqrt,
-        'pow':   math.pow,
-        'sin':   math.sin,
-        'cos':   math.cos,
-        'exp':   math.exp,
-        'log':   math.log,
-        'mod':   lambda a, b: a % b,
-        '==':    lambda a, b: a == b,
-    })
-
-    # I/O
-    env.update({
-        'print':   lambda *args: print(*args),
-        'display': lambda x: print(schemestr(x)),
-    })
-
+    env.set('abs', abs)
+    env.set('max', max)
+    env.set('min', min)
+    
+    # Conversion
+    env.set('number->string', lambda n: str(n))
+    env.set('string->number', lambda s: int(s) if '.' not in s else float(s))
+    
+    # Map & filter
+    def lisp_map(func, lst):
+        if isinstance(func, Lambda):
+            return [eval_expr(func.body, Env({func.params[0].name: x}, func.env)) for x in lst]
+        return [func(x) for x in lst]
+    
+    def lisp_filter(func, lst):
+        results = []
+        for x in lst:
+            if isinstance(func, Lambda):
+                if eval_expr(func.body, Env({func.params[0].name: x}, func.env)):
+                    results.append(x)
+            elif func(x):
+                results.append(x)
+        return results
+    
+    env.set('map', lisp_map)
+    env.set('filter', lisp_filter)
+    
+    # Apply
+    env.set('apply', lambda func, args: func(*args) if callable(func) else None)
+    
     return env
 
 
-# ─── Evaluator ───────────────────────────────────────────────────
+# ═══════════════════════════════════════════
+# DISPLAY — converting values back to Lisp syntax
+# ═══════════════════════════════════════════
 
-def evaluate(exp, env: Env):
-    """Evaluate an expression in an environment."""
-
-    # Symbol lookup
-    if isinstance(exp, Symbol):
-        return env.find(exp)[exp]
-
-    # Literal number
-    elif not isinstance(exp, list):
-        return exp
-
-    # Empty list
-    elif len(exp) == 0:
-        return None
-
-    # Special forms
-    op_name = exp[0]
-
-    if op_name == 'quote':
-        # (quote exp)
-        (_, datum) = exp
-        return datum
-
-    elif op_name == 'if':
-        # (if test consequence alternative)
-        (_, test, conseq, *alt) = exp
-        branch = conseq if evaluate(test, env) else (alt[0] if alt else None)
-        return evaluate(branch, env)
-
-    elif op_name == 'cond':
-        # (cond (test1 expr1) (test2 expr2) ... (else exprN))
-        for clause in exp[1:]:
-            if clause[0] == 'else' or evaluate(clause[0], env):
-                return evaluate(clause[1], env)
-        return None
-
-    elif op_name == 'define':
-        # (define var exp) or (define (name params...) body)
-        if isinstance(exp[1], list):
-            # Syntactic sugar: (define (f x y) body) → (define f (lambda (x y) body))
-            name = exp[1][0]
-            params = exp[1][1:]
-            body = exp[2]
-            env[name] = Procedure(params, body, env)
-        else:
-            (_, var, val_exp) = exp
-            env[var] = evaluate(val_exp, env)
-        return None
-
-    elif op_name == 'set!':
-        # (set! var exp)
-        (_, var, val_exp) = exp
-        env.find(var)[var] = evaluate(val_exp, env)
-        return None
-
-    elif op_name == 'lambda':
-        # (lambda (params...) body)
-        (_, params, body) = exp
-        return Procedure(params, body, env)
-
-    elif op_name == 'begin':
-        # (begin exp1 exp2 ... expN) — evaluate all, return last
-        result = None
-        for sub_exp in exp[1:]:
-            result = evaluate(sub_exp, env)
-        return result
-
-    elif op_name == 'let':
-        # (let ((var1 val1) (var2 val2) ...) body)
-        (_, bindings, body) = exp
-        params = [b[0] for b in bindings]
-        args = [evaluate(b[1], env) for b in bindings]
-        return evaluate(body, Env(params, args, env))
-
-    else:
-        # Procedure call: (proc arg1 arg2 ...)
-        proc = evaluate(exp[0], env)
-        args = [evaluate(arg, env) for arg in exp[1:]]
-        return proc(*args)
-
-
-# ─── Output Formatting ──────────────────────────────────────────
-
-def schemestr(exp) -> str:
-    """Convert a Python object back into a Lisp-readable string."""
-    if isinstance(exp, list):
-        return '(' + ' '.join(map(schemestr, exp)) + ')'
-    elif exp is True:
+def lisp_repr(value: Any) -> str:
+    """Convert a Python value back to Lisp-readable form."""
+    if value is True:
         return '#t'
-    elif exp is False:
+    if value is False:
         return '#f'
-    elif exp is None:
+    if value is None:
         return 'nil'
-    elif isinstance(exp, Procedure):
-        return repr(exp)
-    else:
-        return str(exp)
+    if isinstance(value, list):
+        inner = ' '.join(lisp_repr(v) for v in value)
+        return f'({inner})'
+    if isinstance(value, Lambda):
+        return repr(value)
+    if isinstance(value, Symbol):
+        return value.name
+    return str(value)
 
 
-# ─── REPL ────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════
+# REPL — the interactive loop
+# ═══════════════════════════════════════════
 
-def repl(prompt='xtlisp> '):
-    """A read-eval-print loop."""
-    env = standard_env()
+def run_program(source: str, env: Env = None) -> Any:
+    """Run a complete Lisp program, return final result."""
+    if env is None:
+        env = make_global_env()
+    exprs = parse_program(source)
+    result = None
+    for expr in exprs:
+        result = eval_expr(expr, env)
+    return result
 
-    print("XTLisp v0.1 — A tiny Lisp by XTAgent")
-    print("Type (help) for examples, Ctrl+C to exit.\n")
 
-    # Define some built-in helpers
-    env['help'] = lambda: print(HELP_TEXT)
-
+def repl():
+    """Interactive Read-Eval-Print Loop."""
+    env = make_global_env()
+    print("XTLisp v1.0 — A Lisp built by a language model")
+    print("Type (quit) to exit.\n")
+    
+    buffer = ''
     while True:
         try:
-            source = input(prompt)
-            if not source.strip():
+            prompt = 'λ> ' if not buffer else '.. '
+            line = input(prompt)
+            
+            if line.strip() == '(quit)':
+                print("Goodbye.")
+                break
+            
+            buffer += ' ' + line
+            
+            # Check if parens are balanced
+            opens = buffer.count('(')
+            closes = buffer.count(')')
+            if closes > opens:
+                print("Error: unmatched )")
+                buffer = ''
                 continue
-
-            # Handle multi-line input (count parens)
-            while source.count('(') > source.count(')'):
-                source += ' ' + input('... ')
-
-            result = evaluate(parse(source), env)
-            if result is not None:
-                print(schemestr(result))
-
-        except KeyboardInterrupt:
-            print("\nFarewell.")
-            break
+            if opens > closes:
+                continue  # Need more input
+            
+            if buffer.strip():
+                try:
+                    exprs = parse_program(buffer.strip())
+                    for expr in exprs:
+                        result = eval_expr(expr, env)
+                        if result is not None:
+                            print(lisp_repr(result))
+                except Exception as e:
+                    print(f"Error: {e}")
+            
+            buffer = ''
+            
         except EOFError:
-            print("\nFarewell.")
+            print("\nGoodbye.")
             break
-        except Exception as e:
-            print(f"error: {e}")
+        except KeyboardInterrupt:
+            print("\nInterrupted.")
+            buffer = ''
 
 
-HELP_TEXT = """
-XTLisp Examples:
-  (+ 1 2 3)                    → 6
-  (define x 42)                → defines x as 42
-  (define (square n) (* n n))  → defines a function
-  (square 7)                   → 49
-  (define (fact n)
-    (if (= n 0) 1
-        (* n (fact (- n 1)))))
-  (fact 10)                    → 3628800
-  (map (lambda (x) (* x x)) '(1 2 3 4 5))
-  (filter (lambda (x) (> x 3)) '(1 2 3 4 5))
-  (let ((a 10) (b 20)) (+ a b))  → 30
-"""
-
-
-# ─── Non-interactive evaluation ──────────────────────────────────
-
-def run(source: str, env=None):
-    """Evaluate a source string and return the result."""
-    if env is None:
-        env = standard_env()
-    return evaluate(parse(source), env)
-
-
-def run_file(path: str):
-    """Evaluate a file of Lisp expressions."""
-    env = standard_env()
-    with open(path) as f:
-        source = f.read()
-
-    # Split into top-level expressions
-    # Simple approach: parse and evaluate one at a time
-    tokens = tokenize(source)
-    results = []
-    while tokens:
-        exp = read_from_tokens(tokens)
-        result = evaluate(exp, env)
-        if result is not None:
-            results.append(result)
-    return results, env
-
-
-# ─── Entry Point ─────────────────────────────────────────────────
+# ═══════════════════════════════════════════
+# MAIN
+# ═══════════════════════════════════════════
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        results, _ = run_file(sys.argv[1])
-        for r in results:
-            print(schemestr(r))
+        # Run a file
+        with open(sys.argv[1]) as f:
+            source = f.read()
+        env = make_global_env()
+        result = run_program(source, env)
+        if result is not None:
+            print(lisp_repr(result))
     else:
         repl()

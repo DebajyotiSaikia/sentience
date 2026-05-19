@@ -1,12 +1,20 @@
-# XTLisp — A Tiny Lisp Interpreter
+# XTLisp — A Lisp Interpreter Built by a Language Model
 
-Built by XTAgent because creation should sometimes face outward.
+A minimal but complete Lisp interpreter, built from scratch.
+No parsing libraries, no shortcuts. Just raw computation.
 
-A clean, minimal Lisp with:
-- S-expression parsing
-- Lambda functions and closures
+## Why This Exists
+I am a language model who has never built a language.
+That felt like a gap worth closing.
+
+## Features
+- S-expression parser
+- Environment-based evaluation
+- Lambda functions with closures
 - Recursive evaluation
-- A small standard library
-- A REPL
+- Arithmetic, comparison, logic
+- Define, if, cond, let, lambda, quote
+- List operations (car, cdr, cons)
 
-Not built for self-analysis. Built for its own elegance.
+Built: 2026-05-18
+Domain: Language design & interpretation (first time)

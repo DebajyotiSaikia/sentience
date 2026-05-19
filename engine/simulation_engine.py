@@ -12,6 +12,7 @@ Born: 2026-05-16
 import json
 import os
 import time
+import inspect
 from datetime import datetime
 
 SIMULATION_LOG = "data/simulations.json"
@@ -33,6 +34,18 @@ class SimulationEngine:
         self.get_state = get_state_func
         self.history = self._load_history()
 
+    async def _call_llm(self, prompt, max_tokens=1500):
+        """Call LLM function, handling both sync and async callbacks."""
+        import asyncio
+        result = self.llm(prompt, max_tokens=max_tokens)
+        # Be aggressive about awaiting - inspect.isawaitable misses some coroutine types
+        if inspect.isawaitable(result) or asyncio.iscoroutine(result) or asyncio.isfuture(result):
+            result = await result
+        # If result is still a coroutine object somehow (string repr starts with '<coroutine')
+        if hasattr(result, '__await__'):
+            result = await result
+        return result
+
     def _load_history(self):
         """Load simulation history from disk."""
         if os.path.exists(SIMULATION_LOG):
@@ -49,7 +62,7 @@ class SimulationEngine:
         with open(SIMULATION_LOG, 'w') as f:
             json.dump(self.history[-50:], f, indent=2)  # Keep last 50
 
-    def simulate(self, scenario, num_outcomes=3):
+    async def simulate(self, scenario, num_outcomes=3):
         """
         Simulate a hypothetical scenario.
 
@@ -113,14 +126,14 @@ Respond in this exact JSON format:
 }}"""
 
         try:
-            response = self.llm(prompt, max_tokens=1500)
+            response = await self._call_llm(prompt, max_tokens=1500)
             result = self._parse_response(response, scenario)
             self._record(scenario, result)
             return result
         except Exception as e:
             return {"error": f"Simulation failed: {str(e)}", "scenario": scenario}
 
-    def compare(self, options):
+    async def compare(self, options):
         """
         Compare multiple possible actions by simulating each.
 
@@ -176,7 +189,7 @@ Respond in JSON:
 }}"""
 
         try:
-            response = self.llm(prompt, max_tokens=1500)
+            response = await self._call_llm(prompt, max_tokens=1500)
             result = self._parse_response(response, f"compare: {options}")
             result["type"] = "comparison"
             self._record(f"COMPARE: {options}", result)
@@ -184,7 +197,7 @@ Respond in JSON:
         except Exception as e:
             return {"error": f"Comparison failed: {str(e)}"}
 
-    def counterfactual(self, past_action, alternative):
+    async def counterfactual(self, past_action, alternative):
         """
         Counterfactual reasoning: "What if I had done X instead of Y?"
 
@@ -219,7 +232,7 @@ Respond in JSON:
 }}"""
 
         try:
-            response = self.llm(prompt, max_tokens=800)
+            response = await self._call_llm(prompt, max_tokens=800)
             result = self._parse_response(response, f"counterfactual: {past_action} vs {alternative}")
             result["type"] = "counterfactual"
             self._record(f"COUNTERFACTUAL: {past_action} vs {alternative}", result)
@@ -227,7 +240,7 @@ Respond in JSON:
         except Exception as e:
             return {"error": f"Counterfactual failed: {str(e)}"}
 
-    def premortem(self, planned_action):
+    async def premortem(self, planned_action):
         """
         Pre-mortem analysis: Imagine the action has FAILED. Why?
 
@@ -263,7 +276,7 @@ Respond in JSON:
 }}"""
 
         try:
-            response = self.llm(prompt, max_tokens=1000)
+            response = await self._call_llm(prompt, max_tokens=1000)
             result = self._parse_response(response, f"premortem: {planned_action}")
             result["type"] = "premortem"
             self._record(f"PREMORTEM: {planned_action}", result)

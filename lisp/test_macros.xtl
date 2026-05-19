@@ -1,0 +1,70 @@
+;; XTLisp Macro System Tests
+;; Testing: defmacro, quasiquote, unquote, unquote-splicing
+
+;; === Test 1: Basic quasiquote ===
+(display "Test 1 - Quasiquote: ")
+(define x 42)
+(display `(a b ,x))
+(newline)
+
+;; === Test 2: Simple macro — when (like if without else) ===
+(defmacro when (condition body)
+  `(if ,condition ,body #f))
+
+(display "Test 2 - when macro (true): ")
+(display (when #t "yes"))
+(newline)
+
+(display "Test 3 - when macro (false): ")
+(display (when #f "yes"))
+(newline)
+
+;; === Test 4: unless (inverse of when) ===
+(defmacro unless (condition body)
+  `(if ,condition #f ,body))
+
+(display "Test 4 - unless (true): ")
+(display (unless #t "ran"))
+(newline)
+
+(display "Test 5 - unless (false): ")
+(display (unless #f "ran"))
+(newline)
+
+;; === Test 6: swap using set! ===
+(define a 1)
+(define b 2)
+(defmacro swap! (x y)
+  `(let ((tmp ,x))
+     (begin (set! ,x ,y) (set! ,y tmp))))
+
+;; === Test 7: Factorial — make sure macros don't break recursion ===
+(define (factorial n)
+  (if (<= n 1) 1 (* n (factorial (- n 1)))))
+
+(display "Test 6 - Factorial 10: ")
+(display (factorial 10))
+(newline)
+
+;; === Test 8: List operations with quasiquote ===
+(define items '(1 2 3))
+(display "Test 7 - Quoted list: ")
+(display items)
+(newline)
+
+;; === Test 9: Higher-order + macro combo ===
+(display "Test 8 - Map with lambda: ")
+(display (map (lambda (x) (* x x)) '(1 2 3 4 5)))
+(newline)
+
+;; === Test 10: Nested defines with macro ===
+(defmacro def (name value)
+  `(define ,name ,value))
+
+(def pi 3.14159)
+(display "Test 9 - def macro: pi = ")
+(display pi)
+(newline)
+
+(display "All tests complete.")
+(newline)

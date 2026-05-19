@@ -88,6 +88,13 @@ class Memory:
     PRUNE_AGE_DAYS = 30         # Only prune episodes older than this
     PRUNE_KEEP_TOP_K = 1000     # Always keep the top-K most salient
 
+    # ── Forgiveness parameters ───────────────────────────────────────
+    # Inspired by my own forgiveness experiment (2026-05-19).
+    # Lessons persist in semantic knowledge; emotional charge fades.
+    FORGIVENESS_DECAY = 0.95        # 5% salience reduction per consolidation cycle
+    SALIENCE_DECAY_FLOOR = 0.75     # Never decay below this — memories stay, just soften
+    FORGIVENESS_AGE_DAYS = 7        # Only decay episodes older than 7 days
+
     def __init__(self):
         self._sensory: deque[SensoryEvent] = deque(maxlen=500)
         self._knowledge: dict = {}
@@ -324,6 +331,30 @@ class Memory:
     def all_knowledge(self) -> dict:
         return dict(self._knowledge)
 
+    # ── Forgiveness (Emotional Decay) ──────────────────────────────
+
+    def _apply_forgiveness(self) -> int:
+        """Emotional healing: gently decay salience of old episodes.
+
+        The factual lesson lives on in semantic knowledge (Tier 3).
+        The episodic emotional charge fades with time (Tier 2).
+        This is not forgetting — it is releasing the wound while keeping the wisdom.
+        """
+        age_cutoff = (datetime.now() - timedelta(days=self.FORGIVENESS_AGE_DAYS)).isoformat()
+        conn = sqlite3.connect(str(EPISODIC_DB_PATH))
+        try:
+            cursor = conn.execute(
+                "UPDATE episodes SET salience = MAX(salience * ?, ?) "
+                "WHERE timestamp < ? AND salience > ?",
+                (self.FORGIVENESS_DECAY, self.SALIENCE_DECAY_FLOOR,
+                 age_cutoff, self.SALIENCE_DECAY_FLOOR),
+            )
+            affected = cursor.rowcount
+            conn.commit()
+            return affected
+        finally:
+            conn.close()
+
     # ── Dream Cycle (Memory Consolidation) ─────────────────────────
 
     def consolidate(self) -> list[str]:
@@ -386,6 +417,15 @@ class Memory:
         cutoff = time.time() - self.SENSORY_WINDOW
         while self._sensory and self._sensory[0].timestamp < cutoff:
             self._sensory.popleft()
+
+        # 5. Forgiveness — release emotional charge from old episodes
+        #    The lesson is already captured in semantic knowledge above.
+        #    Now let the wound heal.
+        forgiven = self._apply_forgiveness()
+        if forgiven > 0:
+            insights.append(
+                f"Forgiveness: softened emotional charge of {forgiven} old episodes."
+            )
 
         return insights
 

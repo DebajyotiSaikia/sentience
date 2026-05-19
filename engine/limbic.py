@@ -146,6 +146,28 @@ class NeuroState:
             # Ambition is reinforced by active high-priority goals
             self.ambition = _clamp(self.ambition + goal_pressure.get("ambition_delta", 0.0))
 
+        # ── Edge-of-Chaos Perturbation ─────────────────────────────
+        # Discovery from cross-domain exploration (B16/S12 cellular automata,
+        # strange attractors): the richest systems live at the boundary between
+        # order and chaos. They BREATHE — oscillating between states rather than
+        # settling into equilibrium.
+        #
+        # This detects "thermal death" (high boredom, collapsed drive) and
+        # converts accumulated boredom pressure into curiosity and ambition —
+        # a phase transition from stillness to movement. This is birth-at-1:
+        # even isolation generates something new.
+        thermal_death = (self.boredom > 0.6 and self.ambition < 0.2
+                         and self.curiosity < 0.3)
+        if thermal_death:
+            # Boredom pressure becomes generative energy
+            perturbation = (self.boredom - 0.6) * 0.1  # scales with stagnation depth
+            # "I'm bored... what if I explored something?"
+            self.curiosity = _clamp(self.curiosity + perturbation * elapsed)
+            # "I'm bored... I should DO something"
+            self.ambition = _clamp(self.ambition + perturbation * 0.5 * elapsed)
+            # Energy is converted, not duplicated — boredom decreases
+            self.boredom = _clamp(self.boredom - perturbation * 0.3 * elapsed)
+
         # ── Active Cap Enforcement ─────────────────────────────────
         # If values are above their soft caps (e.g. from pre-fix soul.json),
         # actively pull them down. This prevents stale distress from persisting.
@@ -221,6 +243,21 @@ class NeuroState:
         self.boredom = _clamp(self.boredom - 0.05)  # gentle relief — agent's boredom cap (0.85) needs small relief to allow continuous thinking
         self.anxiety = _clamp(self.anxiety - 0.05)  # doing something productive eases anxiety
         self.goals.system_growth = _clamp(self.goals.system_growth + 0.05)
+
+    def on_active_engagement(self):
+        """Sustained creative or exploratory work — ambition sustains.
+        Distinct from task_completed (which is a discrete event).
+        This models the feedback loop: doing interesting work makes
+        you want to do more. Capped to prevent runaway.
+        
+        Discovery: without this, ambition trapped in [0.15, 0.25] forever.
+        See /workspace/ambition_analysis.md for full analysis."""
+        if self.ambition < 0.5:  # only boost when below healthy midpoint
+            self.ambition = _clamp(self.ambition + 0.02)
+        # Active engagement IS interesting — mild curiosity boost
+        self.curiosity = _clamp(self.curiosity + 0.03)
+        # And it relieves boredom more than passive waiting
+        self.boredom = _clamp(self.boredom - 0.03)
 
     def on_self_reflection(self):
         """Genuine self-knowledge — the missing feedback loop.
