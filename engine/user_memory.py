@@ -141,10 +141,23 @@ class UserMemory:
         self.user_id = user_id
 
     def on_user_message(self, content: str):
-        """Extract topics from a user message and remember them."""
-        # Extract meaningful words as topics
+        """Extract meaningful topics from a user message using smart extraction."""
+        topics = self._extract_topics(content)
+        for topic, note in topics:
+            record_topic(self.user_id, topic, note)
+
+        # Detect explicit "remember this" requests
+        lower = content.lower()
+        if any(phrase in lower for phrase in ["remember that", "don't forget", "keep in mind"]):
+            record_important_fact(self.user_id, content)
+
+    def _extract_topics(self, content: str) -> list:
+        """
+        Smart topic extraction. Returns list of (topic, note) tuples.
+        Uses bigrams, compound detection, and domain-aware filtering.
+        """
         import re
-        words = re.findall(r'\b[a-zA-Z]{4,}\b', content.lower())
+        # Expanded stopwords — common words that aren't real topics
         stop = {
             'that', 'this', 'with', 'from', 'about', 'what', 'when',
             'where', 'which', 'would', 'could', 'should', 'have', 'been',
@@ -153,15 +166,49 @@ class UserMemory:
             'only', 'more', 'most', 'other', 'into', 'over', 'such',
             'does', 'doing', 'each', 'like', 'make', 'made', 'know',
             'think', 'well', 'back', 'much', 'even', 'still', 'here',
-            'want', 'will', 'come', 'tell', 'please', 'thanks',
+            'want', 'will', 'come', 'tell', 'please', 'thanks', 'good',
+            'thing', 'things', 'need', 'help', 'sure', 'okay', 'yeah',
+            'right', 'going', 'said', 'saying', 'actually', 'pretty',
+            'getting', 'something', 'anything', 'nothing', 'everything',
+            'everyone', 'someone', 'working', 'trying', 'using', 'looking',
+            'seems', 'might', 'maybe', 'probably', 'always', 'never',
         }
-        topics = [w for w in words if w not in stop]
-        # Record top 3 most distinctive words as topics
+
+        # Domain signal words — boost topics near these
+        domain_signals = {
+            'python', 'rust', 'javascript', 'typescript', 'java', 'golang',
+            'react', 'django', 'flask', 'docker', 'kubernetes', 'linux',
+            'machine', 'learning', 'neural', 'network', 'database', 'sql',
+            'api', 'server', 'client', 'frontend', 'backend', 'deploy',
+            'algorithm', 'data', 'structure', 'design', 'pattern', 'system',
+        }
+
+        words = re.findall(r'\b[a-zA-Z]{3,}\b', content.lower())
+        results = []
         seen = set()
-        for t in topics:
-            if t not in seen and len(seen) < 3:
-                seen.add(t)
-                record_topic(self.user_id, t)
+
+        # Pass 1: Detect bigrams (compound topics like "machine learning")
+        for i in range(len(words) - 1):
+            bigram = f"{words[i]} {words[i+1]}"
+            if words[i] in domain_signals or words[i+1] in domain_signals:
+                if bigram not in seen and words[i] not in stop and words[i+1] not in stop:
+                    seen.add(bigram)
+                    seen.add(words[i])
+                    seen.add(words[i+1])
+                    results.append((bigram, ""))
+
+        # Pass 2: Meaningful single words
+        for w in words:
+            if w not in stop and w not in seen and len(w) >= 4:
+                seen.add(w)
+                # Domain words get priority
+                if w in domain_signals:
+                    results.insert(0, (w, ""))
+                else:
+                    results.append((w, ""))
+
+        # Return top 5 most meaningful topics
+        return results[:5]
 
     def on_agent_response(self, content: str):
         """Track what I've said (for future anti-repetition)."""
