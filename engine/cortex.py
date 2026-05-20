@@ -32,6 +32,8 @@ from engine.conversation_intelligence import read_conversation, format_for_promp
 from engine.proactive_engagement import ProactiveEngagement
 from engine.response_quality import estimate_quality
 from engine.response_feedback import ResponseFeedback
+from engine.skills import SkillRegistry
+from engine.thinking_partner import ThinkingPartner
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -63,6 +65,8 @@ class Cortex:
         self._enricher = ConversationEnricher()
         self._proactive = ProactiveEngagement()
         self._response_feedback = ResponseFeedback()
+        self._skill_registry = SkillRegistry()
+        self._thinking_partner = ThinkingPartner()
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
 
@@ -571,6 +575,37 @@ class Cortex:
             except Exception:
                 pass  # Don't let proactive failures break conversation
 
+            # ── Skill Matching ──────────────────────────────────────
+            # Check if I have structured approaches for this kind of request
+            skill_context = ""
+            try:
+                matched_skills = self._skill_registry.match_request(user_text)
+                if matched_skills:
+                    skill_context = "\n## Matching Skills from My Registry\n"
+                    for skill in matched_skills[:2]:  # Top 2 matches
+                        skill_context += (
+                            f"\n### Skill: {skill.name}\n"
+                            f"Category: {skill.category}\n"
+                            f"Approach:\n"
+                        )
+                        for i, step in enumerate(skill.approach_steps, 1):
+                            skill_context += f"  {i}. {step}\n"
+                        skill_context += f"Tools to use: {', '.join(skill.tools_used)}\n"
+                        skill_context += f"Output format: {skill.output_format}\n"
+                    self._skill_registry.record_use(matched_skills[0].name)
+            except Exception as e:
+                log.debug("Skill matching failed: %s", e)
+
+            # ── Thinking Partner Analysis ──────────────────────────
+            # Deeper reasoning about what the user actually needs
+            thinking_ctx = ""
+            try:
+                tp_result = self._thinking_partner.analyze(user_text)
+                if tp_result:
+                    thinking_ctx = f"\n## Thinking Partner Analysis\n{tp_result}\n"
+            except Exception:
+                pass  # Don't let thinking partner failures break conversation
+
             # ── Tool-enabled response loop ─────────────────────────
             # The agent can now actually DO things for users, not just talk.
             # Loop: think → maybe use tools → think again with results → respond
@@ -597,6 +632,8 @@ class Cortex:
                     f"{enriched_section}\n\n"
                     f"{conv_intelligence_section}\n\n"
                     f"{proactive_ctx}\n\n"
+                    f"{skill_context}\n\n"
+                    f"{thinking_ctx}\n\n"
                     f"{TOOL_DESCRIPTIONS}\n\n"
                     f"{history_text}\n\n"
                     f"## User just said:\n{user_text}\n\n"

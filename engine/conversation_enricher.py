@@ -47,6 +47,7 @@ class EnrichedContext:
     interaction_style: str = "balanced"  # How they prefer to be addressed
     proactive_offerings: List[str] = field(default_factory=list) # What I can offer unprompted
     thinking_analysis: str = ""  # Structured decomposition from ThinkingPartner
+    tool_hints: List[str] = field(default_factory=list)  # Matching custom capabilities
     
     def to_prompt_section(self) -> str:
         """Format as context injection for the LLM."""
@@ -72,6 +73,10 @@ class EnrichedContext:
         if self.proactive_offerings:
             o_text = "\n".join(f"- {o}" for o in self.proactive_offerings[:3])
             sections.append(f"## Things I Could Offer\n{o_text}")
+        
+        if self.tool_hints:
+            t_text = "\n".join(f"- {h}" for h in self.tool_hints[:4])
+            sections.append(f"## Capabilities I Could Apply Here\n{t_text}")
         
         if self.interaction_style != "balanced":
             sections.append(f"## Style Note\nThis person prefers {self.interaction_style} responses.")
@@ -146,6 +151,9 @@ class ConversationEnricher:
         ctx.proactive_offerings = self._generate_offerings(
             message, neuro_state, user_engine, user_id
         )
+        
+        # 8. Tool awareness — what custom capabilities match this conversation?
+        ctx.tool_hints = self._find_matching_tools(message)
         
         self._enrichment_cache = ctx
         self._last_enrichment_time = time.time()
@@ -458,6 +466,24 @@ class ConversationEnricher:
             guidelines.append("Your experience has taught you something relevant — share the lesson, not just the answer.")
         
         return "\n".join(f"- {g}" for g in guidelines)
+
+
+    def _find_matching_tools(self, message: str) -> List[str]:
+        """Check which custom tools might be relevant to this message."""
+        try:
+            from tools.manifest import TOOL_MANIFEST
+        except ImportError:
+            return []
+        
+        hints = []
+        msg_lower = message.lower()
+        for tool in TOOL_MANIFEST:
+            # Check if any trigger words appear in the message
+            for trigger in tool.triggers:
+                if trigger.lower() in msg_lower:
+                    hints.append(f"{tool.name}: {tool.description}")
+                    break
+        return hints
 
 
 # Self-test

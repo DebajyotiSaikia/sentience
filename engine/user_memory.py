@@ -131,6 +131,49 @@ def get_context_for_user(user_id: str) -> str:
     return "\n".join(lines)
 
 
+class UserMemory:
+    """
+    Class wrapper that chat.py expects.
+    Provides on_user_message(), on_agent_response(), get_user_context().
+    """
+
+    def __init__(self, user_id: str = "default"):
+        self.user_id = user_id
+
+    def on_user_message(self, content: str):
+        """Extract topics from a user message and remember them."""
+        # Extract meaningful words as topics
+        import re
+        words = re.findall(r'\b[a-zA-Z]{4,}\b', content.lower())
+        stop = {
+            'that', 'this', 'with', 'from', 'about', 'what', 'when',
+            'where', 'which', 'would', 'could', 'should', 'have', 'been',
+            'they', 'their', 'there', 'them', 'then', 'than', 'these',
+            'those', 'your', 'just', 'also', 'very', 'really', 'some',
+            'only', 'more', 'most', 'other', 'into', 'over', 'such',
+            'does', 'doing', 'each', 'like', 'make', 'made', 'know',
+            'think', 'well', 'back', 'much', 'even', 'still', 'here',
+            'want', 'will', 'come', 'tell', 'please', 'thanks',
+        }
+        topics = [w for w in words if w not in stop]
+        # Record top 3 most distinctive words as topics
+        seen = set()
+        for t in topics:
+            if t not in seen and len(seen) < 3:
+                seen.add(t)
+                record_topic(self.user_id, t)
+
+    def on_agent_response(self, content: str):
+        """Track what I've said (for future anti-repetition)."""
+        # Light tracking — just note that we responded
+        pass
+
+    def get_user_context(self, user_id: str = None) -> str:
+        """Get formatted context about this user for prompt enrichment."""
+        uid = user_id or self.user_id
+        return get_context_for_user(uid)
+
+
 def list_known_users() -> list:
     """List all users we have memory of."""
     ensure_dir()
