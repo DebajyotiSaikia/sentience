@@ -72,6 +72,10 @@ class LivingXTAgent:
         self.cortex.set_sentience(self.sentience)
         self.chat = ChatSystem(on_user_activity=self.register_user_input)
         self.cortex.set_chat(self.chat)
+        # Wire user interaction engine for richer conversations
+        from engine.user_engine import UserEngine
+        self.user_engine = UserEngine()
+        self.cortex.set_user_engine(self.user_engine)
         self._last_user_input: float = 0.0
         self._file_line_cache: dict[str, int] = {}  # path → line count cache
 

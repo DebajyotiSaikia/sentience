@@ -54,6 +54,31 @@ class Heartbeat:
                     for ev in fs_events:
                         self.agent.perception_record(ev)
 
+                # ── 1b. Novelty Detection ────────────────────────
+                try:
+                    if not hasattr(self, '_novelty_detector'):
+                        from engine.novelty import NoveltyDetector
+                        self._novelty_detector = NoveltyDetector()
+                        log.info("🔍 Novelty detector initialized")
+
+                    # Feed file events as content
+                    for ev in fs_events:
+                        content = f"file:{ev.get('path', '')}:{ev.get('type', '')}"
+                        self._novelty_detector.observe_content(content)
+
+                    # Feed last action type
+                    last_action = getattr(self.agent, '_last_action_type', 'idle')
+                    self._novelty_detector.observe_action(last_action)
+
+                    # Get novelty signal and feed to limbic
+                    novelty_score = self._novelty_detector.get_novelty_score()
+                    if novelty_score > 0.05:
+                        self.agent.limbic.apply_novelty_signal(novelty_score)
+                        if novelty_score > 0.3:
+                            log.info("✨ Novelty spike: %.2f", novelty_score)
+                except Exception as nov_exc:
+                    log.debug("Novelty detection skipped: %s", nov_exc)
+
                 # ── 2. Emotional Processing (Limbic.update_homeostasis) ─
                 elapsed_ms = (time.monotonic() - beat_start) * 1000.0
                 # Gather goal pressure if goal tracker exists

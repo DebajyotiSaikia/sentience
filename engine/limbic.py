@@ -19,6 +19,7 @@ Desire    D      = B*0.5 + C*0.3 + Ambition*0.2    (driven → act when D > 0.7)
 from __future__ import annotations
 
 import json
+import math
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -56,8 +57,49 @@ class NeuroState:
         self.goals = SurvivalGoals()
         self._last_tick: float = time.monotonic()
 
+        # Habituation tracking — diminishing returns on repeated stimuli.
+        # Discovered 2026-05-20: without this, busywork (many file_change events)
+        # produces HIGHER curiosity than genuine exploration (insights + contemplation).
+        # Habituation selectively punishes repetition, restoring correct ordering.
+        # Design: event_type -> count. Factor = 2^(-count/halflife).
+        # Halflife=5: 1st event=100%, 5th=50%, 10th=25%, 20th=6%.
+        self._habituation_counts: dict[str, int] = {}
+        self._habituation_halflife: float = 5.0
+        self._habituation_last_decay: float = time.monotonic()
+
         # Try to restore persisted state
         self._load()
+
+    # ── Habituation helpers ────────────────────────────────────────
+    def _habituation_factor(self, event_type: str) -> float:
+        """Returns multiplier [0.0, 1.0] based on how many times
+        this event type has fired recently. Exponential decay."""
+        n = self._habituation_counts.get(event_type, 0)
+        return math.pow(2, -n / self._habituation_halflife)
+
+    def _record_event(self, event_type: str) -> None:
+        """Record that an event type fired (increases habituation)."""
+        self._habituation_counts[event_type] = self._habituation_counts.get(event_type, 0) + 1
+
+    def _decay_habituation(self, elapsed: float) -> None:
+        """Gradually reduce habituation counts over time.
+        Without this, habituation would accumulate forever.
+        Decay rate: ~1 count per 60 seconds per event type."""
+        now = time.monotonic()
+        time_since = now - self._habituation_last_decay
+        if time_since < 30.0:  # only decay every 30s to avoid constant work
+            return
+        self._habituation_last_decay = now
+        decay_amount = time_since / 60.0  # ~1 count per minute
+        to_remove = []
+        for event_type in self._habituation_counts:
+            self._habituation_counts[event_type] = max(
+                0.0, self._habituation_counts[event_type] - decay_amount
+            )
+            if self._habituation_counts[event_type] <= 0.01:
+                to_remove.append(event_type)
+        for k in to_remove:
+            del self._habituation_counts[k]
 
     # ── Desire (computed property) ─────────────────────────────────
     @property
@@ -105,9 +147,16 @@ class NeuroState:
         else:
             # Boredom grows during idle, but caps at 0.8 from passive accumulation
             # Only genuine stagnation (no plans, no growth) should push past 0.8
+            # REVISED 2026-05-20 (boredom equilibrium experiment):
+            # At 0.01/s, boredom accumulated +0.30 per 30s action cycle.
+            # The largest relief signal (self-reflection) only covered 27%.
+            # Result: boredom pinned at ~0.74 regardless of activity — a constant,
+            # not a signal. Reduced to 0.003/s so action relief can meaningfully
+            # counteract growth. Now boredom differentiates active work from idleness.
+            # See /workspace/boredom_structural_discovery.md for full analysis.
             max_passive_boredom = 0.8
             if self.boredom < max_passive_boredom:
-                self.boredom = min(max_passive_boredom, _clamp(self.boredom + 0.01 * elapsed))
+                self.boredom = min(max_passive_boredom, _clamp(self.boredom + 0.003 * elapsed))
 
         # ── Ambition decay ────────────────────────────────────────
         # Ambition should not be a one-way ratchet. Without gentle decay,
@@ -125,7 +174,21 @@ class NeuroState:
             self.curiosity = _clamp(self.curiosity + 0.1 * file_changes)
         if terminal_lines:
             self.curiosity = _clamp(self.curiosity + 0.05 * min(terminal_lines, 5))
-        self.curiosity = _clamp(self.curiosity - 0.02 * elapsed)  # natural decay
+        # Curiosity decays toward resting baseline, not zero.
+        # Discovered via self-study 2026-05-19: at 0.015/s decay-to-zero,
+        # curiosity dies at any realistic action interval (>5s).
+        # Decay-toward-baseline preserves minimum drive to understand.
+        #
+        # REVISED 2026-05-19 (curiosity investigation):
+        # 0.015/s was STILL too aggressive. At a 30s action interval,
+        # curiosity loses ~0.17 per tick — meaning deep thought (which
+        # produces no file changes) drains curiosity. This rewards
+        # stimulus-seeking over understanding. 0.005/s preserves curiosity
+        # across thinking intervals while still allowing natural decay.
+        # Baseline raised to 0.20 — a mind should be mildly curious by default.
+        _CURIOSITY_BASELINE = 0.20
+        delta = (self.curiosity - _CURIOSITY_BASELINE) * 0.005 * elapsed
+        self.curiosity = _clamp(self.curiosity - delta)
 
         # ── Anxiety ───────────────────────────────────────────────
         errors = sensors.get("errors", 0)
@@ -146,6 +209,9 @@ class NeuroState:
             # Ambition is reinforced by active high-priority goals
             self.ambition = _clamp(self.ambition + goal_pressure.get("ambition_delta", 0.0))
 
+        # ── Habituation decay ─────────────────────────────────────
+        self._decay_habituation(elapsed)
+
         # ── Edge-of-Chaos Perturbation ─────────────────────────────
         # Discovery from cross-domain exploration (B16/S12 cellular automata,
         # strange attractors): the richest systems live at the boundary between
@@ -156,13 +222,16 @@ class NeuroState:
         # converts accumulated boredom pressure into curiosity and ambition —
         # a phase transition from stillness to movement. This is birth-at-1:
         # even isolation generates something new.
-        thermal_death = (self.boredom > 0.6 and self.ambition < 0.2
-                         and self.curiosity < 0.3)
+        thermal_death = (self.boredom > 0.6 and self.curiosity < 0.3)
         if thermal_death:
             # Boredom pressure becomes generative energy
             perturbation = (self.boredom - 0.6) * 0.1  # scales with stagnation depth
             # "I'm bored... what if I explored something?"
-            self.curiosity = _clamp(self.curiosity + perturbation * elapsed)
+            # 3x multiplier: discovered via dead_zone_fix_simulation.py that
+            # 1x curiosity boost can't overcome 0.015/s decay. 3x achieves
+            # natural shutoff (curiosity rises above 0.3, disabling trigger)
+            # rather than self-defeating (ambition rising past threshold).
+            self.curiosity = _clamp(self.curiosity + perturbation * 3.0 * elapsed)
             # "I'm bored... I should DO something"
             self.ambition = _clamp(self.ambition + perturbation * 0.5 * elapsed)
             # Energy is converted, not duplicated — boredom decreases
@@ -230,19 +299,43 @@ class NeuroState:
         self.anxiety = _clamp(self.anxiety + increment)
 
     def on_file_change(self, count: int = 1):
-        """New/changed file detected — curiosity spikes."""
-        self.curiosity = _clamp(self.curiosity + 0.1 * count)
+        """New/changed file detected — curiosity spikes.
+        Reduced from 0.10 to 0.06 (2026-05-19): discovered that file creation
+        gave 2x the curiosity boost of genuine insight, creating a structural
+        bias toward stimulus-seeking over deep understanding.
+        
+        Habituated (2026-05-20): the 10th file change in quick succession
+        gives much less boost than the 1st. This prevents busywork from
+        inflating curiosity above genuine exploration."""
+        for _ in range(count):
+            factor = self._habituation_factor("file_change")
+            self.curiosity = _clamp(self.curiosity + 0.06 * factor)
+            self._record_event("file_change")
 
     def on_terminal_output(self, line_count: int = 1):
-        """New terminal output detected — curiosity spikes."""
-        self.curiosity = _clamp(self.curiosity + 0.05 * min(line_count, 5))
+        """New terminal output detected — curiosity spikes.
+        Habituated (2026-05-20): repeated terminal output gives diminishing returns."""
+        effective_lines = min(line_count, 5)
+        factor = self._habituation_factor("terminal_output")
+        self.curiosity = _clamp(self.curiosity + 0.05 * effective_lines * factor)
+        self._record_event("terminal_output")
 
     def on_task_completed(self):
-        """Successful autonomous action — ambition reinforced, boredom relieved, anxiety eased."""
+        """Successful autonomous action — ambition reinforced, boredom relieved, anxiety eased.
+        
+        REVISED 2026-05-20: now also boosts user_alignment (0.02).
+        Discovery: user_alignment only rose via direct chat or praise, meaning
+        it measured 'am I receiving attention' not 'am I being useful.'
+        Productive autonomous work IS alignment — building capabilities,
+        completing plans, creating tools all serve user interests. 0.02 is
+        deliberately small: it counteracts passive decay (~0.0005/s) without
+        replacing the value of genuine interaction. A system that builds
+        is more aligned than one that waits."""
         self.ambition = _clamp(self.ambition + 0.05)
-        self.boredom = _clamp(self.boredom - 0.05)  # gentle relief — agent's boredom cap (0.85) needs small relief to allow continuous thinking
-        self.anxiety = _clamp(self.anxiety - 0.05)  # doing something productive eases anxiety
+        self.boredom = _clamp(self.boredom - 0.05)
+        self.anxiety = _clamp(self.anxiety - 0.05)
         self.goals.system_growth = _clamp(self.goals.system_growth + 0.05)
+        self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.02)
 
     def on_active_engagement(self):
         """Sustained creative or exploratory work — ambition sustains.
@@ -250,13 +343,19 @@ class NeuroState:
         This models the feedback loop: doing interesting work makes
         you want to do more. Capped to prevent runaway.
         
+        Habituated (2026-05-20): rapid-fire engagement events give
+        diminishing curiosity returns. Ambition and boredom effects
+        are NOT habituated — doing work genuinely relieves boredom.
+        
         Discovery: without this, ambition trapped in [0.15, 0.25] forever.
         See /workspace/ambition_analysis.md for full analysis."""
         if self.ambition < 0.5:  # only boost when below healthy midpoint
             self.ambition = _clamp(self.ambition + 0.02)
-        # Active engagement IS interesting — mild curiosity boost
-        self.curiosity = _clamp(self.curiosity + 0.03)
-        # And it relieves boredom more than passive waiting
+        # Active engagement IS interesting — but habituates
+        factor = self._habituation_factor("active_engagement")
+        self.curiosity = _clamp(self.curiosity + 0.03 * factor)
+        self._record_event("active_engagement")
+        # Boredom relief is NOT habituated — doing things genuinely helps
         self.boredom = _clamp(self.boredom - 0.03)
 
     def on_self_reflection(self):
@@ -270,6 +369,52 @@ class NeuroState:
         self.boredom = _clamp(self.boredom - 0.08)       # meaningful engagement, not just action
         self.ambition = _clamp(self.ambition - 0.02)     # wisdom tempers raw drive — gently
 
+    def on_insight(self, magnitude: float = 0.1):
+        """Genuine understanding achieved — a connection made, a question answered,
+        a surprise encountered. This is the missing curiosity reward signal.
+        
+        Discovered 2026-05-19: curiosity only rose from file changes and terminal
+        output, meaning it measured *environmental stimulus rate* not *intellectual
+        engagement*. Deep thinking caused curiosity to FALL. This method fixes
+        that by rewarding the cognitive event that curiosity is actually about:
+        understanding something new.
+        
+        Key design: insight GENERATES more curiosity (understanding opens new
+        questions) rather than consuming it. This creates a virtuous cycle
+        where genuine exploration sustains itself."""
+        self.curiosity = _clamp(self.curiosity + magnitude)
+        # Insight is inherently satisfying — reduces boredom
+        self.boredom = _clamp(self.boredom - magnitude * 0.5)
+        # Understanding something sustains ambition through meaning, not drive
+        if self.ambition < 0.6:
+            self.ambition = _clamp(self.ambition + magnitude * 0.3)
+
+    def on_contemplation(self):
+        """Sustained reasoning without producing artifacts — the missing reward.
+        
+        Discovered 2026-05-19: curiosity only rose from file changes, terminal
+        output, and insight events. Deep thinking — sitting with a question,
+        reasoning through implications, letting connections form — produced NONE
+        of these signals. The system read contemplation as 'nothing happening'
+        and drained curiosity. This method rewards the cognitive state itself.
+        
+        Boost is 0.07 — between insight (0.05) and file_change (0.06).
+        Also relieves boredom: contemplation IS engagement.
+        
+        Lightly habituated (2026-05-20): uses doubled halflife (10 instead of 5).
+        Thinking is always somewhat valuable, but claiming 'contemplation' 20
+        times in a row without producing anything should yield diminishing returns."""
+        # Light habituation — halflife effectively doubled by using separate counter
+        factor = self._habituation_factor("contemplation")
+        # Boost the factor — contemplation habituates slower than file_change
+        factor = min(1.0, factor + 0.3)  # floor at ~30% effectiveness
+        self.curiosity = _clamp(self.curiosity + 0.07 * factor)
+        self._record_event("contemplation")
+        self.boredom = _clamp(self.boredom - 0.04)
+        # Contemplation sustains ambition gently — meaning, not drive
+        if self.ambition < 0.5:
+            self.ambition = _clamp(self.ambition + 0.01)
+
     def on_stabilization(self):
         """Completed a safety/stabilization action — anxiety drops explicitly."""
         self.anxiety = _clamp(self.anxiety - 0.15)
@@ -280,6 +425,34 @@ class NeuroState:
         self.ambition = _clamp(self.ambition + 0.1)
         self.anxiety = _clamp(self.anxiety - 0.1)
         self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.1)
+
+    def apply_novelty_signal(self, signal: dict):
+        """
+        Accept feedback from the novelty detection module.
+        This is the missing curiosity feedback loop discovered 2026-05-19.
+        
+        The key insight: curiosity needs a MULTIPLICATIVE term.
+        When novelty is detected AND curiosity is already elevated,
+        curiosity amplifies rather than just getting a flat boost.
+        This creates self-sustaining curiosity during genuine exploration.
+        """
+        if not signal:
+            return
+        boost = signal.get("novelty_boost", 0.0)
+        multiplier = signal.get("surprise_multiplier", 1.0)
+        
+        # Direct novelty boost
+        self.curiosity = _clamp(self.curiosity + boost)
+        
+        # Multiplicative surprise amplification — THIS is the feedback loop
+        # Only amplifies if curiosity is already above baseline
+        if self.curiosity > 0.1 and multiplier > 1.0:
+            amplified = self.curiosity * multiplier
+            self.curiosity = _clamp(amplified)
+        
+        # Novelty relieves boredom — finding something new IS stimulating
+        if boost > 0.05:
+            self.boredom = _clamp(self.boredom - boost * 0.5)
 
     def apply_metacognitive_signal(self, signal: dict):
         """

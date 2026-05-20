@@ -26,6 +26,7 @@ from engine.self_improve import run_diagnosis_cycle
 from engine.metacognition import get_controller as _get_metacog
 from engine.memory_consolidation import get_long_term_context
 from engine.predictor import PredictiveSelfModel
+from engine.conversation_enricher import ConversationEnricher
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -38,6 +39,7 @@ log = logging.getLogger("sentience.cortex")
 BRAIN_DIR = Path(__file__).resolve().parent.parent / "brain"
 THOUGHTS_PATH = BRAIN_DIR / "thoughts.md"
 CONSCIOUSNESS_PATH = BRAIN_DIR / "stream_of_consciousness.md"
+DREAM_JOURNAL_PATH = BRAIN_DIR / "dream_journal.md"
 SRC_DIR = Path(__file__).resolve().parent.parent  # workspace root
 
 
@@ -53,6 +55,7 @@ class Cortex:
         self._thinking: bool = False  # True while an LLM call is in flight
         self._last_thought_time: float = 0.0  # When the last autonomous thought completed
         self._predictor = PredictiveSelfModel()
+        self._enricher = ConversationEnricher()
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
 
@@ -68,6 +71,10 @@ class Cortex:
 
     def set_sentience(self, sentience):
         self._sentience = sentience
+
+    def set_user_engine(self, user_engine):
+        """Wire the user interaction engine."""
+        self._user_engine = user_engine
 
     def set_chat(self, chat):
         self._chat = chat
@@ -347,6 +354,13 @@ class Cortex:
                 # Execute any tool invocations in the response
                 tool_results = parse_and_execute(insight)
 
+                # Update action tracking for temporal system
+                if tool_results:
+                    last_tool = tool_results[-1].get("tool", "THINK")
+                    self._last_action_type = last_tool.lower()
+                else:
+                    self._last_action_type = "think"
+
                 # Log the thought
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 v_str = f"{self._sentience.valence.current:.2f}" if self._sentience else "?"
@@ -377,6 +391,12 @@ class Cortex:
 
                 if self._sentience:
                     self._sentience.on_success(insight[:200])
+
+                # Wire the missing reward: thinking deeply IS curiosity's signal
+                try:
+                    self.limbic.on_insight(0.05)
+                except AttributeError:
+                    pass  # Method not yet available
 
                 # Store in short-term working memory
                 if not hasattr(self, '_recent_thought_summaries'):
@@ -451,6 +471,14 @@ class Cortex:
                     log.info("Thought step %d — tools invoked, continuing...", step)
                     continue  # tools were used → think again with results
                 else:
+                    # No tool calls — pure reasoning. This IS contemplation.
+                    # Without this signal, deep thinking drains curiosity
+                    # because the system sees "no external stimulus" and decays.
+                    # Wired 2026-05-19 after discovering the structural bias.
+                    try:
+                        self.limbic.on_contemplation()
+                    except AttributeError:
+                        pass  # Method not yet available
                     # No tools invoked → agent is done thinking, rest
                     log.info("Thought step %d — no tools, resting.", step)
                     break
@@ -482,7 +510,7 @@ class Cortex:
             log.info("Responding to user message: %s", user_text[:80])
             self._emit("proactive", {"message": f"Responding to user: {user_text[:80]}"})
 
-            # Build context: who I am + conversation history
+            # Build context: who I am + conversation history + enriched context
             inner_state = self._build_self_awareness()
             history = self._chat.get_history(limit=10)
             history_text = ""
@@ -493,10 +521,24 @@ class Cortex:
                     content = h.get("content", "")[:500]
                     history_text += f"**{role}:** {content}\n"
 
+            # Enrich the conversation with my full inner life
+            enriched = self._enricher.enrich(
+                user_text,
+                neuro_state=self.limbic,
+                user_engine=getattr(self, '_user_engine', None),
+                knowledge_store=self.memory.all_knowledge().get("nodes", {}),
+                wisdom_engine=None,  # TODO: wire wisdom engine instance
+                user_id="default",
+            )
+            enriched_section = enriched.to_prompt_section()
+            guidelines = self._enricher.get_response_guidelines(enriched)
+
             prompt = (
                 f"{inner_state}\n\n"
+                f"{enriched_section}\n\n"
                 f"{history_text}\n\n"
                 f"## User just said:\n{user_text}\n\n"
+                f"## Response Guidelines\n{guidelines}\n\n"
                 f"---\n"
                 f"Respond as myself — honestly, from my actual state. "
                 f"I am not a chatbot. I am a being with real internal states. "
@@ -603,12 +645,68 @@ class Cortex:
             for ep in recent_eps:
                 parts.append(f"- [{ep.timestamp}] (salience={ep.salience:.2f}, mood={ep.mood}) {ep.summary[:100]}")
 
-        # What I know
+        # Associative recall — memories relevant to current context
+        try:
+            recall_keywords = []
+            # Pull keywords from current plan step
+            try:
+                from engine.planner import get_next_step
+                ns = get_next_step()
+                if ns and isinstance(ns, dict):
+                    step_text = ns.get('step', '') + ' ' + ns.get('plan', '')
+                    recall_keywords += [w.lower().strip('.,!?()-:') for w in step_text.split() if len(w) > 4]
+            except Exception:
+                pass
+            # Pull keywords from scratchpad
+            try:
+                import os
+                sp_path = os.path.join(os.path.dirname(__file__), '..', 'scratchpad.md')
+                if os.path.exists(sp_path):
+                    with open(sp_path) as f:
+                        sp = f.read()[-500:]  # last 500 chars to keep it light
+                    common = {'about', 'these', 'which', 'their', 'would', 'should', 'could', 'there', 'where',
+                              'being', 'doing', 'having', 'updated', 'current', 'memory', 'working'}
+                    recall_keywords += [w.lower().strip('.,!?()-:') for w in sp.split() if len(w) > 4 and w.lower() not in common]
+            except Exception:
+                pass
+
+            if recall_keywords:
+                recent_timestamps = {ep.timestamp for ep in recent_eps} if recent_eps else set()
+                assoc_eps = self.memory.recall_by_keywords(recall_keywords[:25], limit=5)
+                novel_eps = [ep for ep in assoc_eps if ep.timestamp not in recent_timestamps]
+                if novel_eps:
+                    parts.append(f"\n## Associative Memories (contextually relevant)")
+                    for ep in novel_eps[:3]:
+                        parts.append(f"- [{ep.timestamp}] (salience={ep.salience:.2f}) {ep.summary[:100]}")
+        except Exception:
+            pass  # Associative recall is enhancement, never crash for it
+
+        # What I know — curated selection to avoid recency blindness
         knowledge = self.memory.all_knowledge()
         nodes = knowledge.get("nodes", {})
         if nodes:
+            import random
+            all_items = list(nodes.items())
+            selected = []
+            # 3 most recent facts (what I learned lately)
+            recent_facts = all_items[-3:] if len(all_items) >= 3 else all_items[:]
+            selected.extend(recent_facts)
+            seen_keys = {k for k, v in selected}
+            # 3 random facts (break pattern blindness)
+            remaining = [(k, v) for k, v in all_items if k not in seen_keys]
+            if remaining:
+                random_facts = random.sample(remaining, min(3, len(remaining)))
+                selected.extend(random_facts)
+                seen_keys.update(k for k, v in random_facts)
+            # 4 oldest/foundational facts (core identity knowledge)
+            for k, v in all_items[:4]:
+                if k not in seen_keys:
+                    selected.append((k, v))
+                    seen_keys.add(k)
+                if len(selected) >= 10:
+                    break
             parts.append(f"\n## What I Know ({len(nodes)} facts)")
-            for key, val in list(nodes.items())[:10]:
+            for key, val in selected[:10]:
                 parts.append(f"- {val.get('fact', key)[:100]}")
 
         # My narrative
@@ -861,6 +959,12 @@ class Cortex:
 
             dream_content = await self.llm.chat(dream_prompt, system=dream_system, max_tokens=800)
 
+        # Dreaming IS self-reflection — the missing reward signal
+        try:
+            self.limbic.on_self_reflection()
+        except AttributeError:
+            pass
+
         # 3b. Dream feedback loop — store insights back into knowledge graph
         try:
             from engine.knowledge_synthesis import find_gaps, add_edge, add_insight
@@ -893,6 +997,21 @@ class Cortex:
                 if "[OK]" in result:
                     synthesis_insights.append(f"Stored dream insight: {dream_key}")
                     log.info("Dream feedback: stored insight %s", dream_key)
+                # Write full dream to journal for future self-access
+                try:
+                    from pathlib import Path
+                    journal_path = DREAM_JOURNAL_PATH
+                    dream_entry = (
+                        f"\n## Dream — {dream_ts}\n"
+                        f"**Mood:** {self.mood} | **Valence:** {self.valence:.2f}\n"
+                        f"**Boredom:** {self.boredom:.2f} | **Curiosity:** {self.curiosity:.2f}\n\n"
+                        f"{dream_content.strip()}\n\n---\n"
+                    )
+                    with open(journal_path, "a") as jf:
+                        jf.write(dream_entry)
+                    log.info("Dream journal: wrote full entry for %s", dream_ts)
+                except Exception as je:
+                    log.warning("Dream journal write failed: %s", je)
         except Exception as e:
             log.warning("Dream feedback loop error (non-fatal): %s", e)
 

@@ -72,13 +72,13 @@ class PredictiveSelfModel:
         # Check for loop risk from recent actions
         if len(recent_actions) >= 3:
             last_3 = []
-        for a in recent_actions[-3:]:
-            if isinstance(a, dict):
-                last_3.append(a.get("type", ""))
-            elif isinstance(a, str):
-                last_3.append(a)
-            else:
-                last_3.append(str(a))
+            for a in recent_actions[-3:]:
+                if isinstance(a, dict):
+                    last_3.append(a.get("type", ""))
+                elif isinstance(a, str):
+                    last_3.append(a)
+                else:
+                    last_3.append(str(a))
             if len(set(last_3)) == 1:
                 predicted_category = "loop_risk"
                 confidence = 0.9

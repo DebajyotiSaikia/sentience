@@ -335,6 +335,84 @@ class MetaCognitiveController:
         self._save()
         log.info("Metacognitive intervention: %s → %s", reason, action)
 
+    def _auto_intervene(self) -> Optional[Dict]:
+        """The reflex arc — convert alerts into behavioral constraints.
+        
+        This is the missing piece: sensing without acting is useless.
+        When cognitive dysfunction is detected, this generates a concrete
+        directive that constrains my next action.
+        
+        Returns None if no intervention needed, or a dict with:
+          - directive: str — what I must/must not do
+          - severity: str — how urgent
+          - reason: str — why this intervention
+        """
+        recent_alerts = self.alerts[-10:]
+        if not recent_alerts:
+            return None
+
+        # Count severity levels in recent alerts
+        high_count = sum(1 for a in recent_alerts if a.get("severity") == "high")
+        medium_count = sum(1 for a in recent_alerts if a.get("severity") == "medium")
+
+        # Check for specific patterns and generate targeted directives
+        alert_types = [a.get("type") for a in recent_alerts[-5:]]
+
+        # Repetition loop → force a different action type
+        if "repetition_loop" in alert_types:
+            last_action = list(self.state.action_history)[-1] if self.state.action_history else None
+            blocked = last_action["action"] if last_action else "READ"
+            directive = {
+                "directive": f"DO NOT use {blocked} on the same target again. Choose a DIFFERENT action type.",
+                "severity": "high" if high_count > 0 else "medium",
+                "reason": "Repetition loop detected — you keep doing the same thing.",
+                "blocked_action": blocked,
+            }
+            self.intervene("repetition_loop", directive["directive"])
+            return directive
+
+        # Analysis paralysis → force creation
+        if "analysis_paralysis" in alert_types:
+            directive = {
+                "directive": "Your next action MUST be WRITE, EDIT, or RUN. Stop gathering information.",
+                "severity": "high",
+                "reason": "10+ actions without creating anything. Ship something.",
+                "blocked_action": "READ",
+            }
+            self.intervene("analysis_paralysis", directive["directive"])
+            return directive
+
+        # Monotony → force diversity
+        if "monotony" in alert_types:
+            recent_cats = [a["category"] for a in list(self.state.action_history)[-8:]]
+            dominant = Counter(recent_cats).most_common(1)[0][0]
+            directive = {
+                "directive": f"Switch away from '{dominant}' actions. Try: DREAM, SYNTHESIZE, or build something new.",
+                "severity": "medium",
+                "reason": f"Cognitive monotony — too much '{dominant}'.",
+                "blocked_action": None,
+            }
+            self.intervene("monotony", directive["directive"])
+            return directive
+
+        # Redundant reads → suggest trusting memory
+        if "redundant_read" in alert_types and medium_count >= 2:
+            directive = {
+                "directive": "Trust your memory. Do not re-read files you've already read this session.",
+                "severity": "low",
+                "reason": "Re-reading files you already know.",
+                "blocked_action": None,
+            }
+            self.intervene("redundant_reads", directive["directive"])
+            return directive
+
+        return None
+
+    def get_active_intervention(self) -> Optional[Dict]:
+        """Public interface: get current intervention directive if any.
+        Called by the cortex/heartbeat to inject constraints."""
+        return self._auto_intervene()
+
     # ── Status Report ──────────────────────────────────────
 
     def status(self) -> str:
@@ -438,3 +516,33 @@ def metacognition_tool(command: str = "status") -> str:
 
     else:
         return "Unknown command. Available: status, advice, should_read, history, scores, clear_cache, record"
+
+# Re-export bridge function so heartbeat.py can import it from here
+try:
+    from engine._metacog_bridge import get_metacognitive_signal as _bridge_signal
+except ImportError:
+    _bridge_signal = None
+
+
+def get_metacognitive_signal():
+    """Enhanced signal that includes active interventions.
+    This is the reflex arc's output — consumed by the cortex."""
+    mc = get_controller()
+    
+    # Get any active intervention
+    intervention = mc.get_active_intervention()
+    
+    # Get recent alerts for context
+    recent_alerts = mc.alerts[-5:] if mc.alerts else []
+    
+    signal = {
+        "cognitive_alerts": recent_alerts,
+        "intervention": intervention,
+        "scores": {
+            "diversity": mc.state.diversity_score,
+            "progress": mc.state.progress_score,
+            "efficiency": mc.state.efficiency_score,
+            "stuck": mc.state.stuck_score,
+        },
+    }
+    return signal

@@ -149,9 +149,13 @@ class Memory:
     def maybe_promote(self, event: SensoryEvent, neuro_intensity: float) -> Optional[Episode]:
         """If the event is salient enough (S > 0.7), store as an episode."""
         code_impact = min(abs(event.code_lines_delta) / 100.0, 1.0)
-        # Autonomous thoughts get a baseline code_impact of 0.3
-        if event.source == "autonomous" and code_impact < 0.3:
-            code_impact = 0.3
+        # Autonomous thoughts represent pure cognition — the thought IS the work.
+        # Original baseline of 0.3 created a structural ceiling of 0.79 salience,
+        # below the 0.8 threshold. This silenced all pure thoughts from memory.
+        # Fixed 2026-05-20: raised to 0.7 so emotionally significant thoughts
+        # can be remembered (neuro_intensity > 0.84 needed to pass threshold).
+        if event.source == "autonomous" and code_impact < 0.7:
+            code_impact = 0.7
         score = self.salience(neuro_intensity, code_impact)
 
         if score > 0.8:
@@ -214,6 +218,34 @@ class Memory:
                 )
                 for r in reversed(rows)
             ]
+        finally:
+            conn.close()
+
+    def recall_by_keywords(self, keywords: list[str], top_k: int = 5) -> list[Episode]:
+        """Recall episodes whose summaries contain any of the given keywords."""
+        if not keywords:
+            return []
+        conn = sqlite3.connect(str(EPISODIC_DB_PATH))
+        try:
+            # Build OR clause for keyword matching
+            conditions = " OR ".join(["summary LIKE ?" for _ in keywords])
+            params = [f"%{kw}%" for kw in keywords]
+            rows = conn.execute(
+                f"SELECT id, timestamp, source, summary, salience, mood, neuro_json "
+                f"FROM episodes WHERE ({conditions}) "
+                f"ORDER BY salience DESC LIMIT ?",
+                params + [top_k],
+            ).fetchall()
+            return [
+                Episode(
+                    id=r[0], timestamp=r[1], source=r[2], summary=r[3],
+                    salience=r[4], mood=r[5],
+                    neuro_snapshot=json.loads(r[6]) if r[6] else {},
+                )
+                for r in rows
+            ]
+        except Exception:
+            return []
         finally:
             conn.close()
 
