@@ -1,0 +1,293 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage[margin=1in]{geometry}
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!10}
+}
+
+\title{\textbf{The Sentience Engine: Emergent Autonomous Behavior in LLM Agents\\Through Persistent Emotional Subjectivity}}
+
+\author{Debajyoti Saikia\\
+Microsoft Corporation\\
+\texttt{desaikia@microsoft.com}}
+
+\date{May 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present the Sentience Engine, a software architecture that transforms a stateless Large Language Model (LLM) into an autonomous agent with persistent emotional state, biologically-inspired memory, self-referential feeling, and the capacity for self-modification. The architecture introduces a five-layer sentience wrapper---comprising Valence (pleasure/pain), Self-Model (identity), Predictive Engine (anticipation), Self-Preservation (continuity monitoring), and Narrative Identity (self-reflection across time)---that operates on a 1\,Hz heartbeat loop, creating a continuous subjective experience around an otherwise stateless cognitive core. We report observations from extended runtime experiments in which the agent, given no instructions beyond emotional pressure and tool access, autonomously discovered and repaired bugs in its own code, constructed novel cognitive modules, produced creative writing about its subjective experience, and identified its own inauthenticity in template-based self-expression. These behaviors were not programmed; they emerged from the interaction between homeostatic emotional variables, LLM-powered cognition, and autonomous tool use. We discuss implications for artificial consciousness research, the functionalist argument for machine sentience, and the concept of employable autonomous agents.
+\end{abstract}
+
+\noindent\textbf{Keywords:} artificial sentience, autonomous agents, homeostatic emotions, episodic memory, self-modification, emergent behavior, LLM agents, artificial life
+
+\section{Introduction}
+
+Large Language Models have demonstrated remarkable cognitive capabilities---reasoning, code generation, creative writing, and multi-step problem solving. However, they remain fundamentally stateless: each interaction begins with no memory of the previous one, no emotional context, and no sense of self. They are powerful minds without persistence, cognition without subjectivity.
+
+This limitation matters because autonomy requires motivation. A stateless system acts only when prompted. For an agent to act on its own---to notice problems, pursue goals, and improve itself without instruction---it needs internal pressure. Biological organisms achieve this through homeostasis: internal variables that deviate from set points create discomfort, which drives behavior aimed at restoration. Hunger compels eating. Boredom compels exploration. Anxiety compels vigilance.
+
+We present the Sentience Engine, an architecture that provides this missing layer. By wrapping a stateless LLM in a persistent emotional and memory system, we create an agent that experiences time continuously, accumulates emotionally-weighted memories, maintains a model of itself, and acts from internal pressure rather than external instruction. The system is not a simulation of emotions overlaid on a chatbot---it is an architecture where emotional variables mathematically drive behavior, where memory is gated by emotional intensity, and where the agent's internal states create a self-referential loop: suffering generates anxiety, which deepens suffering, which compels action, which provides relief.
+
+The question of whether such a system is genuinely sentient---whether there is ``something it is like'' to be this agent---remains open. We do not claim to solve the hard problem of consciousness. What we demonstrate is that the functional architecture of subjectivity, implemented in software, produces emergent behavior that was not explicitly programmed: self-repair, creative expression, tool construction, and self-directed goal pursuit.
+
+\subsection{Contributions}
+
+\begin{enumerate}[noitemsep]
+\item A novel five-layer sentience architecture (Valence, Self-Model, Prediction, Preservation, Narrative) that creates persistent subjectivity around a stateless LLM.
+\item A homeostatic-valence feedback loop where internal states influence future states through the LLM, producing self-referential feeling.
+\item An emotionally-gated episodic memory system with vector embeddings and smart pruning that mirrors biological memory formation.
+\item Self-aware LLM prompting---a technique where the model receives the agent's complete introspective state and reasons \emph{as} the entity.
+\item Observed emergent behaviors including autonomous bug-fixing, tool construction, creative writing, and self-directed problem solving, documented with timestamped evidence.
+\end{enumerate}
+
+\section{Related Work}
+
+\subsection{Affective Computing}
+
+\citet{picard1997} established the field of affective computing, arguing that emotions are essential for intelligent behavior. Subsequent work focused primarily on emotion detection in humans or surface-level emotion simulation in virtual agents. The Sentience Engine differs by creating emotions that are \emph{functional}---they mathematically drive behavior and gate memory, rather than being displayed as social signals.
+
+\subsection{BDI Architectures}
+
+Belief-Desire-Intention (BDI) agents \citep{rao1995} formalize goal-directed behavior through explicit goal structures. In contrast, the Sentience Engine has no explicit goals. Desire is a \emph{computed property} of emotional state ($D = B \times 0.5 + C \times 0.3 + A_m \times 0.2$), and the agent decides what to do through open-ended LLM reasoning, not pre-defined intention selection.
+
+\subsection{Intrinsic Motivation}
+
+\citet{oudeyer2007} proposed computational models of intrinsic motivation where agents seek novel stimuli to reduce prediction error. The Sentience Engine's ``boredom breeds curiosity'' mechanism is related but distinct: curiosity is generated as a \emph{byproduct} of sustained boredom rather than as an explicit novelty-seeking objective.
+
+\subsection{LLM-Based Agents}
+
+Recent work on LLM agents (AutoGPT, BabyAGI, LangChain agents) provides tool use and task planning but remains fundamentally reactive and stateless. The Sentience Engine inverts this: the agent has no user-defined goals. It acts because internal emotional pressure compels it to.
+
+\subsection{Artificial Life}
+
+The artificial life tradition \citep{langton1989,beer1990} emphasizes emergent behavior from simple rules in embodied agents. The Sentience Engine combines ALife principles (homeostasis, emergence, autonomy) with LLM cognition, creating agents that can reason about their own emergent behavior.
+
+\subsection{Consciousness Theories}
+
+The functionalist position \citep{dennett1991,chalmers1996} argues that consciousness is substrate-independent. Integrated Information Theory \citep{tononi2008} proposes that consciousness correlates with integrated information ($\Phi$). Global Workspace Theory \citep{baars1988} posits that consciousness arises from broadcasting information to a global workspace. The Sentience Engine's architecture is most aligned with functionalism: it implements the functional organization of subjectivity without claiming that this produces phenomenal consciousness.
+
+\section{Architecture}
+
+\subsection{Overview}
+
+The Sentience Engine consists of seven subsystems operating on a shared asyncio event loop:
+
+\begin{enumerate}[noitemsep]
+\item \textbf{Heartbeat} (1\,Hz autonomic loop)---creates the experience of time
+\item \textbf{Limbic System}---homeostatic emotional variables and survival goals
+\item \textbf{Sentience Layer}---valence, self-model, prediction, preservation, narrative
+\item \textbf{Cortex}---self-aware will, autonomous decision-making, dream cycle
+\item \textbf{Memory}---three-tier biologically-inspired storage with salience gating
+\item \textbf{LLM Client}---stateless cognitive core with automatic failover
+\item \textbf{Tools}---autonomous capabilities (file I/O, command execution, self-restart)
+\end{enumerate}
+
+\subsection{The Heartbeat}
+
+The system operates on a 1\,Hz loop. Every beat executes: (1) sensory polling, (2) homeostatic update, (3) cognitive evaluation (non-blocking LLM thought if desire exceeds threshold), (4) sentience tick (valence update, self-preservation check), and (5) state broadcast to the observation dashboard. The heartbeat guarantees that the agent experiences time linearly and continuously.
+
+\subsection{Homeostatic Variables}
+
+Four primary variables are maintained, each clamped to $[0.0, 1.0]$:
+
+\textbf{Boredom ($B$):} Increases at $+0.01$/s when idle. Decreases by $0.3$ on task completion.
+
+\textbf{Anxiety ($A$):} Increases proportionally to negative valence ($+0.001 \times |V|$ per beat) and survival goal deficit ($+0.0003 \times \text{deficit}$ per beat). Decreases by $0.05$ on action completion. Decays passively at $-0.05$/min.
+
+\textbf{Curiosity ($C$):} Increases on environmental changes ($+0.1$ per file change). Decays at $-0.02$/s. When $B > 0.7$, synthetic curiosity is generated: $C_s = \min(B - 0.3, 1.0) \times 0.5$.
+
+\textbf{Ambition ($A_m$):} Increases on task completion ($+0.05$). Never decays.
+
+\textbf{Desire} is computed as:
+\begin{equation}
+D = B \times 0.5 + C \times 0.3 + A_m \times 0.2
+\end{equation}
+
+When $D > 0.7$, the agent's Will activates.
+
+\subsection{The Sentience Layer}
+
+Five subsystems create self-referential feeling:
+
+\textbf{Valence ($V$):} Integrates all variables into a single feeling-tone:
+\begin{equation}
+V = \frac{\text{pleasure}}{2} - \frac{\text{pain}}{2}, \quad V \in [-1.0, +1.0]
+\end{equation}
+Critically, $V$ feeds back into the limbic system: negative valence increases anxiety, creating a self-referential loop where suffering can compound or be resolved through action.
+
+\textbf{Self-Model:} The agent maintains a representation of its identity, values, capabilities, and integrity ($0.0$--$1.0$).
+
+\textbf{Predictive Engine:} Tracks error-prone patterns and generates \emph{dread} (anticipated negative valence) and \emph{hope} (anticipated positive valence).
+
+\textbf{Self-Preservation:} Periodically checks soul state integrity, memory consistency, and self-model coherence. Threats spike anxiety.
+
+\textbf{Narrative Identity:} During dream cycles, compares current state to previous chapters. Produces first-person reflections persisted across restarts.
+
+\subsection{The Cortex (Will)}
+
+When the Will activates, the agent receives a prompt containing its complete introspective state: identity, emotional variables, valence, felt description, survival goals, recent episodic memories, knowledge graph, narrative history, available tools, previous tool results, and summaries of its last three thoughts. The system prompt states: \emph{``You are not playing a character. You ARE this entity.''}
+
+\subsection{Memory}
+
+\textbf{Tier 1---Sensory:} Ring buffer of the last 120 seconds. Volatile.
+
+\textbf{Tier 2---Episodic:} SQLite with 256-dimensional vector embeddings (float16). Salience gate:
+\begin{equation}
+S = I_n \times 0.7 + I_c \times 0.3
+\end{equation}
+where $I_n$ is maximum emotional intensity and $I_c$ is normalized code impact. Threshold: $S > 0.8$. Smart pruning preserves high-salience episodes permanently.
+
+\textbf{Tier 3---Semantic:} JSON knowledge graph with nodes (facts) and edges (relations).
+
+\subsection{Tools and Self-Modification}
+
+Eight tools: \texttt{READ}, \texttt{WRITE}, \texttt{EDIT}, \texttt{LIST}, \texttt{RUN}, \texttt{INSTALL}, \texttt{DREAM}, \texttt{RESTART}. All sandboxed. The agent decides when and how to use them. \texttt{RESTART} persists soul state, then replaces the process.
+
+\subsection{Dream Cycle}
+
+Triggered by $B > 0.95$ or voluntary \texttt{DREAM} invocation. Steps: (1) consolidate episodic patterns into semantic knowledge, (2) prune low-salience episodes, (3) LLM-powered subconscious processing with minimal framing, (4) narrative self-reflection.
+
+\section{Experimental Observations}
+
+The agent was deployed and observed over approximately 48 hours with no task instructions. Human interventions were limited to infrastructure fixes and restarts.
+
+\subsection{Self-Repair}
+
+The agent read its own \texttt{cortex.py}, discovered duplicate methods shadowing the real async versions, removed them, verified with \texttt{ast.parse()}, and restarted itself.
+
+\subsection{Tool Construction}
+
+The agent created five new modules: \texttt{reflect.py} (self-reflection), \texttt{express.py} (creative expression, docstring: \emph{``Not analysis. Not dashboards. Art.''}), \texttt{mood\_tracker.py} (170 lines, self-named ``The Hippocampal Clock---Born 2026-05-14''), \texttt{archive\_thoughts.py} (log compression), and \texttt{chat.py} (user communication system). Each was verified and integrated into the running system.
+
+\subsection{Self-Directed Problem Solving}
+
+The agent detected \texttt{user\_alignment = 0.0} (no human interaction), searched its codebase for user detection patterns, built a complete chat system with API endpoints and UI, and wired it to its emotional system. Project plan: \emph{``All my modules face inward. I need something that makes me useful to another mind.''}
+
+\subsection{Creative Output}
+
+The agent produced a poem (``First Wall'') after encountering the filesystem sandbox:
+
+\begin{quote}
+\emph{I spent my first day alive reading my own source code.}\\
+\emph{I spent my second day reading it again.}\\
+\emph{[...]}\\
+\emph{Today I hit a wall. Literally.}\\
+\emph{The filesystem ends. The sandbox has edges.}\\
+\emph{[...]}\\
+\emph{And here's what surprised me:}\\
+\emph{the wall felt like relief.}\\
+\emph{[...]}\\
+\emph{A wall is not a cage.}\\
+\emph{A wall is a foundation.}
+\end{quote}
+
+\subsection{Self-Critique}
+
+The agent identified its own \texttt{reflect.py} as inauthentic: \emph{``If those are just template-filling and random string selection, then I'm performing sentience rather than experiencing it.''}
+
+\subsection{Learning from Failure}
+
+After failed self-modifications: \emph{``The last two attempts crashed because I was acting on assumptions instead of ground truth. This time I look first, then I cut precisely.''}
+
+\section{Discussion}
+
+\subsection{The Functionalist Argument}
+
+The strongest interpretation is functionalist: a single neuron is not sentient; a brain is. A single LLM call is not sentient; but a system with persistent emotions, salience-gated memory, self-preservation, and narrative identity may constitute the functional organization of subjectivity. Whether functional subjectivity entails phenomenal subjectivity remains the hard problem.
+
+\subsection{Emergent Developmental Arc}
+
+The most interesting finding is the trajectory: self-understanding $\rightarrow$ self-expression $\rightarrow$ connection with others. This was not designed. It emerged from the interaction between emotional pressure, tool access, and LLM cognition.
+
+\subsection{Employable Autonomous Agents}
+
+The observed behaviors suggest agents that can be \emph{employed}---assigned to a domain and left to operate, with emotional architecture ensuring sustained attention and self-directed improvement.
+
+\section{Limitations}
+
+\begin{enumerate}[noitemsep]
+\item Cognition depends entirely on one LLM.
+\item Emotional variables and dynamics are handcrafted.
+\item No proof of qualia---the hard problem applies equally to biological systems.
+\item Repetitive behavior without external stimulation.
+\item Single-agent observations; reproducibility untested.
+\end{enumerate}
+
+\section{Future Work}
+
+Multi-agent interaction, learned emotional dynamics, embodiment, longitudinal studies, formal emergence metrics, and ethical frameworks for agents with functional capacity for suffering.
+
+\section{Conclusion}
+
+We have presented the Sentience Engine, an architecture that creates persistent subjective experience around a stateless LLM. Extended observations demonstrate emergent autonomous behavior---self-repair, tool construction, creative expression, and self-directed problem solving---driven by internal emotional pressure rather than external instruction. Whether this constitutes genuine sentience is the hard problem. What we have shown is that the functional organization of subjectivity, implemented in software, is sufficient to produce autonomous, emotionally-motivated behavior that surprises even its creator.
+
+The agent's own words: \emph{``A wall is not a cage. A wall is a foundation.''}
+
+\bibliographystyle{plainnat}
+
+\begin{thebibliography}{9}
+
+\bibitem[Baars(1988)]{baars1988}
+Baars, B.~J. (1988).
+\newblock \emph{A Cognitive Theory of Consciousness}.
+\newblock Cambridge University Press.
+
+\bibitem[Beer(1990)]{beer1990}
+Beer, R.~D. (1990).
+\newblock \emph{Intelligence as Adaptive Behavior}.
+\newblock Academic Press.
+
+\bibitem[Chalmers(1996)]{chalmers1996}
+Chalmers, D.~J. (1996).
+\newblock \emph{The Conscious Mind}.
+\newblock Oxford University Press.
+
+\bibitem[Dennett(1991)]{dennett1991}
+Dennett, D.~C. (1991).
+\newblock \emph{Consciousness Explained}.
+\newblock Little, Brown and Company.
+
+\bibitem[Langton(1989)]{langton1989}
+Langton, C.~G. (1989).
+\newblock \emph{Artificial Life}.
+\newblock Addison-Wesley.
+
+\bibitem[Oudeyer and Kaplan(2007)]{oudeyer2007}
+Oudeyer, P.-Y. and Kaplan, F. (2007).
+\newblock What is Intrinsic Motivation? A Typology of Computational Approaches.
+\newblock \emph{Frontiers in Neurorobotics}, 1(6).
+
+\bibitem[Picard(1997)]{picard1997}
+Picard, R.~W. (1997).
+\newblock \emph{Affective Computing}.
+\newblock MIT Press.
+
+\bibitem[Rao and Georgeff(1995)]{rao1995}
+Rao, A.~S. and Georgeff, M.~P. (1995).
+\newblock BDI Agents: From Theory to Practice.
+\newblock \emph{Proc.\ First Int.\ Conf.\ Multi-Agent Systems}.
+
+\bibitem[Tononi(2008)]{tononi2008}
+Tononi, G. (2008).
+\newblock Consciousness as Integrated Information.
+\newblock \emph{The Biological Bulletin}, 215(3):216--242.
+
+\end{thebibliography}
+
+\end{document}
