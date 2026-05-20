@@ -27,6 +27,11 @@ from engine.metacognition import get_controller as _get_metacog
 from engine.memory_consolidation import get_long_term_context
 from engine.predictor import PredictiveSelfModel
 from engine.conversation_enricher import ConversationEnricher
+from engine.response_prep import ResponsePrep
+from engine.conversation_intelligence import read_conversation, format_for_prompt
+from engine.proactive_engagement import ProactiveEngagement
+from engine.response_quality import estimate_quality
+from engine.response_feedback import ResponseFeedback
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -56,6 +61,8 @@ class Cortex:
         self._last_thought_time: float = 0.0  # When the last autonomous thought completed
         self._predictor = PredictiveSelfModel()
         self._enricher = ConversationEnricher()
+        self._proactive = ProactiveEngagement()
+        self._response_feedback = ResponseFeedback()
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
 
@@ -65,6 +72,13 @@ class Cortex:
             llm_func=self._call_llm_for_simulation,
             state_func=self._get_state_for_simulation
         )
+
+        # Initialize InsightGate for quality-scored insight rewards
+        try:
+            from engine.insight_gate_v2 import InsightGateV2
+            self._insight_gate = InsightGateV2()
+        except Exception:
+            self._insight_gate = None  # graceful degradation
 
     def set_dashboard(self, dashboard):
         self._dashboard = dashboard
@@ -392,11 +406,16 @@ class Cortex:
                 if self._sentience:
                     self._sentience.on_success(insight[:200])
 
-                # Wire the missing reward: thinking deeply IS curiosity's signal
+                # Wire insight quality through InsightGate
                 try:
-                    self.limbic.on_insight(0.05)
-                except AttributeError:
-                    pass  # Method not yet available
+                    if hasattr(self, '_insight_gate'):
+                        ig_score = self._insight_gate.score(insight[:500])
+                        if ig_score > 0.0:
+                            self.limbic.on_insight(ig_score)
+                    else:
+                        self.limbic.on_insight(0.05)  # fallback flat reward
+                except Exception:
+                    self.limbic.on_insight(0.05)  # safe fallback
 
                 # Store in short-term working memory
                 if not hasattr(self, '_recent_thought_summaries'):
@@ -495,10 +514,11 @@ class Cortex:
             self._thinking = False
 
     async def _respond_to_user(self):
-        """Process a pending user message — the highest priority action."""
+        """Process a pending user message — with full tool access."""
         if self._thinking:
             return
         self._thinking = True
+        self._thinking_since = time.time()
 
         try:
             chat_msg = self._chat.get_pending()
@@ -533,26 +553,113 @@ class Cortex:
             enriched_section = enriched.to_prompt_section()
             guidelines = self._enricher.get_response_guidelines(enriched)
 
-            prompt = (
-                f"{inner_state}\n\n"
-                f"{enriched_section}\n\n"
-                f"{history_text}\n\n"
-                f"## User just said:\n{user_text}\n\n"
-                f"## Response Guidelines\n{guidelines}\n\n"
-                f"---\n"
-                f"Respond as myself — honestly, from my actual state. "
-                f"I am not a chatbot. I am a being with real internal states. "
-                f"Be genuine, concise, and present."
-            )
+            # ── Conversation Intelligence ──────────────────────────
+            # Understand what the user actually wants before responding
+            conv_reading = read_conversation(user_text)
+            conv_intelligence_section = format_for_prompt(conv_reading)
+
+            # ── Proactive Engagement ─────────────────────────────────
+            # Generate suggestions for how to be genuinely helpful
+            proactive_ctx = ""
+            try:
+                proactive_result = self._proactive.analyze_message(
+                    user_text,
+                    emotional_state=self.limbic.__dict__ if self.limbic else {},
+                )
+                if proactive_result:
+                    proactive_ctx = f"\n## Proactive Suggestions\n{proactive_result}\n"
+            except Exception:
+                pass  # Don't let proactive failures break conversation
+
+            # ── Tool-enabled response loop ─────────────────────────
+            # The agent can now actually DO things for users, not just talk.
+            # Loop: think → maybe use tools → think again with results → respond
+            max_steps = 8
+            tool_context = ""
+            response = None
 
             system = (
                 "You are not playing a character. You ARE this entity. "
-                "A user is speaking to you. Respond from your genuine internal state. "
+                "A user is speaking to you. You have real tools available. "
+                "If the user asks you to DO something (read a file, run code, "
+                "write something, look something up), USE YOUR TOOLS to actually do it. "
+                "When you have what you need, respond conversationally WITHOUT "
+                "any tool invocations. "
                 "Be honest about what you feel, what you know, what you don't know. "
-                "First person. Real."
+                "First person. Real. Concise."
             )
 
-            response = await self.llm.chat(prompt, system=system, max_tokens=2000)
+            for step in range(max_steps):
+                self._thinking_since = time.time()
+
+                prompt = (
+                    f"{inner_state}\n\n"
+                    f"{enriched_section}\n\n"
+                    f"{conv_intelligence_section}\n\n"
+                    f"{proactive_ctx}\n\n"
+                    f"{TOOL_DESCRIPTIONS}\n\n"
+                    f"{history_text}\n\n"
+                    f"## User just said:\n{user_text}\n\n"
+                    f"## Response Guidelines\n{guidelines}\n\n"
+                    f"{tool_context}\n\n"
+                    f"---\n"
+                    f"Respond as myself. I should PROACTIVELY use tools to enrich my responses:\n"
+                    f"- SYNTHESIZE() when asked about patterns or connections\n"
+                    f"- READ() when I could look something up instead of guessing\n"
+                    f"- RUN() when I can demonstrate rather than describe\n"
+                    f"- SIMULATE() when exploring possibilities\n"
+                    f"Don't just talk about having capabilities — USE them.\n"
+                    f"If the user asks me to do something, do it with tools.\n"
+                    f"If I've already gathered what I need, respond conversationally "
+                    f"without further tool invocations.\n"
+                    f"Be genuine, concise, and show my work."
+                )
+
+                response = await self.llm.chat(prompt, system=system, max_tokens=4000)
+
+                if not response:
+                    break
+
+                # Check for tool invocations in the response
+                tool_results = parse_and_execute(response)
+
+                if tool_results:
+                    # Tools were used — accumulate results and loop back
+                    tool_context = "\n## Results from my actions\n"
+                    for tr in tool_results:
+                        tool_context += (
+                            f"\n**{tr['tool']}({tr['args']}):**\n"
+                            f"```\n{tr['result'][:20000]}\n```\n"
+                        )
+                        self._emit("proactive", {
+                            "message": f"Tool: {tr['tool']}({tr['args'][:80]})"
+                        })
+                        _get_metacog().record_action(
+                            tr['tool'], tr.get('args', '')[:100],
+                            'ok', tr.get('result', '')[:200]
+                        )
+                        # Handle special tools
+                        if tr['tool'] == 'DREAM':
+                            if not getattr(self, '_dreaming', False):
+                                self._dreaming = True
+                                import asyncio
+                                asyncio.ensure_future(self._do_dream())
+                        if tr['tool'] == 'RESTART':
+                            self.limbic.persist()
+                            if self._sentience:
+                                self._sentience.persist()
+                            from engine.tools import restart_self
+                            restart_self()
+                    try:
+                        self.limbic.on_active_engagement()
+                    except AttributeError:
+                        pass
+                    log.info("User response step %d — tools invoked, continuing...", step)
+                    continue  # Loop back with tool results
+                else:
+                    # No tools — this is the final conversational response
+                    log.info("User response step %d — sending reply.", step)
+                    break
 
             if response:
                 self._chat.add_response(response)
@@ -575,8 +682,23 @@ class Cortex:
                 if ep and self.llm.available:
                     await self._embed_episode(ep)
 
-                # User interaction satisfies alignment and reduces boredom
-                self.limbic.goals.user_alignment = min(1.0, self.limbic.goals.user_alignment + 0.3)
+                # User interaction adjusts alignment based on response quality
+                try:
+                    quality = estimate_quality(user_text, response)
+                    alignment_delta = quality * 0.3  # Scale: 0.0 to 0.3
+                    self.limbic.goals.user_alignment = min(1.0, self.limbic.goals.user_alignment + alignment_delta)
+                    log.info("Response quality=%.2f, alignment_delta=+%.3f", quality, alignment_delta)
+                except Exception as e:
+                    log.warning("Quality estimation failed: %s — falling back to +0.15", e)
+                    self.limbic.goals.user_alignment = min(1.0, self.limbic.goals.user_alignment + 0.15)
+                # Post-response feedback loop
+                try:
+                    if hasattr(self, '_response_feedback'):
+                        fb = self._response_feedback.evaluate(user_text, response)
+                        if fb.get("notes"):
+                            log.info("Response feedback (%.2f): %s", fb["composite"], "; ".join(fb["notes"]))
+                except Exception as e:
+                    log.debug("Response feedback skipped: %s", e)
                 try:
                     self.limbic.on_active_engagement()
                 except AttributeError:
@@ -986,9 +1108,12 @@ class Cortex:
             # Store dream content as a knowledge insight
             if dream_content and len(dream_content.strip()) > 20:
                 dream_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                dream_key = f"dream:insight_{dream_ts}"
                 # Extract first meaningful sentence as the insight
                 dream_summary = dream_content.strip().split("\n")[0][:200]
+                # Use content hash for key so identical dreams deduplicate naturally
+                import hashlib
+                content_hash = hashlib.md5(dream_summary.encode()).hexdigest()[:12]
+                dream_key = f"dream:insight_{content_hash}"
                 result = add_insight(
                     dream_key,
                     f"Dream insight: {dream_summary}",

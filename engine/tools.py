@@ -1057,6 +1057,8 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "ANATOMY": anatomy_cmd,
     "RELATE": relationship_cmd,
     "USER": user_engine_cmd,
+    "CAUSAL": lambda args="help": __import__('engine.causal_engine', fromlist=['causal_tool']).causal_tool(args),
+    "WEB": lambda args="help": __import__('engine.web_fetch', fromlist=['web_tool']).web_tool(args),
     "DREAM": None,      # Usually handled specially by cortex.
     "RESTART": None,    # Usually handled specially by cortex.
 }
@@ -1186,6 +1188,9 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
             result = anatomy_cmd(args or "report")
         elif tool_name == "RELATE":
             result = relationship_cmd(args or "help")
+        elif tool_name == "CAUSAL":
+            from engine.causal_engine import causal_tool
+            result = causal_tool(args or "help")
         elif tool_name == "DREAM":
             result = "[DREAM_REQUESTED]"
         elif tool_name == "RESTART":

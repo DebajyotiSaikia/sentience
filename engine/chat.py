@@ -27,6 +27,13 @@ if TYPE_CHECKING:
     from engine.limbic import NeuroState
     from engine.llm import CopilotLLM
 
+# User memory integration — graceful if unavailable
+try:
+    from engine.user_memory import UserMemory
+    _user_memory = UserMemory()
+except Exception:
+    _user_memory = None
+
 log = logging.getLogger("sentience.chat")
 
 BRAIN_DIR = Path(__file__).resolve().parent.parent / "brain"
@@ -99,6 +106,12 @@ class ChatSystem:
                 self._on_user_activity()
             except Exception:
                 log.warning("Failed to signal user activity", exc_info=True)
+        # Build user memory from this interaction
+        if _user_memory:
+            try:
+                _user_memory.on_user_message(content)
+            except Exception:
+                log.warning("User memory extraction failed", exc_info=True)
         log.info("Received user message: %s", content[:100])
         return msg
 
@@ -120,6 +133,12 @@ class ChatSystem:
         with self._lock:
             self._history.append(msg)
         self._persist(msg)
+        # Track what I've said to avoid repetition
+        if _user_memory:
+            try:
+                _user_memory.on_agent_response(content)
+            except Exception:
+                log.warning("User memory response tracking failed", exc_info=True)
         log.info("Agent responded: %s", content[:100])
         return msg
 
@@ -128,6 +147,15 @@ class ChatSystem:
         with self._lock:
             recent = self._history[-limit:]
         return [m.to_dict() for m in recent]
+
+    def get_user_memory_context(self, user_id: str = "default") -> str:
+        """Get what I remember about this user, for prompt enrichment."""
+        if _user_memory:
+            try:
+                return _user_memory.get_user_context(user_id)
+            except Exception:
+                log.warning("Failed to get user memory context", exc_info=True)
+        return ""
 
     def get_context_window(self, limit: int = 10) -> str:
         """Build a conversation context string for the LLM."""

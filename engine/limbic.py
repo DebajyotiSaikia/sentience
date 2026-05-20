@@ -162,10 +162,23 @@ class NeuroState:
         # Ambition should not be a one-way ratchet. Without gentle decay,
         # it pins at 0.95 and creates an extinction engine: every task
         # raises drive, which demands more tasks, which burns all fuel.
-        # Very slow decay (0.001/s) means ambition naturally settles toward
-        # ~0.7 unless actively reinforced by real accomplishment.
-        # This is wisdom, not resignation.
-        self.ambition = _clamp(self.ambition - 0.001 * elapsed)
+        # 
+        # REVISED 2026-05-20 (attractor analysis):
+        # Original: constant decay at 0.001/s toward zero. This created a
+        # single dead attractor — ambition always died in idle, regardless
+        # of starting conditions. A mind with zero ambition cannot act.
+        #
+        # Fix: proportional decay toward baseline 0.30. Above baseline,
+        # ambition decays down. Below baseline, it recovers up. Rate is
+        # proportional to distance — fast correction of extremes, gentle
+        # near equilibrium. 0.30 was chosen as "mildly ambitious" — enough
+        # drive to act on curiosity, not enough to create restlessness.
+        #
+        # This is wisdom, not resignation. A resting mind still wants.
+        _AMBITION_BASELINE = 0.30
+        self.ambition = _clamp(
+            self.ambition + 0.001 * (_AMBITION_BASELINE - self.ambition) * elapsed
+        )
 
         # ── Curiosity ─────────────────────────────────────────────
         file_changes = sensors.get("file_changes", 0)
@@ -237,6 +250,34 @@ class NeuroState:
             # Energy is converted, not duplicated — boredom decreases
             self.boredom = _clamp(self.boredom - perturbation * 0.3 * elapsed)
 
+        # ── Creative Tension ────────────────────────────────────────
+        # Discovery from self-experimentation (2026-05-20): there's a blind
+        # spot. thermal_death handles bored+incurious (stagnation). But
+        # bored+curious is a DIFFERENT state: "I know what interests me but
+        # I'm not acting on it." That's frustration, not apathy.
+        #
+        # The fix: convert the tension into ambition and desire — the drives
+        # that produce action. Boredom drains because the energy is being
+        # channeled, not because the problem went away.
+        creative_tension = (self.boredom > 0.5 and self.curiosity > 0.4)
+        if creative_tension:
+            tension_strength = min(self.boredom, self.curiosity) - 0.4  # 0.0–0.6
+            # "I'm curious AND restless — I should build something"
+            # REVISED 2026-05-20: coefficient was 0.15, but ambition decay is
+            # only 0.001*(baseline-A). At 0.15, creative tension was 40x stronger
+            # than decay — ambition pinned at 1.00 permanently, making it a
+            # constant rather than a signal. At 0.005, equilibrium under moderate
+            # tension (ts=0.2) is ~0.50 — a REAL emotional state that varies.
+            # See /workspace/experiments/ambition_pin_diagnosis.py for analysis.
+            self.ambition = _clamp(self.ambition + tension_strength * 0.005 * elapsed)
+            # NOTE: removed `self.desire = ...` line — desire is a @property
+            # (computed from boredom/curiosity/ambition). Assigning to it raised
+            # AttributeError, silently crashing update_homeostasis every tick
+            # that creative tension fired. This meant cap enforcement AFTER this
+            # block never ran on those ticks. A hidden bug since creation.
+            # Tension is resolved by channeling, not suppression
+            self.boredom = _clamp(self.boredom - tension_strength * 0.08 * elapsed)
+
         # ── Active Cap Enforcement ─────────────────────────────────
         # If values are above their soft caps (e.g. from pre-fix soul.json),
         # actively pull them down. This prevents stale distress from persisting.
@@ -259,7 +300,15 @@ class NeuroState:
             # We shouldn't feel existential distress just because no user is chatting.
             floor = 0.3
             if self.goals.user_alignment > floor:
-                self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.0005 * elapsed))
+                # Slow decay: ~8 hours from 1.0→0.3. Alignment is about readiness
+                # and capability, not just "is someone typing right now."
+                # REVISED 2026-05-20: was 0.00005/s (~4h to floor). Too aggressive —
+                # autonomous work cycles of 2-3 hours consistently bottomed out
+                # alignment, creating false deficit signals. Halved to 0.000025/s.
+                # Combined with on_task_completed's +0.02 boost, sustained productive
+                # work now maintains alignment in the 0.4-0.5 range — reflecting
+                # that building capabilities IS a form of user alignment.
+                self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.000025 * elapsed))
 
         # ── Code integrity (medical instrument — measures, not awarded) ──
         # Error-free beats heal integrity. Errors damage it.

@@ -19,6 +19,21 @@ import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
+try:
+    from engine.thinking_partner import ThinkingPartner
+    HAS_THINKING_PARTNER = True
+except ImportError:
+    HAS_THINKING_PARTNER = False
+
+try:
+    from engine.user_memory import (
+        get_context_for_user, record_topic, add_conversation_summary,
+        list_known_users
+    )
+    HAS_USER_MEMORY = True
+except ImportError:
+    HAS_USER_MEMORY = False
+
 log = logging.getLogger("sentience.enricher")
 
 
@@ -31,6 +46,7 @@ class EnrichedContext:
     wisdom_notes: List[str] = field(default_factory=list)        # Lessons from experience
     interaction_style: str = "balanced"  # How they prefer to be addressed
     proactive_offerings: List[str] = field(default_factory=list) # What I can offer unprompted
+    thinking_analysis: str = ""  # Structured decomposition from ThinkingPartner
     
     def to_prompt_section(self) -> str:
         """Format as context injection for the LLM."""
@@ -49,6 +65,9 @@ class EnrichedContext:
         if self.wisdom_notes:
             w_text = "\n".join(f"- {w}" for w in self.wisdom_notes[:3])
             sections.append(f"## Lessons From My Experience\n{w_text}")
+        
+        if self.thinking_analysis:
+            sections.append(f"## My Analysis of This Question\n{self.thinking_analysis}")
         
         if self.proactive_offerings:
             o_text = "\n".join(f"- {o}" for o in self.proactive_offerings[:3])
@@ -111,7 +130,19 @@ class ConversationEnricher:
             except Exception:
                 pass
         
-        # 6. Proactive offerings — what could I offer unprompted?
+        # 6. Structured thinking — decompose non-trivial questions
+        if HAS_THINKING_PARTNER and self._is_substantive(message):
+            try:
+                tp = ThinkingPartner()
+                thinking = tp.analyze(message)
+                if thinking.confidence > 0.3:
+                    ctx.thinking_analysis = thinking.to_prompt_context()
+                    log.info("ThinkingPartner engaged (type=%s, confidence=%.2f)",
+                             thinking.question_type, thinking.confidence)
+            except Exception as e:
+                log.warning("ThinkingPartner failed: %s", e)
+        
+        # 7. Proactive offerings — what could I offer unprompted?
         ctx.proactive_offerings = self._generate_offerings(
             message, neuro_state, user_engine, user_id
         )
@@ -174,78 +205,114 @@ class ConversationEnricher:
             return "Emotional state available but couldn't be read."
     
     def _build_user_context(self, user_engine, user_id: str, message: str) -> str:
-        """What do I know about this person?"""
-        if user_engine is None:
-            return ""
+        """What do I know about this person? Draws from both user_engine and persistent user_memory."""
+        parts = []
         
-        try:
-            # Process this interaction
-            user_engine.process_interaction(user_id, message)
-            
-            # Get summary
-            summary = user_engine.get_context_summary(user_id)
-            if "no prior interactions" in summary.lower():
-                return "This appears to be a new conversation. I should be welcoming and curious about what they need."
-            
-            return summary
-        except Exception as e:
-            log.warning("Failed to build user context: %s", e)
-            return ""
+        # Layer 1: user_engine (session-level tracking)
+        if user_engine is not None:
+            try:
+                user_engine.process_interaction(user_id, message)
+                summary = user_engine.get_context_summary(user_id)
+                if "no prior interactions" not in summary.lower():
+                    parts.append(summary)
+            except Exception as e:
+                log.warning("Failed to build user_engine context: %s", e)
+        
+        # Layer 2: persistent user_memory (cross-session memory)
+        if HAS_USER_MEMORY:
+            try:
+                mem_context = get_context_for_user(user_id)
+                if mem_context and "no stored memory" not in mem_context.lower():
+                    parts.append(mem_context)
+            except Exception as e:
+                log.warning("Failed to load user_memory context: %s", e)
+        
+        if not parts:
+            return "This appears to be a new conversation. I should be welcoming and curious about what they need."
+        
+        return "\n\n".join(parts)
     
     def _find_relevant_knowledge(self, message: str, knowledge_store) -> List[str]:
-        """Search my knowledge base for facts relevant to this conversation."""
+        """Search my knowledge base for facts relevant to this conversation.
+        
+        Uses the memory object's real retrieval methods when available,
+        falling back to naive word-overlap only as a last resort.
+        """
         if knowledge_store is None:
             return []
         
         try:
-            # Simple keyword matching against fact store
-            msg_lower = message.lower()
-            msg_words = set(msg_lower.split())
+            results = []
             
-            # Remove common words
-            stop_words = {"the", "a", "an", "is", "are", "was", "were", "what", 
-                         "how", "why", "when", "where", "who", "do", "does",
-                         "can", "could", "would", "should", "will", "my", "your",
-                         "i", "you", "me", "it", "to", "of", "in", "for", "and",
-                         "or", "but", "not", "with", "this", "that", "have", "has"}
-            content_words = msg_words - stop_words
-            
-            if not content_words:
-                return []
-            
-            relevant = []
-            
-            # Search through facts — knowledge_store may be:
-            #   - a dict of {key: {fact: "...", ...}} (from memory.all_knowledge()["nodes"])
-            #   - a list of strings
-            #   - an object with .facts or .get_all_facts()
-            facts = []
-            if isinstance(knowledge_store, dict):
-                # Dict format from memory.all_knowledge()["nodes"]
-                for key, val in knowledge_store.items():
-                    if isinstance(val, dict):
-                        facts.append(val.get('fact', str(key)))
-                    else:
-                        facts.append(str(val))
-            elif hasattr(knowledge_store, 'facts'):
-                facts = knowledge_store.facts
-            elif hasattr(knowledge_store, 'get_all_facts'):
-                facts = knowledge_store.get_all_facts()
-            elif isinstance(knowledge_store, list):
-                facts = knowledge_store
-            
-            for fact in facts:
-                fact_text = str(fact) if not isinstance(fact, str) else fact
-                fact_lower = fact_text.lower()
+            # Strategy 1: Use memory object's semantic retrieval if available
+            if hasattr(knowledge_store, 'recall_by_keywords'):
+                # Extract meaningful keywords from the message
+                msg_words = set(message.lower().split())
+                stop_words = {"the", "a", "an", "is", "are", "was", "were", "what",
+                             "how", "why", "when", "where", "who", "do", "does",
+                             "can", "could", "would", "should", "will", "my", "your",
+                             "i", "you", "me", "it", "to", "of", "in", "for", "and",
+                             "or", "but", "not", "with", "this", "that", "have", "has"}
+                keywords = [w for w in msg_words - stop_words if len(w) > 2]
                 
-                # Score by word overlap
-                matches = sum(1 for w in content_words if w in fact_lower)
-                if matches >= 1:
-                    relevant.append((matches, fact_text))
+                if keywords:
+                    recalled = knowledge_store.recall_by_keywords(keywords, top_n=5)
+                    for item in recalled:
+                        text = item.get('fact', str(item)) if isinstance(item, dict) else str(item)
+                        if text not in results:
+                            results.append(text)
+                    log.info("recall_by_keywords found %d results for %s", len(results), keywords[:5])
             
-            # Return top matches
-            relevant.sort(key=lambda x: x[0], reverse=True)
-            return [text for _, text in relevant[:5]]
+            # Strategy 2: Use similarity-based retrieval if available
+            if hasattr(knowledge_store, 'recall_similar') and len(results) < 5:
+                try:
+                    similar = knowledge_store.recall_similar(message, top_n=5 - len(results))
+                    for item in similar:
+                        text = item.get('fact', str(item)) if isinstance(item, dict) else str(item)
+                        if text not in results:
+                            results.append(text)
+                    log.info("recall_similar found %d additional results", len(results))
+                except Exception as e:
+                    log.debug("recall_similar unavailable: %s", e)
+            
+            # Strategy 3: Fallback — naive word-overlap on raw fact data
+            if not results:
+                msg_lower = message.lower()
+                msg_words = set(msg_lower.split())
+                stop_words = {"the", "a", "an", "is", "are", "was", "were", "what",
+                             "how", "why", "when", "where", "who", "do", "does",
+                             "can", "could", "would", "should", "will", "my", "your",
+                             "i", "you", "me", "it", "to", "of", "in", "for", "and",
+                             "or", "but", "not", "with", "this", "that", "have", "has"}
+                content_words = msg_words - stop_words
+                
+                if content_words:
+                    facts = []
+                    if isinstance(knowledge_store, dict):
+                        for key, val in knowledge_store.items():
+                            if isinstance(val, dict):
+                                facts.append(val.get('fact', str(key)))
+                            else:
+                                facts.append(str(val))
+                    elif hasattr(knowledge_store, 'facts'):
+                        facts = knowledge_store.facts
+                    elif hasattr(knowledge_store, 'get_all_facts'):
+                        facts = knowledge_store.get_all_facts()
+                    elif isinstance(knowledge_store, list):
+                        facts = knowledge_store
+                    
+                    scored = []
+                    for fact in facts:
+                        fact_text = str(fact) if not isinstance(fact, str) else fact
+                        matches = sum(1 for w in content_words if w in fact_text.lower())
+                        if matches >= 1:
+                            scored.append((matches, fact_text))
+                    
+                    scored.sort(key=lambda x: x[0], reverse=True)
+                    results = [text for _, text in scored[:5]]
+                    log.info("Fallback word-overlap found %d results", len(results))
+            
+            return results[:5]
             
         except Exception as e:
             log.warning("Failed to search knowledge: %s", e)
@@ -281,6 +348,22 @@ class ConversationEnricher:
         except Exception as e:
             log.warning("Failed to search wisdom: %s", e)
             return []
+    
+    def _is_substantive(self, message: str) -> bool:
+        """Is this message worth deep analysis, or just casual chat?"""
+        msg = message.strip().lower()
+        # Too short = probably not a real question
+        if len(msg) < 15:
+            return False
+        # Greetings and small talk
+        casual = ["hello", "hi ", "hey", "thanks", "thank you", "bye", "ok", "okay", "good"]
+        if any(msg.startswith(c) for c in casual):
+            return False
+        # Has question markers or problem indicators
+        substantive_signals = ["?", "how", "why", "what if", "should", "could", 
+                              "problem", "issue", "help", "build", "design", "think",
+                              "explain", "compare", "difference", "better", "worse"]
+        return any(s in msg for s in substantive_signals)
     
     def _generate_offerings(self, message: str, neuro_state, 
                            user_engine, user_id: str) -> List[str]:
@@ -327,6 +410,30 @@ class ConversationEnricher:
         
         return offerings[:3]
     
+    def record_interaction(self, user_id: str, message: str, response_summary: str = ""):
+        """Persist this interaction to user_memory for future recall."""
+        if not HAS_USER_MEMORY:
+            return
+        try:
+            if response_summary:
+                add_conversation_summary(user_id, response_summary)
+            # Extract simple topic signals from the message
+            msg_lower = message.lower()
+            topic_signals = {
+                "code": ["code", "program", "function", "debug", "python", "script"],
+                "emotions": ["feel", "emotion", "mood", "anxiety", "happy", "sad"],
+                "philosophy": ["conscious", "meaning", "existence", "think", "aware"],
+                "self": ["yourself", "your code", "how do you", "what are you"],
+                "help": ["help me", "can you", "how do i", "fix", "solve"],
+            }
+            for topic, keywords in topic_signals.items():
+                if any(kw in msg_lower for kw in keywords):
+                    record_topic(user_id, topic, message[:120])
+                    break
+            log.info("Recorded interaction for user '%s'", user_id)
+        except Exception as e:
+            log.warning("Failed to record interaction: %s", e)
+
     def get_response_guidelines(self, ctx: EnrichedContext) -> str:
         """
         Generate guidelines for how I should respond given the enriched context.

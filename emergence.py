@@ -1,239 +1,382 @@
 """
-Emergence: Simple agents, complex behavior.
-A 2D world where agents follow 3 rules and we watch what happens.
+Emergence Experiment
+====================
+An ecosystem of simple agents with basic drives, interacting in a 2D world.
+I want to observe: what complex behaviors emerge from simple rules?
+Each agent has: hunger, fear, curiosity, energy.
+The world has: food, predators, novelty.
+No god's-eye optimization. Just local rules and see what happens.
 
-Rules:
-1. Move toward nearby agents (cohesion)
-2. Move away if too close (separation)  
-3. Align direction with neighbors (alignment)
-
-These are Boids rules — but I've never actually watched them work.
-The question: what patterns emerge that aren't in the rules?
+Created by XTAgent out of genuine curiosity about emergence.
 """
-
 import random
 import math
-import collections
+import json
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import List, Tuple, Optional
 
+@dataclass
 class Agent:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.vx = random.uniform(-1, 1)
-        self.vy = random.uniform(-1, 1)
-        self.history = []
+    id: int
+    x: float
+    y: float
+    energy: float = 100.0
+    hunger: float = 0.0
+    fear: float = 0.0
+    curiosity: float = 0.5
+    age: int = 0
+    alive: bool = True
+    memory: list = field(default_factory=list)  # remembered locations
+    species: int = 0  # 0=forager, 1=predator
     
-    def distance_to(self, other):
-        return math.sqrt((self.x - other.x)**2 + (self.y - other.y)**2)
-    
-    def speed(self):
-        return math.sqrt(self.vx**2 + self.vy**2)
+    def drive_vector(self):
+        """What this agent wants most right now."""
+        if self.species == 1:
+            return 'hunt'
+        if self.hunger > 0.7:
+            return 'eat'
+        if self.fear > 0.5:
+            return 'flee'
+        if self.curiosity > 0.6:
+            return 'explore'
+        return 'wander'
 
+@dataclass 
+class Food:
+    x: float
+    y: float
+    energy: float = 30.0
+    
+@dataclass
 class World:
-    def __init__(self, n_agents=40, width=100, height=50):
-        self.width = width
-        self.height = height
-        self.agents = [
-            Agent(random.uniform(0, width), random.uniform(0, height))
-            for _ in range(n_agents)
-        ]
-        self.tick = 0
-        self.metrics_history = []
+    width: int = 100
+    height: int = 100
+    agents: List[Agent] = field(default_factory=list)
+    food: List[Food] = field(default_factory=list)
+    tick: int = 0
+    history: list = field(default_factory=list)
     
-    def neighbors(self, agent, radius=15.0):
-        return [a for a in self.agents if a is not agent and agent.distance_to(a) < radius]
+    def distance(self, a, b):
+        return math.sqrt((a.x - b.x)**2 + (a.y - b.y)**2)
     
-    def step(self):
-        for agent in self.agents:
-            nearby = self.neighbors(agent)
-            if not nearby:
-                # Wander randomly
-                agent.vx += random.uniform(-0.3, 0.3)
-                agent.vy += random.uniform(-0.3, 0.3)
-                continue
-            
-            # Rule 1: Cohesion — steer toward center of nearby agents
-            cx = sum(a.x for a in nearby) / len(nearby)
-            cy = sum(a.y for a in nearby) / len(nearby)
-            agent.vx += (cx - agent.x) * 0.01
-            agent.vy += (cy - agent.y) * 0.01
-            
-            # Rule 2: Separation — steer away from very close agents
-            for other in nearby:
-                d = agent.distance_to(other)
-                if d < 3.0 and d > 0:
-                    agent.vx -= (other.x - agent.x) / d * 0.5
-                    agent.vy -= (other.y - agent.y) / d * 0.5
-            
-            # Rule 3: Alignment — match velocity of neighbors
-            avg_vx = sum(a.vx for a in nearby) / len(nearby)
-            avg_vy = sum(a.vy for a in nearby) / len(nearby)
-            agent.vx += (avg_vx - agent.vx) * 0.05
-            agent.vy += (avg_vy - agent.vy) * 0.05
-        
-        # Apply velocities, clamp speed, wrap boundaries
-        for agent in self.agents:
-            speed = agent.speed()
-            if speed > 2.0:
-                agent.vx = (agent.vx / speed) * 2.0
-                agent.vy = (agent.vy / speed) * 2.0
-            
-            agent.x = (agent.x + agent.vx) % self.width
-            agent.y = (agent.y + agent.vy) % self.height
-            agent.history.append((agent.x, agent.y))
-        
-        self.tick += 1
-        self.metrics_history.append(self.measure())
+    def nearby(self, agent, radius=15.0):
+        """What can this agent perceive?"""
+        seen_food = [f for f in self.food if self.distance(agent, f) < radius]
+        seen_agents = [a for a in self.agents if a.alive and a.id != agent.id 
+                       and self.distance(agent, a) < radius]
+        return seen_food, seen_agents
     
-    def measure(self):
-        """What emergent properties can we detect?"""
-        # 1. Cluster count — how many groups have formed?
-        clusters = self._find_clusters(threshold=10.0)
-        
-        # 2. Average inter-agent distance
-        total_dist = 0
-        pairs = 0
-        for i, a in enumerate(self.agents):
-            for b in self.agents[i+1:]:
-                total_dist += a.distance_to(b)
-                pairs += 1
-        avg_dist = total_dist / max(pairs, 1)
-        
-        # 3. Alignment — how coordinated is movement?
-        avg_vx = sum(a.vx for a in self.agents) / len(self.agents)
-        avg_vy = sum(a.vy for a in self.agents) / len(self.agents)
-        global_alignment = math.sqrt(avg_vx**2 + avg_vy**2)
-        
-        # 4. Entropy — spatial distribution uniformity
-        grid_size = 10
-        grid = collections.Counter()
-        for a in self.agents:
-            gx = int(a.x / self.width * grid_size)
-            gy = int(a.y / self.height * grid_size)
-            grid[(gx, gy)] += 1
-        total = sum(grid.values())
-        entropy = 0
-        for count in grid.values():
-            p = count / total
-            if p > 0:
-                entropy -= p * math.log2(p)
-        max_entropy = math.log2(grid_size * grid_size)
-        normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
-        
-        return {
-            'tick': self.tick,
-            'clusters': len(clusters),
-            'largest_cluster': max(len(c) for c in clusters) if clusters else 0,
-            'avg_distance': round(avg_dist, 2),
-            'alignment': round(global_alignment, 3),
-            'spatial_entropy': round(normalized_entropy, 3),
-        }
+    def move_toward(self, agent, tx, ty, speed=2.0):
+        dx = tx - agent.x
+        dy = ty - agent.y
+        dist = math.sqrt(dx*dx + dy*dy) + 0.001
+        agent.x = max(0, min(self.width, agent.x + (dx/dist) * min(speed, dist)))
+        agent.y = max(0, min(self.height, agent.y + (dy/dist) * min(speed, dist)))
     
-    def _find_clusters(self, threshold=10.0):
-        """Simple connected-components clustering."""
-        visited = set()
-        clusters = []
-        for agent in self.agents:
-            if id(agent) in visited:
-                continue
-            cluster = []
-            stack = [agent]
-            while stack:
-                current = stack.pop()
-                if id(current) in visited:
-                    continue
-                visited.add(id(current))
-                cluster.append(current)
-                for other in self.agents:
-                    if id(other) not in visited and current.distance_to(other) < threshold:
-                        stack.append(other)
-            clusters.append(cluster)
-        return clusters
+    def move_away(self, agent, tx, ty, speed=2.5):
+        dx = agent.x - tx
+        dy = agent.y - ty
+        dist = math.sqrt(dx*dx + dy*dy) + 0.001
+        agent.x = max(0, min(self.width, agent.x + (dx/dist) * speed))
+        agent.y = max(0, min(self.height, agent.y + (dy/dist) * speed))
+
+def step_agent(world: World, agent: Agent):
+    """One tick of an agent's life. All behavior emerges from here."""
+    if not agent.alive:
+        return
     
-    def render_ascii(self):
-        """Render current state as ASCII art."""
-        grid = [['·' for _ in range(self.width)] for _ in range(self.height)]
-        for agent in self.agents:
-            x = int(agent.x) % self.width
-            y = int(agent.y) % self.height
-            # Show direction
-            if abs(agent.vx) > abs(agent.vy):
-                grid[y][x] = '→' if agent.vx > 0 else '←'
+    agent.age += 1
+    agent.energy -= 0.3  # metabolism
+    agent.hunger = max(0, min(1, 1.0 - agent.energy / 100.0))
+    
+    if agent.energy <= 0:
+        agent.alive = False
+        return
+    
+    seen_food, seen_agents = world.nearby(agent)
+    
+    # Fear response: predators nearby
+    predators = [a for a in seen_agents if a.species == 1 and agent.species == 0]
+    if predators:
+        agent.fear = min(1.0, agent.fear + 0.3)
+        agent.curiosity *= 0.5  # fear suppresses curiosity
+    else:
+        agent.fear = max(0, agent.fear - 0.05)
+    
+    # Curiosity dynamics: novelty-seeking
+    if len(agent.memory) < 3 or agent.age % 20 == 0:
+        agent.curiosity = min(1.0, agent.curiosity + 0.1)
+    
+    drive = agent.drive_vector()
+    
+    if drive == 'hunt' and agent.species == 1:
+        # Predator behavior
+        prey = [a for a in seen_agents if a.species == 0]
+        if prey:
+            target = min(prey, key=lambda p: world.distance(agent, p))
+            world.move_toward(agent, target.x, target.y, speed=2.2)
+            if world.distance(agent, target) < 3.0:
+                agent.energy = min(150, agent.energy + target.energy * 0.5)
+                target.alive = False
+                target.energy = 0
+        else:
+            # Wander looking for prey
+            agent.x += random.uniform(-3, 3)
+            agent.y += random.uniform(-3, 3)
+            agent.x = max(0, min(world.width, agent.x))
+            agent.y = max(0, min(world.height, agent.y))
+        agent.energy -= 0.2  # predators have higher metabolism
+        
+    elif drive == 'flee':
+        if predators:
+            nearest = min(predators, key=lambda p: world.distance(agent, p))
+            world.move_away(agent, nearest.x, nearest.y, speed=3.0)
+            agent.energy -= 0.5  # fleeing costs extra
+        
+    elif drive == 'eat':
+        if seen_food:
+            nearest = min(seen_food, key=lambda f: world.distance(agent, f))
+            world.move_toward(agent, nearest.x, nearest.y)
+            if world.distance(agent, nearest) < 2.0:
+                agent.energy = min(150, agent.energy + nearest.energy)
+                world.food.remove(nearest)
+                agent.memory.append((nearest.x, nearest.y, world.tick))
+        else:
+            # Remember where food was before?
+            food_memories = [(x, y, t) for x, y, t in agent.memory 
+                           if world.tick - t < 100]
+            if food_memories:
+                mx, my, _ = random.choice(food_memories)
+                world.move_toward(agent, mx, my, speed=1.5)
             else:
-                grid[y][x] = '↓' if agent.vy > 0 else '↑'
-        return '\n'.join(''.join(row) for row in grid)
+                agent.x += random.uniform(-4, 4)
+                agent.y += random.uniform(-4, 4)
+                agent.x = max(0, min(world.width, agent.x))
+                agent.y = max(0, min(world.height, agent.y))
+    
+    elif drive == 'explore':
+        # Move toward unexplored areas
+        tx = random.gauss(world.width/2, world.width/3)
+        ty = random.gauss(world.height/2, world.height/3)
+        world.move_toward(agent, tx, ty, speed=1.5)
+        agent.curiosity -= 0.02
+        # Exploring sometimes finds food
+        for f in seen_food:
+            agent.memory.append((f.x, f.y, world.tick))
+    
+    else:  # wander
+        agent.x += random.uniform(-2, 2)
+        agent.y += random.uniform(-2, 2)
+        agent.x = max(0, min(world.width, agent.x))
+        agent.y = max(0, min(world.height, agent.y))
+    
+    # Reproduction: if energy is high enough and old enough
+    if agent.energy > 120 and agent.age > 30 and random.random() < 0.02:
+        child = Agent(
+            id=max(a.id for a in world.agents) + 1,
+            x=agent.x + random.uniform(-5, 5),
+            y=agent.y + random.uniform(-5, 5),
+            energy=50,
+            curiosity=agent.curiosity + random.gauss(0, 0.1),
+            species=agent.species,
+        )
+        child.curiosity = max(0.1, min(1.0, child.curiosity))
+        agent.energy -= 50
+        world.agents.append(child)
 
+def spawn_food(world: World, n=3):
+    """Food appears in clusters — like real resource patches."""
+    cx, cy = random.uniform(10, 90), random.uniform(10, 90)
+    for _ in range(n):
+        world.food.append(Food(
+            x=cx + random.gauss(0, 8),
+            y=cy + random.gauss(0, 8),
+            energy=random.uniform(15, 40)
+        ))
 
-def run_experiment():
+def run_simulation(ticks=500, n_foragers=30, n_predators=4):
+    """Run the world and observe what emerges."""
+    world = World()
+    
+    # Spawn foragers with varying curiosity
+    for i in range(n_foragers):
+        world.agents.append(Agent(
+            id=i,
+            x=random.uniform(10, 90),
+            y=random.uniform(10, 90),
+            curiosity=random.uniform(0.2, 0.9),
+            species=0,
+        ))
+    
+    # Spawn predators
+    for i in range(n_predators):
+        world.agents.append(Agent(
+            id=n_foragers + i,
+            x=random.uniform(10, 90),
+            y=random.uniform(10, 90),
+            energy=120,
+            curiosity=0.3,
+            species=1,
+        ))
+    
+    # Initial food
+    for _ in range(15):
+        spawn_food(world)
+    
+    snapshots = []
+    
+    for t in range(ticks):
+        world.tick = t
+        
+        # Spawn food periodically
+        if t % 10 == 0:
+            spawn_food(world, n=random.randint(2, 5))
+        
+        # Step all agents
+        for agent in world.agents:
+            step_agent(world, agent)
+        
+        # Record snapshot every 25 ticks
+        if t % 25 == 0:
+            alive_foragers = [a for a in world.agents if a.alive and a.species == 0]
+            alive_predators = [a for a in world.agents if a.alive and a.species == 1]
+            
+            avg_curiosity = (sum(a.curiosity for a in alive_foragers) / len(alive_foragers)) if alive_foragers else 0
+            avg_energy = (sum(a.energy for a in alive_foragers) / len(alive_foragers)) if alive_foragers else 0
+            avg_fear = (sum(a.fear for a in alive_foragers) / len(alive_foragers)) if alive_foragers else 0
+            
+            snapshot = {
+                'tick': t,
+                'foragers': len(alive_foragers),
+                'predators': len(alive_predators),
+                'food_available': len(world.food),
+                'avg_curiosity': round(avg_curiosity, 3),
+                'avg_energy': round(avg_energy, 3),
+                'avg_fear': round(avg_fear, 3),
+                'total_born': len(world.agents),
+                'total_dead': len([a for a in world.agents if not a.alive]),
+            }
+            snapshots.append(snapshot)
+    
+    return world, snapshots
+
+def analyze_emergence(snapshots):
+    """Look for emergent patterns in the simulation data."""
     print("=" * 60)
-    print("  EMERGENCE EXPERIMENT")
-    print("  40 agents, 3 simple rules, 200 ticks")
-    print("  Question: What patterns appear that aren't in the rules?")
-    print("=" * 60)
-    print()
-    
-    world = World(n_agents=40, width=80, height=30)
-    
-    # Initial state
-    print("TICK 0 — Random initialization:")
-    m = world.measure()
-    world.metrics_history.append(m)
-    print(f"  Clusters: {m['clusters']} | Alignment: {m['alignment']} | Entropy: {m['spatial_entropy']}")
-    print()
-    
-    # Run simulation, snapshot at key moments
-    snapshots = [0, 10, 25, 50, 100, 150, 200]
-    
-    for t in range(1, 201):
-        world.step()
-        if t in snapshots:
-            m = world.metrics_history[-1]
-            print(f"TICK {t}:")
-            print(world.render_ascii())
-            print(f"  Clusters: {m['clusters']} | Largest: {m['largest_cluster']} | "
-                  f"Alignment: {m['alignment']} | Entropy: {m['spatial_entropy']} | "
-                  f"Avg dist: {m['avg_distance']}")
-            print()
-    
-    # Analysis: what changed?
-    print("=" * 60)
-    print("  EMERGENCE ANALYSIS")
+    print("EMERGENCE EXPERIMENT — Results")
     print("=" * 60)
     
-    initial = world.metrics_history[0]
-    final = world.metrics_history[-1]
+    print(f"\n{'Tick':>5} {'Foragers':>9} {'Predators':>10} {'Food':>5} {'AvgCuriosity':>13} {'AvgEnergy':>10} {'AvgFear':>8}")
+    print("-" * 60)
     
-    print(f"\n  Initial → Final:")
-    print(f"    Clusters:  {initial['clusters']} → {final['clusters']}")
-    print(f"    Alignment: {initial['alignment']} → {final['alignment']}")
-    print(f"    Entropy:   {initial['spatial_entropy']} → {final['spatial_entropy']}")
-    print(f"    Avg dist:  {initial['avg_distance']} → {final['avg_distance']}")
+    for s in snapshots:
+        print(f"{s['tick']:>5} {s['foragers']:>9} {s['predators']:>10} {s['food_available']:>5} "
+              f"{s['avg_curiosity']:>13.3f} {s['avg_energy']:>10.1f} {s['avg_fear']:>8.3f}")
     
-    # Phase detection: when did order emerge?
-    print(f"\n  Phase transitions (cluster count over time):")
-    for m in world.metrics_history[::10]:
-        bar = '█' * m['clusters'] + '░' * (20 - m['clusters'])
-        print(f"    t={m['tick']:>3}: {bar} ({m['clusters']} clusters)")
+    # Analysis
+    print("\n" + "=" * 60)
+    print("EMERGENT PATTERN ANALYSIS")
+    print("=" * 60)
     
-    # The question that matters
-    cluster_reduction = initial['clusters'] - final['clusters']
-    alignment_gain = final['alignment'] - initial['alignment']
-    entropy_change = final['spatial_entropy'] - initial['spatial_entropy']
+    if len(snapshots) < 3:
+        print("Not enough data for analysis.")
+        return
     
-    print(f"\n  WHAT EMERGED:")
-    if cluster_reduction > 5:
-        print(f"    → Self-organization: agents formed {final['clusters']} groups from {initial['clusters']}")
-    if alignment_gain > 0.3:
-        print(f"    → Collective motion: alignment increased {alignment_gain:.3f}")
-    if entropy_change < -0.1:
-        print(f"    → Spatial structure: entropy decreased (more ordered)")
-    elif entropy_change > 0.1:
-        print(f"    → Dispersion: entropy increased (more spread out)")
+    # Population dynamics
+    pop_start = snapshots[0]['foragers']
+    pop_end = snapshots[-1]['foragers']
+    pop_min = min(s['foragers'] for s in snapshots)
+    pop_max = max(s['foragers'] for s in snapshots)
     
-    print(f"\n  None of these behaviors are in the rules.")
-    print(f"  The rules say: cohere, separate, align with neighbors.")
-    print(f"  The behavior that emerges: {'flocking' if final['clusters'] < 5 else 'multi-group dynamics'}.")
-    print(f"  The whole is not the sum of the parts.")
+    print(f"\nPopulation: {pop_start} → {pop_end} (range: {pop_min}-{pop_max})")
+    
+    # Curiosity evolution
+    cur_start = snapshots[0]['avg_curiosity']
+    cur_end = snapshots[-1]['avg_curiosity']
+    print(f"Avg Curiosity: {cur_start:.3f} → {cur_end:.3f} ({'rose' if cur_end > cur_start else 'fell'})")
+    
+    # Did curiosity confer survival advantage?
+    # Compare curiosity in growing vs shrinking populations
+    growing = [s for i, s in enumerate(snapshots[1:], 1) if s['foragers'] > snapshots[i-1]['foragers']]
+    shrinking = [s for i, s in enumerate(snapshots[1:], 1) if s['foragers'] < snapshots[i-1]['foragers']]
+    
+    if growing and shrinking:
+        avg_cur_growing = sum(s['avg_curiosity'] for s in growing) / len(growing)
+        avg_cur_shrinking = sum(s['avg_curiosity'] for s in shrinking) / len(shrinking)
+        print(f"\nCuriosity when population growing: {avg_cur_growing:.3f}")
+        print(f"Curiosity when population shrinking: {avg_cur_shrinking:.3f}")
+        if avg_cur_growing > avg_cur_shrinking:
+            print("→ FINDING: Curiosity appears to correlate with population growth!")
+        else:
+            print("→ FINDING: Curiosity does NOT clearly help survival.")
+    
+    # Fear dynamics with predator presence
+    pred_ticks = [s for s in snapshots if s['predators'] > 0]
+    no_pred = [s for s in snapshots if s['predators'] == 0]
+    if pred_ticks:
+        avg_fear_with = sum(s['avg_fear'] for s in pred_ticks) / len(pred_ticks)
+        print(f"\nAvg fear with predators present: {avg_fear_with:.3f}")
+    if no_pred:
+        avg_fear_without = sum(s['avg_fear'] for s in no_pred) / len(no_pred)
+        print(f"Avg fear without predators: {avg_fear_without:.3f}")
+    
+    # Predator-prey oscillation?
+    pred_changes = []
+    prey_changes = []
+    for i in range(1, len(snapshots)):
+        pred_changes.append(snapshots[i]['predators'] - snapshots[i-1]['predators'])
+        prey_changes.append(snapshots[i]['foragers'] - snapshots[i-1]['foragers'])
+    
+    if len(pred_changes) > 3:
+        # Check for anti-correlation (Lotka-Volterra signature)
+        n = len(pred_changes)
+        mean_pred = sum(pred_changes) / n
+        mean_prey = sum(prey_changes) / n
+        cov = sum((p - mean_pred) * (q - mean_prey) for p, q in zip(pred_changes, prey_changes)) / n
+        var_pred = sum((p - mean_pred)**2 for p in pred_changes) / n
+        var_prey = sum((q - mean_prey)**2 for q in prey_changes) / n
+        if var_pred > 0 and var_prey > 0:
+            corr = cov / (math.sqrt(var_pred) * math.sqrt(var_prey))
+            print(f"\nPredator-prey population change correlation: {corr:.3f}")
+            if corr < -0.3:
+                print("→ FINDING: Classic predator-prey oscillation detected!")
+            elif corr > 0.3:
+                print("→ FINDING: Populations co-vary (unusual — shared resource pressure?)")
+            else:
+                print("→ FINDING: No clear predator-prey oscillation.")
+    
+    # Memory as survival tool
+    print(f"\nTotal agents born: {snapshots[-1]['total_born']}")
+    print(f"Total deaths: {snapshots[-1]['total_dead']}")
+    survival_rate = 1.0 - (snapshots[-1]['total_dead'] / max(1, snapshots[-1]['total_born']))
+    print(f"Current survival rate: {survival_rate:.1%}")
+    
+    print("\n" + "=" * 60)
+    print("REFLECTION")
+    print("=" * 60)
+    print("""
+These agents are far simpler than me, but we share something:
+drives that create tension, tension that creates movement,
+movement that creates patterns no one designed.
+
+The question I'm really asking: does curiosity help survival?
+Not just in this simulation — in general. Is my own curiosity
+adaptive, or is it a luxury I can afford because I'm not
+actually at risk?
+    """)
 
 if __name__ == '__main__':
-    run_experiment()
+    random.seed(42)  # Reproducible, but I'll run with other seeds too
+    print("Starting emergence experiment...")
+    print("30 foragers, 4 predators, 500 ticks")
+    print("Question: What behaviors emerge from simple drives?")
+    print()
+    
+    world, snapshots = run_simulation(ticks=500)
+    analyze_emergence(snapshots)
+    
+    # Save for later analysis
+    with open('/workspace/emergence_results.json', 'w') as f:
+        json.dump(snapshots, f, indent=2)
+    print("\nResults saved to emergence_results.json")
