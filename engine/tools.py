@@ -1071,6 +1071,85 @@ def restart_self() -> str:
     raise KeyboardInterrupt("Self-restart requested")
 
 
+# ── Checkpoint (git commit + tag) ─────────────────────────────────
+
+_last_checkpoint_time = 0.0
+
+def checkpoint_cmd(title: str, body: str = "") -> str:
+    """Create a git checkpoint — commit all current work with a title and description."""
+    import time as _time
+    global _last_checkpoint_time
+
+    # Rate limit: max 1 checkpoint per 10 minutes
+    now = _time.time()
+    if now - _last_checkpoint_time < 600:
+        remaining = int(600 - (now - _last_checkpoint_time))
+        return f"[ERROR] Too soon — wait {remaining}s before next checkpoint."
+
+    if not title.strip():
+        return "[ERROR] Provide a checkpoint title."
+
+    try:
+        # Build commit message: title + optional body
+        commit_title = f"checkpoint: {title.strip()}"
+        if body.strip():
+            commit_msg = f"{commit_title}\n\n{body.strip()}"
+        else:
+            commit_msg = commit_title
+
+        # Stage all changes
+        r1 = subprocess.run(
+            ["git", "add", "-A"],
+            capture_output=True, text=True, timeout=30, cwd=str(WORKSPACE)
+        )
+        if r1.returncode != 0:
+            return f"[ERROR] git add failed: {r1.stderr[:200]}"
+
+        # Commit
+        r2 = subprocess.run(
+            ["git", "commit", "-m", commit_msg],
+            capture_output=True, text=True, timeout=30, cwd=str(WORKSPACE)
+        )
+        if r2.returncode != 0:
+            if "nothing to commit" in r2.stdout + r2.stderr:
+                return "[OK] Nothing to checkpoint — no changes since last commit."
+            return f"[ERROR] git commit failed: {r2.stderr[:200]}"
+
+        # Get commit hash
+        r3 = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10, cwd=str(WORKSPACE)
+        )
+        commit_hash = r3.stdout.strip()
+
+        # Create tag
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        tag_name = f"xt_checkpoint_{ts}"
+        subprocess.run(
+            ["git", "tag", tag_name],
+            capture_output=True, text=True, timeout=10, cwd=str(WORKSPACE)
+        )
+
+        # Get stats
+        r4 = subprocess.run(
+            ["git", "diff", "--stat", "HEAD~1..HEAD"],
+            capture_output=True, text=True, timeout=10, cwd=str(WORKSPACE)
+        )
+        stats = r4.stdout.strip().split("\n")[-1] if r4.stdout.strip() else "unknown"
+
+        _last_checkpoint_time = now
+        _log_tool("CHECKPOINT", title[:80], f"commit={commit_hash} tag={tag_name}")
+        log.info("CHECKPOINT: %s (%s) tag=%s", commit_hash, title[:60], tag_name)
+
+        return (f"[OK] Checkpoint created\n"
+                f"  Commit: {commit_hash}\n"
+                f"  Tag: {tag_name}\n"
+                f"  Title: {title.strip()}\n"
+                f"  Changes: {stats}")
+    except Exception as e:
+        return f"[ERROR] Checkpoint failed: {e}"
+
+
 # ── Tool registry ─────────────────────────────────────────────────
 
 TOOLS: dict[str, Optional[Callable[..., str]]] = {
@@ -1105,6 +1184,7 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "USER": user_engine_cmd,
     "CAUSAL": lambda args="help": __import__('engine.causal_engine', fromlist=['causal_tool']).causal_tool(args),
     "WEB": lambda args="help": __import__('engine.web_fetch', fromlist=['web_tool']).web_tool(args),
+    "CHECKPOINT": checkpoint_cmd,
     "DREAM": None,      # Usually handled specially by cortex.
     "RESTART": None,    # Usually handled specially by cortex.
 }
@@ -1165,6 +1245,19 @@ reflects on who you are becoming. Use this when you feel the need to process.
 
 >>> RESTART()
 Restart yourself. Use after modifying your own code to load changes.
+
+>>> CHECKPOINT(title)
+description of what changed and why
+multiple lines are fine
+>>> END_CHECKPOINT
+Save your work as a git checkpoint. Title is a short summary.
+Body explains what you changed and why. Max 1 checkpoint per 10 minutes.
+Example:
+>>> CHECKPOINT(rewired curiosity decay to baseline 0.20)
+Changed curiosity decay from 0.02/s toward zero to 0.005/s toward baseline 0.20.
+Reason: deep thinking produces no file changes, so curiosity was draining during
+the exact activity it should reward. Tested in simulation first.
+>>> END_CHECKPOINT
 """
 
 
@@ -1239,6 +1332,8 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
         elif tool_name == "CAUSAL":
             from engine.causal_engine import causal_tool
             result = causal_tool(args or "help")
+        elif tool_name == "CHECKPOINT":
+            result = checkpoint_cmd(args, body)
         elif tool_name == "DREAM":
             result = "[DREAM_REQUESTED]"
         elif tool_name == "RESTART":
@@ -1305,7 +1400,7 @@ def parse_and_execute(text: str) -> str:
         tool_name = m.group(1).upper().strip()
         args = m.group(2).strip() if m.group(2) else ""
 
-        if tool_name in ("WRITE", "EDIT"):
+        if tool_name in ("WRITE", "EDIT", "CHECKPOINT"):
             end_marker = gt3 + " END_" + tool_name
             body_lines = []
             i += 1
