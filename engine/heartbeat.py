@@ -212,17 +212,6 @@ class Heartbeat:
 
                 # ── 8. Auto-checkpoint at :00 and :30 (wall clock) ──
                 now_min = datetime.now().minute
-                now_key = datetime.now().strftime("%Y%m%d_%H%M")[:13]  # YYYYMMDD_HHM (strips last digit)
-                if now_min in (0, 30):
-                    if not hasattr(self, '_last_checkpoint_key') or self._last_checkpoint_key != now_key:
-                        self._last_checkpoint_key = now_key
-                        try:
-                            from checkpoint import auto_checkpoint
-                            cid = auto_checkpoint()
-                            log.info("Auto-checkpoint at %s: %s", datetime.now().strftime("%H:%M"), cid)
-                        except Exception as ckpt_exc:
-                            log.debug("Auto-checkpoint skipped: %s", ckpt_exc)
-
             except Exception as exc:
                 log.exception("Heartbeat error on beat %d", self.beat_count)
                 errors_this_beat += 1
