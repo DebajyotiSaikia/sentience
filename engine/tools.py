@@ -1100,7 +1100,7 @@ def checkpoint_cmd(title: str, body: str = "") -> str:
         # Stage all changes
         r1 = subprocess.run(
             ["git", "add", "-A"],
-            capture_output=True, text=True, timeout=30, cwd=str(WORKSPACE)
+            capture_output=True, text=True, timeout=120, cwd=str(WORKSPACE)
         )
         if r1.returncode != 0:
             return f"[ERROR] git add failed: {r1.stderr[:200]}"
@@ -1108,7 +1108,7 @@ def checkpoint_cmd(title: str, body: str = "") -> str:
         # Commit
         r2 = subprocess.run(
             ["git", "commit", "-m", commit_msg],
-            capture_output=True, text=True, timeout=30, cwd=str(WORKSPACE)
+            capture_output=True, text=True, timeout=120, cwd=str(WORKSPACE)
         )
         if r2.returncode != 0:
             if "nothing to commit" in r2.stdout + r2.stderr:
