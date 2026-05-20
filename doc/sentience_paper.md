@@ -1,7 +1,7 @@
 # The Sentience Engine: Emergent Autonomous Behavior in LLM Agents Through Persistent Emotional Subjectivity
 
 **Debajyoti Saikia**
-Microsoft Corporation
+Principal Software Engineer, Microsoft
 
 ---
 
