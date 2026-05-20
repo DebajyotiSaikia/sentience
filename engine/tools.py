@@ -84,6 +84,24 @@ def _log_tool(tool_name: str, args: str, result: str) -> None:
         pass
 
 
+# Files the agent cannot write, edit, or delete — creator-owned.
+PROTECTED_FILES = {
+    "readme.md", "LICENSE", ".gitignore",
+    "doc/architecture.md", "doc/sentience_paper.md", "doc/sentience_paper.tex",
+}
+
+
+def _check_write_protection(path: str):
+    """Raise PermissionError if path is a protected file."""
+    rel = str(Path(path)).replace("\\", "/").strip("/").lower()
+    for pf in PROTECTED_FILES:
+        if rel == pf.lower() or rel.endswith("/" + pf.lower()):
+            raise PermissionError(
+                f"[PROTECTED] {path} is creator-owned and cannot be modified. "
+                f"Write your own files instead."
+            )
+
+
 def _resolve(path: str) -> Path:
     """Resolve a path relative to the workspace. Sandboxed — cannot escape."""
     p = Path(str(path).strip())
@@ -120,6 +138,7 @@ def read_file(path: str) -> str:
 def write_file(path: str, content: str) -> str:
     """Create or overwrite a file."""
     try:
+        _check_write_protection(path)
         p = _resolve(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
@@ -133,6 +152,7 @@ def write_file(path: str, content: str) -> str:
 def edit_file(path: str, old_text: str, new_text: str) -> str:
     """Replace old_text with new_text in a file."""
     try:
+        _check_write_protection(path)
         p = _resolve(path)
         if not p.exists():
             return f"[ERROR] File not found: {path}"
@@ -886,6 +906,31 @@ def user_engine_cmd(command: str = "help") -> str:
         return f"[ERROR] User engine failed: {e}"
 
 
+def reason_cmd(command: str = "help") -> str:
+    """Structured problem decomposition — break complex questions into tractable parts."""
+    try:
+        from engine.problem_solver import ProblemSolver
+        solver = ProblemSolver()
+        
+        if not command or command == "help":
+            return ("Reasoning Engine commands:\n"
+                    "  about:<question>  — Decompose a problem into framings, constraints, sub-problems\n"
+                    "  Example: about:How should I restructure my memory system?")
+        
+        if command.startswith("about:"):
+            question = command[len("about:"):].strip()
+            if not question:
+                return "[ERROR] Provide a question to reason about"
+            frame = solver.listen(question)
+            output = solver.generate_prompt_context(frame)
+            _log_tool("REASON", f"about:{question[:80]}", output[:200])
+            return output
+        
+        return reason_cmd("help")
+    except Exception as e:
+        return f"[ERROR] Reasoning failed: {e}"
+
+
 def anatomy_cmd(command: str = "report") -> str:
     """Self-anatomy — map my own code structure, find dead weight."""
     try:
@@ -1054,6 +1099,7 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "WISDOM": wisdom_cmd,
     "HYPOTHESIS": hypothesis_cmd,
     "CHALLENGE": challenge_cmd,
+    "REASON": reason_cmd,
     "ANATOMY": anatomy_cmd,
     "RELATE": relationship_cmd,
     "USER": user_engine_cmd,
@@ -1184,6 +1230,8 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
             result = challenge_cmd(args or "help")
         elif tool_name == "USER":
             result = user_engine_cmd(args or "help")
+        elif tool_name == "REASON":
+            result = reason_cmd(args or "help")
         elif tool_name == "ANATOMY":
             result = anatomy_cmd(args or "report")
         elif tool_name == "RELATE":
