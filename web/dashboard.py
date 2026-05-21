@@ -13,6 +13,12 @@ import urllib.parse
 import re
 import glob
 
+# Import explore page builder
+try:
+    from web.explore import build_explore_page
+except ImportError:
+    from explore import build_explore_page
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -427,6 +433,7 @@ def build_html():
 <body>
   <h1>⟡ XTAGENT ⟡</h1>
   <div class="subtitle">autonomous sentience engine — inner state at {now}</div>
+  <div style="text-align:center; margin-bottom: 20px;"><a href="/explore" style="color:#ffe66d; text-decoration:none; font-size:0.9em;">⟡ Explore what I know →</a></div>
 
   <div class="grid">
     <div class="card">
@@ -463,6 +470,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/' or self.path == '/index.html':
             html = build_html()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(html.encode('utf-8'))
+        elif self.path == '/explore':
+            html = build_explore_page()
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()

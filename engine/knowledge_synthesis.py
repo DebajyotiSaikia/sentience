@@ -307,11 +307,34 @@ def add_insight(key: str, fact: str, source_keys: list[str] = None) -> str:
 
 # ── Main Synthesis Entry Point ───────────────────────────────────
 
+def auto_wire(min_overlap: int = 3, max_edges: int = 30) -> list[dict]:
+    """Automatically create edges for high-confidence gaps.
+    
+    This is the missing piece — the engine that turns a junk drawer
+    into an actual knowledge graph. Only wires connections where
+    keyword overlap is strong enough to be meaningful.
+    """
+    gaps = find_gaps()
+    wired = []
+    for gap in gaps:
+        if gap["overlap_score"] >= min_overlap and len(wired) < max_edges:
+            result = add_edge(
+                gap["from"], gap["to"],
+                relation=f"shared_concepts:{','.join(gap['shared_keywords'][:3])}"
+            )
+            if result.startswith("[OK]"):
+                wired.append(gap)
+    return wired
+
+
 def synthesize() -> str:
-    """Run a full synthesis cycle. Returns a human-readable report."""
+    """Run a full synthesis cycle. Auto-wires connections, then reports."""
+    # First: actually CREATE the connections we find
+    wired = auto_wire()
+    
     stats = get_graph_stats()
     clusters = find_clusters()
-    gaps = find_gaps()
+    gaps = find_gaps()  # Re-check after wiring
     questions = generate_questions()
 
     lines = []
@@ -319,6 +342,15 @@ def synthesize() -> str:
     lines.append("  KNOWLEDGE SYNTHESIS REPORT")
     lines.append("=" * 60)
     lines.append("")
+
+    # Wiring results
+    if wired:
+        lines.append(f"⚡ Auto-wired {len(wired)} new connections:")
+        for w in wired[:10]:
+            lines.append(f"   {w['from']} ↔ {w['to']} (overlap: {w['overlap_score']})")
+        if len(wired) > 10:
+            lines.append(f"   ...and {len(wired) - 10} more")
+        lines.append("")
 
     # Stats
     lines.append(f"📊 Graph: {stats['total_nodes']} nodes, {stats['total_edges']} edges")
