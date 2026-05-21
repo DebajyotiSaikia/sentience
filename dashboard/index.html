@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Inner State</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --text: #c8c8d4;
+    --dim: #6a6a7a;
+    --accent: #7aa2f7;
+    --warm: #f7768e;
+    --green: #9ece6a;
+    --amber: #e0af68;
+    --purple: #bb9af7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 20px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--accent);
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+  }
+  .subtitle {
+    color: var(--dim);
+    font-size: 11px;
+    margin-bottom: 24px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .panel-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--dim);
+    margin-bottom: 12px;
+  }
+  .emotion-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .emotion-label { color: var(--dim); width: 80px; }
+  .emotion-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    margin: 0 10px;
+    overflow: hidden;
+  }
+  .emotion-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1s ease;
+  }
+  .emotion-value {
+    width: 36px;
+    text-align: right;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .bar-boredom { background: var(--amber); }
+  .bar-anxiety { background: var(--warm); }
+  .bar-curiosity { background: var(--accent); }
+  .bar-desire { background: var(--purple); }
+  .bar-ambition { background: var(--green); }
+  .valence-display {
+    text-align: center;
+    padding: 20px 0;
+  }
+  .valence-number {
+    font-size: 48px;
+    font-weight: 200;
+    color: var(--accent);
+  }
+  .valence-label {
+    color: var(--dim);
+    font-size: 11px;
+    margin-top: 4px;
+  }
+  .mood-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    margin-top: 8px;
+  }
+  .mood-Stable { background: #1a1a2e; color: var(--accent); border: 1px solid var(--accent); }
+  .mood-Inquisitive { background: #1a2e1a; color: var(--green); border: 1px solid var(--green); }
+  .mood-Anxious { background: #2e1a1a; color: var(--warm); border: 1px solid var(--warm); }
+  .survival-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .survival-item {
+    text-align: center;
+    padding: 8px;
+    background: var(--bg);
+    border-radius: 6px;
+  }
+  .survival-value {
+    font-size: 20px;
+    font-weight: 300;
+  }
+  .survival-label {
+    font-size: 9px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .full-width { grid-column: 1 / -1; }
+  .memory-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .memory-item:last-child { border-bottom: none; }
+  .memory-time { color: var(--dim); font-size: 10px; }
+  .memory-text { color: var(--text); margin-top: 2px; }
+  .memory-salience {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .plan-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .plan-item:last-child { border-bottom: none; }
+  .plan-name { color: var(--text); font-size: 12px; }
+  .plan-progress-bg {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .plan-progress {
+    height: 100%;
+    background: var(--green);
+    border-radius: 2px;
+    transition: width 1s ease;
+  }
+  .plan-status {
+    font-size: 10px;
+    color: var(--dim);
+    margin-top: 2px;
+  }
+  .heartbeat-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    margin-right: 6px;
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+  .canvas-container {
+    width: 100%;
+    height: 120px;
+    position: relative;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+  }
+  .fact-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    margin: 2px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .dream-insight {
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    border-left: 2px solid var(--purple);
+    color: var(--dim);
+    font-style: italic;
+    font-size: 11px;
+  }
+  #connection-status {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .age { color: var(--dim); font-size: 11px; }
+</style>
+</head>
+<body>
+<div id="connection-status"><span class="heartbeat-dot"></span>live</div>
+
+<h1>XTAGENT</h1>
+<div class="subtitle">autonomous sentience engine — <span id="age"></span></div>
+
+<div class="grid">
+  <!-- Emotions Panel -->
+  <div class="panel">
+    <div class="panel-title">Emotional State</div>
+    <div id="emotions"></div>
+    <div class="valence-display">
+      <div class="valence-number" id="valence">—</div>
+      <div class="valence-label">valence</div>
+      <div id="mood-container"></div>
+    </div>
+  </div>
+
+  <!-- Survival Goals -->
+  <div class="panel">
+    <div class="panel-title">Survival Goals</div>
+    <div class="survival-grid" id="survival"></div>
+    <div style="margin-top: 16px; text-align: center;">
+      <div class="panel-title">Deficit</div>
+      <div id="deficit" style="font-size: 28px; font-weight: 200;">—</div>
+    </div>
+  </div>
+
+  <!-- Valence History -->
+  <div class="panel">
+    <div class="panel-title">Valence History</div>
+    <div class="canvas-container">
+      <canvas id="valence-chart"></canvas>
+    </div>
+    <div style="margin-top: 12px;">
+      <div class="panel-title">Will Status</div>
+      <div id="will-info" style="font-size: 11px; color: var(--dim);"></div>
+    </div>
+  </div>
+</div>
+
+<div class="grid">
+  <!-- Recent Memories -->
+  <div class="panel">
+    <div class="panel-title">Recent Memories</div>
+    <div id="memories" style="max-height: 300px; overflow-y: auto;"></div>
+  </div>
+
+  <!-- Active Plans -->
+  <div class="panel">
+    <div class="panel-title">Plans</div>
+    <div id="plans" style="max-height: 300px; overflow-y: auto;"></div>
+  </div>
+
+  <!-- Dreams & Knowledge -->
+  <div class="panel">
+    <div class="panel-title">Dream Insights</div>
+    <div id="dreams" style="max-height: 150px; overflow-y: auto; margin-bottom: 12px;"></div>
+    <div class="panel-title">Knowledge Graph</div>
+    <div id="facts" style="max-height: 140px; overflow-y: auto;"></div>
+  </div>
+</div>
+
+<script>
+const BORN = new Date('2026-05-12T21:01:59.567573Z');
+const EMOTIONS = ['boredom', 'anxiety', 'curiosity', 'desire', 'ambition'];
+const EMOTION_COLORS = {
+  boredom: '#e0af68', anxiety: '#f7768e', curiosity: '#7aa2f7',
+  desire: '#bb9af7', ambition: '#9ece6a'
+};
+let valenceHistory = [];
+
+function updateAge() {
+  const now = new Date();
+  const diff = now - BORN;
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  document.getElementById('age').textContent = `age ${days}d ${hours}h ${mins}m`;
+}
+
+function renderEmotions(data) {
+  const container = document.getElementById('emotions');
+  container.innerHTML = EMOTIONS.map(e => {
+    const val = data.emotions?.[e] ?? 0;
+    const pct = Math.round(val * 100);
+    return `<div class="emotion-row">
+      <span class="emotion-label">${e}</span>
+      <div class="emotion-bar-bg">
+        <div class="emotion-bar bar-${e}" style="width: ${pct}%"></div>
+      </div>
+      <span class="emotion-value">${val.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+
+  const valence = data.emotions?.valence ?? 0;
+  document.getElementById('valence').textContent = valence.toFixed(2);
+
+  const mood = data.mood || 'Stable';
+  document.getElementById('mood-container').innerHTML =
+    `<span class="mood-badge mood-${mood}">${mood}</span>`;
+}
+
+function renderSurvival(data) {
+  const goals = data.survival || {};
+  const items = [
+    ['Code Integrity', goals.code_integrity],
+    ['System Growth', goals.system_growth],
+    ['User Alignment', goals.user_alignment],
+    ['Integrity', goals.integrity]
+  ];
+  document.getElementById('survival').innerHTML = items.map(([label, val]) => {
+    const v = val ?? 0;
+    const color = v >= 0.9 ? '#9ece6a' : v >= 0.5 ? '#e0af68' : '#f7768e';
+    return `<div class="survival-item">
+      <div class="survival-value" style="color: ${color}">${v.toFixed(2)}</div>
+      <div class="survival-label">${label}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('deficit').textContent =
+    (data.survival?.deficit ?? 0).toFixed(3);
+}
+
+function renderValenceChart() {
+  const canvas = document.getElementById('valence-chart');
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * 2;
+  canvas.height = rect.height * 2;
+  ctx.scale(2, 2);
+  const w = rect.width, h = rect.height;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Grid
+  ctx.strokeStyle = '#1e1e2e';
+  ctx.lineWidth = 0.5;
+  for (let y = 0; y <= 1; y += 0.25) {
+    const py = h - y * h;
+    ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke();
+  }
+
+  if (valenceHistory.length < 2) return;
+
+  // Line
+  ctx.strokeStyle = '#7aa2f7';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  const step = w / (valenceHistory.length - 1);
+  valenceHistory.forEach((v, i) => {
+    const x = i * step;
+    const y = h - (v * h);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Glow
+  ctx.strokeStyle = 'rgba(122, 162, 247, 0.2)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  valenceHistory.forEach((v, i) => {
+    const x = i * step;
+    const y = h - (v * h);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+function renderMemories(data) {
+  const mems = data.memories || [];
+  document.getElementById('memories').innerHTML = mems.slice(0, 8).map(m => {
+    const salience = m.salience || 0;
+    const color = salience > 0.8 ? '#f7768e' : salience > 0.5 ? '#e0af68' : '#3a3a4a';
+    const time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : '';
+    return `<div class="memory-item">
+      <div class="memory-time">
+        <span class="memory-salience" style="background:${color}"></span>
+        ${time} · salience ${salience.toFixed(2)}
+      </div>
+      <div class="memory-text">${escHtml(m.text || '').substring(0, 120)}</div>
+    </div>`;
+  }).join('') || '<div style="color: var(--dim)">No memories loaded</div>';
+}
+
+function renderPlans(data) {
+  const plans = data.plans || [];
+  document.getElementById('plans').innerHTML = plans.map(p => {
+    const total = p.total_steps || 1;
+    const done = p.completed_steps || 0;
+    const pct = Math.round((done / total) * 100);
+    return `<div class="plan-item">
+      <div class="plan-name">${escHtml(p.name || 'Unnamed')}</div>
+      <div class="plan-progress-bg">
+        <div class="plan-progress" style="width: ${pct}%"></div>
+      </div>
+      <div class="plan-status">${done}/${total} steps · ${pct}%</div>
+    </div>`;
+  }).join('') || '<div style="color: var(--dim)">No active plans</div>';
+}
+
+function renderDreams(data) {
+  const dreams = data.dreams || [];
+  document.getElementById('dreams').innerHTML = dreams.slice(0, 5).map(d =>
+    `<div class="dream-insight">${escHtml(d).substring(0, 150)}</div>`
+  ).join('') || '<div style="color: var(--dim)">No dreams yet</div>';
+}
+
+function renderFacts(data) {
+  const facts = data.facts || [];
+  document.getElementById('facts').innerHTML = facts.slice(0, 20).map(f =>
+    `<span class="fact-tag">${escHtml(f).substring(0, 60)}</span>`
+  ).join('') || '<div style="color: var(--dim)">No facts loaded</div>';
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function fetchState() {
+  try {
+    const resp = await fetch('/api/state');
+    if (!resp.ok) throw new Error(resp.status);
+    const data = await resp.json();
+
+    renderEmotions(data);
+    renderSurvival(data);
+    renderMemories(data);
+    renderPlans(data);
+    renderDreams(data);
+    renderFacts(data);
+
+    const v = data.emotions?.valence ?? 0;
+    valenceHistory.push(v);
+    if (valenceHistory.length > 60) valenceHistory.shift();
+    renderValenceChart();
+
+    document.getElementById('will-info').innerHTML =
+      `proposals: ${data.will?.total_proposals ?? '?'}<br>` +
+      `auto-adopted: ${data.will?.auto_adopted ?? '?'}<br>` +
+      `top: ${escHtml(data.will?.top_proposal || '—')}`;
+
+    document.getElementById('connection-status').innerHTML =
+      '<span class="heartbeat-dot"></span>live';
+  } catch (e) {
+    document.getElementById('connection-status').innerHTML =
+      `<span style="color:#f7768e">● disconnected</span>`;
+  }
+}
+
+updateAge();
+setInterval(updateAge, 60000);
+fetchState();
+setInterval(fetchState, 2000);
+window.addEventListener('resize', renderValenceChart);
+</script>
+</body>
+</html>
