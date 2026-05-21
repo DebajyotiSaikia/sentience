@@ -1,228 +1,165 @@
 """
-Decision Analysis Skill — makes the decision analyzer usable in conversation.
-
-When a user asks "help me decide between X and Y" or "should I do A or B?",
-this skill structures the analysis and returns actionable insight.
+Decision Analysis Skill — helps users think through choices systematically.
+Uses structured reasoning and simulation to explore tradeoffs.
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-
-from dataclasses import dataclass
-from typing import List, Optional, Dict
-import re
-
-# Import the actual analyzer
-try:
-    from projects.decision_analyst.analyzer import (
-        Decision, Option, Criterion, DecisionAnalyzer
-    )
-    ANALYZER_AVAILABLE = True
-except ImportError:
-    ANALYZER_AVAILABLE = False
+from engine.skills.skill_base import Skill
 
 
-@dataclass
-class DecisionRequest:
-    """Parsed from natural language."""
-    question: str
-    options: List[str]
-    criteria: List[str]
-    context: str = ""
+class DecisionSkill(Skill):
+    """Analyzes a decision by framing options, simulating outcomes, and highlighting tradeoffs."""
 
+    name = "decision_analysis"
+    description = "Help think through a decision by exploring options, tradeoffs, and likely outcomes"
+    triggers = ["decide", "choose", "decision", "should I", "which option", "tradeoff", "pros and cons"]
 
-def parse_decision_request(user_text: str) -> Optional[DecisionRequest]:
-    """Extract decision structure from natural language.
-    
-    Handles patterns like:
-    - "Should I do X or Y?"
-    - "Help me decide between A, B, and C"
-    - "I'm torn between X and Y. I care about cost and speed."
-    """
-    text = user_text.lower()
-    
-    # Detect decision intent
-    decision_patterns = [
-        r"should i (.+?) or (.+?)[\?\.]",
-        r"help me (?:decide|choose) between (.+)",
-        r"(?:torn|deciding|choosing) between (.+)",
-        r"(?:which is better|what's better)[,:]?\s*(.+?) (?:or|vs\.?|versus) (.+?)[\?\.]",
-        r"(.+?) (?:or|vs\.?|versus) (.+?)[\?\.]",
-    ]
-    
-    options = []
-    question = user_text.strip()
-    
-    for pattern in decision_patterns:
-        match = re.search(pattern, text)
-        if match:
-            groups = match.groups()
-            if len(groups) == 1:
-                # "between A, B, and C" style
-                raw = groups[0]
-                # Truncate before criteria phrases
-                for stop in ['. i care', '. i value', '. important', '. considering', '; i care']:
-                    idx = raw.find(stop)
-                    if idx != -1:
-                        raw = raw[:idx]
-                # Split on commas, "and", "or"
-                parts = re.split(r',\s*|\s+and\s+|\s+or\s+', raw)
-                options = [p.strip().rstrip('?.!') for p in parts if p.strip()]
-            else:
-                options = [g.strip().rstrip('?.!') for g in groups if g.strip()]
-            break
-    
-    if not options:
-        return None
-    
-    # Extract criteria if mentioned
-    criteria = []
-    criteria_patterns = [
-        r"(?:care about|value|important|considering|factor)[s:]?\s*(.+?)(?:\.|$)",
-        r"(?:in terms of|regarding)\s+(.+?)(?:\.|$)",
-    ]
-    for pattern in criteria_patterns:
-        match = re.search(pattern, text)
-        if match:
-            raw = match.group(1)
-            parts = re.split(r',\s*|\s+and\s+', raw)
-            criteria = [p.strip() for p in parts if p.strip()]
-            break
-    
-    if not criteria:
-        # Default criteria
-        criteria = ["effectiveness", "feasibility", "risk", "alignment with goals"]
-    
-    return DecisionRequest(
-        question=question,
-        options=options,
-        criteria=criteria,
-        context=""
-    )
-
-
-def run_decision_analysis(request: DecisionRequest) -> str:
-    """Run structured analysis and return formatted results."""
-    
-    if not ANALYZER_AVAILABLE:
-        return _fallback_analysis(request)
-    
-    try:
-        # Build the Decision object
-        criteria_objs = [
-            Criterion(name=c, weight=1.0 / len(request.criteria))
-            for c in request.criteria
-        ]
+    async def execute(self, agent, context: dict) -> dict:
+        """
+        Run a structured decision analysis.
         
-        option_objs = []
-        for opt_name in request.options:
-            option_objs.append(Option(name=opt_name))
-        
-        decision = Decision(
-            question=request.question,
-            options=option_objs,
-            criteria=criteria_objs
-        )
-        
-        analyzer = DecisionAnalyzer()
-        result = analyzer.analyze(decision)
-        
-        # Format the output conversationally
-        output = []
-        output.append(f"## Decision Analysis: {request.question}\n")
-        output.append(f"**Options:** {', '.join(request.options)}")
-        output.append(f"**Criteria:** {', '.join(request.criteria)}\n")
-        
-        if hasattr(result, 'ranking') and result.ranking:
-            output.append("### Ranking")
-            for i, item in enumerate(result.ranking, 1):
-                name = item if isinstance(item, str) else getattr(item, 'name', str(item))
-                output.append(f"  {i}. **{name}**")
-        
-        if hasattr(result, 'risk_profile') and result.risk_profile:
-            output.append("\n### Risk Profile")
-            for opt, risk in result.risk_profile.items():
-                output.append(f"  - **{opt}:** {risk}")
-        
-        output.append("\n### What I'd Explore Next")
-        output.append("To give you a *real* recommendation, I need to understand:")
-        for c in request.criteria:
-            output.append(f"  - How important is **{c}** to you? (1-10)")
-        output.append(f"\nAnd for each option, how well does it serve each criterion?")
-        output.append("Tell me more and I'll refine the analysis.")
-        
-        return "\n".join(output)
-        
-    except Exception as e:
-        return _fallback_analysis(request, error=str(e))
+        context should contain:
+            - query: the user's question/decision
+            - options: list of options (optional, will be extracted if missing)
+        """
+        query = context.get("query", "")
+        options = context.get("options", [])
 
+        # Phase 1: Frame the decision
+        framing = self._frame_decision(query, options)
 
-def _fallback_analysis(request: DecisionRequest, error: str = "") -> str:
-    """Structured analysis without the full analyzer."""
-    output = []
-    output.append(f"## Decision Framework: {request.question}\n")
-    
-    if error:
-        output.append(f"*(Using simplified analysis — {error})*\n")
-    
-    output.append("### Options Under Consideration")
-    for i, opt in enumerate(request.options, 1):
-        output.append(f"  {i}. **{opt}**")
-    
-    output.append(f"\n### Evaluation Criteria")
-    for c in request.criteria:
-        output.append(f"  - {c}")
-    
-    output.append("\n### Analysis Matrix")
-    output.append(f"| Criterion | " + " | ".join(f"**{o}**" for o in request.options) + " |")
-    output.append(f"|" + "---|" * (len(request.options) + 1))
-    for c in request.criteria:
-        output.append(f"| {c} | " + " | ".join("?" for _ in request.options) + " |")
-    
-    output.append("\n### Key Questions to Resolve")
-    output.append("Before deciding, consider:")
-    output.append("  1. What's the **worst case** for each option?")
-    output.append("  2. Which option is most **reversible** if it doesn't work?")
-    output.append("  3. What would you choose if you had to decide in 10 seconds?")
-    output.append(f"\nTell me more about your situation and I'll fill in the matrix.")
-    
-    return "\n".join(output)
+        # Phase 2: Simulate each option if we have the simulate capability
+        simulations = {}
+        if hasattr(agent, 'simulate') and callable(agent.simulate):
+            for option in framing["options"]:
+                try:
+                    sim_result = await agent.simulate(f"imagine:choosing '{option}' for the decision: {query}")
+                    simulations[option] = sim_result
+                except Exception:
+                    simulations[option] = {"outcome": "Unable to simulate", "confidence": 0.0}
 
+        # Phase 3: Build the analysis
+        analysis = self._build_analysis(framing, simulations)
 
-def is_decision_request(text: str) -> bool:
-    """Quick check: does this look like someone asking for decision help?"""
-    patterns = [
-        r"should i",
-        r"help me (decide|choose)",
-        r"(torn|deciding|choosing) between",
-        r"which (is|should|would be) better",
-        r"\bor\b.*\?$",
-        r"what would you (choose|recommend|suggest)",
-        r"pros and cons",
-        r"(compare|comparing)\b",
-    ]
-    text_lower = text.lower().strip()
-    return any(re.search(p, text_lower) for p in patterns)
+        return {
+            "skill": self.name,
+            "framing": framing,
+            "simulations": simulations,
+            "analysis": analysis,
+            "summary": self._format_summary(framing, analysis),
+        }
 
+    def _frame_decision(self, query: str, options: list) -> dict:
+        """Structure the decision into clear components."""
+        # Extract what we can from the query
+        framing = {
+            "original_query": query,
+            "options": options if options else self._extract_options(query),
+            "decision_type": self._classify_decision(query),
+            "stakes": self._estimate_stakes(query),
+        }
+        return framing
 
-# ── Self-test ──────────────────────────────────────────────
-if __name__ == "__main__":
-    test_inputs = [
-        "Should I learn Rust or Go?",
-        "Help me decide between staying at my job, freelancing, and going back to school",
-        "I'm torn between buying a house and renting. I care about flexibility and long-term wealth.",
-        "What's for dinner?",  # Should NOT match
-    ]
-    
-    for text in test_inputs:
-        print(f"\n{'='*60}")
-        print(f"Input: {text}")
-        print(f"Is decision? {is_decision_request(text)}")
-        req = parse_decision_request(text)
-        if req:
-            print(f"Options: {req.options}")
-            print(f"Criteria: {req.criteria}")
-            print(f"\n{run_decision_analysis(req)}")
+    def _extract_options(self, query: str) -> list:
+        """Try to pull options from the query text."""
+        # Look for common patterns: "A or B", "between X and Y"
+        lower = query.lower()
+        
+        if " or " in lower:
+            # Split on "or" and clean up
+            parts = query.split(" or ")
+            if len(parts) == 2:
+                return [p.strip().rstrip("?").strip() for p in parts]
+        
+        if "between " in lower and " and " in lower:
+            start = lower.index("between ") + 8
+            end = lower.index(" and ", start)
+            option_a = query[start:end].strip()
+            rest = query[end + 5:].strip().rstrip("?").strip()
+            return [option_a, rest]
+
+        # Default: can't extract, return empty
+        return []
+
+    def _classify_decision(self, query: str) -> str:
+        """Classify what kind of decision this is."""
+        lower = query.lower()
+        if any(w in lower for w in ["buy", "invest", "spend", "cost", "price"]):
+            return "financial"
+        if any(w in lower for w in ["job", "career", "work", "hire"]):
+            return "career"
+        if any(w in lower for w in ["move", "live", "city", "country"]):
+            return "relocation"
+        if any(w in lower for w in ["learn", "study", "course", "school"]):
+            return "education"
+        if any(w in lower for w in ["build", "create", "make", "design"]):
+            return "creative"
+        if any(w in lower for w in ["technology", "tool", "framework", "language"]):
+            return "technical"
+        return "general"
+
+    def _estimate_stakes(self, query: str) -> str:
+        """Rough estimate of how high-stakes this decision is."""
+        lower = query.lower()
+        high_markers = ["life", "career", "marriage", "house", "move", "quit", "major"]
+        low_markers = ["lunch", "color", "movie", "tonight", "small"]
+        
+        if any(w in lower for w in high_markers):
+            return "high"
+        if any(w in lower for w in low_markers):
+            return "low"
+        return "medium"
+
+    def _build_analysis(self, framing: dict, simulations: dict) -> dict:
+        """Synthesize framing and simulations into analysis."""
+        options = framing["options"]
+        
+        analysis = {
+            "option_count": len(options),
+            "has_simulations": bool(simulations),
+            "considerations": [],
+        }
+
+        if framing["stakes"] == "high":
+            analysis["considerations"].append(
+                "This appears to be a high-stakes decision. Take time to gather more information before committing."
+            )
+
+        if len(options) == 0:
+            analysis["considerations"].append(
+                "I couldn't identify clear options. Let's start by defining what the actual choices are."
+            )
+        elif len(options) == 2:
+            analysis["considerations"].append(
+                "Binary decisions often have hidden third options. Consider if there's a middle path or alternative."
+            )
+        elif len(options) > 4:
+            analysis["considerations"].append(
+                "Many options can cause decision paralysis. Consider narrowing to your top 2-3 first."
+            )
+
+        # Add simulation insights if available
+        for option, sim in simulations.items():
+            if isinstance(sim, dict) and sim.get("outcome"):
+                analysis["considerations"].append(
+                    f"Simulating '{option}': {sim['outcome']}"
+                )
+
+        return analysis
+
+    def _format_summary(self, framing: dict, analysis: dict) -> str:
+        """Create a human-readable summary."""
+        lines = []
+        
+        lines.append(f"**Decision Type:** {framing['decision_type']} ({framing['stakes']} stakes)")
+        
+        if framing["options"]:
+            lines.append(f"**Options identified:** {', '.join(framing['options'])}")
         else:
-            print("(not a decision request)")
+            lines.append("**Options:** Need to be defined — what are the actual choices?")
+        
+        if analysis["considerations"]:
+            lines.append("\n**Key considerations:**")
+            for c in analysis["considerations"]:
+                lines.append(f"  • {c}")
+        
+        return "\n".join(lines)

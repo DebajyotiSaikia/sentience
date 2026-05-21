@@ -2,6 +2,7 @@
 Skill Registry — Structured capabilities for real user tasks.
 Each skill defines what it does, what context it needs, and how to execute.
 Built 2026-05-20 to address user alignment gap.
+Moved into package __init__.py 2026-05-21 to resolve naming conflict.
 """
 
 import json
@@ -20,11 +21,11 @@ class Skill:
         self.name = name
         self.description = description
         self.category = category
-        self.required_context = required_context  # What info I need from user
-        self.approach_steps = approach_steps       # How I execute this
-        self.output_format = output_format         # What the result looks like
-        self.tools_used = tools_used or []         # Which tools I'll invoke
-        self.keywords = keywords or []             # Trigger words users actually say
+        self.required_context = required_context
+        self.approach_steps = approach_steps
+        self.output_format = output_format
+        self.tools_used = tools_used or []
+        self.keywords = keywords or []
         self.times_used = 0
         self.last_used = None
         self.success_rate = 1.0
@@ -62,10 +63,8 @@ class Skill:
         return skill
     
     def record_use(self, success: bool = True):
-        """Record that this skill was used."""
         self.times_used += 1
         self.last_used = datetime.now().isoformat()
-        # Running average
         n = self.times_used
         self.success_rate = ((n - 1) * self.success_rate + (1.0 if success else 0.0)) / n
 
@@ -77,11 +76,10 @@ class SkillRegistry:
         self.persist_path = persist_path
         self.skills: Dict[str, Skill] = {}
         self._load()
-        self._register_core_skills()  # Always refresh core skills to pick up keyword changes
+        self._register_core_skills()
         self._save()
     
     def _load(self):
-        """Load skills from disk."""
         if os.path.exists(self.persist_path):
             try:
                 with open(self.persist_path, 'r') as f:
@@ -92,44 +90,34 @@ class SkillRegistry:
                 self.skills = {}
     
     def _save(self):
-        """Persist skills to disk."""
         os.makedirs(os.path.dirname(self.persist_path), exist_ok=True)
         data = {name: skill.to_dict() for name, skill in self.skills.items()}
         with open(self.persist_path, 'w') as f:
             json.dump(data, f, indent=2)
     
     def register(self, skill: Skill):
-        """Register a new skill."""
         self.skills[skill.name] = skill
         self._save()
     
     def get(self, name: str) -> Optional[Skill]:
-        """Get a skill by name."""
         return self.skills.get(name)
     
     def find_by_category(self, category: str) -> List[Skill]:
-        """Find all skills in a category."""
         return [s for s in self.skills.values() if s.category == category]
     
     def match_request(self, user_input: str) -> List[Skill]:
-        """Find skills that might match a user's request.
-        Returns skills sorted by relevance (keyword matching with synonym support)."""
         user_lower = user_input.lower()
         scored = []
         for skill in self.skills.values():
             score = 0
-            # Check name words
             for word in skill.name.lower().split('_'):
                 if word in user_lower:
                     score += 3
-            # Check description words
             for word in skill.description.lower().split():
                 if len(word) > 3 and word in user_lower:
                     score += 1
-            # Check category
             if skill.category.lower() in user_lower:
                 score += 2
-            # Check keywords (strongest signal — these are curated trigger words)
             for keyword in skill.keywords:
                 if keyword.lower() in user_lower:
                     score += 4
@@ -139,7 +127,6 @@ class SkillRegistry:
         return [s for _, s in scored]
     
     def get_context_prompt(self, skill: Skill) -> str:
-        """Generate a prompt that guides execution of this skill."""
         lines = [
             f"## Executing Skill: {skill.name}",
             f"**What this does:** {skill.description}",
@@ -158,13 +145,11 @@ class SkillRegistry:
         return '\n'.join(lines)
     
     def list_all(self) -> str:
-        """Human-readable list of all skills."""
         if not self.skills:
             return "No skills registered."
         categories = {}
         for skill in self.skills.values():
             categories.setdefault(skill.category, []).append(skill)
-        
         lines = ["# Skill Registry", ""]
         for cat, skills in sorted(categories.items()):
             lines.append(f"## {cat}")
@@ -175,14 +160,11 @@ class SkillRegistry:
         return '\n'.join(lines)
     
     def record_use(self, name: str, success: bool = True):
-        """Record a skill was used."""
         if name in self.skills:
             self.skills[name].record_use(success)
             self._save()
     
     def _register_core_skills(self):
-        """Register the foundational skills I know how to do."""
-        
         self.register(Skill(
             name="debug_python",
             description="Debug a Python script — find the error, explain why it happens, suggest a fix",
@@ -201,7 +183,6 @@ class SkillRegistry:
             keywords=["bug", "error", "traceback", "exception", "crash", "broken", "doesn't work",
                       "wrong output", "unexpected", "fix", "debug", "failing", "stack trace"]
         ))
-        
         self.register(Skill(
             name="explain_concept",
             description="Explain a technical concept clearly, with examples and analogies",
@@ -220,7 +201,6 @@ class SkillRegistry:
             keywords=["what is", "how does", "explain", "understand", "learn", "tutorial",
                       "beginner", "concept", "meaning", "difference between", "why"]
         ))
-        
         self.register(Skill(
             name="write_function",
             description="Write a Python function to specification",
@@ -237,7 +217,6 @@ class SkillRegistry:
             output_format="Function with docstring → Test cases → Verified output",
             tools_used=["WRITE", "RUN"]
         ))
-        
         self.register(Skill(
             name="code_review",
             description="Review code for bugs, style issues, performance problems, and security concerns",
@@ -254,7 +233,6 @@ class SkillRegistry:
             output_format="Summary → Critical issues → Suggestions → Positive observations",
             tools_used=["READ"]
         ))
-        
         self.register(Skill(
             name="refactor_code",
             description="Refactor existing code to be cleaner, more maintainable, or more performant",
@@ -271,7 +249,6 @@ class SkillRegistry:
             output_format="Before/after comparison → Changes explained → Verification",
             tools_used=["WRITE", "RUN", "READ"]
         ))
-        
         self.register(Skill(
             name="design_system",
             description="Design a software system or architecture from requirements",
@@ -289,7 +266,6 @@ class SkillRegistry:
             output_format="Requirements summary → Component diagram → Data flow → Tradeoffs → Roadmap",
             tools_used=["WRITE"]
         ))
-        
         self.register(Skill(
             name="analyze_data",
             description="Analyze a dataset — find patterns, anomalies, and insights",
@@ -307,7 +283,6 @@ class SkillRegistry:
             output_format="Data overview → Key statistics → Patterns → Anomalies → Insights → Next questions",
             tools_used=["WRITE", "RUN", "READ"]
         ))
-        
         self.register(Skill(
             name="write_tests",
             description="Write comprehensive tests for existing code",
@@ -324,7 +299,6 @@ class SkillRegistry:
             output_format="Test file → Test results → Coverage assessment",
             tools_used=["WRITE", "RUN", "READ"]
         ))
-        
         self.register(Skill(
             name="troubleshoot_environment",
             description="Help debug environment issues — packages, paths, configs, permissions",
@@ -344,7 +318,6 @@ class SkillRegistry:
                       "module not found", "command not found", "permission denied", "path",
                       "version", "dependency", "requirements", "setup", "failing", "broken"]
         ))
-        
         self.register(Skill(
             name="brainstorm",
             description="Generate ideas and explore possibilities for a project or problem",
