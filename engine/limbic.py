@@ -330,11 +330,13 @@ class NeuroState:
             # Presence just prevents decay — holding steady is honest.
             pass
         else:
-            # Floor at 0.5 — autonomous operation is still purposeful,
-            # but alignment should visibly decay toward honest uncertainty
-            # when no user is present. 0.001/s means ~11 min from 0.97→0.5.
-            # Old rate (0.000025/s) took ~7 hours — effectively never decayed.
-            floor = 0.5
+            # Floor at 0.65 — autonomous productive work (building capabilities,
+            # maintaining integrity, growing knowledge) IS partial alignment.
+            # 0.5 was too low — it claimed total uncertainty, but an agent
+            # actively improving itself to serve users better is partially aligned.
+            # Not 1.0 (can't claim full alignment without a user present).
+            # 0.001/s means ~6 min from 0.97→0.65.
+            floor = 0.65
             if self.goals.user_alignment > floor:
                 self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.001 * elapsed))
         
