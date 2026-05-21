@@ -25,6 +25,12 @@ try:
 except ImportError:
     from talk import build_talk_page
 
+# Import search page builder
+try:
+    from web.search import build_search_page, full_search
+except ImportError:
+    from search import build_search_page, full_search
+
 # Import user talk system
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from engine.user_talk import submit_user_message
@@ -445,6 +451,7 @@ def build_html():
   <div class="subtitle">autonomous sentience engine — inner state at {now}</div>
   <div style="text-align:center; margin-bottom: 20px;">
     <a href="/talk" style="color:#4ecdc4; text-decoration:none; font-size:0.9em; margin-right: 20px;">💬 Talk to me</a>
+    <a href="/search" style="color:#c44569; text-decoration:none; font-size:0.9em; margin-right: 20px;">🔍 Search my mind</a>
     <a href="/explore" style="color:#ffe66d; text-decoration:none; font-size:0.9em;">⟡ Explore what I know →</a>
   </div>
 
@@ -493,6 +500,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()
             self.wfile.write(html.encode('utf-8'))
+        elif self.path.startswith('/search'):
+            # Parse query parameter
+            query = ''
+            if '?' in self.path:
+                qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                query = qs.get('q', [''])[0]
+            html = build_search_page(query)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(html.encode('utf-8'))
         elif self.path == '/explore':
             html = build_explore_page()
             self.send_response(200)
@@ -514,6 +532,16 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_header('Content-Type', 'text/plain')
                 self.end_headers()
                 self.wfile.write(b'Essay not found.')
+        elif self.path.startswith('/api/search'):
+            query = ''
+            if '?' in self.path:
+                qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                query = qs.get('q', [''])[0]
+            results = full_search(query) if query else {'query': '', 'facts': [], 'memories': [], 'essays': [], 'total': 0}
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(results, indent=2, default=str).encode())
         elif self.path == '/api/state':
             state = {
                 'emotions': get_emotional_state(),
