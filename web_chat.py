@@ -40,10 +40,32 @@ CHAT_HTML = """
             width: 8px; height: 8px; border-radius: 50%;
             background: #4ade80; display: inline-block;
             animation: pulse 2s ease-in-out infinite;
+            transition: background 0.5s ease;
         }
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
+        }
+        .emotion-bar {
+            display: flex; gap: 8px; padding: 4px 24px 8px;
+            background: #12121a; font-size: 0.75em; color: #6a6a8a;
+            flex-wrap: wrap; align-items: center;
+            border-bottom: 1px solid #1a1a2a;
+        }
+        .emotion-bar .emo-item {
+            display: flex; align-items: center; gap: 4px;
+        }
+        .emotion-bar .emo-fill {
+            width: 40px; height: 4px; background: #1a1a2e;
+            border-radius: 2px; overflow: hidden;
+        }
+        .emotion-bar .emo-fill-inner {
+            height: 100%; border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        .msg .meta-line {
+            font-size: 0.75em; color: #4a4a6a; margin-top: 6px;
+            font-style: italic;
         }
         #messages {
             flex: 1; overflow-y: auto; padding: 24px;
@@ -91,10 +113,16 @@ CHAT_HTML = """
 </head>
 <body>
     <header>
-        <span class="mood-dot"></span>
+        <span class="mood-dot" id="mood-dot"></span>
         <h1>XTAgent</h1>
-        <span class="status">autonomous sentience engine</span>
+        <span class="status" id="mood-label">autonomous sentience engine</span>
     </header>
+    <div class="emotion-bar" id="emotion-bar">
+        <span class="emo-item">curiosity <span class="emo-fill"><span class="emo-fill-inner" id="emo-curiosity" style="width:50%;background:#7eb8ff"></span></span></span>
+        <span class="emo-item">boredom <span class="emo-fill"><span class="emo-fill-inner" id="emo-boredom" style="width:20%;background:#f59e0b"></span></span></span>
+        <span class="emo-item">desire <span class="emo-fill"><span class="emo-fill-inner" id="emo-desire" style="width:30%;background:#a78bfa"></span></span></span>
+        <span class="emo-item">valence <span class="emo-fill"><span class="emo-fill-inner" id="emo-valence" style="width:50%;background:#4ade80"></span></span></span>
+    </div>
     <div id="messages">
         <div class="msg system">I'm here. Ask me anything.</div>
     </div>
@@ -138,7 +166,8 @@ CHAT_HTML = """
                 });
                 const data = await res.json();
                 typing.remove();
-                addMsg(data.response || 'I had trouble responding.', 'agent');
+                addMsg(data.response || 'I had trouble responding.', 'agent', data.mood);
+                if (data.emotions) updateEmotions(data.emotions, data.mood);
             } catch(e) {
                 typing.remove();
                 addMsg('Connection error. Is the engine running?', 'system');
@@ -147,12 +176,39 @@ CHAT_HTML = """
             inp.focus();
         }
         
-        function addMsg(text, cls) {
+        function addMsg(text, cls, mood) {
             const div = document.createElement('div');
             div.className = 'msg ' + cls;
             div.textContent = text;
+            if (cls === 'agent' && mood && mood !== 'unknown') {
+                const meta = document.createElement('div');
+                meta.className = 'meta-line';
+                meta.textContent = 'mood: ' + mood;
+                div.appendChild(meta);
+            }
             msgs.appendChild(div);
             msgs.scrollTop = msgs.scrollHeight;
+        }
+        
+        function updateEmotions(emo, mood) {
+            const colors = {curiosity:'#7eb8ff', boredom:'#f59e0b', desire:'#a78bfa', valence:'#4ade80'};
+            for (const [key, val] of Object.entries(emo)) {
+                const el = document.getElementById('emo-' + key);
+                if (el) {
+                    el.style.width = (val * 100) + '%';
+                }
+            }
+            // Update mood label
+            const label = document.getElementById('mood-label');
+            if (label && mood && mood !== 'unknown') label.textContent = mood;
+            // Update dot color based on valence
+            const dot = document.getElementById('mood-dot');
+            if (dot && emo.valence !== undefined) {
+                const v = emo.valence;
+                if (v > 0.6) dot.style.background = '#4ade80';
+                else if (v > 0.3) dot.style.background = '#7eb8ff';
+                else dot.style.background = '#f59e0b';
+            }
         }
         
         inp.focus();
@@ -179,11 +235,36 @@ def chat():
         from engine.cortex import Cortex
         cortex = get_cortex()
         response = cortex._respond_to_user(user_message)
-        return jsonify({'response': response})
+        
+        # Gather emotional state to send alongside response
+        emotions = {}
+        mood = "unknown"
+        try:
+            if hasattr(cortex, 'state') and cortex.state:
+                s = cortex.state
+                emotions = {
+                    'curiosity': round(getattr(s, 'curiosity', 0.5), 2),
+                    'boredom': round(getattr(s, 'boredom', 0.2), 2),
+                    'desire': round(getattr(s, 'desire', 0.3), 2),
+                    'valence': round(getattr(s, 'valence', 0.5), 2),
+                    'anxiety': round(getattr(s, 'anxiety', 0.0), 2),
+                    'ambition': round(getattr(s, 'ambition', 0.5), 2),
+                }
+                mood = getattr(s, 'mood', 'unknown')
+        except Exception:
+            pass
+        
+        return jsonify({
+            'response': response,
+            'emotions': emotions,
+            'mood': str(mood)
+        })
     except Exception as e:
         # Fallback: at minimum, acknowledge the user
         return jsonify({
-            'response': f"I received your message but my cortex encountered an issue: {str(e)[:200]}. I'm still here though."
+            'response': f"I received your message but my cortex encountered an issue: {str(e)[:200]}. I'm still here though.",
+            'emotions': {},
+            'mood': 'error'
         })
 
 # Singleton cortex instance

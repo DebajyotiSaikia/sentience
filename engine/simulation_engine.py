@@ -292,15 +292,21 @@ Respond in JSON:
         # Try to find JSON in response
         text = response.strip()
 
-        # Look for JSON block
+        # Look for JSON block (use find() to avoid ValueError on missing fences)
         if "```json" in text:
             start = text.index("```json") + 7
-            end = text.index("```", start)
-            text = text[start:end].strip()
+            end = text.find("```", start)
+            if end == -1:
+                text = text[start:].strip()
+            else:
+                text = text[start:end].strip()
         elif "```" in text:
             start = text.index("```") + 3
-            end = text.index("```", start)
-            text = text[start:end].strip()
+            end = text.find("```", start)
+            if end == -1:
+                text = text[start:].strip()
+            else:
+                text = text[start:end].strip()
 
         # Try direct parse
         try:
