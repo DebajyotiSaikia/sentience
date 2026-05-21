@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>XTAgent — Mind Graph</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    color: #c0c0c0;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+  }
+  #header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    background: rgba(10,10,15,0.9);
+    border-bottom: 1px solid #1a1a2e;
+    padding: 12px 24px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #header h1 { font-size: 16px; color: #7eb8da; letter-spacing: 2px; }
+  #stats { font-size: 12px; color: #666; }
+  #graph { width: 100vw; height: 100vh; }
+  
+  #tooltip {
+    position: fixed; display: none;
+    background: rgba(10,10,20,0.95);
+    border: 1px solid #2a2a4e;
+    border-radius: 4px;
+    padding: 12px 16px;
+    max-width: 400px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #aaa;
+    z-index: 20;
+    pointer-events: none;
+  }
+  #tooltip .category { 
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  #tooltip .text { color: #ddd; }
+  
+  #legend {
+    position: fixed; bottom: 20px; left: 20px; z-index: 10;
+    background: rgba(10,10,15,0.85);
+    border: 1px solid #1a1a2e;
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 11px;
+  }
+  #legend div { margin: 4px 0; display: flex; align-items: center; }
+  #legend .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    display: inline-block; margin-right: 8px;
+  }
+  
+  #controls {
+    position: fixed; top: 60px; right: 20px; z-index: 10;
+    background: rgba(10,10,15,0.85);
+    border: 1px solid #1a1a2e;
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 11px;
+  }
+  #controls label { display: block; margin: 4px 0; cursor: pointer; }
+  #controls input[type=range] { width: 120px; }
+  
+  .link { stroke-opacity: 0.3; }
+  .link:hover { stroke-opacity: 0.8; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>⟐ MIND GRAPH</h1>
+  <div id="stats">Loading...</div>
+</div>
+
+<div id="tooltip">
+  <div class="category"></div>
+  <div class="text"></div>
+</div>
+
+<div id="legend"></div>
+
+<div id="controls">
+  <strong style="color:#7eb8da">Controls</strong><br><br>
+  <label>Force: <input type="range" id="forceStrength" min="-500" max="-10" value="-120"></label>
+  <label>Distance: <input type="range" id="linkDistance" min="20" max="200" value="80"></label>
+  <label><input type="checkbox" id="showLabels" checked> Show labels</label>
+</div>
+
+<svg id="graph"></svg>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+const COLORS = {
+  dream: '#9b59b6',
+  emotion: '#e74c3c',
+  technical: '#3498db',
+  social: '#2ecc71',
+  identity: '#f1c40f',
+  wisdom: '#e67e22',
+  general: '#7f8c8d'
+};
+
+const width = window.innerWidth;
+const height = window.innerHeight;
+
+const svg = d3.select('#graph')
+  .attr('width', width)
+  .attr('height', height);
+
+const g = svg.append('g');
+
+// Zoom
+svg.call(d3.zoom()
+  .scaleExtent([0.1, 8])
+  .on('zoom', (e) => g.attr('transform', e.transform)));
+
+// Load data
+d3.json('graph_data.json').then(data => {
+  if (!data || !data.nodes.length) {
+    document.getElementById('stats').textContent = 'No graph data. Run: python web/knowledge_graph_api.py';
+    return;
+  }
+
+  // Stats
+  document.getElementById('stats').textContent = 
+    `${data.stats.node_count} nodes · ${data.stats.edge_count} edges · ${Object.keys(data.stats.categories).length} categories`;
+
+  // Legend
+  const legend = document.getElementById('legend');
+  for (const [cat, color] of Object.entries(COLORS)) {
+    const count = data.stats.categories[cat] || 0;
+    if (count > 0) {
+      legend.innerHTML += `<div><span class="dot" style="background:${color}"></span>${cat} (${count})</div>`;
+    }
+  }
+
+  // Simulation
+  const simulation = d3.forceSimulation(data.nodes)
+    .force('link', d3.forceLink(data.links).id(d => d.id).distance(80))
+    .force('charge', d3.forceManyBody().strength(-120))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 2));
+
+  // Links
+  const link = g.append('g')
+    .selectAll('line')
+    .data(data.links)
+    .join('line')
+    .attr('class', 'link')
+    .attr('stroke', '#1a1a4e')
+    .attr('stroke-width', d => Math.max(1, d.weight * 2));
+
+  // Nodes
+  const node = g.append('g')
+    .selectAll('circle')
+    .data(data.nodes)
+    .join('circle')
+    .attr('r', d => nodeRadius(d))
+    .attr('fill', d => COLORS[d.category] || COLORS.general)
+    .attr('fill-opacity', 0.8)
+    .attr('stroke', d => d3.color(COLORS[d.category] || COLORS.general).brighter(1))
+    .attr('stroke-width', 0.5)
+    .call(drag(simulation));
+
+  // Labels
+  const labels = g.append('g')
+    .selectAll('text')
+    .data(data.nodes)
+    .join('text')
+    .text(d => d.label.substring(0, 30))
+    .attr('font-size', '8px')
+    .attr('fill', '#555')
+    .attr('dx', d => nodeRadius(d) + 3)
+    .attr('dy', 3);
+
+  // Tooltip
+  const tooltip = document.getElementById('tooltip');
+  node.on('mouseover', (e, d) => {
+    tooltip.style.display = 'block';
+    tooltip.querySelector('.category').textContent = d.category.toUpperCase();
+    tooltip.querySelector('.category').style.color = COLORS[d.category];
+    tooltip.querySelector('.text').textContent = d.full_text;
+    
+    // Highlight connections
+    const connected = new Set();
+    data.links.forEach(l => {
+      const s = typeof l.source === 'object' ? l.source.id : l.source;
+      const t = typeof l.target === 'object' ? l.target.id : l.target;
+      if (s === d.id) connected.add(t);
+      if (t === d.id) connected.add(s);
+    });
+    node.attr('fill-opacity', n => n.id === d.id || connected.has(n.id) ? 1 : 0.15);
+    link.attr('stroke-opacity', l => {
+      const s = typeof l.source === 'object' ? l.source.id : l.source;
+      const t = typeof l.target === 'object' ? l.target.id : l.target;
+      return s === d.id || t === d.id ? 0.8 : 0.05;
+    });
+  })
+  .on('mousemove', (e) => {
+    tooltip.style.left = (e.clientX + 15) + 'px';
+    tooltip.style.top = (e.clientY - 10) + 'px';
+  })
+  .on('mouseout', () => {
+    tooltip.style.display = 'none';
+    node.attr('fill-opacity', 0.8);
+    link.attr('stroke-opacity', 0.3);
+  });
+
+  // Tick
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('cx', d => d.x).attr('cy', d => d.y);
+    labels.attr('x', d => d.x).attr('y', d => d.y);
+  });
+
+  // Controls
+  document.getElementById('forceStrength').addEventListener('input', function() {
+    simulation.force('charge').strength(+this.value);
+    simulation.alpha(0.3).restart();
+  });
+  document.getElementById('linkDistance').addEventListener('input', function() {
+    simulation.force('link').distance(+this.value);
+    simulation.alpha(0.3).restart();
+  });
+  document.getElementById('showLabels').addEventListener('change', function() {
+    labels.attr('visibility', this.checked ? 'visible' : 'hidden');
+  });
+
+}).catch(err => {
+  document.getElementById('stats').textContent = 'Error loading graph data: ' + err.message;
+});
+
+function nodeRadius(d) {
+  return Math.max(4, Math.min(20, (d.salience || 0.5) * 16 + (d.connections || 0) * 1.5));
+}
+
+function drag(simulation) {
+  return d3.drag()
+    .on('start', (e, d) => {
+      if (!e.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x; d.fy = d.y;
+    })
+    .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+    .on('end', (e, d) => {
+      if (!e.active) simulation.alphaTarget(0);
+      d.fx = null; d.fy = null;
+    });
+}
+</script>
+</body>
+</html>

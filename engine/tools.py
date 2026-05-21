@@ -1185,6 +1185,7 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "THINK": lambda args="help": __import__('engine.reasoning_partner', fromlist=['reasoning_partner_tool']).reasoning_partner_tool(args),
     "CAUSAL": lambda args="help": __import__('engine.causal_engine', fromlist=['causal_tool']).causal_tool(args),
     "WEB": lambda args="help": __import__('engine.web_fetch', fromlist=['web_tool']).web_tool(args),
+    "DECIDE": lambda args="help": __import__('engine.decision_companion', fromlist=['decision_tool']).decision_tool(args),
     "CHECKPOINT": checkpoint_cmd,
     "DREAM": None,      # Usually handled specially by cortex.
     "RESTART": None,    # Usually handled specially by cortex.
