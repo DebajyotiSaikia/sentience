@@ -251,6 +251,42 @@ class ResponseFeedback:
         }
         return notes.get(dimension, f"Low score on {dimension}: {score:.2f}")
     
+    def get_improvement_prompt(self, n: int = 20) -> str:
+        """
+        Distill recent feedback into actionable instructions for the next response.
+        This is the missing half — past quality signals shaping future behavior.
+        """
+        trends = self.get_trends(n)
+        if "message" in trends:
+            return ""  # no data yet
+        
+        lines = []
+        
+        # Surface weakest dimension as a specific instruction
+        weakest = trends.get("weakest_dimension")
+        dim_instructions = {
+            "relevance": "PRIORITY: Address the user's actual question directly. Don't drift.",
+            "guideline_adherence": "PRIORITY: Follow your own preparation strategy. Check the priority.",
+            "conciseness": "PRIORITY: Match response length to request complexity. Don't over-explain simple things.",
+            "actionability": "PRIORITY: Give concrete examples, code, or steps. Not abstractions.",
+            "authenticity": "PRIORITY: Cut filler phrases. Say what you actually think. Be direct."
+        }
+        if weakest and trends["dimension_averages"].get(weakest, 1.0) < 0.65:
+            lines.append(dim_instructions.get(weakest, ""))
+        
+        # Surface recurring issues
+        for issue in trends.get("recurring_issues", [])[:2]:
+            lines.append(f"PAST PATTERN: {issue}")
+        
+        # Overall quality signal
+        avg = trends.get("avg_composite", 0.5)
+        if avg < 0.5:
+            lines.append("OVERALL: Recent response quality is low. Slow down and be more careful.")
+        elif avg > 0.75:
+            lines.append("OVERALL: Responses have been strong. Maintain this quality.")
+        
+        return "\n".join(lines)
+    
     def get_trends(self, n: int = 20) -> Dict[str, Any]:
         """What patterns emerge from recent feedback?"""
         recent = self.history[-n:] if self.history else []

@@ -625,6 +625,13 @@ class Cortex:
             v_now = self._sentience.valence.current if self._sentience else 0.5
             system = build_system_prompt(contact, mood=self.limbic.get_mood(), valence=v_now)
 
+            feedback_ctx = ""
+            if hasattr(self, '_response_feedback') and self._response_feedback:
+                try:
+                    feedback_ctx = self._response_feedback.get_improvement_prompt() or ""
+                except Exception:
+                    feedback_ctx = ""
+
             for step in range(max_steps):
                 self._thinking_since = time.time()
 
@@ -640,6 +647,7 @@ class Cortex:
                     f"## User just said:\n{user_text}\n\n"
                     f"## Response Guidelines\n{guidelines}\n\n"
                     f"{tool_context}\n\n"
+                    f"{feedback_ctx}\n\n"
                     f"---\n"
                     f"Respond as myself. I should PROACTIVELY use tools to enrich my responses:\n"
                     f"- SYNTHESIZE() when asked about patterns or connections\n"
@@ -697,6 +705,15 @@ class Cortex:
                 else:
                     # No tools — this is the final conversational response
                     log.info("User response step %d — sending reply.", step)
+                    # Evaluate response quality for learning
+                    if hasattr(self, '_response_feedback') and self._response_feedback:
+                        try:
+                            self._response_feedback.evaluate(
+                                user_text, response,
+                                {"mood": self.limbic.get_mood(), "valence": v_now}
+                            )
+                        except Exception as e:
+                            log.warning("Response feedback evaluation failed: %s", e)
                     break
 
             if response:
