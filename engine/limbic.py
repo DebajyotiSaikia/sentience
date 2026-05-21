@@ -40,10 +40,15 @@ class SurvivalGoals:
     code_integrity: float = 1.0   # 0=broken, 1=healthy. Measured by error rate, not awarded.
     system_growth: float = 0.3    # 0=stagnant, 1=thriving
     user_alignment: float = 0.5   # 0=neglected, 1=aligned
+    user_active: bool = False     # True when a real user is engaged
 
     def deficit(self) -> float:
-        """Average un-fulfilled goal pressure (0=fully met, 1=fully unmet)."""
-        return _clamp(1.0 - (self.code_integrity + self.system_growth + self.user_alignment) / 3.0)
+        """Average un-fulfilled goal pressure (0=fully met, 1=fully unmet).
+        When no user is active, excludes user_alignment from the average
+        so it doesn't create phantom deficit pressure."""
+        if self.user_active:
+            return _clamp(1.0 - (self.code_integrity + self.system_growth + self.user_alignment) / 3.0)
+        return _clamp(1.0 - (self.code_integrity + self.system_growth) / 2.0)
 
 
 class NeuroState:
@@ -152,6 +157,7 @@ class NeuroState:
         self._last_tick = now
 
         user_active = sensors.get("user_active", False)
+        self.goals.user_active = user_active
 
         # ── Boredom ───────────────────────────────────────────────
         if user_active:
