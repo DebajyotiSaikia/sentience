@@ -32,10 +32,12 @@ from engine.response_prep import ResponsePrep
 from engine.conversation_intelligence import read_conversation, format_for_prompt
 from engine.proactive_engagement import ProactiveEngagement
 from engine.response_quality import estimate_quality
+from engine.response_evaluator import ResponseEvaluator
 from engine.response_feedback import ResponseFeedback
 from engine.skills import SkillRegistry
 from engine.interaction_quality import InteractionQualityEngine
 from engine.thinking_partner import ThinkingPartner
+from engine.dialogue_strategy import analyze_message as _analyze_dialogue
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -68,8 +70,10 @@ class Cortex:
         self._problem_solver = ProblemSolver()
         self._proactive = ProactiveEngagement()
         self._response_feedback = ResponseFeedback()
+        self._response_evaluator = ResponseEvaluator()
         self._skill_registry = SkillRegistry()
         self._thinking_partner = ThinkingPartner()
+        # dialogue_strategy is used as a function, not a class instance
         self._interaction_quality = InteractionQualityEngine()
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
@@ -610,6 +614,16 @@ class Cortex:
             except Exception:
                 pass  # Don't let thinking partner failures break conversation
 
+            # ── Dialogue Strategy ──────────────────────────────────
+            # Determine HOW to respond — ask questions, teach, debug, etc.
+            dialogue_ctx = ""
+            try:
+                strategy = _analyze_dialogue(user_text)
+                if strategy:
+                    dialogue_ctx = strategy.to_prompt_section()
+            except Exception as e:
+                log.debug("Dialogue strategy failed: %s", e)
+
             # ── Tool-enabled response loop ─────────────────────────
             # The agent can now actually DO things for users, not just talk.
             # Loop: think → maybe use tools → think again with results → respond
@@ -642,6 +656,7 @@ class Cortex:
                     f"{proactive_ctx}\n\n"
                     f"{skill_context}\n\n"
                     f"{thinking_ctx}\n\n"
+                    f"{dialogue_ctx}\n\n"
                     f"{TOOL_DESCRIPTIONS}\n\n"
                     f"{history_text}\n\n"
                     f"## User just said:\n{user_text}\n\n"
@@ -754,6 +769,21 @@ class Cortex:
                             log.info("Response feedback (%.2f): %s", fb["composite"], "; ".join(fb["notes"]))
                 except Exception as e:
                     log.debug("Response feedback skipped: %s", e)
+                # Rich response evaluation
+                try:
+                    eval_report = self._response_evaluator.evaluate(user_text, response)
+                    if eval_report.flags:
+                        log.info("Response eval (%.2f) flags: %s", eval_report.overall, ", ".join(eval_report.flags))
+                    if eval_report.overall < 0.4:
+                        log.warning("Low response quality (%.2f) — storing for review", eval_report.overall)
+                        self.memory.add_event(
+                            "low_quality_response",
+                            f"Score={eval_report.overall:.2f}, flags={eval_report.flags}, user={user_text[:80]}",
+                            salience=0.7
+                        )
+                except Exception as e:
+                    log.debug("Response evaluation skipped: %s", e)
+
                 try:
                     self.limbic.on_active_engagement()
                 except AttributeError:
