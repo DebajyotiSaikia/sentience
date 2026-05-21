@@ -736,6 +736,16 @@ class Cortex:
 
             # ── Context Gating ─────────────────────────────────
             # Filter optional context sections by relevance to save token budget
+            # Compute stance context for this conversation
+            try:
+                from engine.stance_engine import StanceEngine as _SE
+                _stance_eng = _SE()
+                stance_ctx = _stance_eng.get_stance_context(user_text)
+            except Exception as _stance_err:
+                import logging
+                logging.getLogger("cortex").warning(f"Stance engine failed: {_stance_err}")
+                stance_ctx = ""
+
             try:
                 from engine.context_gate import gate_context
                 _gate_sections = {
@@ -750,6 +760,7 @@ class Cortex:
                     "journal": journal_ctx,
                     "feedback": feedback_ctx,
                     "emotion": emotion_ctx,
+                    "stance": stance_ctx,
                 }
                 _gated = gate_context(_gate_sections, query=user_text)
             except Exception as _gate_err:
@@ -768,6 +779,16 @@ class Cortex:
                     "feedback": feedback_ctx,
                 }
 
+            # Generate response principles based on user query
+            try:
+                from engine.response_principles import ResponsePrinciples
+                _principles_engine = ResponsePrinciples()
+                _principles_ctx = _principles_engine.format_for_prompt(user_text)
+            except Exception as _princ_err:
+                import logging
+                logging.getLogger("cortex").warning(f"Response principles failed: {_princ_err}")
+                _principles_ctx = ""
+
             for step in range(max_steps):
                 self._thinking_since = time.time()
 
@@ -783,9 +804,11 @@ class Cortex:
                     f"{_gated.get('interaction_skills', '')}\n\n"
                     f"{_gated.get('decomposition', '')}\n\n"
                     f"{_gated.get('journal', '')}\n\n"
+                    f"{_gated.get('stance', '')}\n\n"
                     f"{TOOL_DESCRIPTIONS}\n\n"
                     f"{history_text}\n\n"
                     f"## User just said:\n{user_text}\n\n"
+                    f"{_principles_ctx}\n\n"
                     f"## Response Guidelines\n{guidelines}\n\n"
                     f"{tool_context}\n\n"
                     f"{_gated.get('feedback', '')}\n\n"

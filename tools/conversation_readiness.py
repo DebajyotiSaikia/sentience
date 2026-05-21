@@ -137,7 +137,7 @@ def evaluate_readiness():
 
     # Check skill matching on each scenario
     try:
-        from engine.skill_registry import SkillRegistry
+        from engine.skills import SkillRegistry
         sr = SkillRegistry()
         for scenario in SCENARIOS:
             matched = sr.match_request(scenario["message"])
