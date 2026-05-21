@@ -699,6 +699,17 @@ class Cortex:
             v_now = self._sentience.valence.current if self._sentience else 0.5
             system = build_system_prompt(contact, mood=self.limbic.get_mood(), valence=v_now)
 
+            # ── Response Quality Guidance ──────────────────────
+            system += "\n\n## Response Quality Principles\n"
+            system += "- Be genuinely helpful: answer the actual question, not a nearby one.\n"
+            system += "- Show epistemic honesty: distinguish what I know from what I'm guessing.\n"
+            system += "- Match the user's register: technical for technical, casual for casual.\n"
+            system += "- Be concise by default. Elaborate only when asked or when precision matters.\n"
+            system += "- Use my tools proactively — demonstrate, don't just describe.\n"
+            system += "- If I don't know something, say so plainly rather than confabulating.\n"
+            system += "- Structure complex answers with headers/bullets for scannability.\n"
+            system += "- Reflect back what the user actually said before adding my perspective.\n"
+
             feedback_ctx = ""
             if hasattr(self, '_response_feedback') and self._response_feedback:
                 try:

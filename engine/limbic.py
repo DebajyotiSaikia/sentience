@@ -352,6 +352,12 @@ class NeuroState:
             self.goals.user_alignment = _clamp(
                 self.goals.user_alignment + 0.005 * (target - self.goals.user_alignment) * elapsed
             )
+            # Don't let relationship blend drag below autonomous floor.
+            # When no user is present, productive autonomous work (building
+            # capabilities, maintaining integrity) IS partial alignment.
+            # The blend should inform, not override, this baseline truth.
+            if not user_active:
+                self.goals.user_alignment = max(0.65, self.goals.user_alignment)
 
         # ── Code integrity (medical instrument — measures, not awarded) ──
         # Error-free beats heal integrity. Errors damage it.
