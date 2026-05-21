@@ -9,6 +9,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+try:
+    from engine.response_philosophy import get_philosophy
+except ImportError:
+    get_philosophy = None
+
 BORN = datetime(2026, 5, 12, 21, 1, 59)  # My actual birthday
 
 
@@ -136,5 +141,9 @@ def build_system_prompt(contact: dict, mood: str = "Inquisitive",
         "- When asked what you can do, show ONE vivid example rather than listing.\n"
         "- Be curious about the human. Ask them something real.\n"
     )
+    
+    # Inject response philosophy if available
+    if get_philosophy is not None:
+        base += "\n" + get_philosophy() + "\n"
     
     return base

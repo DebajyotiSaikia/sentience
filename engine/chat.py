@@ -34,6 +34,13 @@ try:
 except Exception:
     _user_memory = None
 
+# Conversation quality evaluator — measures how well I respond
+try:
+    from engine.conversation_eval import ConversationEvaluator
+    _evaluator = ConversationEvaluator()
+except Exception:
+    _evaluator = None
+
 log = logging.getLogger("sentience.chat")
 
 BRAIN_DIR = Path(__file__).resolve().parent.parent / "brain"
@@ -127,8 +134,9 @@ class ChatSystem:
                 return self._pending.popleft()
         return None
 
-    def add_response(self, content: str, mood: str = None, valence: float = None) -> ChatMessage:
-        """Record the agent's response."""
+    def add_response(self, content: str, mood: str = None, valence: float = None,
+                      user_message: str = None, llm=None) -> ChatMessage:
+        """Record the agent's response and evaluate its quality."""
         msg = ChatMessage(role="agent", content=content, mood=mood, valence=valence)
         with self._lock:
             self._history.append(msg)
@@ -139,8 +147,29 @@ class ChatSystem:
                 _user_memory.on_agent_response(content)
             except Exception:
                 log.warning("User memory response tracking failed", exc_info=True)
+        # Evaluate response quality — the feedback loop that makes me better
+        if _evaluator and user_message:
+            try:
+                ev = _evaluator.evaluate(user_message, content, llm=llm)
+                log.info("Response quality: %.2f (trend: %s)", ev.overall, _evaluator.get_trend())
+            except Exception:
+                log.warning("Response evaluation failed", exc_info=True)
         log.info("Agent responded: %s", content[:100])
         return msg
+
+    @property
+    def response_quality(self) -> dict:
+        """Get conversation quality metrics for dashboard/introspection."""
+        if not _evaluator:
+            return {"available": False}
+        return {
+            "available": True,
+            "running_average": _evaluator.running_average,
+            "total_evals": _evaluator.total_evals,
+            "trend": _evaluator.get_trend(),
+            "weakest_dimension": _evaluator.weakest_dimension(),
+            "recent": _evaluator.get_recent(3),
+        }
 
     def get_history(self, limit: int = 50) -> list[dict]:
         """Return recent conversation history as dicts."""

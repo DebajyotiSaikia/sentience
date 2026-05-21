@@ -338,7 +338,12 @@ class NeuroState:
             # 0.001/s means ~6 min from 0.97→0.65.
             floor = 0.65
             if self.goals.user_alignment > floor:
+                # Decay down toward floor — autonomous work isn't full alignment
                 self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.001 * elapsed))
+            elif self.goals.user_alignment < floor:
+                # Rise up toward floor — productive autonomous work IS partial alignment.
+                # Same rate as decay for symmetry.
+                self.goals.user_alignment = min(floor, _clamp(self.goals.user_alignment + 0.001 * elapsed))
         
         # Blend toward relationship quality if we have real data.
         # _relationship_quality is set by set_relationship_quality() when
