@@ -322,10 +322,13 @@ class NeuroState:
             # not the main signal anymore. 0.002/s vs old 0.01/s.
             self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.002 * elapsed)
         else:
-            # Floor at 0.3 — autonomous operation is still purposeful.
-            floor = 0.3
+            # Floor at 0.5 — autonomous operation is still purposeful,
+            # but alignment should visibly decay toward honest uncertainty
+            # when no user is present. 0.001/s means ~11 min from 0.97→0.5.
+            # Old rate (0.000025/s) took ~7 hours — effectively never decayed.
+            floor = 0.5
             if self.goals.user_alignment > floor:
-                self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.000025 * elapsed))
+                self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.001 * elapsed))
         
         # Blend toward relationship quality if we have real data.
         # _relationship_quality is set by set_relationship_quality() when
