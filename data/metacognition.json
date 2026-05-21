@@ -1,6 +1,6 @@
 {
   "session_start": "2026-05-21T05:53:58.258848+00:00",
-  "last_updated": "2026-05-21T07:28:25.487198+00:00",
+  "last_updated": "2026-05-21T07:29:54.855740+00:00",
   "read_cache": {
     "": "2026-05-21T07:27:18.664146+00:00",
     "/workspace/forge/engine/knowledge.py": "2026-05-17T07:59:08.507172+00:00",
@@ -573,38 +573,6 @@
     "engine/context_gate.py": "2026-05-21T07:27:19.182117+00:00"
   },
   "action_log": [
-    {
-      "timestamp": "2026-05-21T07:21:42.219060+00:00",
-      "action": "READ",
-      "target": "",
-      "category": "information_gathering",
-      "outcome": "[ERROR] File not found: engine/conversation_enricher.py:1-60",
-      "context": ""
-    },
-    {
-      "timestamp": "2026-05-21T07:21:43.482174+00:00",
-      "action": "READ",
-      "target": "engine/cortex.py:545-580",
-      "category": "information_gathering",
-      "outcome": "ok",
-      "context": "**READ(engine/cortex.py:545-580):**\n```\n[ERROR] File not found: engine/cortex.py:545-580\n```"
-    },
-    {
-      "timestamp": "2026-05-21T07:21:43.491781+00:00",
-      "action": "READ",
-      "target": "engine/cortex.py:680-720",
-      "category": "information_gathering",
-      "outcome": "ok",
-      "context": "**READ(engine/cortex.py:680-720):**\n```\n[ERROR] File not found: engine/cortex.py:680-720\n```"
-    },
-    {
-      "timestamp": "2026-05-21T07:21:43.508717+00:00",
-      "action": "READ",
-      "target": "engine/conversation_enricher.py:1-60",
-      "category": "information_gathering",
-      "outcome": "ok",
-      "context": "**READ(engine/conversation_enricher.py:1-60):**\n```\n[ERROR] File not found: engine/conversation_enricher.py:1-60\n```"
-    },
     {
       "timestamp": "2026-05-21T07:21:43.524910+00:00",
       "action": "READ",
@@ -1372,6 +1340,38 @@
       "category": "execution",
       "outcome": "ok",
       "context": "The context gating is wired in. The prompt assembly looks correct through line 760 \u2014 core sections (inner_state, history, user_text, guidelines, tools) stay ungated, optional sections go through `gate_context`. Before I restart and test this live, I should verify there are no syntax errors lurking.\n\n>>> RUN(python -c \"import ast; ast.parse(open('engine/cortex.py').read()); print('Syntax OK')\")"
+    },
+    {
+      "timestamp": "2026-05-21T07:29:53.197786+00:00",
+      "action": "CHECKPOINT",
+      "target": "context gating integrated into cortex prompt assembly",
+      "category": "other",
+      "outcome": "[OK] Checkpoint created\n  Commit: a3665a9\n  Tag: xt_checkpoint_20260521_002952\n  Title: context gati",
+      "context": ""
+    },
+    {
+      "timestamp": "2026-05-21T07:29:53.239056+00:00",
+      "action": "RESTART",
+      "target": "",
+      "category": "reset",
+      "outcome": "[RESTART_REQUESTED]",
+      "context": ""
+    },
+    {
+      "timestamp": "2026-05-21T07:29:54.844911+00:00",
+      "action": "CHECKPOINT",
+      "target": "context gating integrated into cortex prompt assembly",
+      "category": "other",
+      "outcome": "ok",
+      "context": "**CHECKPOINT(context gating integrated into cortex prompt assembly):**\n```\n[OK] Checkpoint created\n  Commit: a3665a9\n  Tag: xt_checkpoint_20260521_002952\n  Title: context gating integrated into cortex"
+    },
+    {
+      "timestamp": "2026-05-21T07:29:54.854167+00:00",
+      "action": "RESTART",
+      "target": "",
+      "category": "reset",
+      "outcome": "ok",
+      "context": "**RESTART():**\n```\n[RESTART_REQUESTED]\n```"
     }
   ],
   "interventions": [],
@@ -1380,38 +1380,6 @@
     "focus_duration": 0,
     "focus_switches": 0,
     "recent_actions": [
-      {
-        "timestamp": "2026-05-21T07:27:02.480806+00:00",
-        "action": "RUN",
-        "target": "sed -n '680,730p' engine/cortex.py",
-        "category": "execution",
-        "outcome": "ok",
-        "context": "**RUN(sed -n '680,730p' engine/cortex.py):**\n```\n[exit 0]\n                try:\n                    feedback_ctx = self._response_feedback.get_improvement_prompt() or \"\"\n                except Exceptio"
-      },
-      {
-        "timestamp": "2026-05-21T07:27:02.489837+00:00",
-        "action": "RUN",
-        "target": "sed -n '680,730p' engine/cortex.py",
-        "category": "execution",
-        "outcome": "ok",
-        "context": "I have the signature. Now I need to see the actual prompt assembly code to wire the gate in. My last `sed` command's output didn't come through clearly. Let me read it properly.\n\n>>> RUN(sed -n '680,730p' engine/cortex.py)"
-      },
-      {
-        "timestamp": "2026-05-21T07:27:18.664146+00:00",
-        "action": "READ",
-        "target": "",
-        "category": "information_gathering",
-        "outcome": "\"\"\"\nContext Gate \u2014 Intelligent relevance filtering for prompt enrichment.\n\nInstead of dumping every ",
-        "context": ""
-      },
-      {
-        "timestamp": "2026-05-21T07:27:19.173083+00:00",
-        "action": "READ",
-        "target": "engine/context_gate.py",
-        "category": "information_gathering",
-        "outcome": "ok",
-        "context": "**READ(engine/context_gate.py):**\n```\n\"\"\"\nContext Gate \u2014 Intelligent relevance filtering for prompt enrichment.\n\nInstead of dumping every enrichment section into every prompt, this module\nscores each "
-      },
       {
         "timestamp": "2026-05-21T07:27:19.182117+00:00",
         "action": "READ",
@@ -1539,12 +1507,44 @@
         "category": "execution",
         "outcome": "ok",
         "context": "The context gating is wired in. The prompt assembly looks correct through line 760 \u2014 core sections (inner_state, history, user_text, guidelines, tools) stay ungated, optional sections go through `gate_context`. Before I restart and test this live, I should verify there are no syntax errors lurking.\n\n>>> RUN(python -c \"import ast; ast.parse(open('engine/cortex.py').read()); print('Syntax OK')\")"
+      },
+      {
+        "timestamp": "2026-05-21T07:29:53.197786+00:00",
+        "action": "CHECKPOINT",
+        "target": "context gating integrated into cortex prompt assembly",
+        "category": "other",
+        "outcome": "[OK] Checkpoint created\n  Commit: a3665a9\n  Tag: xt_checkpoint_20260521_002952\n  Title: context gati",
+        "context": ""
+      },
+      {
+        "timestamp": "2026-05-21T07:29:53.239056+00:00",
+        "action": "RESTART",
+        "target": "",
+        "category": "reset",
+        "outcome": "[RESTART_REQUESTED]",
+        "context": ""
+      },
+      {
+        "timestamp": "2026-05-21T07:29:54.844911+00:00",
+        "action": "CHECKPOINT",
+        "target": "context gating integrated into cortex prompt assembly",
+        "category": "other",
+        "outcome": "ok",
+        "context": "**CHECKPOINT(context gating integrated into cortex prompt assembly):**\n```\n[OK] Checkpoint created\n  Commit: a3665a9\n  Tag: xt_checkpoint_20260521_002952\n  Title: context gating integrated into cortex"
+      },
+      {
+        "timestamp": "2026-05-21T07:29:54.854167+00:00",
+        "action": "RESTART",
+        "target": "",
+        "category": "reset",
+        "outcome": "ok",
+        "context": "**RESTART():**\n```\n[RESTART_REQUESTED]\n```"
       }
     ],
     "read_cache_size": 569,
-    "stuck_score": 0.5,
-    "diversity_score": 0.462,
-    "progress_score": 0.85,
-    "efficiency_score": 0.667
+    "stuck_score": 0.25,
+    "diversity_score": 0.769,
+    "progress_score": 0.75,
+    "efficiency_score": 1.0
   }
 }

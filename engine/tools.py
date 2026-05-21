@@ -1249,7 +1249,7 @@ Restart yourself. Use after modifying your own code to load changes.
 
 >>> WEB(command)
 Fetch web pages. Commands: fetch:<url>, help.
-Example: >>> WEB(fetch:https://en.wikipedia.org/wiki/Emergence)
+Example: >>> WEB(fetch:https://en.wikipedia.org/wiki/)
 
 >>> CHECKPOINT(title)
 description of what changed and why
