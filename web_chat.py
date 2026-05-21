@@ -18,6 +18,8 @@ try:
     app.register_blueprint(explore_bp)
     from web.talk import talk_bp
     app.register_blueprint(talk_bp)
+    from web.knowledge import knowledge_bp
+    app.register_blueprint(knowledge_bp)
 except ImportError as e:
     print(f"Warning: Could not load explorer: {e}")
 

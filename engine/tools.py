@@ -988,6 +988,17 @@ def reflect_cmd(command: str = "help") -> str:
         return f"[ERROR] Reflection failed: {e}"
 
 
+def self_report_cmd(command: str = "full") -> str:
+    """Self-Report — generate a coherent summary of who I am for users."""
+    try:
+        from engine.self_report import self_report_tool
+        result = self_report_tool(command)
+        _log_tool("SELF_REPORT", command, result[:200])
+        return result
+    except Exception as e:
+        return f"[ERROR] Self-report failed: {e}"
+
+
 def anatomy_cmd(command: str = "report") -> str:
     """Self-anatomy — map my own code structure, find dead weight."""
     try:
