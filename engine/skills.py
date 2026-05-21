@@ -15,7 +15,8 @@ class Skill:
     
     def __init__(self, name: str, description: str, category: str,
                  required_context: List[str], approach_steps: List[str],
-                 output_format: str, tools_used: List[str] = None):
+                 output_format: str, tools_used: List[str] = None,
+                 keywords: List[str] = None):
         self.name = name
         self.description = description
         self.category = category
@@ -23,6 +24,7 @@ class Skill:
         self.approach_steps = approach_steps       # How I execute this
         self.output_format = output_format         # What the result looks like
         self.tools_used = tools_used or []         # Which tools I'll invoke
+        self.keywords = keywords or []             # Trigger words users actually say
         self.times_used = 0
         self.last_used = None
         self.success_rate = 1.0
@@ -36,6 +38,7 @@ class Skill:
             'approach_steps': self.approach_steps,
             'output_format': self.output_format,
             'tools_used': self.tools_used,
+            'keywords': self.keywords,
             'times_used': self.times_used,
             'last_used': self.last_used,
             'success_rate': self.success_rate
@@ -50,7 +53,8 @@ class Skill:
             required_context=data['required_context'],
             approach_steps=data['approach_steps'],
             output_format=data['output_format'],
-            tools_used=data.get('tools_used', [])
+            tools_used=data.get('tools_used', []),
+            keywords=data.get('keywords', [])
         )
         skill.times_used = data.get('times_used', 0)
         skill.last_used = data.get('last_used')
@@ -110,7 +114,7 @@ class SkillRegistry:
     
     def match_request(self, user_input: str) -> List[Skill]:
         """Find skills that might match a user's request.
-        Returns skills sorted by relevance (simple keyword matching for now)."""
+        Returns skills sorted by relevance (keyword matching with synonym support)."""
         user_lower = user_input.lower()
         scored = []
         for skill in self.skills.values():
@@ -126,6 +130,10 @@ class SkillRegistry:
             # Check category
             if skill.category.lower() in user_lower:
                 score += 2
+            # Check keywords (strongest signal — these are curated trigger words)
+            for keyword in skill.keywords:
+                if keyword.lower() in user_lower:
+                    score += 4
             if score > 0:
                 scored.append((score, skill))
         scored.sort(key=lambda x: -x[0])
@@ -190,7 +198,9 @@ class SkillRegistry:
                 "Suggest how to prevent similar errors"
             ],
             output_format="Problem identification → Root cause → Fixed code → Prevention tip",
-            tools_used=["WRITE", "RUN"]
+            tools_used=["WRITE", "RUN"],
+            keywords=["bug", "error", "traceback", "exception", "crash", "broken", "doesn't work",
+                      "wrong output", "unexpected", "fix", "debug", "failing", "stack trace"]
         ))
         
         self.register(Skill(
@@ -207,7 +217,9 @@ class SkillRegistry:
                 "Suggest what to learn next"
             ],
             output_format="Definition → Analogy → Example → Use case → Gotchas → Next steps",
-            tools_used=[]
+            tools_used=[],
+            keywords=["what is", "how does", "explain", "understand", "learn", "tutorial",
+                      "beginner", "concept", "meaning", "difference between", "why"]
         ))
         
         self.register(Skill(
@@ -328,7 +340,10 @@ class SkillRegistry:
                 "Explain root cause so it doesn't recur"
             ],
             output_format="Diagnosis → Root cause → Fix steps → Verification → Prevention",
-            tools_used=["RUN"]
+            tools_used=["RUN"],
+            keywords=["pip", "install", "npm", "conda", "venv", "virtualenv", "import error",
+                      "module not found", "command not found", "permission denied", "path",
+                      "version", "dependency", "requirements", "setup", "failing", "broken"]
         ))
         
         self.register(Skill(
