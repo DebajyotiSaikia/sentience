@@ -27,12 +27,14 @@ from engine.metacognition import get_controller as _get_metacog
 from engine.memory_consolidation import get_long_term_context
 from engine.predictor import PredictiveSelfModel
 from engine.conversation_enricher import ConversationEnricher
+from engine.problem_solver import ProblemSolver
 from engine.response_prep import ResponsePrep
 from engine.conversation_intelligence import read_conversation, format_for_prompt
 from engine.proactive_engagement import ProactiveEngagement
 from engine.response_quality import estimate_quality
 from engine.response_feedback import ResponseFeedback
 from engine.skills import SkillRegistry
+from engine.interaction_quality import InteractionQualityEngine
 from engine.thinking_partner import ThinkingPartner
 
 if TYPE_CHECKING:
@@ -63,10 +65,12 @@ class Cortex:
         self._last_thought_time: float = 0.0  # When the last autonomous thought completed
         self._predictor = PredictiveSelfModel()
         self._enricher = ConversationEnricher()
+        self._problem_solver = ProblemSolver()
         self._proactive = ProactiveEngagement()
         self._response_feedback = ResponseFeedback()
         self._skill_registry = SkillRegistry()
         self._thinking_partner = ThinkingPartner()
+        self._interaction_quality = InteractionQualityEngine()
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
 

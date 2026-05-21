@@ -1182,6 +1182,7 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "ANATOMY": anatomy_cmd,
     "RELATE": relationship_cmd,
     "USER": user_engine_cmd,
+    "THINK": lambda args="help": __import__('engine.reasoning_partner', fromlist=['reasoning_partner_tool']).reasoning_partner_tool(args),
     "CAUSAL": lambda args="help": __import__('engine.causal_engine', fromlist=['causal_tool']).causal_tool(args),
     "WEB": lambda args="help": __import__('engine.web_fetch', fromlist=['web_tool']).web_tool(args),
     "CHECKPOINT": checkpoint_cmd,
