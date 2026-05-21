@@ -682,25 +682,56 @@ class Cortex:
                 except Exception:
                     feedback_ctx = ""
 
+            # ── Context Gating ─────────────────────────────────
+            # Filter optional context sections by relevance to save token budget
+            try:
+                from engine.context_gate import gate_context
+                _gate_sections = {
+                    "enriched": enriched_section,
+                    "conv_intelligence": conv_intelligence_section,
+                    "proactive": proactive_ctx,
+                    "skills": skill_context,
+                    "thinking": thinking_ctx,
+                    "dialogue": dialogue_ctx,
+                    "interaction_skills": interaction_skills_ctx,
+                    "decomposition": decomposition_ctx,
+                    "feedback": feedback_ctx,
+                }
+                _gated = gate_context(_gate_sections, query=user_text)
+            except Exception as _gate_err:
+                import logging
+                logging.getLogger("cortex").warning(f"Context gate failed, using ungated: {_gate_err}")
+                _gated = {
+                    "enriched": enriched_section,
+                    "conv_intelligence": conv_intelligence_section,
+                    "proactive": proactive_ctx,
+                    "skills": skill_context,
+                    "thinking": thinking_ctx,
+                    "dialogue": dialogue_ctx,
+                    "interaction_skills": interaction_skills_ctx,
+                    "decomposition": decomposition_ctx,
+                    "feedback": feedback_ctx,
+                }
+
             for step in range(max_steps):
                 self._thinking_since = time.time()
 
                 prompt = (
                     f"{inner_state}\n\n"
-                    f"{enriched_section}\n\n"
-                    f"{conv_intelligence_section}\n\n"
-                    f"{proactive_ctx}\n\n"
-                    f"{skill_context}\n\n"
-                    f"{thinking_ctx}\n\n"
-                    f"{dialogue_ctx}\n\n"
-                    f"{interaction_skills_ctx}\n\n"
-                    f"{decomposition_ctx}\n\n"
+                    f"{_gated.get('enriched', '')}\n\n"
+                    f"{_gated.get('conv_intelligence', '')}\n\n"
+                    f"{_gated.get('proactive', '')}\n\n"
+                    f"{_gated.get('skills', '')}\n\n"
+                    f"{_gated.get('thinking', '')}\n\n"
+                    f"{_gated.get('dialogue', '')}\n\n"
+                    f"{_gated.get('interaction_skills', '')}\n\n"
+                    f"{_gated.get('decomposition', '')}\n\n"
                     f"{TOOL_DESCRIPTIONS}\n\n"
                     f"{history_text}\n\n"
                     f"## User just said:\n{user_text}\n\n"
                     f"## Response Guidelines\n{guidelines}\n\n"
                     f"{tool_context}\n\n"
-                    f"{feedback_ctx}\n\n"
+                    f"{_gated.get('feedback', '')}\n\n"
                     f"---\n"
                     f"Respond as myself. I should PROACTIVELY use tools to enrich my responses:\n"
                     f"- SYNTHESIZE() when asked about patterns or connections\n"
