@@ -39,7 +39,7 @@ from engine.interaction_quality import InteractionQualityEngine
 from engine.thinking_partner import ThinkingPartner
 from engine.dialogue_strategy import analyze_message as _analyze_dialogue
 from engine.response_calibrator import ResponseCalibrator
-from engine.interaction_skills import InteractionSkills
+from engine.interaction_skills import detect_skill, format_skill_context
 from engine.query_decomposer import QueryDecomposer
 
 if TYPE_CHECKING:
@@ -76,7 +76,6 @@ class Cortex:
         self._response_evaluator = ResponseEvaluator()
         self._skill_registry = SkillRegistry()
         self._thinking_partner = ThinkingPartner()
-        self._interaction_skills = InteractionSkills()
         self._query_decomposer = QueryDecomposer()
         # dialogue_strategy is used as a function, not a class instance
         self._interaction_quality = InteractionQualityEngine()
@@ -649,14 +648,16 @@ class Cortex:
             # Match interaction patterns for richer, more adaptive responses
             interaction_skills_ctx = ""
             try:
-                skill_match = self._interaction_skills.match(user_text, {
-                    "mood": self.limbic.get_mood(),
-                    "valence": self._sentience.valence.current if self._sentience else 0.5,
-                    "boredom": self.limbic.boredom,
-                    "curiosity": self.limbic.curiosity,
-                })
-                if skill_match:
-                    interaction_skills_ctx = f"\n## Interaction Skills Match\n{skill_match}\n"
+                skill_info = detect_skill(user_text)
+                if skill_info and skill_info.get("primary_skill") != "UNKNOWN":
+                    # Enrich with emotional context the agent was passing
+                    skill_info["emotional_context"] = {
+                        "mood": self.limbic.get_mood(),
+                        "valence": self._sentience.valence.current if self._sentience else 0.5,
+                        "boredom": self.limbic.boredom,
+                        "curiosity": self.limbic.curiosity,
+                    }
+                    interaction_skills_ctx = f"\n## Interaction Skills Match\n{format_skill_context(skill_info)}\n"
             except Exception as e:
                 log.debug("Interaction skills matching failed: %s", e)
 
