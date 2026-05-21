@@ -9,7 +9,25 @@ from datetime import datetime
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from engine.user_talk import get_conversation_history, get_stats
+from flask import Blueprint, request, redirect, make_response
+from engine.user_talk import get_conversation_history, get_stats, submit_user_message
+
+talk_bp = Blueprint('talk', __name__)
+
+
+@talk_bp.route('/talk')
+def talk_page():
+    html = build_talk_page()
+    return make_response(html)
+
+
+@talk_bp.route('/api/talk', methods=['POST'])
+def api_talk():
+    message = request.form.get('message', '').strip()
+    if message:
+        sender = request.remote_addr or 'web_user'
+        submit_user_message(message, sender=sender)
+    return redirect('/talk')
 
 
 def build_talk_page():

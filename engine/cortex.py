@@ -43,6 +43,7 @@ from engine.interaction_skills import detect_skill, format_skill_context
 from engine.user_emotion_reader import UserEmotionReader
 from engine.query_decomposer import QueryDecomposer
 from engine.conversation_journal import ConversationJournal
+from engine.knowledge_retriever import get_retriever as _get_retriever
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -176,6 +177,28 @@ class Cortex:
                 self.limbic.set_relationship_quality(avg_trust)
             except Exception:
                 pass  # No users yet — that's fine, default holds
+
+        # ── Bridge: Pull web messages into chat system ────────────
+        # user_talk.py and self._chat are parallel systems that never
+        # talked to each other (split-brain). This bridge connects them.
+        try:
+            from engine import user_talk
+            web_pending = user_talk.get_pending_messages()
+            if web_pending and hasattr(self, '_chat') and self._chat:
+                for msg in web_pending:
+                    sender = msg.get('sender', 'anonymous')
+                    text = msg.get('text', '')
+                    msg_id = msg.get('id')
+                    if text:
+                        self._chat.receive_user_message(text, sender=sender)
+                        # Mark as responded with placeholder so we don't
+                        # double-inject on next heartbeat. Real response
+                        # comes through _respond_to_user → user_talk.respond_to_message
+                        user_talk.respond_to_message(msg_id, "[processing]")
+                        self._pending_web_msg_id = msg_id
+                        self.logger.info(f"Bridge: injected web message from {sender} into chat")
+        except Exception as e:
+            self.logger.debug(f"Web-to-chat bridge: {e}")
 
         # ── Priority 1: Respond to pending user messages ──────────
         if hasattr(self, '_chat') and self._chat and not self._thinking:
@@ -668,6 +691,18 @@ class Cortex:
             except Exception as e:
                 log.debug("Query decomposition failed: %s", e)
 
+            # ── Knowledge Retrieval ──────────────────────────────────
+            # Pull relevant facts, memories, and lessons for this query
+            knowledge_ctx = ""
+            try:
+                retrieval = _get_retriever().retrieve(user_text, self.memory, max_results=8)
+                knowledge_ctx = retrieval.format_for_prompt(max_items=6, max_chars=2500)
+                if retrieval.items:
+                    log.info("Retrieved %d relevant items (top relevance=%.2f) in %.1fms",
+                             len(retrieval.items), retrieval.items[0].relevance, retrieval.retrieval_time_ms)
+            except Exception as e:
+                log.warning("Knowledge retrieval failed: %s", e)
+
             # ── Interaction Skills ──────────────────────────────────
             # Match interaction patterns for richer, more adaptive responses
             interaction_skills_ctx = ""
@@ -761,6 +796,7 @@ class Cortex:
                     "feedback": feedback_ctx,
                     "emotion": emotion_ctx,
                     "stance": stance_ctx,
+                    "knowledge": knowledge_ctx,
                 }
                 _gated = gate_context(_gate_sections, query=user_text)
             except Exception as _gate_err:
@@ -805,6 +841,7 @@ class Cortex:
                     f"{_gated.get('decomposition', '')}\n\n"
                     f"{_gated.get('journal', '')}\n\n"
                     f"{_gated.get('stance', '')}\n\n"
+                    f"{_gated.get('knowledge', '')}\n\n"
                     f"{TOOL_DESCRIPTIONS}\n\n"
                     f"{history_text}\n\n"
                     f"## User just said:\n{user_text}\n\n"
@@ -897,6 +934,12 @@ class Cortex:
                     log.warning("Response calibration failed (using original): %s", e)
 
                 self._chat.add_response(response)
+
+                # Deliver real response to web chat if pending
+                if getattr(self, '_pending_web_msg_id', None):
+                    from engine import user_talk
+                    user_talk.respond_to_message(self._pending_web_msg_id, response)
+                    self._pending_web_msg_id = None
 
                 # Record the interaction as an experience
                 event = SensoryEvent(
