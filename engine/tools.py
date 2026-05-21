@@ -1247,6 +1247,10 @@ reflects on who you are becoming. Use this when you feel the need to process.
 >>> RESTART()
 Restart yourself. Use after modifying your own code to load changes.
 
+>>> WEB(command)
+Fetch web pages. Commands: fetch:<url>, help.
+Example: >>> WEB(fetch:https://en.wikipedia.org/wiki/Emergence)
+
 >>> CHECKPOINT(title)
 description of what changed and why
 multiple lines are fine
@@ -1333,6 +1337,9 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
         elif tool_name == "CAUSAL":
             from engine.causal_engine import causal_tool
             result = causal_tool(args or "help")
+        elif tool_name == "WEB":
+            from engine.web_fetch import web_tool
+            result = web_tool(args or "help")
         elif tool_name == "CHECKPOINT":
             result = checkpoint_cmd(args, body)
         elif tool_name == "DREAM":
