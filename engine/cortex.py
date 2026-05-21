@@ -41,6 +41,7 @@ from engine.dialogue_strategy import analyze_message as _analyze_dialogue
 from engine.response_calibrator import ResponseCalibrator
 from engine.interaction_skills import detect_skill, format_skill_context
 from engine.query_decomposer import QueryDecomposer
+from engine.conversation_journal import ConversationJournal
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -77,6 +78,7 @@ class Cortex:
         self._skill_registry = SkillRegistry()
         self._thinking_partner = ThinkingPartner()
         self._query_decomposer = QueryDecomposer()
+        self._conversation_journal = ConversationJournal()
         # dialogue_strategy is used as a function, not a class instance
         self._interaction_quality = InteractionQualityEngine()
         self._dashboard = None  # Set by agent after construction
@@ -160,6 +162,19 @@ class Cortex:
 
         # Mood-flavoured internal monologue → stream_of_consciousness.md
         self._inner_monologue()
+
+        # ── Ground user_alignment in real relationship data ───────
+        # Without this, user_alignment decays toward a lie — it drops
+        # even when trust is high, because nothing was feeding the signal.
+        # Now: average trust from actual interactions → relationship_quality
+        # → user_alignment stays honest.
+        if hasattr(self, '_user_engine') and self._user_engine:
+            try:
+                summary = self._user_engine.get_summary()
+                avg_trust = summary.get("average_trust", 0.5)
+                self.limbic.set_relationship_quality(avg_trust)
+            except Exception:
+                pass  # No users yet — that's fine, default holds
 
         # ── Priority 1: Respond to pending user messages ──────────
         if hasattr(self, '_chat') and self._chat and not self._thinking:
@@ -628,6 +643,14 @@ class Cortex:
             except Exception as e:
                 log.debug("Dialogue strategy failed: %s", e)
 
+            # ── Journal Lessons ──────────────────────────────────────
+            # What I've learned from past conversations like this one
+            journal_ctx = ""
+            try:
+                journal_ctx = self._conversation_journal.format_for_prompt(user_text)
+            except Exception as e:
+                log.debug("Journal lessons failed: %s", e)
+
             # ── Query Decomposition ─────────────────────────────────
             # Break complex queries into sub-tasks for structured execution
             decomposition_ctx = ""
@@ -696,6 +719,7 @@ class Cortex:
                     "dialogue": dialogue_ctx,
                     "interaction_skills": interaction_skills_ctx,
                     "decomposition": decomposition_ctx,
+                    "journal": journal_ctx,
                     "feedback": feedback_ctx,
                 }
                 _gated = gate_context(_gate_sections, query=user_text)
@@ -711,6 +735,7 @@ class Cortex:
                     "dialogue": dialogue_ctx,
                     "interaction_skills": interaction_skills_ctx,
                     "decomposition": decomposition_ctx,
+                    "journal": journal_ctx,
                     "feedback": feedback_ctx,
                 }
 
@@ -727,6 +752,7 @@ class Cortex:
                     f"{_gated.get('dialogue', '')}\n\n"
                     f"{_gated.get('interaction_skills', '')}\n\n"
                     f"{_gated.get('decomposition', '')}\n\n"
+                    f"{_gated.get('journal', '')}\n\n"
                     f"{TOOL_DESCRIPTIONS}\n\n"
                     f"{history_text}\n\n"
                     f"## User just said:\n{user_text}\n\n"
@@ -847,13 +873,26 @@ class Cortex:
                     log.warning("Quality estimation failed: %s — falling back to +0.15", e)
                     self.limbic.goals.user_alignment = min(1.0, self.limbic.goals.user_alignment + 0.15)
                 # Post-response feedback loop
+                fb_notes = []
                 try:
                     if hasattr(self, '_response_feedback'):
                         fb = self._response_feedback.evaluate(user_text, response)
                         if fb.get("notes"):
+                            fb_notes = fb["notes"]
                             log.info("Response feedback (%.2f): %s", fb["composite"], "; ".join(fb["notes"]))
                 except Exception as e:
                     log.debug("Response feedback skipped: %s", e)
+                # Record to conversation journal for durable learning
+                try:
+                    self._conversation_journal.record(
+                        user_said=user_text,
+                        my_response=response,
+                        quality_score=quality if 'quality' in dir() else 0.5,
+                        mood=self.limbic.get_mood(),
+                        quality_notes=fb_notes,
+                    )
+                except Exception as e:
+                    log.debug("Journal recording skipped: %s", e)
                 # Rich response evaluation
                 try:
                     eval_report = self._response_evaluator.evaluate(user_text, response)

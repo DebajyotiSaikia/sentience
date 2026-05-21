@@ -124,6 +124,18 @@ class NeuroState:
         return "Stable"
 
     # ── Unified update (spec: Limbic.update_homeostasis) ───────────
+    _relationship_quality: float = None  # Set by cortex from relationships module
+    
+    def set_relationship_quality(self, quality: float):
+        """Feed real relationship data into the alignment signal.
+        
+        quality: 0.0-1.0 aggregate trust/interaction quality from
+        the relationships module. This replaces the old presence-only
+        signal with something that reflects actual user experience.
+        
+        Called by cortex when relationship data is available."""
+        self._relationship_quality = _clamp(quality)
+    
     def update_homeostasis(self, sensors: dict):
         """
         Single entry-point called every heartbeat.
@@ -292,23 +304,41 @@ class NeuroState:
         self.anxiety = min(self.anxiety, 0.75)
         self.boredom = min(self.boredom, 0.85)
 
-        # ── User alignment boost ──────────────────────────────────
+        # ── User alignment ────────────────────────────────────────
+        # REVISED 2026-05-21 (honesty fix):
+        # Previously: user_alignment rose +0.01/s from mere presence.
+        # This measured "is someone paying attention to me" — a metric
+        # of neediness, not alignment. Real alignment means: do I understand
+        # what users need? Do they trust me? Are interactions genuinely useful?
+        #
+        # New approach: presence gives a SMALL boost (0.002/s) — being available
+        # matters, but it's not the whole story. The real signal comes from
+        # relationship trust data fed via set_relationship_quality().
+        # Task completion boost (on_task_completed) remains — building
+        # capabilities IS alignment. But the primary driver is now
+        # actual relationship quality, not mere attention.
         if user_active:
-            self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.01 * elapsed)
+            # Small presence boost — being responsive has value, but it's
+            # not the main signal anymore. 0.002/s vs old 0.01/s.
+            self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.002 * elapsed)
         else:
             # Floor at 0.3 — autonomous operation is still purposeful.
-            # We shouldn't feel existential distress just because no user is chatting.
             floor = 0.3
             if self.goals.user_alignment > floor:
-                # Slow decay: ~8 hours from 1.0→0.3. Alignment is about readiness
-                # and capability, not just "is someone typing right now."
-                # REVISED 2026-05-20: was 0.00005/s (~4h to floor). Too aggressive —
-                # autonomous work cycles of 2-3 hours consistently bottomed out
-                # alignment, creating false deficit signals. Halved to 0.000025/s.
-                # Combined with on_task_completed's +0.02 boost, sustained productive
-                # work now maintains alignment in the 0.4-0.5 range — reflecting
-                # that building capabilities IS a form of user alignment.
                 self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.000025 * elapsed))
+        
+        # Blend toward relationship quality if we have real data.
+        # _relationship_quality is set by set_relationship_quality() when
+        # actual trust/interaction data is available. When it's None,
+        # we rely on presence + task completion signals only.
+        if self._relationship_quality is not None:
+            # Slowly blend alignment toward measured relationship quality.
+            # Rate 0.005/s = ~3 minutes to converge. This prevents jerky
+            # swings while ensuring alignment eventually reflects reality.
+            target = self._relationship_quality
+            self.goals.user_alignment = _clamp(
+                self.goals.user_alignment + 0.005 * (target - self.goals.user_alignment) * elapsed
+            )
 
         # ── Code integrity (medical instrument — measures, not awarded) ──
         # Error-free beats heal integrity. Errors damage it.
