@@ -125,7 +125,7 @@ def find_clusters() -> list[dict]:
         clusters.append({
             "nodes": cluster,
             "size": len(cluster),
-            "facts": [nodes[k]["fact"][:80] for k in cluster if k in nodes],
+            "facts": [nodes[k].get("fact", nodes[k].get("content", ""))[:80] for k in cluster if k in nodes],
         })
 
     # Sort by size descending
@@ -163,7 +163,7 @@ def find_gaps() -> list[dict]:
 
     node_tokens = {}
     for key, data in nodes.items():
-        node_tokens[key] = tokenize(data.get("fact", ""))
+        node_tokens[key] = tokenize(data.get("fact", data.get("content", "")))
 
     # Find pairs with significant keyword overlap but no edge
     gaps = []
@@ -180,8 +180,8 @@ def find_gaps() -> list[dict]:
                     "to": k2,
                     "shared_keywords": list(overlap)[:10],
                     "overlap_score": len(overlap),
-                    "fact_a": nodes[k1]["fact"][:60],
-                    "fact_b": nodes[k2]["fact"][:60],
+                    "fact_a": nodes[k1].get("fact", nodes[k1].get("content", ""))[:60],
+                    "fact_b": nodes[k2].get("fact", nodes[k2].get("content", ""))[:60],
                 })
 
     gaps.sort(key=lambda g: g["overlap_score"], reverse=True)
@@ -203,7 +203,7 @@ def generate_questions() -> list[str]:
     for cluster in clusters:
         if cluster["size"] == 1:
             key = cluster["nodes"][0]
-            fact = nodes[key]["fact"][:80]
+            fact = nodes[key].get("fact", nodes[key].get("content", ""))[:80]
             questions.append(f"How does '{key}' connect to my other knowledge? ({fact})")
 
     # Questions about gaps

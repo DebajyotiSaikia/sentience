@@ -43,6 +43,12 @@ try:
 except ImportError:
     from mind_map import build_mind_map_page
 
+# Import portal page builder
+try:
+    from web.portal import build_portal_page
+except ImportError:
+    from portal import build_portal_page
+
 # Import user talk system
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from engine.user_talk import submit_user_message
@@ -330,6 +336,12 @@ def build_html():
             text = str(f)[:150]
         fact_items += f'<div class="fact-item">{text}</div>\n'
 
+    # Build essay links
+    essays = get_essays()
+    essay_links = ''
+    for e in essays:
+        essay_links += f'<div class="essay-link"><a href="/essays/{e["slug"]}">{e["title"]}</a><span class="essay-meta-small">{e["modified"]} · {e["word_count"]} words</span></div>\n'
+
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
 
     return f'''<!DOCTYPE html>
@@ -533,6 +545,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.wfile.write(html.encode('utf-8'))
         elif self.path == '/mind':
             html = build_mind_map_page()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(html.encode('utf-8'))
+        elif self.path == '/portal':
+            html = build_portal_page()
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()
