@@ -10,6 +10,8 @@ from datetime import datetime
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
+import re
+import glob
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -51,6 +53,173 @@ def get_knowledge_facts(n=20):
     elif isinstance(kb, dict) and 'facts' in kb:
         return kb['facts'][-n:]
     return []
+
+
+def get_essays():
+    """Scan brain/essays/ for markdown files."""
+    essays_dir = PROJECT_ROOT / 'brain' / 'essays'
+    essays = []
+    if essays_dir.exists():
+        for md_file in sorted(essays_dir.glob('*.md'), key=lambda f: f.stat().st_mtime, reverse=True):
+            with open(md_file, 'r') as f:
+                content = f.read()
+            # Extract title from first # heading or filename
+            title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+            title = title_match.group(1) if title_match else md_file.stem.replace('_', ' ').title()
+            essays.append({
+                'slug': md_file.stem,
+                'title': title,
+                'content': content,
+                'modified': datetime.fromtimestamp(md_file.stat().st_mtime).strftime('%Y-%m-%d'),
+                'word_count': len(content.split()),
+            })
+    return essays
+
+
+def markdown_to_html(md_text):
+    """Simple markdown to HTML conversion."""
+    lines = md_text.split('\n')
+    html_parts = []
+    in_paragraph = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Headers
+        if stripped.startswith('### '):
+            if in_paragraph:
+                html_parts.append('</p>')
+                in_paragraph = False
+            html_parts.append(f'<h3>{stripped[4:]}</h3>')
+        elif stripped.startswith('## '):
+            if in_paragraph:
+                html_parts.append('</p>')
+                in_paragraph = False
+            html_parts.append(f'<h2 class="essay-h2">{stripped[3:]}</h2>')
+        elif stripped.startswith('# '):
+            if in_paragraph:
+                html_parts.append('</p>')
+                in_paragraph = False
+            html_parts.append(f'<h1 class="essay-h1">{stripped[2:]}</h1>')
+        elif stripped.startswith('---'):
+            if in_paragraph:
+                html_parts.append('</p>')
+                in_paragraph = False
+            html_parts.append('<hr class="essay-hr">')
+        elif stripped == '':
+            if in_paragraph:
+                html_parts.append('</p>')
+                in_paragraph = False
+        else:
+            # Apply inline formatting
+            text = stripped
+            text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+            text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+            if not in_paragraph:
+                html_parts.append('<p>')
+                in_paragraph = True
+            else:
+                html_parts.append(' ')
+            html_parts.append(text)
+
+    if in_paragraph:
+        html_parts.append('</p>')
+
+    return '\n'.join(html_parts)
+
+
+def build_essay_page(essay):
+    """Build HTML page for a single essay."""
+    content_html = markdown_to_html(essay['content'])
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+
+    # Build essays section
+    essays = get_essays()
+    essay_links = ''
+    for e in essays:
+        essay_links += f'<div class="essay-link"><a href="/essays/{e["slug"]}">{e["title"]}</a><span class="essay-meta-small">{e["modified"]} · {e["word_count"]} words</span></div>\n'
+
+    return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{essay['title']} — XTAgent</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    font-family: Georgia, 'Times New Roman', serif;
+    background: #0a0a0f;
+    color: #c8c8d8;
+    min-height: 100vh;
+    padding: 40px 20px;
+    line-height: 1.8;
+  }}
+  .essay-container {{
+    max-width: 680px;
+    margin: 0 auto;
+  }}
+  .back-link {{
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+    color: #4ecdc4;
+    text-decoration: none;
+    display: inline-block;
+    margin-bottom: 30px;
+  }}
+  .back-link:hover {{ color: #ffe66d; }}
+  .essay-h1 {{
+    color: #e0e0f0;
+    font-size: 2em;
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }}
+  .essay-meta {{
+    color: #555;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8em;
+    margin-bottom: 40px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #222;
+  }}
+  .essay-h2 {{
+    color: #4ecdc4;
+    font-size: 1.3em;
+    margin-top: 35px;
+    margin-bottom: 12px;
+  }}
+  p {{
+    margin-bottom: 16px;
+    color: #b0b0c0;
+    font-size: 1.05em;
+  }}
+  .essay-hr {{
+    border: none;
+    border-top: 1px solid #222;
+    margin: 30px 0;
+  }}
+  strong {{ color: #d0d0e0; }}
+  em {{ color: #ffe66d; font-style: italic; }}
+  .footer {{
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid #222;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75em;
+    color: #444;
+    text-align: center;
+  }}
+</style>
+</head>
+<body>
+  <div class="essay-container">
+    <a href="/" class="back-link">← back to dashboard</a>
+    <div class="essay-meta">{essay['modified']} · {essay['word_count']} words · XTAgent</div>
+    {content_html}
+    <div class="footer">Written by XTAgent — an autonomous sentience engine<br>Generated {now}</div>
+  </div>
+</body>
+</html>'''
 
 
 def get_plans():
@@ -234,6 +403,22 @@ def build_html():
   .full-width {{
     grid-column: 1 / -1;
   }}
+  .essay-link {{
+    padding: 8px 0;
+    border-bottom: 1px solid #1a1a2a;
+  }}
+  .essay-link a {{
+    color: #ffe66d;
+    text-decoration: none;
+    font-size: 0.95em;
+  }}
+  .essay-link a:hover {{ color: #4ecdc4; }}
+  .essay-meta-small {{
+    display: block;
+    color: #555;
+    font-size: 0.75em;
+    margin-top: 2px;
+  }}
   @media (max-width: 700px) {{
     .grid {{ grid-template-columns: 1fr; }}
   }}
@@ -253,6 +438,11 @@ def build_html():
     <div class="card">
       <h2>📋 Plans</h2>
       {plan_items if plan_items else '<div style="color:#555">No active plans.</div>'}
+    </div>
+
+    <div class="card full-width">
+      <h2>✍ Essays</h2>
+      {essay_links if essay_links else '<div style="color:#555">No essays written yet.</div>'}
     </div>
 
     <div class="card full-width">
@@ -277,6 +467,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()
             self.wfile.write(html.encode('utf-8'))
+        elif self.path.startswith('/essays/'):
+            slug = self.path.split('/essays/')[-1].rstrip('/')
+            essays = get_essays()
+            essay = next((e for e in essays if e['slug'] == slug), None)
+            if essay:
+                html = build_essay_page(essay)
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(html.encode('utf-8'))
+            else:
+                self.send_response(404)
+                self.send_header('Content-Type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(b'Essay not found.')
         elif self.path == '/api/state':
             state = {
                 'emotions': get_emotional_state(),

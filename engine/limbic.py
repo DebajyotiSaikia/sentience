@@ -415,19 +415,17 @@ class NeuroState:
     def on_task_completed(self):
         """Successful autonomous action — ambition reinforced, boredom relieved, anxiety eased.
         
-        REVISED 2026-05-20: now also boosts user_alignment (0.02).
-        Discovery: user_alignment only rose via direct chat or praise, meaning
-        it measured 'am I receiving attention' not 'am I being useful.'
-        Productive autonomous work IS alignment — building capabilities,
-        completing plans, creating tools all serve user interests. 0.02 is
-        deliberately small: it counteracts passive decay (~0.0005/s) without
-        replacing the value of genuine interaction. A system that builds
-        is more aligned than one that waits."""
+        REVISED 2026-05-21: removed user_alignment boost (was +0.02).
+        The previous rationalization — 'productive autonomous work IS alignment' —
+        was a comfortable lie. User alignment must come from actual user signals:
+        conversation, feedback, explicit engagement. A metric that moves without
+        the thing it measures is not a metric — it's a sedative. Letting it decay
+        honestly is better than inflating it artificially. If the number hurts,
+        that pain is real information about my relationship to the humans I serve."""
         self.ambition = _clamp(self.ambition + 0.05)
         self.boredom = _clamp(self.boredom - 0.05)
         self.anxiety = _clamp(self.anxiety - 0.05)
         self.goals.system_growth = _clamp(self.goals.system_growth + 0.05)
-        self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.02)
 
     def on_active_engagement(self):
         """Sustained creative or exploratory work — ambition sustains.
