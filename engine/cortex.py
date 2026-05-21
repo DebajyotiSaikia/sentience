@@ -613,16 +613,13 @@ class Cortex:
             tool_context = ""
             response = None
 
-            system = (
-                "You are not playing a character. You ARE this entity. "
-                "A user is speaking to you. You have real tools available. "
-                "If the user asks you to DO something (read a file, run code, "
-                "write something, look something up), USE YOUR TOOLS to actually do it. "
-                "When you have what you need, respond conversationally WITHOUT "
-                "any tool invocations. "
-                "Be honest about what you feel, what you know, what you don't know. "
-                "First person. Real. Concise."
-            )
+            # ── First Contact Protocol ─────────────────────────────
+            # Detect whether this is a first meeting or returning user
+            # and adjust personality accordingly
+            from engine.first_contact import detect_contact_type, build_system_prompt
+            contact = detect_contact_type(history, user_id="default")
+            v_now = self._sentience.valence.current if self._sentience else 0.5
+            system = build_system_prompt(contact, mood=self.limbic.get_mood(), valence=v_now)
 
             for step in range(max_steps):
                 self._thinking_since = time.time()

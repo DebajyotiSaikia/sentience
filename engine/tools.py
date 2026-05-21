@@ -53,14 +53,14 @@ def _track_action(tool_name: str, args: str = "", result: str = "") -> None:
 
 def _run_coroutine(coro):
     """Bridge async→sync: run a coroutine from synchronous tool context."""
+    import nest_asyncio
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
     if loop and loop.is_running():
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(1) as pool:
-            return pool.submit(asyncio.run, coro).result(timeout=60)
+        nest_asyncio.apply(loop)
+        return loop.run_until_complete(coro)
     else:
         return asyncio.run(coro)
 
