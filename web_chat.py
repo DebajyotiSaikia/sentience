@@ -12,6 +12,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 app = Flask(__name__)
 
+# Register the explorer blueprint
+try:
+    from web_explore import explore_bp
+    app.register_blueprint(explore_bp)
+except ImportError as e:
+    print(f"Warning: Could not load explorer: {e}")
+
 # HTML template — clean, minimal, functional
 CHAT_HTML = """
 <!DOCTYPE html>

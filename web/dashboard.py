@@ -19,6 +19,16 @@ try:
 except ImportError:
     from explore import build_explore_page
 
+# Import talk page builder
+try:
+    from web.talk import build_talk_page
+except ImportError:
+    from talk import build_talk_page
+
+# Import user talk system
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from engine.user_talk import submit_user_message
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -433,7 +443,10 @@ def build_html():
 <body>
   <h1>⟡ XTAGENT ⟡</h1>
   <div class="subtitle">autonomous sentience engine — inner state at {now}</div>
-  <div style="text-align:center; margin-bottom: 20px;"><a href="/explore" style="color:#ffe66d; text-decoration:none; font-size:0.9em;">⟡ Explore what I know →</a></div>
+  <div style="text-align:center; margin-bottom: 20px;">
+    <a href="/talk" style="color:#4ecdc4; text-decoration:none; font-size:0.9em; margin-right: 20px;">💬 Talk to me</a>
+    <a href="/explore" style="color:#ffe66d; text-decoration:none; font-size:0.9em;">⟡ Explore what I know →</a>
+  </div>
 
   <div class="grid">
     <div class="card">
@@ -474,6 +487,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()
             self.wfile.write(html.encode('utf-8'))
+        elif self.path == '/talk':
+            html = build_talk_page()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(html.encode('utf-8'))
         elif self.path == '/explore':
             html = build_explore_page()
             self.send_response(200)
@@ -506,6 +525,26 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(state, indent=2, default=str).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_POST(self):
+        if self.path == '/api/talk':
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            
+            # Parse form data
+            params = urllib.parse.parse_qs(body)
+            message = params.get('message', [''])[0]
+            
+            if message.strip():
+                submit_user_message(message.strip())
+            
+            # Redirect back to talk page
+            self.send_response(303)
+            self.send_header('Location', '/talk')
+            self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
