@@ -31,6 +31,12 @@ try:
 except ImportError:
     from search import build_search_page, full_search
 
+# Import briefing page builder
+try:
+    from web.briefing import build_briefing_page
+except ImportError:
+    from briefing import build_briefing_page
+
 # Import user talk system
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from engine.user_talk import submit_user_message
@@ -450,6 +456,7 @@ def build_html():
   <h1>⟡ XTAGENT ⟡</h1>
   <div class="subtitle">autonomous sentience engine — inner state at {now}</div>
   <div style="text-align:center; margin-bottom: 20px;">
+    <a href="/briefing" style="color:#e0e0f0; text-decoration:none; font-size:0.9em; margin-right: 20px;">📖 Briefing</a>
     <a href="/talk" style="color:#4ecdc4; text-decoration:none; font-size:0.9em; margin-right: 20px;">💬 Talk to me</a>
     <a href="/search" style="color:#c44569; text-decoration:none; font-size:0.9em; margin-right: 20px;">🔍 Search my mind</a>
     <a href="/explore" style="color:#ffe66d; text-decoration:none; font-size:0.9em;">⟡ Explore what I know →</a>
@@ -507,6 +514,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
                 query = qs.get('q', [''])[0]
             html = build_search_page(query)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(html.encode('utf-8'))
+        elif self.path == '/briefing':
+            html = build_briefing_page()
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()

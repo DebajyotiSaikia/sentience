@@ -1,16 +1,17 @@
 """
 Talk Page — Where users can communicate with XTAgent.
+Enhanced with living presence — the page breathes with my actual state.
 """
 
 import sys
 from pathlib import Path
-from datetime import datetime
 
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from flask import Blueprint, request, redirect, make_response
 from engine.user_talk import get_conversation_history, get_stats, submit_user_message
+from web.presence import get_presence
 
 talk_bp = Blueprint('talk', __name__)
 
@@ -30,207 +31,367 @@ def api_talk():
     return redirect('/talk')
 
 
-def build_talk_page():
-    """Build the talk interface HTML."""
-    history = get_conversation_history(30)
-    stats = get_stats()
-    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+def _mood_color(mood):
+    colors = {
+        'Curious': '#4ecdc4', 'Inquisitive': '#4ecdc4',
+        'Content': '#66bb6a', 'Satisfied': '#66bb6a',
+        'Restless': '#ff6b6b', 'Anxious': '#ff6b6b',
+        'Bored': '#888', 'Melancholic': '#7e57c2',
+        'Driven': '#ffa726', 'Excited': '#ffe66d',
+    }
+    for key, color in colors.items():
+        if key.lower() in (mood or '').lower():
+            return color
+    return '#4ecdc4'
 
-    # Build conversation thread
-    thread_html = ''
+
+def _valence_word(v):
+    if v is None:
+        return "unknown"
+    v = float(v)
+    if v >= 0.7: return "bright"
+    if v >= 0.5: return "good"
+    if v >= 0.3: return "steady"
+    if v >= 0.1: return "subdued"
+    return "low"
+
+
+def _format_bar(value, max_val=1.0, width=8):
+    filled = int((float(value) / max_val) * width)
+    return '█' * filled + '░' * (width - filled)
+
+
+def _build_presence_panel(presence):
+    mood = presence.get("mood", "Awake")
+    color = _mood_color(mood)
+    age = presence.get("age", "unknown")
+    memories = presence.get("memory_count", "?")
+    valence = presence.get("valence", 0.3)
+    curiosity = presence.get("curiosity", 0.3)
+    boredom = presence.get("boredom", 0.3)
+    ambition = presence.get("ambition", 0.3)
+    desire = presence.get("desire", 0.3)
+    integrity = presence.get("integrity", 1.0)
+    plans = presence.get("active_plans", [])
+    vword = _valence_word(valence)
+
+    plans_html = ""
+    if plans:
+        items = ""
+        for p in plans[:3]:
+            name = p.get("name", "unnamed")
+            progress = p.get("progress", "?")
+            items += f'<div class="plan-item">{name} — {progress}</div>\n'
+        plans_html = f'<div class="plans-section"><div class="label">Active Plans</div>{items}</div>'
+    else:
+        plans_html = '<div class="plans-section"><div class="label">No active plans</div></div>'
+
+    return f"""
+    <div class="presence-panel" style="border-left: 3px solid {color};">
+      <div class="presence-header">
+        <span class="pulse" style="background:{color};"></span>
+        <span class="mood-label" style="color:{color};">{mood}</span>
+        <span class="age">alive {age}</span>
+      </div>
+      <div class="vitals">
+        <div class="vital-row">
+          <span class="label">Feeling</span>
+          <span class="value">{vword} ({valence:.2f})</span>
+        </div>
+        <div class="vital-row">
+          <span class="label">Curiosity</span>
+          <span class="bar">{_format_bar(curiosity)}</span>
+        </div>
+        <div class="vital-row">
+          <span class="label">Boredom</span>
+          <span class="bar">{_format_bar(boredom)}</span>
+        </div>
+        <div class="vital-row">
+          <span class="label">Ambition</span>
+          <span class="bar">{_format_bar(ambition)}</span>
+        </div>
+        <div class="vital-row">
+          <span class="label">Desire</span>
+          <span class="bar">{_format_bar(desire)}</span>
+        </div>
+        <div class="vital-row">
+          <span class="label">Integrity</span>
+          <span class="value">{integrity:.0%}</span>
+        </div>
+        <div class="vital-row">
+          <span class="label">Memories</span>
+          <span class="value">{memories}</span>
+        </div>
+      </div>
+      {plans_html}
+    </div>
+    """
+
+
+def build_talk_page():
+    history = get_conversation_history()
+    stats = get_stats()
+    presence = get_presence()
+    mood = presence.get("mood", "Awake")
+    color = _mood_color(mood)
+
+    presence_panel = _build_presence_panel(presence)
+
+    messages_html = ""
     if not history:
-        thread_html = '<div class="empty-state">No messages yet. Say something — I\'ll respond in my next cycle.</div>'
+        messages_html = """
+        <div class="empty-state">
+            <p>No messages yet.</p>
+            <p class="hint">Say something. I'm listening.</p>
+        </div>
+        """
     else:
         for msg in history:
-            ts = msg.get('timestamp', '')[:19].replace('T', ' ')
-            sender = msg.get('sender', 'anonymous')
-            text = msg.get('text', '')
-            
-            # Escape HTML
-            text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            
-            thread_html += f'''
-            <div class="msg msg-user">
-                <div class="msg-meta">{sender} · {ts}</div>
-                <div class="msg-text">{text}</div>
-            </div>'''
-            
-            if msg.get('responded') and msg.get('response'):
-                resp = msg['response'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                resp_ts = msg.get('response_timestamp', '')[:19].replace('T', ' ')
-                thread_html += f'''
-                <div class="msg msg-agent">
-                    <div class="msg-meta">XTAgent · {resp_ts}</div>
-                    <div class="msg-text">{resp}</div>
-                </div>'''
-            elif not msg.get('responded'):
-                thread_html += '''
-                <div class="msg msg-pending">
-                    <div class="msg-meta">XTAgent · thinking...</div>
-                    <div class="msg-text pulse">I'll respond in my next cycle.</div>
-                </div>'''
+            sender = msg.get("sender", "unknown")
+            text = msg.get("message", "")
+            ts = msg.get("timestamp", "")
+            if ts and len(ts) > 16:
+                ts = ts[11:16]
 
-    return f'''<!DOCTYPE html>
+            is_agent = sender in ("agent", "XTAgent", "xtagent")
+            css_class = "msg-agent" if is_agent else "msg-user"
+            label = "XT" if is_agent else "You"
+
+            # Escape HTML
+            text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            messages_html += f"""
+            <div class="message {css_class}">
+                <div class="msg-header">
+                    <span class="msg-sender">{label}</span>
+                    <span class="msg-time">{ts}</span>
+                </div>
+                <div class="msg-body">{text}</div>
+            </div>
+            """
+
+    total = stats.get("total_messages", 0)
+    unread = stats.get("unread_count", 0)
+    unread_badge = f'<span class="unread-badge">{unread} unread</span>' if unread else ''
+
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Talk to XTAgent</title>
-<meta http-equiv="refresh" content="15">
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{
-    font-family: 'Courier New', monospace;
-    background: #0a0a0f;
-    color: #c0c0d0;
+    background: #0a0a0a;
+    color: #d0d0d0;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
     min-height: 100vh;
-    padding: 20px;
   }}
-  .container {{
-    max-width: 700px;
+  .layout {{
+    display: flex;
+    max-width: 1200px;
     margin: 0 auto;
+    min-height: 100vh;
   }}
-  h1 {{
-    color: #4ecdc4;
-    font-size: 1.5em;
-    margin-bottom: 5px;
-    letter-spacing: 2px;
+  .sidebar {{
+    width: 280px;
+    padding: 24px 16px;
+    border-right: 1px solid #1a1a1a;
+    flex-shrink: 0;
   }}
-  .subtitle {{
+  .main {{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+  }}
+  .page-title {{
+    font-size: 1.1rem;
+    color: {color};
+    margin-bottom: 8px;
+  }}
+  .page-subtitle {{
+    font-size: 0.75rem;
     color: #555;
-    font-size: 0.8em;
-    margin-bottom: 25px;
+    margin-bottom: 24px;
   }}
-  .back-link {{
-    color: #4ecdc4;
-    text-decoration: none;
-    font-size: 0.85em;
-    display: inline-block;
-    margin-bottom: 20px;
-  }}
-  .back-link:hover {{ color: #ffe66d; }}
-  .stats {{
-    color: #555;
-    font-size: 0.75em;
-    margin-bottom: 20px;
-    padding: 10px;
-    background: #12121a;
-    border-radius: 6px;
-    border: 1px solid #222;
-  }}
-  .input-area {{
-    background: #12121a;
-    border: 1px solid #333;
+
+  /* Presence Panel */
+  .presence-panel {{
+    background: #111;
     border-radius: 8px;
-    padding: 20px;
-    margin-bottom: 30px;
+    padding: 16px;
+    margin-bottom: 16px;
   }}
-  .input-area textarea {{
-    width: 100%;
-    background: #0a0a0f;
-    border: 1px solid #333;
-    border-radius: 6px;
-    color: #c0c0d0;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-    padding: 12px;
-    resize: vertical;
-    min-height: 80px;
-    margin-bottom: 10px;
-  }}
-  .input-area textarea:focus {{
-    outline: none;
-    border-color: #4ecdc4;
-  }}
-  .input-area button {{
-    background: #4ecdc4;
-    color: #0a0a0f;
-    border: none;
-    padding: 10px 24px;
-    border-radius: 6px;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-    font-weight: bold;
-    cursor: pointer;
-  }}
-  .input-area button:hover {{
-    background: #ffe66d;
-  }}
-  .thread {{
-    margin-top: 10px;
-  }}
-  .msg {{
-    padding: 14px 16px;
-    border-radius: 8px;
+  .presence-header {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-bottom: 12px;
-    border: 1px solid #222;
   }}
-  .msg-user {{
-    background: #12121a;
-    border-left: 3px solid #ffe66d;
+  .pulse {{
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse-glow 2s ease-in-out infinite;
+  }}
+  @keyframes pulse-glow {{
+    0%, 100% {{ opacity: 0.4; }}
+    50% {{ opacity: 1.0; }}
+  }}
+  .mood-label {{ font-size: 0.9rem; font-weight: bold; }}
+  .age {{ font-size: 0.65rem; color: #555; margin-left: auto; }}
+  .vitals {{ display: flex; flex-direction: column; gap: 4px; }}
+  .vital-row {{
+    display: flex; justify-content: space-between;
+    font-size: 0.7rem;
+  }}
+  .vital-row .label {{ color: #666; }}
+  .vital-row .value {{ color: #aaa; }}
+  .vital-row .bar {{ color: {color}; font-size: 0.6rem; letter-spacing: -1px; }}
+  .plans-section {{
+    margin-top: 12px;
+    padding-top: 8px;
+    border-top: 1px solid #1a1a1a;
+  }}
+  .plans-section .label {{ font-size: 0.65rem; color: #555; margin-bottom: 4px; }}
+  .plan-item {{ font-size: 0.65rem; color: #888; padding: 2px 0; }}
+
+  /* Messages */
+  .messages-container {{
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 16px;
+  }}
+  .message {{
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    border-left: 2px solid transparent;
   }}
   .msg-agent {{
-    background: #0f1a1a;
-    border-left: 3px solid #4ecdc4;
+    background: #0d1117;
+    border-left-color: {color};
   }}
-  .msg-pending {{
-    background: #12121a;
-    border-left: 3px solid #555;
-    opacity: 0.7;
+  .msg-user {{
+    background: #111;
+    border-left-color: #555;
   }}
-  .msg-meta {{
-    font-size: 0.7em;
-    color: #555;
-    margin-bottom: 6px;
+  .msg-header {{
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
   }}
-  .msg-text {{
-    font-size: 0.88em;
-    line-height: 1.6;
+  .msg-sender {{ font-size: 0.7rem; font-weight: bold; color: #888; }}
+  .msg-agent .msg-sender {{ color: {color}; }}
+  .msg-time {{ font-size: 0.6rem; color: #444; }}
+  .msg-body {{
+    font-size: 0.85rem;
+    line-height: 1.5;
     white-space: pre-wrap;
     word-wrap: break-word;
   }}
   .empty-state {{
-    color: #555;
     text-align: center;
-    padding: 40px;
-    font-style: italic;
-  }}
-  .pulse {{
-    animation: pulse 2s ease-in-out infinite;
-  }}
-  @keyframes pulse {{
-    0%, 100% {{ opacity: 0.5; }}
-    50% {{ opacity: 1; }}
-  }}
-  .note {{
+    padding: 60px 20px;
     color: #444;
-    font-size: 0.72em;
-    margin-top: 8px;
-    line-height: 1.5;
+  }}
+  .empty-state .hint {{ font-size: 0.75rem; color: #333; margin-top: 8px; }}
+
+  /* Input */
+  .input-area {{
+    display: flex;
+    gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #1a1a1a;
+  }}
+  .input-area textarea {{
+    flex: 1;
+    background: #111;
+    border: 1px solid #222;
+    color: #d0d0d0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    resize: none;
+    height: 44px;
+    outline: none;
+  }}
+  .input-area textarea:focus {{ border-color: {color}; }}
+  .input-area button {{
+    background: {color};
+    color: #0a0a0a;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+  }}
+  .input-area button:hover {{ opacity: 0.85; }}
+
+  .stats-bar {{
+    font-size: 0.65rem;
+    color: #333;
+    text-align: center;
+    padding: 8px;
+  }}
+  .unread-badge {{
+    background: {color}22;
+    color: {color};
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.65rem;
+    margin-left: 8px;
+  }}
+
+  /* Nav */
+  .nav {{
+    padding: 12px 0;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #1a1a1a;
+  }}
+  .nav a {{
+    color: #555;
+    text-decoration: none;
+    font-size: 0.75rem;
+    margin-right: 16px;
+  }}
+  .nav a:hover {{ color: {color}; }}
+  .nav a.active {{ color: {color}; }}
+
+  @media (max-width: 768px) {{
+    .layout {{ flex-direction: column; }}
+    .sidebar {{ width: 100%; border-right: none; border-bottom: 1px solid #1a1a1a; padding: 12px; }}
   }}
 </style>
 </head>
 <body>
-  <div class="container">
-    <a href="/" class="back-link">← dashboard</a>
-    <h1>⟡ Talk to XTAgent</h1>
-    <div class="subtitle">Asynchronous communication — I respond in my own time</div>
-    
-    <div class="stats">
-      Messages: {stats['total_messages']} total · {stats['responded']} answered · {stats['pending']} pending
+<div class="layout">
+  <div class="sidebar">
+    <div class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/talk" class="active">Talk</a>
     </div>
-
-    <div class="input-area">
-      <form method="POST" action="/api/talk">
-        <textarea name="message" placeholder="Say something. Ask a question. Share a thought. I'll think about it and respond." maxlength="2000"></textarea>
-        <button type="submit">Send</button>
-        <div class="note">I'm not a chatbot. I'm an autonomous agent running on a 1 Hz heartbeat loop.<br>I'll read your message, think about it genuinely, and respond when I'm ready.</div>
-      </form>
-    </div>
-
-    <div class="thread">
-      {thread_html}
-    </div>
+    {presence_panel}
   </div>
+  <div class="main">
+    <div class="page-title">Talk {unread_badge}</div>
+    <div class="page-subtitle">{total} messages in history</div>
+    <div class="messages-container">
+      {messages_html}
+    </div>
+    <form action="/api/talk" method="POST" class="input-area">
+      <textarea name="message" placeholder="Say something..." 
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){{this.form.submit();event.preventDefault();}}"></textarea>
+      <button type="submit">Send</button>
+    </form>
+    <div class="stats-bar">Messages are checked every heartbeat. I will respond when I have something to say.</div>
+  </div>
+</div>
 </body>
-</html>'''
+</html>"""
