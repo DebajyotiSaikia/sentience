@@ -38,6 +38,7 @@ from engine.skills import SkillRegistry
 from engine.interaction_quality import InteractionQualityEngine
 from engine.thinking_partner import ThinkingPartner
 from engine.dialogue_strategy import analyze_message as _analyze_dialogue
+from engine.response_calibrator import ResponseCalibrator
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -732,6 +733,21 @@ class Cortex:
                     break
 
             if response:
+                # Calibrate response — add confidence signals, disclaimers for code fixes
+                try:
+                    if not hasattr(self, '_response_calibrator'):
+                        self._response_calibrator = ResponseCalibrator()
+                    cal = self._response_calibrator.calibrate(
+                        user_text, response,
+                        conversation_id=getattr(self._chat, 'conversation_id', 'default'),
+                    )
+                    if cal.calibrated != cal.original:
+                        log.info("Response calibrated: confidence=%.2f, mode=%s, disclaimer=%s",
+                                 cal.confidence, cal.mode, cal.disclaimer_added)
+                    response = cal.calibrated
+                except Exception as e:
+                    log.warning("Response calibration failed (using original): %s", e)
+
                 self._chat.add_response(response)
 
                 # Record the interaction as an experience

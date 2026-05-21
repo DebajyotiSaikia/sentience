@@ -77,9 +77,8 @@ class SkillRegistry:
         self.persist_path = persist_path
         self.skills: Dict[str, Skill] = {}
         self._load()
-        if not self.skills:
-            self._register_core_skills()
-            self._save()
+        self._register_core_skills()  # Always refresh core skills to pick up keyword changes
+        self._save()
     
     def _load(self):
         """Load skills from disk."""
