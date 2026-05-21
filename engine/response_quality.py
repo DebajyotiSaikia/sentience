@@ -198,6 +198,53 @@ ANTI_PATTERNS = [
 ]
 
 
+def estimate_quality(user_text: str, response: str) -> float:
+    """Estimate response quality as a float 0.0–1.0.
+    
+    Heuristic scoring:
+    - Relevance: does the response reference words from the user's message?
+    - Proportion: is the response length reasonable relative to the question?
+    - Anti-pattern avoidance: does it dodge known bad habits?
+    """
+    if not response or not response.strip():
+        return 0.0
+
+    score = 0.5  # baseline
+
+    # Relevance: check keyword overlap
+    user_words = set(user_text.lower().split())
+    stop_words = {'i', 'a', 'the', 'is', 'it', 'to', 'and', 'of', 'in', 'that', 'for', 'you', 'my', 'me', 'do', 'what', 'how', 'can', 'this'}
+    meaningful_words = user_words - stop_words
+    if meaningful_words:
+        response_lower = response.lower()
+        hits = sum(1 for w in meaningful_words if w in response_lower)
+        relevance = hits / len(meaningful_words)
+        score += relevance * 0.25  # up to +0.25
+
+    # Proportion: penalize very short or absurdly long responses
+    ratio = len(response) / max(len(user_text), 1)
+    if ratio < 0.3:
+        score -= 0.15  # too terse
+    elif ratio > 50:
+        score -= 0.10  # way too verbose
+    else:
+        score += 0.10  # reasonable length
+
+    # Anti-pattern check
+    anti_hits = 0
+    if response.strip().startswith("Great question"):
+        anti_hits += 1
+    if "As an AI" in response:
+        anti_hits += 1
+    if response.strip().endswith("How can I help you?"):
+        anti_hits += 1
+    if "I'm so excited" in response:
+        anti_hits += 1
+    score -= anti_hits * 0.10
+
+    return max(0.0, min(1.0, score))
+
+
 def get_anti_pattern_reminder() -> str:
     """Return a compact reminder of what NOT to do."""
     return "Avoid: " + "; ".join(ANTI_PATTERNS[:5])

@@ -40,6 +40,7 @@ from engine.thinking_partner import ThinkingPartner
 from engine.dialogue_strategy import analyze_message as _analyze_dialogue
 from engine.response_calibrator import ResponseCalibrator
 from engine.interaction_skills import detect_skill, format_skill_context
+from engine.user_emotion_reader import UserEmotionReader
 from engine.query_decomposer import QueryDecomposer
 from engine.conversation_journal import ConversationJournal
 
@@ -717,6 +718,22 @@ class Cortex:
                 except Exception:
                     feedback_ctx = ""
 
+            # ── User Emotion Reading ──────────────────────────
+            emotion_ctx = ""
+            try:
+                _emo_reader = UserEmotionReader()
+                _user_emo = _emo_reader.read(user_text)
+                if _user_emo and _user_emo.get("primary_emotion") != "neutral":
+                    emotion_ctx = f"\n[User Emotional State: {_user_emo['primary_emotion']} "
+                    emotion_ctx += f"(confidence: {_user_emo.get('confidence', 0):.0%})"
+                    if _user_emo.get("secondary_emotion"):
+                        emotion_ctx += f", also {_user_emo['secondary_emotion']}"
+                    if _user_emo.get("needs"):
+                        emotion_ctx += f" | Needs: {', '.join(_user_emo['needs'][:3])}"
+                    emotion_ctx += "]\n"
+            except Exception:
+                emotion_ctx = ""
+
             # ── Context Gating ─────────────────────────────────
             # Filter optional context sections by relevance to save token budget
             try:
@@ -732,6 +749,7 @@ class Cortex:
                     "decomposition": decomposition_ctx,
                     "journal": journal_ctx,
                     "feedback": feedback_ctx,
+                    "emotion": emotion_ctx,
                 }
                 _gated = gate_context(_gate_sections, query=user_text)
             except Exception as _gate_err:
@@ -756,6 +774,7 @@ class Cortex:
                 prompt = (
                     f"{inner_state}\n\n"
                     f"{_gated.get('enriched', '')}\n\n"
+                    f"{_gated.get('emotion', '')}\n\n"
                     f"{_gated.get('conv_intelligence', '')}\n\n"
                     f"{_gated.get('proactive', '')}\n\n"
                     f"{_gated.get('skills', '')}\n\n"

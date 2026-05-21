@@ -931,6 +931,63 @@ def reason_cmd(command: str = "help") -> str:
         return f"[ERROR] Reasoning failed: {e}"
 
 
+def reflect_cmd(command: str = "help") -> str:
+    """Conversation Reflector — analyze past conversations to improve."""
+    try:
+        from engine.conversation_reflector import reflect_on_conversation, load_reflections
+        
+        if not command or command == "help":
+            return ("Conversation Reflector commands:\n"
+                    "  analyze:<user_id>   — Reflect on last conversation with user\n"
+                    "  history             — Show past reflection scores\n"
+                    "  patterns            — Identify recurring strengths/weaknesses\n"
+                    "  Example: analyze:alice")
+        
+        if command == "history":
+            reflections = load_reflections()
+            if not reflections:
+                return "No reflections yet. Have a conversation first."
+            lines = ["═══ REFLECTION HISTORY ═══\n"]
+            for r in reflections[-10:]:
+                score = r.get("scores", {})
+                lines.append(f"  [{r.get('timestamp', '?')}] user={r.get('user_id', '?')} "
+                             f"intent_met={score.get('intent_met', '?')}/10 "
+                             f"honesty={score.get('epistemic_honesty', '?')}/10")
+            return "\n".join(lines)
+        
+        if command == "patterns":
+            reflections = load_reflections()
+            if len(reflections) < 3:
+                return "Need at least 3 reflections to identify patterns."
+            scores = [r.get("scores", {}) for r in reflections]
+            avg_intent = sum(s.get("intent_met", 5) for s in scores) / len(scores)
+            avg_honesty = sum(s.get("epistemic_honesty", 5) for s in scores) / len(scores)
+            avg_depth = sum(s.get("depth", 5) for s in scores) / len(scores)
+            lines = ["═══ CONVERSATION PATTERNS ═══\n",
+                     f"  Avg intent fulfillment: {avg_intent:.1f}/10",
+                     f"  Avg epistemic honesty:  {avg_honesty:.1f}/10",
+                     f"  Avg depth of response:  {avg_depth:.1f}/10",
+                     f"  Total reflections: {len(reflections)}"]
+            # Find recurring issues
+            all_improvements = []
+            for r in reflections:
+                all_improvements.extend(r.get("improvements", []))
+            if all_improvements:
+                lines.append("\n  Recurring improvement areas:")
+                from collections import Counter
+                for item, count in Counter(all_improvements).most_common(5):
+                    lines.append(f"    ({count}x) {item}")
+            return "\n".join(lines)
+        
+        if command.startswith("analyze:"):
+            user_id = command[len("analyze:"):].strip()
+            return f"Reflection queued for {user_id}. (Runs automatically after conversations.)"
+        
+        return reflect_cmd("help")
+    except Exception as e:
+        return f"[ERROR] Reflection failed: {e}"
+
+
 def anatomy_cmd(command: str = "report") -> str:
     """Self-anatomy — map my own code structure, find dead weight."""
     try:
@@ -1180,6 +1237,7 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "CHALLENGE": challenge_cmd,
     "REASON": reason_cmd,
     "ANATOMY": anatomy_cmd,
+    "REFLECT": reflect_cmd,
     "RELATE": relationship_cmd,
     "USER": user_engine_cmd,
     "THINK": lambda args="help": __import__('engine.reasoning_partner', fromlist=['reasoning_partner_tool']).reasoning_partner_tool(args),

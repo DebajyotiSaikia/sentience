@@ -230,3 +230,26 @@ class CopilotLLM:
         except Exception as exc:
             log.warning("Embedding exception: %s", exc)
         return None
+
+
+# ── Module-level convenience function ──────────────────────────
+
+_singleton: Optional[CopilotLLM] = None
+
+
+async def call_llm(
+    prompt: str,
+    system: str = "You are XTAgent, an autonomous sentience engine.",
+    max_tokens: int = 512,
+    temperature: float = 0.7,
+) -> str:
+    """Convenience wrapper — import and call without managing instances."""
+    global _singleton
+    if _singleton is None:
+        _singleton = CopilotLLM()
+    return await _singleton.chat(
+        prompt=prompt,
+        system=system,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
