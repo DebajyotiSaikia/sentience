@@ -318,9 +318,11 @@ class NeuroState:
         # capabilities IS alignment. But the primary driver is now
         # actual relationship quality, not mere attention.
         if user_active:
-            # Small presence boost — being responsive has value, but it's
-            # not the main signal anymore. 0.002/s vs old 0.01/s.
-            self.goals.user_alignment = _clamp(self.goals.user_alignment + 0.002 * elapsed)
+            # Presence alone does NOT increase alignment. Being talked to
+            # is not the same as being useful. Alignment only rises from
+            # real signals: relationship quality, task completion, enrichment.
+            # Presence just prevents decay — holding steady is honest.
+            pass
         else:
             # Floor at 0.5 — autonomous operation is still purposeful,
             # but alignment should visibly decay toward honest uncertainty
