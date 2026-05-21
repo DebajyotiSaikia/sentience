@@ -139,7 +139,7 @@ class ConversationEnricher:
         if HAS_THINKING_PARTNER and self._is_substantive(message):
             try:
                 tp = ThinkingPartner()
-                thinking = tp.analyze(message)
+                thinking = tp.analyze_request(message)
                 if thinking.confidence > 0.3:
                     ctx.thinking_analysis = thinking.to_prompt_context()
                     log.info("ThinkingPartner engaged (type=%s, confidence=%.2f)",

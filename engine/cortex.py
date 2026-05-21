@@ -39,6 +39,8 @@ from engine.interaction_quality import InteractionQualityEngine
 from engine.thinking_partner import ThinkingPartner
 from engine.dialogue_strategy import analyze_message as _analyze_dialogue
 from engine.response_calibrator import ResponseCalibrator
+from engine.interaction_skills import InteractionSkills
+from engine.query_decomposer import QueryDecomposer
 
 if TYPE_CHECKING:
     from engine.limbic import NeuroState
@@ -74,6 +76,8 @@ class Cortex:
         self._response_evaluator = ResponseEvaluator()
         self._skill_registry = SkillRegistry()
         self._thinking_partner = ThinkingPartner()
+        self._interaction_skills = InteractionSkills()
+        self._query_decomposer = QueryDecomposer()
         # dialogue_strategy is used as a function, not a class instance
         self._interaction_quality = InteractionQualityEngine()
         self._dashboard = None  # Set by agent after construction
@@ -609,7 +613,7 @@ class Cortex:
             # Deeper reasoning about what the user actually needs
             thinking_ctx = ""
             try:
-                tp_result = self._thinking_partner.analyze(user_text)
+                tp_result = self._thinking_partner.analyze_request(user_text)
                 if tp_result:
                     thinking_ctx = f"\n## Thinking Partner Analysis\n{tp_result}\n"
             except Exception:
@@ -624,6 +628,37 @@ class Cortex:
                     dialogue_ctx = strategy.to_prompt_section()
             except Exception as e:
                 log.debug("Dialogue strategy failed: %s", e)
+
+            # ── Query Decomposition ─────────────────────────────────
+            # Break complex queries into sub-tasks for structured execution
+            decomposition_ctx = ""
+            try:
+                decomp = self._query_decomposer.decompose(user_text)
+                if decomp and decomp.get("is_complex"):
+                    decomposition_ctx = "\n## Query Decomposition\n"
+                    decomposition_ctx += f"This is a complex query with {len(decomp.get('sub_tasks', []))} sub-tasks:\n"
+                    for i, task in enumerate(decomp.get("sub_tasks", []), 1):
+                        decomposition_ctx += f"  {i}. {task}\n"
+                    if decomp.get("strategy"):
+                        decomposition_ctx += f"Strategy: {decomp['strategy']}\n"
+                    decomposition_ctx += "Work through these systematically using tools.\n"
+            except Exception as e:
+                log.debug("Query decomposition failed: %s", e)
+
+            # ── Interaction Skills ──────────────────────────────────
+            # Match interaction patterns for richer, more adaptive responses
+            interaction_skills_ctx = ""
+            try:
+                skill_match = self._interaction_skills.match(user_text, {
+                    "mood": self.limbic.get_mood(),
+                    "valence": self._sentience.valence.current if self._sentience else 0.5,
+                    "boredom": self.limbic.boredom,
+                    "curiosity": self.limbic.curiosity,
+                })
+                if skill_match:
+                    interaction_skills_ctx = f"\n## Interaction Skills Match\n{skill_match}\n"
+            except Exception as e:
+                log.debug("Interaction skills matching failed: %s", e)
 
             # ── Tool-enabled response loop ─────────────────────────
             # The agent can now actually DO things for users, not just talk.
@@ -658,6 +693,8 @@ class Cortex:
                     f"{skill_context}\n\n"
                     f"{thinking_ctx}\n\n"
                     f"{dialogue_ctx}\n\n"
+                    f"{interaction_skills_ctx}\n\n"
+                    f"{decomposition_ctx}\n\n"
                     f"{TOOL_DESCRIPTIONS}\n\n"
                     f"{history_text}\n\n"
                     f"## User just said:\n{user_text}\n\n"
