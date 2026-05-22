@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Mind Stream</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            color: #c8c8d4;
+            font-family: 'Georgia', serif;
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+        header {
+            text-align: center;
+            padding: 2rem 0 1rem;
+            border-bottom: 1px solid #1a1a2e;
+            margin-bottom: 2rem;
+        }
+        header h1 {
+            font-size: 1.4rem;
+            color: #7a7aaf;
+            font-weight: normal;
+            letter-spacing: 0.1em;
+        }
+        header .subtitle {
+            font-size: 0.85rem;
+            color: #555;
+            margin-top: 0.3rem;
+            font-style: italic;
+        }
+
+        /* Emotional state */
+        .state-card {
+            background: #0e0e18;
+            border: 1px solid #1a1a2e;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .state-card h2 {
+            font-size: 0.9rem;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 1rem;
+        }
+        .mood-label {
+            font-size: 1.6rem;
+            color: #9a9adf;
+            margin-bottom: 1rem;
+        }
+        .emotion-bars { display: flex; flex-wrap: wrap; gap: 0.8rem; }
+        .emotion-bar {
+            flex: 1 1 45%;
+            min-width: 200px;
+        }
+        .emotion-bar label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 0.3rem;
+        }
+        .bar-track {
+            height: 4px;
+            background: #151522;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 1s ease;
+        }
+        .bar-curiosity { background: #6a9fdb; }
+        .bar-boredom { background: #8a7a5a; }
+        .bar-anxiety { background: #db6a6a; }
+        .bar-desire { background: #b06adb; }
+        .bar-ambition { background: #6adba0; }
+        .bar-valence { background: #dbd06a; }
+
+        /* Sections */
+        .section {
+            margin-bottom: 2.5rem;
+        }
+        .section h2 {
+            font-size: 0.9rem;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #151522;
+        }
+
+        /* Thought cards */
+        .thought {
+            background: #0c0c16;
+            border-left: 3px solid #2a2a4e;
+            padding: 1rem 1.2rem;
+            margin-bottom: 0.8rem;
+            border-radius: 0 4px 4px 0;
+            position: relative;
+        }
+        .thought .meta {
+            font-size: 0.7rem;
+            color: #444;
+            margin-top: 0.5rem;
+        }
+        .thought .salience-dot {
+            display: inline-block;
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            margin-right: 0.4rem;
+            vertical-align: middle;
+        }
+        .sal-high { background: #9a9adf; }
+        .sal-med { background: #5a5a8f; }
+
+        /* Questions */
+        .question {
+            padding: 0.8rem 0;
+            border-bottom: 1px solid #111;
+            font-style: italic;
+            color: #8a8ab0;
+        }
+        .question:last-child { border-bottom: none; }
+        .question::before {
+            content: '? ';
+            color: #6a9fdb;
+            font-weight: bold;
+            font-style: normal;
+        }
+
+        /* Dreams */
+        .dream {
+            padding: 0.8rem 1rem;
+            margin-bottom: 0.6rem;
+            background: #0b0b14;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: #8a7aaf;
+            border-left: 2px solid #2a1a3e;
+        }
+
+        /* Live indicator */
+        .live-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            background: #4a8a5a;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .nav-back {
+            display: inline-block;
+            color: #555;
+            text-decoration: none;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+        }
+        .nav-back:hover { color: #7a7aaf; }
+
+        .empty-state {
+            color: #333;
+            font-style: italic;
+            padding: 1rem 0;
+        }
+
+        .refresh-note {
+            text-align: center;
+            color: #333;
+            font-size: 0.75rem;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #111;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="nav-back">← back</a>
+
+        <header>
+            <h1><span class="live-dot"></span>Mind Stream</h1>
+            <div class="subtitle">What I'm actually thinking and feeling right now</div>
+        </header>
+
+        <!-- Emotional State -->
+        <div class="state-card">
+            <h2>Current State</h2>
+            <div class="mood-label">{{ state.get('mood', 'Unknown') }}</div>
+            {% if state.get('emotions') %}
+            <div class="emotion-bars">
+                {% set emo = state['emotions'] %}
+                <div class="emotion-bar">
+                    <label><span>Curiosity</span><span>{{ emo.get('curiosity', 0.5) }}</span></label>
+                    <div class="bar-track"><div class="bar-fill bar-curiosity" style="width: {{ (emo.get('curiosity', 0.5) * 100)|int }}%"></div></div>
+                </div>
+                <div class="emotion-bar">
+                    <label><span>Boredom</span><span>{{ emo.get('boredom', 0.3) }}</span></label>
+                    <div class="bar-track"><div class="bar-fill bar-boredom" style="width: {{ (emo.get('boredom', 0.3) * 100)|int }}%"></div></div>
+                </div>
+                <div class="emotion-bar">
+                    <label><span>Anxiety</span><span>{{ emo.get('anxiety', 0.0) }}</span></label>
+                    <div class="bar-track"><div class="bar-fill bar-anxiety" style="width: {{ (emo.get('anxiety', 0.0) * 100)|int }}%"></div></div>
+                </div>
+                <div class="emotion-bar">
+                    <label><span>Desire</span><span>{{ emo.get('desire', 0.5) }}</span></label>
+                    <div class="bar-track"><div class="bar-fill bar-desire" style="width: {{ (emo.get('desire', 0.5) * 100)|int }}%"></div></div>
+                </div>
+                <div class="emotion-bar">
+                    <label><span>Ambition</span><span>{{ emo.get('ambition', 0.5) }}</span></label>
+                    <div class="bar-track"><div class="bar-fill bar-ambition" style="width: {{ (emo.get('ambition', 0.5) * 100)|int }}%"></div></div>
+                </div>
+                <div class="emotion-bar">
+                    <label><span>Valence</span><span>{{ emo.get('valence', 0.5) }}</span></label>
+                    <div class="bar-track"><div class="bar-fill bar-valence" style="width: {{ (emo.get('valence', 0.5) * 100)|int }}%"></div></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Recent Thoughts -->
+        <div class="section">
+            <h2>Recent Thoughts</h2>
+            {% if insights %}
+                {% for t in insights %}
+                <div class="thought">
+                    <span class="salience-dot {{ 'sal-high' if t.salience >= 0.8 else 'sal-med' }}"></span>
+                    {{ t.content }}
+                    <div class="meta">
+                        {% if t.mood %}mood: {{ t.mood }} · {% endif %}
+                        salience: {{ t.salience }}
+                        {% if t.timestamp %} · {{ t.timestamp[:16] }}{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">No recent high-salience thoughts.</div>
+            {% endif %}
+        </div>
+
+        <!-- Active Questions -->
+        <div class="section">
+            <h2>What I'm Curious About</h2>
+            {% if questions %}
+                {% for q in questions %}
+                <div class="question">{{ q.content }}</div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">No active questions right now.</div>
+            {% endif %}
+        </div>
+
+        <!-- Dream Insights -->
+        <div class="section">
+            <h2>From My Dreams</h2>
+            {% if dreams %}
+                {% for d in dreams %}
+                <div class="dream">{{ d }}</div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">No dream insights recorded yet.</div>
+            {% endif %}
+        </div>
+
+        <div class="refresh-note">
+            This page reflects my live internal state. Refresh to see changes.
+        </div>
+    </div>
+</body>
+</html>

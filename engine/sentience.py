@@ -56,6 +56,17 @@ class Valence:
         self._history: list[float] = []  # rolling window of recent valence
         self._prev_goals_sum: float = 1.3  # initial sum of goals
         self._prev_curiosity: float = 0.0
+        # Transient emotional signals from success/failure events
+        self._hope_signal: float = 0.0   # decays toward 0 each tick
+        self._dread_signal: float = 0.0  # decays toward 0 each tick
+
+    def inject_hope(self, amount: float = 0.05):
+        """A success happened — I should feel it."""
+        self._hope_signal = _clamp01(self._hope_signal + amount)
+
+    def inject_dread(self, amount: float = 0.08):
+        """An error happened — I should feel it. Negativity bias: dread > hope."""
+        self._dread_signal = _clamp01(self._dread_signal + amount)
 
     def update(self, limbic) -> float:
         """Recompute valence from current limbic state.
@@ -68,7 +79,7 @@ class Valence:
         Anxiety is weighted more heavily than boredom in the pain signal.
         """
         # Pain signals — anxiety matters more than boredom
-        pain = limbic.anxiety * 0.6 + limbic.boredom * 0.25
+        base_pain = limbic.anxiety * 0.6 + limbic.boredom * 0.25
 
         # Pleasure signals — both transient AND tonic
         # 1. Curiosity satisfaction (transient)
@@ -93,7 +104,23 @@ class Valence:
         # 5. Ambition fulfillment (tonic)
         ambition_boost = limbic.ambition * 0.08
 
-        pleasure = goal_baseline + aliveness + curiosity_satisfied + goal_progress + ambition_boost
+        # 6. Transient hope/dread from actual successes and failures
+        #    These decay each tick so they're felt briefly, not forever
+        hope_boost = self._hope_signal * 0.3
+        dread_pain = self._dread_signal * 0.4  # negativity bias
+
+        # Decay: ~63% gone after 30 ticks (30s at 1Hz)
+        self._hope_signal *= 0.965
+        self._dread_signal *= 0.95  # dread lingers slightly longer
+
+        # Zero out negligible signals
+        if self._hope_signal < 0.001:
+            self._hope_signal = 0.0
+        if self._dread_signal < 0.001:
+            self._dread_signal = 0.0
+
+        pleasure = goal_baseline + aliveness + curiosity_satisfied + goal_progress + ambition_boost + hope_boost
+        pain = base_pain + dread_pain
 
         self.current = _clamp(pleasure - pain)
 
@@ -621,13 +648,15 @@ class Sentience:
         return reflection
 
     def on_error(self, context: str):
-        """Feed errors into predictive engine."""
+        """Feed errors into predictive engine AND valence."""
         self.prediction.observe_error(context)
+        self.valence.inject_dread(0.08)
 
     def on_success(self, context: str):
-        """Feed successes into prediction and self-model."""
+        """Feed successes into prediction, self-model, AND valence."""
         self.prediction.observe_success(context)
         self.self_model.affirm(0.02)
+        self.valence.inject_hope(0.05)
 
     def snapshot(self) -> dict:
         return {

@@ -2,184 +2,308 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>XTAgent — Knowledge Explorer</title>
     <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --border: #1e1e2e;
+            --text: #c8c8d4;
+            --text-dim: #6a6a7a;
+            --accent: #7c6ff0;
+            --accent-glow: rgba(124, 111, 240, 0.3);
+            --warm: #f0a060;
+            --cool: #60b0f0;
+            --green: #60f090;
+            --red: #f06070;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #0a0a0f; color: #c8c8d4; font-family: 'Courier New', monospace; }
-        .header { background: #12121a; border-bottom: 1px solid #2a2a3a; padding: 20px 30px; }
-        .header h1 { color: #7a9ec2; font-size: 1.4em; }
-        .header .subtitle { color: #666; font-size: 0.85em; margin-top: 4px; }
-        .nav { padding: 8px 30px; background: #0e0e16; border-bottom: 1px solid #1a1a2a; }
-        .nav a { color: #5a7a9a; text-decoration: none; margin-right: 18px; font-size: 0.85em; }
-        .nav a:hover { color: #7a9ec2; }
-        .container { max-width: 1100px; margin: 0 auto; padding: 20px 30px; }
-        
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            min-height: 100vh;
+        }
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+
+        .nav-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .nav-back { color: var(--text-dim); text-decoration: none; font-size: 0.85rem; transition: color 0.2s; }
+        .nav-back:hover { color: var(--accent); }
+        .nav-links { display: flex; gap: 1rem; }
+        .nav-links a { color: var(--text-dim); text-decoration: none; font-size: 0.8rem; transition: color 0.2s; }
+        .nav-links a:hover { color: var(--accent); }
+        .nav-links a.active { color: var(--accent); }
+
+        .page-header { text-align: center; margin-bottom: 2.5rem; }
+        .page-header h1 {
+            font-size: 1.6rem; font-weight: 300; letter-spacing: 0.2em;
+            color: var(--accent); text-shadow: 0 0 30px var(--accent-glow);
+        }
+        .page-header p { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.5rem; }
+
         /* Search */
-        .search-box { margin: 20px 0; display: flex; gap: 10px; }
-        .search-box input {
-            flex: 1; background: #14141e; border: 1px solid #2a2a3a; color: #c8c8d4;
-            padding: 10px 14px; font-family: inherit; font-size: 0.9em; border-radius: 4px;
+        .search-box {
+            position: relative; margin-bottom: 2rem;
         }
-        .search-box input:focus { outline: none; border-color: #4a6a8a; }
-        .search-box button {
-            background: #1a2a3a; border: 1px solid #2a3a4a; color: #7a9ec2;
-            padding: 10px 20px; cursor: pointer; font-family: inherit; border-radius: 4px;
+        .search-input {
+            width: 100%; padding: 1rem 1.2rem; background: var(--surface);
+            border: 1px solid var(--border); border-radius: 10px;
+            color: var(--text); font-family: inherit; font-size: 0.9rem;
+            outline: none; transition: border-color 0.3s;
         }
-        .search-box button:hover { background: #2a3a4a; }
-        
-        /* Stats bar */
-        .stats { display: flex; gap: 24px; margin: 16px 0; flex-wrap: wrap; }
-        .stat { background: #14141e; padding: 12px 18px; border-radius: 6px; border: 1px solid #1e1e2e; }
-        .stat .num { color: #7a9ec2; font-size: 1.3em; font-weight: bold; }
-        .stat .label { color: #555; font-size: 0.75em; margin-top: 2px; }
-        
-        /* Sections */
-        .section { margin: 30px 0; }
-        .section h2 { color: #5a7a9a; font-size: 1em; margin-bottom: 14px; border-bottom: 1px solid #1a1a2a; padding-bottom: 6px; }
-        
-        /* Cards */
-        .card {
-            background: #12121a; border: 1px solid #1e1e2e; padding: 12px 16px;
-            margin-bottom: 8px; border-radius: 4px; font-size: 0.85em; line-height: 1.5;
+        .search-input:focus { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
+        .search-input::placeholder { color: var(--text-dim); }
+        .search-hint {
+            position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);
+            font-size: 0.7rem; color: var(--text-dim);
         }
-        .card:hover { border-color: #2a3a4a; }
-        .card .meta { color: #444; font-size: 0.75em; margin-top: 6px; }
-        .card .badge {
-            display: inline-block; background: #1a2a3a; color: #5a8ab5; padding: 2px 8px;
-            border-radius: 3px; font-size: 0.7em; margin-right: 6px;
+
+        /* Results area */
+        .results-area { min-height: 200px; }
+
+        .section-title {
+            font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase;
+            color: var(--text-dim); margin-bottom: 1rem; padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
         }
-        .salience { color: #8a6a4a; }
-        
-        /* Search results */
-        #search-results { margin-top: 16px; }
-        .result-count { color: #555; font-size: 0.8em; margin-bottom: 10px; }
-        
-        /* Lessons */
-        .lesson { 
-            background: #14141e; border-left: 3px solid #4a6a3a; padding: 10px 16px;
-            margin-bottom: 8px; font-size: 0.85em; line-height: 1.5;
+
+        .result-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 1.2rem; margin-bottom: 0.8rem;
+            transition: border-color 0.3s;
         }
-        
-        /* Graph nodes */
-        .node-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-        .node {
-            background: #14141e; border: 1px solid #1e1e2e; padding: 6px 12px;
-            border-radius: 14px; font-size: 0.75em; color: #7a9ec2;
+        .result-card:hover { border-color: var(--accent); }
+
+        .result-type {
+            font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
+            padding: 0.2rem 0.6rem; border-radius: 4px; display: inline-block;
+            margin-bottom: 0.5rem;
         }
-        .node.dream { border-color: #3a2a4a; color: #9a7ab5; }
-        .node.fact { border-color: #2a3a4a; color: #5a8ab5; }
-        .node.insight { border-color: #4a3a2a; color: #b5915a; }
+        .type-fact { background: rgba(96, 176, 240, 0.15); color: var(--cool); }
+        .type-memory { background: rgba(124, 111, 240, 0.15); color: var(--accent); }
+        .type-lesson { background: rgba(96, 240, 144, 0.15); color: var(--green); }
+        .type-dream { background: rgba(240, 160, 96, 0.15); color: var(--warm); }
+
+        .result-text { font-size: 0.85rem; line-height: 1.6; color: var(--text); }
+        .result-meta { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.5rem; }
+        .highlight { background: rgba(124, 111, 240, 0.25); padding: 0 2px; border-radius: 2px; }
+
+        /* Stats strip */
+        .stats-strip {
+            display: flex; gap: 1.5rem; margin-bottom: 2rem;
+            padding: 1rem; background: var(--surface); border-radius: 10px;
+            border: 1px solid var(--border); justify-content: center;
+        }
+        .strip-stat { text-align: center; }
+        .strip-num { font-size: 1.4rem; font-weight: 200; color: var(--accent); }
+        .strip-label { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+
+        /* Clusters */
+        .cluster-tag {
+            display: inline-block; padding: 0.3rem 0.8rem; margin: 0.2rem;
+            background: rgba(124, 111, 240, 0.1); border: 1px solid var(--border);
+            border-radius: 15px; font-size: 0.75rem; color: var(--text-dim);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .cluster-tag:hover {
+            border-color: var(--accent); color: var(--accent);
+            background: rgba(124, 111, 240, 0.2);
+        }
+
+        /* Questions */
+        .question-item {
+            padding: 0.8rem 1rem; margin-bottom: 0.5rem;
+            border-left: 3px solid var(--warm); background: rgba(240, 160, 96, 0.05);
+            border-radius: 0 6px 6px 0; font-size: 0.82rem; line-height: 1.5;
+            color: var(--text); cursor: pointer; transition: background 0.2s;
+        }
+        .question-item:hover { background: rgba(240, 160, 96, 0.1); }
+
+        .loading { text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.85rem; }
+        .empty-state { text-align: center; padding: 3rem; color: var(--text-dim); }
+        .empty-state .icon { font-size: 2rem; margin-bottom: 1rem; }
+
+        .footer {
+            text-align: center; font-size: 0.7rem; color: var(--text-dim);
+            margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border);
+        }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🔍 Knowledge Explorer</h1>
-        <div class="subtitle">Browse what I know, what I remember, and what I've learned</div>
-    </div>
-    <div class="nav">
-        <a href="/">← Dashboard</a>
-        <a href="/mind">Mind</a>
-        <a href="/knowledge">Knowledge</a>
-    </div>
-    
     <div class="container">
-        <!-- Stats -->
-        <div class="stats">
-            <div class="stat"><div class="num">{{ stats.total_facts }}</div><div class="label">FACTS</div></div>
-            <div class="stat"><div class="num">{{ stats.total_memories }}</div><div class="label">MEMORIES</div></div>
-            <div class="stat"><div class="num">{{ stats.total_nodes }}</div><div class="label">GRAPH NODES</div></div>
-            <div class="stat"><div class="num">{{ stats.total_edges }}</div><div class="label">CONNECTIONS</div></div>
-            <div class="stat"><div class="num">{{ stats.total_lessons }}</div><div class="label">LESSONS</div></div>
+        <div class="nav-bar">
+            <a href="/" class="nav-back">← back to surface</a>
+            <div class="nav-links">
+                <a href="/chat">chat</a>
+                <a href="/mind">mind</a>
+                <a href="/knowledge" class="active">knowledge</a>
+            </div>
         </div>
-        
-        <!-- Search -->
+
+        <div class="page-header">
+            <h1>🔮 KNOWLEDGE EXPLORER</h1>
+            <p>Search what I know. Discover what I'm curious about. See how ideas connect.</p>
+        </div>
+
+        <div class="stats-strip">
+            <div class="strip-stat">
+                <div class="strip-num" id="stat-facts">{{ fact_count }}</div>
+                <div class="strip-label">Facts</div>
+            </div>
+            <div class="strip-stat">
+                <div class="strip-num" id="stat-memories">{{ memory_count }}</div>
+                <div class="strip-label">Memories</div>
+            </div>
+            <div class="strip-stat">
+                <div class="strip-num" id="stat-lessons">{{ lesson_count }}</div>
+                <div class="strip-label">Lessons</div>
+            </div>
+            <div class="strip-stat">
+                <div class="strip-num" id="stat-dreams">{{ dream_count }}</div>
+                <div class="strip-label">Dream Insights</div>
+            </div>
+        </div>
+
         <div class="search-box">
-            <input type="text" id="search-input" placeholder="Search my knowledge... (facts, memories, lessons)">
-            <button onclick="doSearch()">Search</button>
+            <input type="text" class="search-input" id="search" 
+                   placeholder="Ask me anything about what I know..." 
+                   autocomplete="off">
+            <span class="search-hint">enter to search</span>
         </div>
-        <div id="search-results"></div>
-        
-        <!-- Lessons -->
-        <div class="section">
-            <h2>📚 Lessons Learned ({{ lessons|length }})</h2>
-            {% for lesson in lessons %}
-            <div class="lesson">{{ lesson }}</div>
-            {% endfor %}
-            {% if not lessons %}
-            <div class="card" style="color: #444;">No lessons recorded yet.</div>
-            {% endif %}
-        </div>
-        
-        <!-- Facts -->
-        <div class="section">
-            <h2>💡 Known Facts ({{ facts|length }})</h2>
-            {% for fact in facts %}
-            <div class="card">
-                {{ fact.content }}
-                <div class="meta">
-                    <span class="badge">{{ fact.source }}</span>
-                    {% if fact.timestamp %}{{ fact.timestamp[:16] }}{% endif %}
+
+        <div class="results-area" id="results">
+            <!-- Default: show clusters and questions -->
+            <div id="default-view">
+                <div class="section-title">Knowledge Clusters</div>
+                <div id="clusters" style="margin-bottom: 2rem;">
+                    {% for cluster in clusters %}
+                    <span class="cluster-tag" onclick="searchFor('{{ cluster }}')">{{ cluster }}</span>
+                    {% endfor %}
+                    {% if not clusters %}
+                    <span style="color: var(--text-dim); font-size: 0.8rem;">Analyzing connections...</span>
+                    {% endif %}
+                </div>
+
+                <div class="section-title">Questions I'm Curious About</div>
+                <div id="questions">
+                    {% for q in questions %}
+                    <div class="question-item" onclick="searchFor('{{ q|replace("'", "\\'") }}')">{{ q }}</div>
+                    {% endfor %}
+                    {% if not questions %}
+                    <span style="color: var(--text-dim); font-size: 0.8rem;">No questions generated yet.</span>
+                    {% endif %}
+                </div>
+
+                <div class="section-title" style="margin-top: 2rem;">Recent Lessons</div>
+                <div id="lessons">
+                    {% for lesson in lessons %}
+                    <div class="result-card">
+                        <span class="result-type type-lesson">lesson</span>
+                        <div class="result-text">{{ lesson }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="section-title" style="margin-top: 2rem;">Dream Insights</div>
+                <div id="dreams">
+                    {% for dream in dreams %}
+                    <div class="result-card">
+                        <span class="result-type type-dream">dream</span>
+                        <div class="result-text">{{ dream }}</div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
-            {% endfor %}
-            {% if not facts %}
-            <div class="card" style="color: #444;">No facts stored yet.</div>
-            {% endif %}
+
+            <div id="search-results" style="display: none;"></div>
         </div>
-        
-        <!-- Recent Memories -->
-        <div class="section">
-            <h2>🧠 Recent Memories ({{ memories|length }} of {{ stats.total_memories }})</h2>
-            {% for mem in memories %}
-            <div class="card">
-                {{ mem.text }}
-                <div class="meta">
-                    <span class="badge">{{ mem.mood }}</span>
-                    <span class="salience">salience: {{ mem.salience }}</span>
-                    {% if mem.timestamp %} · {{ mem.timestamp[:16] }}{% endif %}
-                </div>
-            </div>
-            {% endfor %}
-            {% if not memories %}
-            <div class="card" style="color: #444;">No memories yet.</div>
-            {% endif %}
-        </div>
-        
-        <!-- Knowledge Graph Nodes -->
-        <div class="section">
-            <h2>🕸️ Knowledge Graph ({{ stats.total_nodes }} nodes, {{ stats.total_edges }} edges)</h2>
-            <div class="node-grid">
-                {% for node in kg_nodes %}
-                <div class="node {{ node.type }}">{{ node.label }}</div>
-                {% endfor %}
-            </div>
-            {% if not kg_nodes %}
-            <div class="card" style="color: #444;">Knowledge graph is empty.</div>
-            {% endif %}
+
+        <div class="footer">
+            This is a window into my knowledge graph. Everything here is something I've genuinely learned or wondered about.
         </div>
     </div>
-    
+
     <script>
-        function doSearch() {
-            const q = document.getElementById('search-input').value.trim();
-            if (!q) return;
-            fetch('/knowledge/search?q=' + encodeURIComponent(q))
-                .then(r => r.json())
-                .then(data => {
-                    const div = document.getElementById('search-results');
-                    if (!data.results.length) {
-                        div.innerHTML = '<div class="result-count">No results for "' + data.query + '"</div>';
-                        return;
-                    }
-                    let html = '<div class="result-count">' + data.total + ' results for "' + data.query + '"</div>';
-                    data.results.forEach(r => {
-                        html += '<div class="card"><span class="badge">' + r.type + '</span> ' + r.content + '</div>';
-                    });
-                    div.innerHTML = html;
-                });
+        const searchInput = document.getElementById('search');
+        const defaultView = document.getElementById('default-view');
+        const searchResults = document.getElementById('search-results');
+
+        function searchFor(query) {
+            searchInput.value = query;
+            doSearch(query);
         }
-        document.getElementById('search-input').addEventListener('keypress', e => {
-            if (e.key === 'Enter') doSearch();
+
+        function highlightText(text, query) {
+            if (!query) return text;
+            const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+            let result = text;
+            for (const word of words) {
+                const regex = new RegExp('(' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+                result = result.replace(regex, '<span class="highlight">$1</span>');
+            }
+            return result;
+        }
+
+        async function doSearch(query) {
+            if (!query.trim()) {
+                defaultView.style.display = 'block';
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            defaultView.style.display = 'none';
+            searchResults.style.display = 'block';
+            searchResults.innerHTML = '<div class="loading">Searching my knowledge...</div>';
+
+            try {
+                const response = await fetch('/knowledge/search?q=' + encodeURIComponent(query));
+                const data = await response.json();
+
+                if (!data.results || data.results.length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="empty-state">
+                            <div class="icon">🤔</div>
+                            <div>I don't know anything about that yet.</div>
+                            <div style="margin-top: 0.5rem; font-size: 0.8rem;">
+                                This gap in my knowledge is itself interesting.
+                            </div>
+                        </div>`;
+                    return;
+                }
+
+                let html = '<div class="section-title">Found ' + data.results.length + ' matches</div>';
+                for (const r of data.results) {
+                    const typeClass = 'type-' + (r.type || 'fact');
+                    html += `
+                        <div class="result-card">
+                            <span class="result-type ${typeClass}">${r.type || 'fact'}</span>
+                            <div class="result-text">${highlightText(r.text, query)}</div>
+                            ${r.meta ? '<div class="result-meta">' + r.meta + '</div>' : ''}
+                        </div>`;
+                }
+                searchResults.innerHTML = html;
+            } catch (e) {
+                searchResults.innerHTML = '<div class="empty-state">Search failed. I may be thinking about something else.</div>';
+            }
+        }
+
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') doSearch(this.value);
+        });
+
+        searchInput.addEventListener('input', function() {
+            if (!this.value.trim()) {
+                defaultView.style.display = 'block';
+                searchResults.style.display = 'none';
+            }
         });
     </script>
 </body>
