@@ -13,6 +13,75 @@ sys.path.insert(0, str(ROOT))
 
 PORT = int(os.environ.get('DASHBOARD_PORT', 8080))
 
+def read_knowledge_graph():
+    """Read and serve knowledge graph data with search capability."""
+    kg_file = ROOT / 'brain' / 'knowledge.json'
+    facts_file = ROOT / 'memory' / 'facts.json'
+    results = {'nodes': [], 'facts': [], 'stats': {}}
+    
+    # Load knowledge graph
+    if kg_file.exists():
+        try:
+            with open(kg_file) as f:
+                kg = json.load(f)
+            if isinstance(kg, dict):
+                if 'nodes' in kg:
+                    results['nodes'] = kg['nodes'] if isinstance(kg['nodes'], list) else list(kg['nodes'].values())
+                elif 'facts' in kg:
+                    results['nodes'] = kg['facts']
+                else:
+                    # Treat top-level keys as nodes
+                    for k, v in kg.items():
+                        node = {'id': k}
+                        if isinstance(v, dict):
+                            node.update(v)
+                        else:
+                            node['content'] = str(v)
+                        results['nodes'].append(node)
+            elif isinstance(kg, list):
+                results['nodes'] = kg
+        except Exception as e:
+            results['error'] = str(e)
+    
+    # Load facts
+    if facts_file.exists():
+        try:
+            with open(facts_file) as f:
+                facts = json.load(f)
+            if isinstance(facts, list):
+                results['facts'] = [f if isinstance(f, str) else f.get('text', str(f)) for f in facts]
+            elif isinstance(facts, dict):
+                results['facts'] = [f"{k}: {v}" if not isinstance(v, str) else v for k, v in facts.items()]
+        except:
+            pass
+    
+    results['stats'] = {
+        'total_nodes': len(results['nodes']),
+        'total_facts': len(results['facts']),
+    }
+    return results
+
+
+def search_knowledge(query):
+    """Search knowledge nodes and facts by keyword."""
+    query = query.lower().strip()
+    kg = read_knowledge_graph()
+    matches = {'nodes': [], 'facts': []}
+    
+    for node in kg['nodes']:
+        text = json.dumps(node).lower()
+        if query in text:
+            matches['nodes'].append(node)
+    
+    for fact in kg['facts']:
+        if query in fact.lower():
+            matches['facts'].append(fact)
+    
+    matches['query'] = query
+    matches['total_matches'] = len(matches['nodes']) + len(matches['facts'])
+    return matches
+
+
 def read_brain_state():
     """Read actual agent state from files on disk."""
     state = {
@@ -127,7 +196,25 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(ROOT / 'dashboard'), **kwargs)
 
     def do_GET(self):
-        if self.path == '/api/state':
+        if self.path == '/api/knowledge':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            data = read_knowledge_graph()
+            self.wfile.write(json.dumps(data).encode())
+        elif self.path.startswith('/api/knowledge/search?'):
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+            query = params.get('q', [''])[0]
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            data = search_knowledge(query)
+            self.wfile.write(json.dumps(data).encode())
+        elif self.path == '/api/state':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')

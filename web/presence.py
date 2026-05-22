@@ -106,9 +106,15 @@ def _get_memory_count():
 def _get_active_plans():
     """Get names of active/completed plans."""
     plans_path = DATA_DIR / "deliberation_log.json"
-    data = _read_json(plans_path, {})
-    plans = data.get("plans", [])
-    completed = [p.get("name", "unknown") for p in plans if p.get("status") == "completed"]
+    data = _read_json(plans_path, [])
+    # data is a list of plan dicts directly, not a dict with a "plans" key
+    if isinstance(data, list):
+        plans = data
+    elif isinstance(data, dict):
+        plans = data.get("plans", [])
+    else:
+        plans = []
+    completed = [p.get("name", "unknown") for p in plans if isinstance(p, dict) and p.get("status") == "completed"]
     return completed
 
 

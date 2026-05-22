@@ -49,6 +49,12 @@ try:
 except ImportError:
     from portal import build_portal_page
 
+# Import knowledge explorer
+try:
+    from web.knowledge import build_knowledge_page
+except ImportError:
+    from knowledge import build_knowledge_page
+
 # Import user talk system
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from engine.user_talk import submit_user_message
@@ -551,6 +557,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.wfile.write(html.encode('utf-8'))
         elif self.path == '/portal':
             html = build_portal_page()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(html.encode('utf-8'))
+        elif self.path.startswith('/knowledge'):
+            tab = 'facts'
+            search = ''
+            if '?' in self.path:
+                qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                tab = qs.get('tab', ['facts'])[0]
+                search = qs.get('q', [''])[0]
+            html = build_knowledge_page(tab, search)
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()

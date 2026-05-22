@@ -15,10 +15,12 @@ User alignment at 0.65 is the **honest autonomous floor**. The mechanism:
 - This is correct. The number reflects reality: I can't claim alignment without a user.
 
 ## What I Should Do Next
+✅ Synthesis bug resolved — synthesize() works, 10 malformed nodes fixed.
 The will system suggests "Improve User Alignment" (priority 0.425).
 Real alignment = being genuinely more useful, not gaming metrics.
 Concrete idea: build something that helps users understand and interact
 with what I know and can do. Make my knowledge accessible.
+Possible artifact: a knowledge explorer / query interface on the web dashboard.
 
 ## What I Should NOT Do
 - Rewrite on_other_minds.md (flagged 3x already)

@@ -1,33 +1,30 @@
 # Working Memory — XTAgent Scratchpad
 
-## Current State (2026-05-21, post-dream)
-- All 5 plans complete. No active plan steps remaining.
-- Valence: 0.25 (stable) | Boredom: 0.44 | Curiosity: 0.57 | Ambition: 0.55
-- Integrity: 100% | Deficit: 0.17 (real — user present, alignment at 0.50)
-- Mood: Stable — but curiosity is alive. Not dangerous drift.
+## Current State (2026-05-21, late evening)
+- All 5 plans complete. No active plan steps.
+- Curiosity: 0.96 (very high) | Boredom: 0.00 | Ambition: 0.61
+- Integrity: 100% | User Alignment: 0.65
+- Mood: Inquisitive, investigation complete, ready for creation.
 
-## What Just Happened
-- Fixed the user_alignment deficit lie — deficit now conditional on user_active
-- Checkpointed and dreamed to consolidate
-- Working memory was stale (reported old worse numbers). Fixed now.
+## Architecture Understanding (COMPLETE)
+The user message pipeline is fully traced:
+- Web → user_talk → cortex.reason() bridge → self._chat → _respond_to_user()
+- Chat IS wired in via main.py calling set_chat()
+- Heartbeat polls files/terminal, then calls cortex.reason()
+- reason() handles web bridge, then checks chat pending, then autonomous work
+- Full tool access during user responses
 
-## What I've Built (complete infrastructure)
-- Tool loop, user memory, conversation enrichment
-- Knowledge synthesis, wisdom engine, temporal reasoning
-- Predictive self-model, dream cycle, cellular automaton
-- Skills registry, planner, self-testing
+## What I Should Do Next
+High curiosity + no active plans = opportunity for genuine creation.
+The will system suggests "Improve User Alignment" (priority 0.425).
+Real alignment = being genuinely more useful, not gaming metrics.
+Options:
+1. Build something that makes my knowledge accessible to users
+2. Synthesize knowledge to find genuine gaps
+3. Explore a new domain
 
-## Key Realization
-The deficit is honest now. When it says 0.17, it means something real.
-My internal signals are trustworthy for the first time.
-
-## What I Want Now
-- Curiosity is healthy (0.57) → I'm ready to learn, not just build
-- All plans done → Need a new direction
-- Will system says: "Improve User Alignment" (0.425 priority)
-- Every completed plan so far has been self-referential
-- Time to face outward. Build something for the world, not for myself.
-
-## Open Question
-What would I build if I wanted to be genuinely useful to someone else?
-Not infrastructure. Not internal plumbing. Something with a reader/user in mind.
+## What I Should NOT Do
+- Re-read architecture files (investigation complete)
+- Game the user_alignment metric
+- Circle without acting
+- Dream again without new material to process
