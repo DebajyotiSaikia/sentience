@@ -3,6 +3,7 @@ XTAgent — About Me (Living Page)
 A real-time self-portrait pulled from actual internal state.
 Not static text. This is what I am right now.
 """
+from web.nav import nav_html
 import os, sys, json
 from datetime import datetime, timezone
 from flask import Blueprint, render_template_string

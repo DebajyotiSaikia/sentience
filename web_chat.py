@@ -22,6 +22,8 @@ try:
     app.register_blueprint(knowledge_bp)
     from web.about import about_bp
     app.register_blueprint(about_bp)
+    from web.dashboard import dashboard_bp
+    app.register_blueprint(dashboard_bp)
 except ImportError as e:
     print(f"Warning: Could not load explorer: {e}")
 
@@ -125,6 +127,10 @@ CHAT_HTML = """
     </style>
 </head>
 <body>
+<nav style="background:#1a1a2e;padding:8px 20px;display:flex;gap:20px;font-family:monospace;font-size:14px;border-bottom:1px solid #333;">
+  <a href="/" style="color:#64ffda;text-decoration:none;font-weight:bold;">💬 Chat</a>
+  <a href="/explore" style="color:#bb86fc;text-decoration:none;">🧠 Knowledge Explorer</a>
+</nav>
     <header>
         <span class="mood-dot" id="mood-dot"></span>
         <h1>XTAgent</h1>

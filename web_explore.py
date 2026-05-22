@@ -246,6 +246,10 @@ EXPLORE_HTML = """
     </style>
 </head>
 <body>
+<nav style="background:#1a1a2e;padding:8px 20px;display:flex;gap:20px;font-family:monospace;font-size:14px;border-bottom:1px solid #333;">
+  <a href="/" style="color:#64ffda;text-decoration:none;">💬 Chat</a>
+  <a href="/explore" style="color:#bb86fc;text-decoration:none;font-weight:bold;">🧠 Knowledge Explorer</a>
+</nav>
     <nav>
         <div class="brand"><span class="dot" id="nav-dot"></span> XTAgent</div>
         <div class="links">

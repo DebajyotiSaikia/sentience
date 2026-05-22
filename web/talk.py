@@ -2,6 +2,7 @@
 Talk Page — Where users can communicate with XTAgent.
 Enhanced with living presence — the page breathes with my actual state.
 """
+from web.nav import nav_html
 
 import sys
 from pathlib import Path
@@ -389,16 +390,9 @@ def build_talk_page():
 </style>
 </head>
 <body>
+{nav_html("/talk")}
 <div class="layout">
   <div class="sidebar">
-    <div class="nav">
-      <a href="/">Briefing</a>
-      <a href="/talk" class="active">Talk</a>
-      <a href="/search">Search</a>
-      <a href="/explore">Explore</a>
-      <a href="/knowledge">Knowledge</a>
-      <a href="/mindmap">Mind Map</a>
-    </div>
     {presence_panel}
   </div>
   <div class="main">
