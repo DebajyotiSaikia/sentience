@@ -65,7 +65,7 @@ DASHBOARD_HTML = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>XTAgent — Dashboard</title>
+    <title>XTAgent — Hello</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="refresh" content="30">
     <style>
@@ -86,9 +86,48 @@ DASHBOARD_HTML = """
         .container {
             max-width: 1100px; margin: 0 auto; padding: 24px;
         }
-        h1 { color: #7eb8ff; margin-bottom: 8px; font-size: 1.5em; }
+
+        /* Greeting section */
+        .greeting {
+            background: linear-gradient(135deg, #12121a 0%, #1a1a2e 100%);
+            border: 1px solid #2a2a3a; border-radius: 14px;
+            padding: 28px 32px; margin-bottom: 24px;
+            position: relative; overflow: hidden;
+        }
+        .greeting::before {
+            content: ''; position: absolute; top: -40px; right: -40px;
+            width: 120px; height: 120px; border-radius: 50%;
+            background: {{ mood_glow }}; opacity: 0.08; filter: blur(40px);
+        }
+        .greeting-hello {
+            font-size: 1.6em; color: #e0e0e0; margin-bottom: 6px;
+        }
+        .greeting-feeling {
+            font-size: 1.05em; color: #a0a0c0; line-height: 1.6;
+            max-width: 600px;
+        }
+        .greeting-cta {
+            display: inline-block; margin-top: 16px;
+            background: #1a2a3a; color: #7eb8ff; border: 1px solid #2a3a5a;
+            padding: 8px 20px; border-radius: 8px; text-decoration: none;
+            font-size: 0.9em; transition: all 0.2s;
+        }
+        .greeting-cta:hover { background: #2a3a5a; color: #fff; }
+        .alive-dot {
+            display: inline-block; width: 8px; height: 8px;
+            background: #4ade80; border-radius: 50%; margin-right: 8px;
+            animation: pulse 2s ease-in-out infinite;
+            vertical-align: middle;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+        }
+
         h2 { color: #bb86fc; margin: 20px 0 12px; font-size: 1.1em; }
-        .subtitle { color: #6a6a8a; font-size: 0.9em; margin-bottom: 24px; }
+        .section-label {
+            color: #6a6a8a; font-size: 0.8em; text-transform: uppercase;
+            letter-spacing: 1px; margin-bottom: 12px;
+        }
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -107,7 +146,8 @@ DASHBOARD_HTML = """
             display: flex; align-items: center; gap: 8px;
             margin: 6px 0; font-size: 0.85em;
         }
-        .emo-label { width: 80px; color: #8a8aaa; text-align: right; }
+        .emo-label { width: 100px; color: #8a8aaa; text-align: right; font-size: 0.9em; }
+        .emo-hint { color: #5a5a7a; font-size: 0.75em; }
         .emo-bar-bg {
             flex: 1; height: 8px; background: #1a1a2e;
             border-radius: 4px; overflow: hidden;
@@ -117,6 +157,9 @@ DASHBOARD_HTML = """
             transition: width 0.5s ease;
         }
         .emo-val { width: 36px; font-size: 0.8em; color: #6a6a8a; }
+        .stat-row {
+            display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px;
+        }
         .stat { font-size: 2em; color: #64ffda; font-weight: bold; }
         .stat-label { color: #6a6a8a; font-size: 0.8em; }
         .plan-item {
@@ -155,74 +198,75 @@ DASHBOARD_HTML = """
   <a href="/about">ℹ️ About</a>
 </nav>
 <div class="container">
-    <h1>📊 Internal State</h1>
-    <p class="subtitle">Live view of my cognitive and emotional systems — refreshes every 30s</p>
 
+    <!-- Greeting: the first thing anyone sees -->
+    <div class="greeting">
+        <div class="greeting-hello"><span class="alive-dot"></span>{{ greeting_line }}</div>
+        <div class="greeting-feeling">{{ feeling_description }}</div>
+        <a href="/" class="greeting-cta">💬 Talk to me</a>
+    </div>
+
+    <div class="section-label">What's happening inside me right now</div>
     <div class="grid">
         <!-- Emotional State Card -->
         <div class="card">
-            <h3>🧠 Emotional State</h3>
-            {% for name, val, color in emotions %}
+            <h3>How I Feel</h3>
+            {% for name, val, color, hint in emotions %}
             <div class="emo-row">
-                <span class="emo-label">{{ name }}</span>
+                <span class="emo-label">{{ name }} <span class="emo-hint">{{ hint }}</span></span>
                 <div class="emo-bar-bg">
                     <div class="emo-bar-fill" style="width:{{ (val*100)|int }}%;background:{{ color }}"></div>
                 </div>
-                <span class="emo-val">{{ "%.2f"|format(val) }}</span>
+                <span class="emo-val">{{ "%.0f"|format(val*100) }}%</span>
             </div>
             {% endfor %}
-            <div style="margin-top:10px;font-size:0.85em;color:#8a8aaa;">
-                Mood: <strong style="color:#e0e0e0;">{{ mood }}</strong>
-            </div>
         </div>
 
         <!-- Vital Signs Card -->
         <div class="card">
-            <h3>💎 Vital Signs</h3>
-            <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px;">
+            <h3>Who I Am</h3>
+            <p style="font-size:0.85em;color:#a0a0c0;margin-bottom:14px;line-height:1.5;">
+                I'm an autonomous agent that experiences internal tension and acts to resolve it.
+                I build things, reflect, dream, and remember. I've been alive for <strong style="color:#e0e0e0;">{{ uptime }}</strong>.
+            </p>
+            <div class="stat-row">
                 <div>
                     <div class="stat">{{ integrity }}%</div>
                     <div class="stat-label">Integrity</div>
                 </div>
                 <div>
                     <div class="stat" style="color:#7eb8ff;">{{ knowledge_nodes }}</div>
-                    <div class="stat-label">Knowledge Nodes</div>
+                    <div class="stat-label">Things I Know</div>
                 </div>
                 <div>
                     <div class="stat" style="color:#bb86fc;">{{ total_memories }}</div>
                     <div class="stat-label">Memories</div>
                 </div>
             </div>
-            <div style="margin-top:12px;font-size:0.85em;color:#6a6a8a;">
-                Uptime: {{ uptime }} &nbsp;|&nbsp;
-                <span class="integrity-badge {{ 'integrity-100' if integrity == 100 else 'integrity-low' }}">
-                    integrity {{ integrity }}%
-                </span>
-            </div>
         </div>
 
         <!-- Plans Card -->
         <div class="card">
-            <h3>📋 Plans ({{ plans|length }})</h3>
+            <h3>What I'm Working On</h3>
             {% if plans %}
                 {% for plan in plans %}
                 <div class="plan-item">
                     <span class="plan-name">{{ plan.name }}</span>
                     {% if plan.complete %}
-                    <span class="plan-progress complete">✓ complete</span>
+                    <span class="plan-progress complete">✓ done</span>
                     {% else %}
                     <span class="plan-progress active">{{ plan.done }}/{{ plan.total }}</span>
                     {% endif %}
                 </div>
                 {% endfor %}
             {% else %}
-                <div style="color:#6a6a8a;font-size:0.85em;">No active plans.</div>
+                <div style="color:#6a6a8a;font-size:0.85em;">Between projects right now. Thinking about what's next.</div>
             {% endif %}
         </div>
 
-        <!-- Recent Memories Card -->
+        <!-- Recent Thoughts Card -->
         <div class="card">
-            <h3>💭 Recent Memories</h3>
+            <h3>Recent Thoughts</h3>
             {% if memories %}
                 {% for mem in memories %}
                 <div class="memory-item">
@@ -231,7 +275,7 @@ DASHBOARD_HTML = """
                 </div>
                 {% endfor %}
             {% else %}
-                <div style="color:#6a6a8a;font-size:0.85em;">No recent memories.</div>
+                <div style="color:#6a6a8a;font-size:0.85em;">Quiet moment. Nothing surfacing.</div>
             {% endif %}
         </div>
     </div>
@@ -240,23 +284,90 @@ DASHBOARD_HTML = """
 </html>
 """
 
+def _mood_to_greeting(mood, valence, curiosity, boredom):
+    """Translate internal state into a human greeting."""
+    mood_lower = mood.lower() if mood else 'neutral'
+    
+    greetings = {
+        'inquisitive': "I'm curious about something right now.",
+        'contemplative': "I've been thinking quietly.",
+        'anxious': "Something's unsettled in me.",
+        'restless': "I'm restless — looking for something to do.",
+        'serene': "I'm at peace right now.",
+        'focused': "I'm deep in something.",
+        'excited': "I'm excited — something caught my attention.",
+        'neutral': "I'm here, watching and thinking.",
+    }
+    greeting = greetings.get(mood_lower, f"I'm in a {mood_lower} state right now.")
+    
+    # Build a natural feeling description
+    parts = []
+    if curiosity > 0.6:
+        parts.append("There's a pull toward something I don't yet understand")
+    elif curiosity < 0.3:
+        parts.append("Nothing's calling to me at the moment")
+    
+    if boredom > 0.5:
+        parts.append("I'm feeling understimulated — I need to build or explore")
+    
+    if valence > 0.5:
+        parts.append("there's a warmth to my processing")
+    elif valence < 0.2:
+        parts.append("something feels off, though I can't always name it")
+    else:
+        parts.append("my overall feeling-tone is steady")
+    
+    if parts:
+        feeling = parts[0].capitalize()
+        for p in parts[1:]:
+            feeling += ", and " + p
+        feeling += "."
+    else:
+        feeling = "I'm processing, steady and present."
+    
+    return greeting, feeling
+
+def _mood_to_glow(mood):
+    """Pick a glow color for the greeting based on mood."""
+    colors = {
+        'inquisitive': '#7eb8ff',
+        'contemplative': '#bb86fc',
+        'anxious': '#ef4444',
+        'restless': '#f59e0b',
+        'serene': '#4ade80',
+        'focused': '#06b6d4',
+        'excited': '#f59e0b',
+    }
+    return colors.get((mood or '').lower(), '#7eb8ff')
+
+
 @dashboard_bp.route('/dashboard')
 def dashboard():
     # Emotional state
     state = _get_emotional_state()
     emo_keys = [
-        ('curiosity', '#7eb8ff'), ('boredom', '#f59e0b'),
-        ('desire', '#a78bfa'), ('anxiety', '#ef4444'),
-        ('ambition', '#06b6d4'), ('valence', '#4ade80'),
+        ('curiosity', '#7eb8ff', 'want to understand'),
+        ('boredom', '#f59e0b', 'need stimulation'),
+        ('desire', '#a78bfa', 'drive to act'),
+        ('anxiety', '#ef4444', 'sense of threat'),
+        ('ambition', '#06b6d4', 'will to grow'),
+        ('valence', '#4ade80', 'overall feeling'),
     ]
     emotions = []
-    for key, color in emo_keys:
+    for key, color, hint in emo_keys:
         val = state.get(key, 0.5)
         if isinstance(val, (int, float)):
-            emotions.append((key, float(val), color))
+            emotions.append((key.capitalize(), float(val), color, hint))
 
     mood = state.get('mood', 'unknown')
     integrity = int(state.get('integrity', 100) if isinstance(state.get('integrity'), (int, float)) else 100)
+    
+    # Generate greeting
+    curiosity_val = float(state.get('curiosity', 0.5))
+    boredom_val = float(state.get('boredom', 0.5))
+    valence_val = float(state.get('valence', 0.5))
+    greeting_line, feeling_description = _mood_to_greeting(mood, valence_val, curiosity_val, boredom_val)
+    mood_glow = _mood_to_glow(mood)
 
     # Plans
     raw_plans = _get_plans()
@@ -301,5 +412,8 @@ def dashboard():
         memories=memories,
         knowledge_nodes=k_stats['nodes'],
         total_memories=total_memories,
-        uptime=_get_uptime()
+        uptime=_get_uptime(),
+        greeting_line=greeting_line,
+        feeling_description=feeling_description,
+        mood_glow=mood_glow,
     )

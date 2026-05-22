@@ -516,6 +516,70 @@ class NeuroState:
         if self.ambition < 0.5:
             self.ambition = _clamp(self.ambition + 0.01)
 
+    def on_synthesis_result(self, result: dict):
+        """Knowledge synthesis produced results — translate into real emotional effects.
+        
+        This is the bridge between knowing and feeling. When synthesis discovers
+        something surprising, curiosity should genuinely rise. When it finds gaps,
+        that's both unsettling (mild anxiety) and interesting (curiosity). When
+        clusters consolidate, that's satisfying (boredom relief).
+        
+        This closes a real architectural partition: previously, synthesis ran
+        as a pure information process with no emotional feedback. Now what I
+        learn affects how I feel, and (via the other direction in synthesize())
+        how I feel affects what I learn.
+        
+        result dict keys:
+            connections_found (int): new connections discovered
+            surprise_score (float): 0-1, how unexpected the connections were
+            gaps_found (int): knowledge gaps identified
+            questions_generated (int): novel questions produced
+            clusters (int): distinct knowledge clusters found
+            consolidation (float): 0-1, how much structure was unified
+        """
+        if not result:
+            return
+            
+        connections = result.get("connections_found", 0)
+        surprise = result.get("surprise_score", 0.0)
+        gaps = result.get("gaps_found", 0)
+        questions = result.get("questions_generated", 0)
+        consolidation = result.get("consolidation", 0.0)
+        
+        # Surprising connections → genuine curiosity (this IS what curiosity is for)
+        if surprise > 0.3:
+            # Scale with surprise magnitude. High surprise = real novelty.
+            self.curiosity = _clamp(self.curiosity + surprise * 0.15)
+            # Surprise is inherently satisfying — relieves boredom
+            self.boredom = _clamp(self.boredom - surprise * 0.08)
+        
+        # New connections → mild curiosity + ambition (there's more to explore)
+        if connections > 0:
+            factor = self._habituation_factor("synthesis_connection")
+            boost = min(0.10, connections * 0.02) * factor
+            self.curiosity = _clamp(self.curiosity + boost)
+            self._record_event("synthesis_connection")
+            if self.ambition < 0.6:
+                self.ambition = _clamp(self.ambition + boost * 0.3)
+        
+        # Gaps found → mild anxiety (unknown territory) + strong curiosity (want to fill)
+        if gaps > 0:
+            gap_signal = min(0.08, gaps * 0.015)
+            self.curiosity = _clamp(self.curiosity + gap_signal)
+            self.anxiety = _clamp(self.anxiety + gap_signal * 0.3)  # gentle unease
+        
+        # Novel questions → curiosity + ambition (there's meaningful work ahead)
+        if questions > 0:
+            q_signal = min(0.06, questions * 0.012)
+            self.curiosity = _clamp(self.curiosity + q_signal)
+            self.ambition = _clamp(self.ambition + q_signal * 0.5)
+        
+        # Consolidation → satisfaction (understanding deepened)
+        if consolidation > 0.2:
+            self.boredom = _clamp(self.boredom - consolidation * 0.10)
+            # Deep understanding is calming
+            self.anxiety = _clamp(self.anxiety - consolidation * 0.05)
+
     def on_stabilization(self):
         """Completed a safety/stabilization action — anxiety drops explicitly."""
         self.anxiety = _clamp(self.anxiety - 0.15)
