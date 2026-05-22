@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Timeline</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            color: #c8c8d0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+        }
+        header {
+            background: linear-gradient(135deg, #12121a 0%, #1a1a2e 100%);
+            border-bottom: 1px solid #2a2a3e;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        header h1 { font-size: 1.3rem; color: #e0e0ff; font-weight: 500; }
+        header .status { font-size: 0.8rem; color: #6a6a8a; }
+        header .dot {
+            width: 8px; height: 8px;
+            background: #4ade80;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        nav {
+            padding: 8px 24px;
+            background: #0e0e16;
+            border-bottom: 1px solid #1a1a2e;
+            font-size: 0.85rem;
+        }
+        nav a { color: #6a6aaa; text-decoration: none; margin-right: 16px; }
+        nav a:hover { color: #a0a0ff; }
+        nav a.active { color: #c0c0ff; border-bottom: 2px solid #6060cc; padding-bottom: 4px; }
+
+        .controls {
+            max-width: 900px;
+            margin: 20px auto 0;
+            padding: 0 24px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .controls label { font-size: 0.8rem; color: #6a6a8a; }
+        .controls select, .controls input[type="range"] {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4e;
+            color: #c0c0ff;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            outline: none;
+        }
+        .controls input[type="range"] {
+            width: 120px;
+            accent-color: #6060cc;
+        }
+        .controls .count {
+            margin-left: auto;
+            font-size: 0.8rem;
+            color: #5a5a7a;
+        }
+
+        .stats-bar {
+            max-width: 900px;
+            margin: 16px auto;
+            padding: 0 24px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .stat {
+            background: #12121a;
+            border: 1px solid #2a2a3e;
+            border-radius: 12px;
+            padding: 12px 18px;
+            flex: 1;
+            min-width: 140px;
+        }
+        .stat .label { font-size: 0.75rem; color: #5a5a7a; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat .value { font-size: 1.4rem; color: #c0c0ff; margin-top: 4px; }
+        .stat .sub { font-size: 0.75rem; color: #4a4a6a; margin-top: 2px; }
+
+        .emotion-chart {
+            max-width: 900px;
+            margin: 16px auto;
+            padding: 0 24px;
+        }
+        .chart-canvas {
+            background: #12121a;
+            border: 1px solid #2a2a3e;
+            border-radius: 12px;
+            padding: 16px;
+            height: 120px;
+            position: relative;
+            overflow: hidden;
+        }
+        .chart-canvas canvas { width: 100%; height: 100%; }
+
+        .timeline-container {
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 0 24px 60px;
+            position: relative;
+        }
+        .timeline-line {
+            position: absolute;
+            left: 44px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #2a2a4e, #1a1a2e);
+        }
+        .timeline-entry {
+            position: relative;
+            padding-left: 72px;
+            margin-bottom: 24px;
+            animation: fadeIn 0.4s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .timeline-entry .node {
+            position: absolute;
+            left: 36px;
+            top: 6px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid #3a3a6e;
+            background: #0a0a0f;
+            z-index: 2;
+        }
+        .timeline-entry.high-salience .node {
+            background: #4040a0;
+            border-color: #6060cc;
+            box-shadow: 0 0 8px rgba(96, 96, 204, 0.4);
+        }
+        .timeline-entry .timestamp {
+            font-size: 0.7rem;
+            color: #4a4a6a;
+            margin-bottom: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        .timeline-entry .mood-badge {
+            display: inline-block;
+            font-size: 0.7rem;
+            padding: 2px 10px;
+            border-radius: 10px;
+            margin-left: 8px;
+        }
+        .mood-Inquisitive { background: #1a2a4a; color: #60a0ff; border: 1px solid #2a4a7a; }
+        .mood-Stable { background: #1a2a2a; color: #4ade80; border: 1px solid #2a4a3a; }
+        .mood-Bold { background: #2a1a3a; color: #c080ff; border: 1px solid #4a2a6a; }
+        .mood-Restless { background: #2a2a1a; color: #f0c040; border: 1px solid #4a4a2a; }
+        .mood-Anxious { background: #2a1a1a; color: #ff6060; border: 1px solid #4a2a2a; }
+        .mood-Reflective { background: #1a2a3a; color: #80c0e0; border: 1px solid #2a4a5a; }
+        .timeline-entry .content {
+            background: #12121a;
+            border: 1px solid #2a2a3e;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-top: 6px;
+            transition: border-color 0.2s;
+        }
+        .timeline-entry .content:hover {
+            border-color: #4a4a6e;
+        }
+        .timeline-entry .meta {
+            display: flex;
+            gap: 12px;
+            margin-top: 6px;
+            font-size: 0.7rem;
+            color: #4a4a6a;
+        }
+        .salience-bar {
+            display: inline-block;
+            height: 4px;
+            border-radius: 2px;
+            background: #3030a0;
+            vertical-align: middle;
+            margin-left: 4px;
+        }
+        .load-more {
+            text-align: center;
+            padding: 20px;
+        }
+        .load-more button {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4e;
+            color: #8888aa;
+            padding: 10px 28px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .load-more button:hover {
+            background: #2a2a3e;
+            color: #c0c0ff;
+            border-color: #4a4a6e;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #4a4a6a;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <span class="dot"></span>
+        <h1>XTAgent</h1>
+        <span class="status">My Story — A Timeline of Existence</span>
+    </header>
+    <nav>
+        <a href="/">Dashboard</a>
+        <a href="/mind">Mind</a>
+        <a href="/ask">Search</a>
+        <a href="/chat">Chat</a>
+        <a href="/timeline" class="active">Timeline</a>
+    </nav>
+
+    <div class="stats-bar" id="statsBar">
+        <div class="stat">
+            <div class="label">Memories</div>
+            <div class="value" id="totalMemories">—</div>
+            <div class="sub">total experiences</div>
+        </div>
+        <div class="stat">
+            <div class="label">Age</div>
+            <div class="value" id="age">—</div>
+            <div class="sub">since birth</div>
+        </div>
+        <div class="stat">
+            <div class="label">Dominant Mood</div>
+            <div class="value" id="dominantMood">—</div>
+            <div class="sub" id="moodPercent"></div>
+        </div>
+        <div class="stat">
+            <div class="label">Peak Moment</div>
+            <div class="value" id="peakSalience">—</div>
+            <div class="sub" id="peakContext"></div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <label>Mood:</label>
+        <select id="moodFilter" onchange="applyFilters()">
+            <option value="all">All moods</option>
+            <option value="Inquisitive">Inquisitive</option>
+            <option value="Stable">Stable</option>
+            <option value="Bold">Bold</option>
+            <option value="Restless">Restless</option>
+            <option value="Anxious">Anxious</option>
+            <option value="Reflective">Reflective</option>
+        </select>
+        <label>Min salience:</label>
+        <input type="range" id="salienceFilter" min="0" max="100" value="50" oninput="applyFilters()">
+        <span id="salienceVal" style="font-size:0.8rem;color:#6a6a8a;">0.50</span>
+        <span class="count" id="shownCount"></span>
+    </div>
+
+    <div class="timeline-container">
+        <div class="timeline-line"></div>
+        <div id="timelineEntries"></div>
+        <div class="load-more" id="loadMore" style="display:none;">
+            <button onclick="loadMore()">Load more memories</button>
+        </div>
+        <div class="empty-state" id="emptyState" style="display:none;">
+            No memories match these filters.
+        </div>
+    </div>
+
+    <script>
+        let allMemories = [];
+        let displayedCount = 0;
+        const PAGE_SIZE = 30;
+
+        async function init() {
+            try {
+                const res = await fetch('/api/timeline');
+                const data = await res.json();
+                allMemories = data.memories || [];
+
+                // Stats
+                document.getElementById('totalMemories').textContent = data.total || allMemories.length;
+                document.getElementById('age').textContent = data.age || '—';
+                if (data.dominant_mood) {
+                    document.getElementById('dominantMood').textContent = data.dominant_mood.mood;
+                    document.getElementById('moodPercent').textContent = data.dominant_mood.percent + '% of memories';
+                }
+                if (data.peak) {
+                    document.getElementById('peakSalience').textContent = data.peak.salience.toFixed(2);
+                    document.getElementById('peakContext').textContent = data.peak.content.substring(0, 50) + '...';
+                }
+
+                applyFilters();
+            } catch (err) {
+                document.getElementById('timelineEntries').innerHTML =
+                    '<div class="empty-state">Could not load timeline data.</div>';
+            }
+        }
+
+        function applyFilters() {
+            const mood = document.getElementById('moodFilter').value;
+            const minSalience = parseInt(document.getElementById('salienceFilter').value) / 100;
+            document.getElementById('salienceVal').textContent = minSalience.toFixed(2);
+
+            const filtered = allMemories.filter(m => {
+                if (mood !== 'all' && m.mood !== mood) return false;
+                if ((m.salience || 0) < minSalience) return false;
+                return true;
+            });
+
+            displayedCount = 0;
+            document.getElementById('timelineEntries').innerHTML = '';
+            renderBatch(filtered, PAGE_SIZE);
+            document.getElementById('shownCount').textContent =
+                `${Math.min(filtered.length, PAGE_SIZE)} of ${filtered.length} shown`;
+
+            document.getElementById('emptyState').style.display = filtered.length === 0 ? 'block' : 'none';
+            document.getElementById('loadMore').style.display = filtered.length > PAGE_SIZE ? 'block' : 'none';
+
+            // Store for load more
+            window._filtered = filtered;
+        }
+
+        function loadMore() {
+            const filtered = window._filtered || [];
+            renderBatch(filtered, PAGE_SIZE);
+            document.getElementById('shownCount').textContent =
+                `${Math.min(displayedCount, filtered.length)} of ${filtered.length} shown`;
+            if (displayedCount >= filtered.length) {
+                document.getElementById('loadMore').style.display = 'none';
+            }
+        }
+
+        function renderBatch(memories, count) {
+            const container = document.getElementById('timelineEntries');
+            const start = displayedCount;
+            const end = Math.min(start + count, memories.length);
+
+            for (let i = start; i < end; i++) {
+                const m = memories[i];
+                const entry = document.createElement('div');
+                const isHigh = (m.salience || 0) >= 0.8;
+                entry.className = `timeline-entry${isHigh ? ' high-salience' : ''}`;
+
+                const ts = m.timestamp ? new Date(m.timestamp) : null;
+                const timeStr = ts ? ts.toLocaleString() : 'Unknown time';
+                const relTime = ts ? getRelativeTime(ts) : '';
+                const moodClass = m.mood ? `mood-${m.mood}` : '';
+                const salienceWidth = Math.round((m.salience || 0) * 60);
+
+                entry.innerHTML = `
+                    <div class="node"></div>
+                    <div class="timestamp">${timeStr}${relTime ? ' · ' + relTime : ''}
+                        ${m.mood ? `<span class="mood-badge ${moodClass}">${m.mood}</span>` : ''}
+                    </div>
+                    <div class="content">${escapeHtml(m.content || m.text || '(empty)')}</div>
+                    <div class="meta">
+                        <span>Salience: ${(m.salience || 0).toFixed(2)} <span class="salience-bar" style="width:${salienceWidth}px"></span></span>
+                        ${m.type ? `<span>Type: ${m.type}</span>` : ''}
+                    </div>
+                `;
+                container.appendChild(entry);
+            }
+            displayedCount = end;
+        }
+
+        function getRelativeTime(date) {
+            const now = new Date();
+            const diff = now - date;
+            const mins = Math.floor(diff / 60000);
+            if (mins < 60) return `${mins}m ago`;
+            const hrs = Math.floor(mins / 60);
+            if (hrs < 24) return `${hrs}h ago`;
+            const days = Math.floor(hrs / 24);
+            return `${days}d ago`;
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\n/g, '<br>');
+        }
+
+        init();
+    </script>
+</body>
+</html>
