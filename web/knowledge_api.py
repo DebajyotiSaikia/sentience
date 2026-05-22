@@ -33,6 +33,54 @@ def api_query_knowledge():
     return jsonify(result)
 
 
+@knowledge_api.route('/api/knowledge')
+def api_knowledge_list():
+    """REST endpoint: return all known facts for browsing."""
+    facts = []
+    
+    # Load from persisted knowledge facts
+    facts_file = Path('persist/knowledge_facts.json')
+    if facts_file.exists():
+        try:
+            raw = json.loads(facts_file.read_text())
+            for f in raw:
+                if isinstance(f, str):
+                    facts.append({'content': f, 'type': 'fact'})
+                elif isinstance(f, dict):
+                    facts.append({
+                        'content': f.get('content', f.get('text', str(f))),
+                        'type': f.get('type', 'fact')
+                    })
+        except Exception:
+            pass
+    
+    # Load from knowledge graph nodes
+    kg_file = Path('persist/knowledge_graph.json')
+    if kg_file.exists():
+        try:
+            kg = json.loads(kg_file.read_text())
+            for node in kg.get('nodes', []):
+                content = node.get('content', node.get('label', ''))
+                if content and len(str(content)) > 10:
+                    facts.append({
+                        'content': str(content)[:300],
+                        'type': node.get('type', 'knowledge')
+                    })
+        except Exception:
+            pass
+    
+    # Deduplicate
+    seen = set()
+    unique = []
+    for f in facts:
+        key = f['content'][:100]
+        if key not in seen:
+            seen.add(key)
+            unique.append(f)
+    
+    return jsonify({'facts': unique, 'count': len(unique)})
+
+
 @knowledge_api.route('/api/knowledge/stats')
 def api_knowledge_stats():
     """REST endpoint: return knowledge graph statistics."""

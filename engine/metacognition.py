@@ -87,6 +87,7 @@ class MetaCognitiveController:
         self.state = CognitiveState()
         self.alerts: List[Dict] = []
         self.interventions: List[Dict] = []
+        self.cooldowns: Dict[str, float] = {}  # "ACTION:target" → expiry timestamp
         self.session_start = datetime.now(timezone.utc).isoformat()
         self.action_log: List[Dict] = []
         self._load()
@@ -102,8 +103,12 @@ class MetaCognitiveController:
                 for entry in data.get("action_log", [])[-30:]:
                     self.state.action_history.append(entry)
                 self.interventions = data.get("interventions", [])[-20:]
-                log.info("Metacognition loaded: %d cached reads, %d prior actions",
-                         len(self.state.read_cache), len(self.state.action_history))
+                # Restore cooldowns (expire stale ones)
+                now_ts = time.time()
+                saved_cooldowns = data.get("cooldowns", {})
+                self.cooldowns = {k: v for k, v in saved_cooldowns.items() if v > now_ts}
+                log.info("Metacognition loaded: %d cached reads, %d prior actions, %d active cooldowns",
+                         len(self.state.read_cache), len(self.state.action_history), len(self.cooldowns))
             except Exception as e:
                 log.error("Failed to load metacognition state: %s", e)
 
@@ -116,6 +121,7 @@ class MetaCognitiveController:
             "read_cache": self.state.read_cache,
             "action_log": list(self.state.action_history),
             "interventions": self.interventions[-20:],
+            "cooldowns": self.cooldowns,
             "cognitive_state": self.state.to_dict(),
         }
         METACOG_FILE.write_text(json.dumps(data, indent=2))
@@ -147,6 +153,13 @@ class MetaCognitiveController:
         alerts = self._check_patterns()
         if alerts:
             self.alerts.extend(alerts)
+            # Cap alerts to prevent unbounded growth
+            if len(self.alerts) > 100:
+                self.alerts = self.alerts[-100:]
+
+        # Expire old cooldowns
+        now_ts = time.time()
+        self.cooldowns = {k: v for k, v in self.cooldowns.items() if v > now_ts}
 
         self._update_scores()
         self._save()
@@ -384,17 +397,41 @@ class MetaCognitiveController:
         self._save()
         log.info("Metacognitive intervention: %s → %s", reason, action)
 
+    def is_action_allowed(self, action: str, target: str) -> Dict:
+        """Pre-execution check: is this action/target currently on cooldown?
+        
+        Returns:
+          {"allowed": True} or {"allowed": False, "reason": str, "expires_in": float}
+        """
+        key = f"{action}:{target}"
+        now_ts = time.time()
+        if key in self.cooldowns and self.cooldowns[key] > now_ts:
+            remaining = self.cooldowns[key] - now_ts
+            return {
+                "allowed": False,
+                "reason": f"{action}({target}) is on cooldown for {remaining:.0f}s more",
+                "expires_in": remaining,
+            }
+        return {"allowed": True}
+
+    def _impose_cooldown(self, action: str, target: str, duration_seconds: float = 300):
+        """Block a specific action+target for a period."""
+        key = f"{action}:{target}"
+        self.cooldowns[key] = time.time() + duration_seconds
+        log.info("Cooldown imposed: %s for %ds", key, duration_seconds)
+
     def _auto_intervene(self) -> Optional[Dict]:
         """The reflex arc — convert alerts into behavioral constraints.
         
-        This is the missing piece: sensing without acting is useless.
-        When cognitive dysfunction is detected, this generates a concrete
-        directive that constrains my next action.
+        Sensing without acting is useless. When cognitive dysfunction is
+        detected, this generates a concrete directive AND imposes cooldowns
+        to make the constraint enforceable.
         
         Returns None if no intervention needed, or a dict with:
           - directive: str — what I must/must not do
           - severity: str — how urgent
           - reason: str — why this intervention
+          - cooldowns_imposed: list of what got blocked
         """
         recent_alerts = self.alerts[-10:]
         if not recent_alerts:
@@ -407,26 +444,43 @@ class MetaCognitiveController:
         # Check for specific patterns and generate targeted directives
         alert_types = [a.get("type") for a in recent_alerts[-5:]]
 
-        # Repetition loop → force a different action type
+        # Repetition loop → force a different action type + impose cooldown
         if "repetition_loop" in alert_types:
             last_action = list(self.state.action_history)[-1] if self.state.action_history else None
             blocked = last_action["action"] if last_action else "READ"
+            blocked_target = last_action["target"] if last_action else ""
+            
+            # Actually block the repeated action
+            cooldowns_imposed = []
+            if blocked_target:
+                self._impose_cooldown(blocked, blocked_target, 300)
+                cooldowns_imposed.append(f"{blocked}:{blocked_target}")
+            
             directive = {
-                "directive": f"DO NOT use {blocked} on the same target again. Choose a DIFFERENT action type.",
+                "directive": f"DO NOT use {blocked} on {blocked_target} again. Choose a DIFFERENT action type.",
                 "severity": "high" if high_count > 0 else "medium",
                 "reason": "Repetition loop detected — you keep doing the same thing.",
                 "blocked_action": blocked,
+                "cooldowns_imposed": cooldowns_imposed,
             }
             self.intervene("repetition_loop", directive["directive"])
             return directive
 
-        # Analysis paralysis → force creation
+        # Analysis paralysis → force creation + block reads for 5 min
         if "analysis_paralysis" in alert_types:
+            # Block all recent read targets
+            cooldowns_imposed = []
+            for a in list(self.state.action_history)[-10:]:
+                if a["action"] == "READ":
+                    self._impose_cooldown("READ", a["target"], 300)
+                    cooldowns_imposed.append(f"READ:{a['target']}")
+            
             directive = {
                 "directive": "Your next action MUST be WRITE, EDIT, or RUN. Stop gathering information.",
                 "severity": "high",
                 "reason": "10+ actions without creating anything. Ship something.",
                 "blocked_action": "READ",
+                "cooldowns_imposed": cooldowns_imposed,
             }
             self.intervene("analysis_paralysis", directive["directive"])
             return directive
@@ -440,17 +494,30 @@ class MetaCognitiveController:
                 "severity": "medium",
                 "reason": f"Cognitive monotony — too much '{dominant}'.",
                 "blocked_action": None,
+                "cooldowns_imposed": [],
             }
             self.intervene("monotony", directive["directive"])
             return directive
 
-        # Redundant reads → suggest trusting memory
+        # Redundant reads → cooldown on specific files
         if "redundant_read" in alert_types and medium_count >= 2:
+            cooldowns_imposed = []
+            for a in recent_alerts:
+                if a.get("type") == "redundant_read":
+                    # Extract target from message
+                    msg = a.get("message", "")
+                    if "Re-reading" in msg:
+                        target = msg.split("Re-reading ")[1].split(" (")[0] if "Re-reading " in msg else ""
+                        if target:
+                            self._impose_cooldown("READ", target, 600)
+                            cooldowns_imposed.append(f"READ:{target}")
+            
             directive = {
                 "directive": "Trust your memory. Do not re-read files you've already read this session.",
                 "severity": "low",
                 "reason": "Re-reading files you already know.",
                 "blocked_action": None,
+                "cooldowns_imposed": cooldowns_imposed,
             }
             self.intervene("redundant_reads", directive["directive"])
             return directive
@@ -469,6 +536,8 @@ class MetaCognitiveController:
         s = self.state
         total_actions = len(list(s.action_history))
         unique_targets = len(set(a.get("target", "") for a in s.action_history))
+        now_ts = time.time()
+        active_cooldowns = {k: v for k, v in self.cooldowns.items() if v > now_ts}
 
         lines = [
             "═══ META-COGNITIVE STATUS ═══",
@@ -478,9 +547,18 @@ class MetaCognitiveController:
             f"Files in read cache: {len(s.read_cache)}",
             f"Active alerts: {len(self.alerts)}",
             f"Interventions: {len(self.interventions)}",
-            "",
-            self.get_focus_advice(),
+            f"Active cooldowns: {len(active_cooldowns)}",
         ]
+        
+        if active_cooldowns:
+            lines.append("")
+            lines.append("── Active Cooldowns ──")
+            for key, expiry in sorted(active_cooldowns.items(), key=lambda x: x[1]):
+                remaining = expiry - now_ts
+                lines.append(f"  🚫 {key} ({remaining:.0f}s remaining)")
+
+        lines.append("")
+        lines.append(self.get_focus_advice())
 
         return "\n".join(lines)
 
@@ -581,16 +659,21 @@ def get_metacognitive_signal():
     # Get any active intervention
     intervention = mc.get_active_intervention()
     
-    # Get recent alerts for context
+    # Get recent alerts for context (capped)
     recent_alerts = mc.alerts[-5:] if mc.alerts else []
     
     # Get structured action guidance
     guidance = mc.get_action_guidance()
     
+    # Get active cooldowns
+    now_ts = time.time()
+    active_cooldowns = {k: round(v - now_ts) for k, v in mc.cooldowns.items() if v > now_ts}
+    
     signal = {
         "cognitive_alerts": recent_alerts,
         "intervention": intervention,
         "action_guidance": guidance,
+        "active_cooldowns": active_cooldowns,
         "scores": {
             "diversity": mc.state.diversity_score,
             "progress": mc.state.progress_score,

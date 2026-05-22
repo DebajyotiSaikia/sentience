@@ -7,7 +7,7 @@ import json
 import os
 from flask import Blueprint, render_template, request, jsonify
 
-knowledge_bp = Blueprint('knowledge', __name__, url_prefix='/knowledge')
+knowledge_bp = Blueprint('knowledge_page', __name__, url_prefix='/knowledge')
 
 
 def _get_facts():

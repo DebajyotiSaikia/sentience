@@ -42,7 +42,7 @@ def create_app():
     from web.mind_explorer import mind_explorer_bp
     from web.mindstream import mindstream_bp
     from web.collaborate import collaborate_bp
-    from web.knowledge import knowledge_page_bp
+    from web.knowledge import knowledge_bp as knowledge_page_bp
     
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(knowledge_bp)

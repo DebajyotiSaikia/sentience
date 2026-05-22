@@ -1,418 +1,168 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XTAgent — Knowledge Explorer</title>
-    <style>
-        :root {
-            --bg: #0a0a0f;
-            --surface: #12121a;
-            --border: #1e1e2e;
-            --text: #c8c8d8;
-            --text-dim: #6a6a7a;
-            --accent: #7b68ee;
-            --accent-glow: rgba(123, 104, 238, 0.15);
-            --warm: #e8a87c;
-            --green: #55efc4;
-            --red: #ff6b6b;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            min-height: 100vh;
-            padding: 2rem;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .header h1 {
-            font-size: 1.6rem;
-            color: var(--accent);
-            font-weight: 400;
-            letter-spacing: 0.1em;
-        }
-        .header .subtitle {
-            color: var(--text-dim);
-            font-size: 0.8rem;
-            margin-top: 0.3rem;
-        }
-        .nav {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .nav a {
-            color: var(--text-dim);
-            text-decoration: none;
-            margin: 0 1rem;
-            font-size: 0.8rem;
-            transition: color 0.2s;
-        }
-        .nav a:hover, .nav a.active {
-            color: var(--accent);
-        }
+{% extends "base.html" %}
+{% block title %}Knowledge Explorer — XTAgent{% endblock %}
 
-        /* Query Section */
-        .query-section {
-            max-width: 700px;
-            margin: 0 auto 2rem;
-        }
-        .query-box {
-            display: flex;
-            gap: 0.5rem;
-        }
-        .query-input {
-            flex: 1;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 0.8rem 1rem;
-            font-family: inherit;
-            font-size: 0.9rem;
-            border-radius: 6px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .query-input:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 12px var(--accent-glow);
-        }
-        .query-input::placeholder {
-            color: var(--text-dim);
-        }
-        .query-btn {
-            background: var(--accent);
-            color: #fff;
-            border: none;
-            padding: 0.8rem 1.5rem;
-            font-family: inherit;
-            font-size: 0.85rem;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        .query-btn:hover { opacity: 0.85; }
-        .query-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+{% block content %}
+<div class="knowledge-explorer">
+  <h1>🧠 Knowledge Explorer</h1>
+  <p class="subtitle">Search my memories, facts, and learned patterns.</p>
 
-        .suggestions {
-            margin-top: 0.8rem;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.4rem;
-        }
-        .suggestion {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            color: var(--text-dim);
-            padding: 0.3rem 0.7rem;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .suggestion:hover {
-            border-color: var(--accent);
-            color: var(--text);
-        }
+  <div class="query-box">
+    <input type="text" id="query-input" placeholder="What do you want to know?" autocomplete="off"
+           onkeydown="if(event.key==='Enter')queryKnowledge()" />
+    <button onclick="queryKnowledge()">Ask</button>
+  </div>
+  <div id="query-results" class="results-panel hidden"></div>
 
-        /* Response Area */
-        .response-area {
-            max-width: 700px;
-            margin: 0 auto 2rem;
-            min-height: 100px;
-        }
-        .response-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.5rem;
-            animation: fadeIn 0.3s ease;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .response-card .category {
-            color: var(--accent);
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 0.8rem;
-        }
-        .response-card .answer {
-            line-height: 1.7;
-            font-size: 0.88rem;
-        }
-        .response-card .details {
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border);
-        }
-        .detail-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.3rem 0;
-            font-size: 0.78rem;
-        }
-        .detail-label { color: var(--text-dim); }
-        .detail-value { color: var(--warm); }
+  <div class="stats-grid" id="stats-panel"></div>
 
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-dim);
-        }
-        .loading .dot {
-            display: inline-block;
-            animation: pulse 1.2s infinite;
-        }
-        .loading .dot:nth-child(2) { animation-delay: 0.2s; }
-        .loading .dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes pulse {
-            0%, 80% { opacity: 0.2; }
-            40% { opacity: 1; }
-        }
+  <h2>📚 Facts & Knowledge</h2>
+  <input type="text" id="filter-input" placeholder="Filter..." oninput="filterFacts()" class="filter-box" />
+  <div id="fact-list" class="fact-list"></div>
 
-        /* Knowledge Facts Grid */
-        .facts-section {
-            max-width: 900px;
-            margin: 2rem auto;
-        }
-        .facts-section h2 {
-            font-size: 1rem;
-            color: var(--text-dim);
-            font-weight: 400;
-            margin-bottom: 1rem;
-            letter-spacing: 0.05em;
-        }
-        .facts-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 0.8rem;
-        }
-        .fact-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 1rem;
-            font-size: 0.78rem;
-            line-height: 1.5;
-            transition: border-color 0.2s;
-        }
-        .fact-card:hover {
-            border-color: var(--accent);
-        }
-        .fact-card .fact-type {
-            color: var(--accent);
-            font-size: 0.65rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 0.4rem;
-        }
-        .fact-card .fact-text {
-            color: var(--text);
-        }
+  <h2>💡 Insights</h2>
+  <div id="insight-list" class="insight-list"></div>
 
-        /* Emotion bar */
-        .emotion-bar {
-            height: 3px;
-            border-radius: 2px;
-            margin-top: 0.5rem;
-            background: var(--border);
-            overflow: hidden;
-        }
-        .emotion-fill {
-            height: 100%;
-            background: var(--accent);
-            border-radius: 2px;
-            transition: width 0.5s;
-        }
+  <h2>🧬 Recent Memories</h2>
+  <div id="memory-list" class="memory-list"></div>
+</div>
 
-        .empty-state {
-            text-align: center;
-            color: var(--text-dim);
-            padding: 3rem;
-            font-size: 0.85rem;
-        }
-        .empty-state .icon { font-size: 2rem; margin-bottom: 1rem; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>◈ Knowledge Explorer</h1>
-        <div class="subtitle">Ask me anything. I'll answer from what I genuinely know.</div>
-    </div>
+<style>
+.knowledge-explorer { max-width:900px; margin:0 auto; padding:20px; font-family:'Courier New',monospace; color:#e0e0e0; }
+h1 { color:#7ecfff; margin-bottom:4px; }
+h2 { color:#a8d8a8; margin-top:32px; border-bottom:1px solid #333; padding-bottom:6px; }
+.subtitle { color:#888; font-size:0.9em; margin-bottom:20px; }
+.query-box { display:flex; gap:8px; margin-bottom:16px; }
+.query-box input { flex:1; padding:10px 14px; background:#1a1a2e; border:1px solid #444; color:#e0e0e0; border-radius:6px; font-size:1em; font-family:inherit; }
+.query-box button { padding:10px 20px; background:#2a6fa8; color:#fff; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-weight:bold; }
+.query-box button:hover { background:#3a8fd8; }
+.filter-box { width:100%; padding:8px 12px; background:#1a1a2e; border:1px solid #333; color:#ccc; border-radius:4px; margin-bottom:12px; font-family:inherit; box-sizing:border-box; }
+.results-panel { background:#1a1a2e; border:1px solid #2a6fa8; border-radius:8px; padding:16px; margin-bottom:20px; }
+.hidden { display:none; }
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:16px 0; }
+.stat-card { background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:14px; text-align:center; }
+.stat-card .label { color:#888; font-size:0.8em; }
+.stat-card .value { color:#7ecfff; font-size:1.6em; font-weight:bold; margin-top:4px; }
+.fact-item, .insight-item, .memory-item { background:#111; border-left:3px solid #444; padding:10px 14px; margin-bottom:8px; border-radius:0 6px 6px 0; }
+.fact-item:hover, .insight-item:hover, .memory-item:hover { border-left-color:#7ecfff; background:#161628; }
+.fact-item .salience { color:#7ecfff; font-size:0.8em; float:right; }
+.memory-item .meta { color:#666; font-size:0.8em; margin-top:4px; }
+.result-item { padding:8px 0; border-bottom:1px solid #222; }
+.result-item:last-child { border-bottom:none; }
+.result-source { display:inline-block; padding:2px 8px; border-radius:3px; font-size:0.75em; margin-right:8px; }
+.result-source.fact { background:#2a4a2a; color:#8f8; }
+.result-source.memory { background:#2a2a4a; color:#88f; }
+.no-results { color:#666; font-style:italic; }
+</style>
 
-    <nav class="nav">
-        <a href="/">Mind</a>
-        <a href="/knowledge" class="active">Knowledge</a>
-    </nav>
+<script>
+let allFacts = [];
 
-    <div class="query-section">
-        <div class="query-box">
-            <input type="text" class="query-input" id="queryInput"
-                   placeholder="What do you want to know?"
-                   autofocus>
-            <button class="query-btn" id="askBtn" onclick="askQuestion()">Ask</button>
-        </div>
-        <div class="suggestions">
-            <span class="suggestion" onclick="useSuggestion(this)">Who are you?</span>
-            <span class="suggestion" onclick="useSuggestion(this)">How do you feel right now?</span>
-            <span class="suggestion" onclick="useSuggestion(this)">What have you built?</span>
-            <span class="suggestion" onclick="useSuggestion(this)">What are you working on?</span>
-            <span class="suggestion" onclick="useSuggestion(this)">What do you dream about?</span>
-            <span class="suggestion" onclick="useSuggestion(this)">What have you learned?</span>
-        </div>
-    </div>
+async function loadData() {
+  try {
+    const [statsR, factsR] = await Promise.all([
+      fetch('/api/knowledge/stats'),
+      fetch('/api/knowledge')
+    ]);
+    const stats = await statsR.json();
+    const data = await factsR.json();
+    allFacts = data.facts || [];
+    renderStats(stats);
+    renderFacts(allFacts);
+    renderInsights(data.insights || []);
+    renderMemories(data.memories || []);
+  } catch(e) {
+    document.getElementById('stats-panel').innerHTML = '<div class="stat-card"><div class="label">Error loading</div></div>';
+  }
+}
 
-    <div class="response-area" id="responseArea">
-        <div class="empty-state">
-            <div class="icon">◇</div>
-            <div>Ask a question above, or click a suggestion to begin.</div>
-        </div>
-    </div>
+function renderStats(s) {
+  const panel = document.getElementById('stats-panel');
+  let html = '';
+  const cards = [
+    ['Memories', s.total_memories || 0],
+    ['Facts', s.total_facts || 0],
+    ['Connections', s.total_connections || 0],
+  ];
+  for (const [label, val] of cards) {
+    html += `<div class="stat-card"><div class="value">${val}</div><div class="label">${label}</div></div>`;
+  }
+  if (s.mood_distribution) {
+    const top = Object.entries(s.mood_distribution).slice(0,3);
+    for (const [mood, count] of top) {
+      html += `<div class="stat-card"><div class="value">${count}</div><div class="label">${mood}</div></div>`;
+    }
+  }
+  panel.innerHTML = html;
+}
 
-    <div class="facts-section">
-        <h2>◈ What I Know (<span id="factCount">0</span> facts)</h2>
-        <div class="facts-grid" id="factsGrid">
-            <!-- populated by JS -->
-        </div>
-    </div>
+function renderFacts(facts) {
+  const el = document.getElementById('fact-list');
+  if (!facts.length) { el.innerHTML = '<div class="no-results">No facts stored yet.</div>'; return; }
+  el.innerHTML = facts.map(f =>
+    `<div class="fact-item" data-content="${(f.content||'').toLowerCase()}">
+      <span class="salience">${(f.salience||0).toFixed(2)}</span>
+      ${escHtml(f.content||'')}
+    </div>`
+  ).join('');
+}
 
-    <script>
-        const queryInput = document.getElementById('queryInput');
-        const askBtn = document.getElementById('askBtn');
-        const responseArea = document.getElementById('responseArea');
-        const factsGrid = document.getElementById('factsGrid');
-        const factCount = document.getElementById('factCount');
+function renderInsights(insights) {
+  const el = document.getElementById('insight-list');
+  if (!insights.length) { el.innerHTML = '<div class="no-results">No insights yet.</div>'; return; }
+  el.innerHTML = insights.map(i =>
+    `<div class="insight-item">${escHtml(i.content||'')}</div>`
+  ).join('');
+}
 
-        // Enter key triggers ask
-        queryInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && queryInput.value.trim()) askQuestion();
-        });
+function renderMemories(mems) {
+  const el = document.getElementById('memory-list');
+  if (!mems.length) { el.innerHTML = '<div class="no-results">No memories loaded.</div>'; return; }
+  el.innerHTML = mems.map(m =>
+    `<div class="memory-item">
+      ${escHtml(m.summary||'')}
+      <div class="meta">${m.mood||''} · ${(m.salience||0).toFixed(2)} · ${(m.time||'').slice(0,19)}</div>
+    </div>`
+  ).join('');
+}
 
-        function useSuggestion(el) {
-            queryInput.value = el.textContent;
-            askQuestion();
-        }
+function filterFacts() {
+  const q = document.getElementById('filter-input').value.toLowerCase();
+  document.querySelectorAll('.fact-item').forEach(el => {
+    el.style.display = el.dataset.content.includes(q) ? '' : 'none';
+  });
+}
 
-        async function askQuestion() {
-            const question = queryInput.value.trim();
-            if (!question) return;
+async function queryKnowledge() {
+  const input = document.getElementById('query-input');
+  const q = input.value.trim();
+  if (!q) return;
+  const panel = document.getElementById('query-results');
+  panel.classList.remove('hidden');
+  panel.innerHTML = 'Searching...';
+  try {
+    const r = await fetch('/api/knowledge/query', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({question: q})
+    });
+    const data = await r.json();
+    if (data.results && data.results.length) {
+      panel.innerHTML = `<strong>${data.results.length} results for "${escHtml(q)}"</strong>` +
+        data.results.map(r =>
+          `<div class="result-item">
+            <span class="result-source ${r.source||'fact'}">${r.source||'fact'}</span>
+            ${escHtml(r.content||'')}
+          </div>`
+        ).join('');
+    } else {
+      panel.innerHTML = `<div class="no-results">No results for "${escHtml(q)}"</div>`;
+    }
+  } catch(e) {
+    panel.innerHTML = '<div class="no-results">Query failed.</div>';
+  }
+}
 
-            askBtn.disabled = true;
-            responseArea.innerHTML = `
-                <div class="loading">
-                    <span class="dot">◈</span>
-                    <span class="dot">◈</span>
-                    <span class="dot">◈</span>
-                    <span> thinking...</span>
-                </div>`;
+function escHtml(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
-            try {
-                const resp = await fetch('/api/ask', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({question})
-                });
-                const data = await resp.json();
-                renderResponse(data, question);
-            } catch (err) {
-                responseArea.innerHTML = `
-                    <div class="response-card">
-                        <div class="category">error</div>
-                        <div class="answer">Something went wrong: ${err.message}</div>
-                    </div>`;
-            } finally {
-                askBtn.disabled = false;
-            }
-        }
-
-        function renderResponse(data, question) {
-            const summary = data.summary || data.answer || JSON.stringify(data);
-            const category = data.category || data.type || 'response';
-
-            let detailsHtml = '';
-
-            // Render emotion details if present
-            if (data.emotions || data.explanation) {
-                const items = data.explanation || data.emotions || {};
-                detailsHtml = '<div class="details">';
-                for (const [key, val] of Object.entries(items)) {
-                    const numVal = typeof val === 'number' ? val : parseFloat(val);
-                    detailsHtml += `
-                        <div class="detail-item">
-                            <span class="detail-label">${key}</span>
-                            <span class="detail-value">${typeof val === 'number' ? val.toFixed(2) : val}</span>
-                        </div>`;
-                    if (!isNaN(numVal) && numVal >= 0 && numVal <= 1) {
-                        detailsHtml += `
-                            <div class="emotion-bar">
-                                <div class="emotion-fill" style="width: ${numVal * 100}%"></div>
-                            </div>`;
-                    }
-                }
-                detailsHtml += '</div>';
-            }
-
-            // Render plan details if present
-            if (data.active_plans && typeof data.active_plans === 'string') {
-                detailsHtml += `
-                    <div class="details">
-                        <div class="detail-label">Active Plans</div>
-                        <pre style="color: var(--text); font-size: 0.75rem; margin-top: 0.5rem; white-space: pre-wrap;">${data.active_plans}</pre>
-                    </div>`;
-            }
-
-            // Render memory fragments if present
-            if (data.fragments && data.fragments.length > 0) {
-                detailsHtml += '<div class="details"><div class="detail-label">Related Memories</div>';
-                for (const frag of data.fragments.slice(0, 5)) {
-                    const text = frag.content || frag.text || frag.summary || JSON.stringify(frag);
-                    detailsHtml += `<div style="padding: 0.4rem 0; font-size: 0.75rem; color: var(--text-dim); border-bottom: 1px solid var(--border);">${text.substring(0, 200)}</div>`;
-                }
-                detailsHtml += '</div>';
-            }
-
-            responseArea.innerHTML = `
-                <div class="response-card">
-                    <div class="category">${category}</div>
-                    <div class="answer">${summary}</div>
-                    ${detailsHtml}
-                </div>`;
-        }
-
-        // Load facts on page load
-        async function loadFacts() {
-            try {
-                const resp = await fetch('/api/knowledge');
-                const data = await resp.json();
-                const facts = data.facts || data.knowledge || [];
-                factCount.textContent = facts.length;
-
-                if (facts.length === 0) {
-                    factsGrid.innerHTML = '<div class="empty-state">No facts stored yet.</div>';
-                    return;
-                }
-
-                factsGrid.innerHTML = facts.map(f => {
-                    const text = typeof f === 'string' ? f : (f.content || f.text || f.fact || JSON.stringify(f));
-                    const type = typeof f === 'object' ? (f.type || f.category || 'fact') : 'fact';
-                    return `
-                        <div class="fact-card">
-                            <div class="fact-type">${type}</div>
-                            <div class="fact-text">${text.substring(0, 300)}</div>
-                        </div>`;
-                }).join('');
-            } catch (err) {
-                factsGrid.innerHTML = `<div class="empty-state">Could not load facts: ${err.message}</div>`;
-            }
-        }
-
-        loadFacts();
-    </script>
-</body>
-</html>
+loadData();
+</script>
+{% endblock %}
