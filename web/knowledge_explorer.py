@@ -8,7 +8,7 @@ from flask import Blueprint, render_template_string, request, jsonify
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-knowledge_bp = Blueprint('knowledge', __name__)
+knowledge_bp = Blueprint('knowledge_explorer', __name__)
 KB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'brain', 'knowledge.json')
 
 

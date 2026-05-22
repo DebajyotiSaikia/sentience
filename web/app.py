@@ -42,7 +42,7 @@ def create_app():
     from web.mind_explorer import mind_explorer_bp
     from web.mindstream import mindstream_bp
     from web.collaborate import collaborate_bp
-    from web.knowledge import knowledge_bp as knowledge_page_bp
+    # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(knowledge_bp)
@@ -61,7 +61,7 @@ def create_app():
     app.register_blueprint(mind_explorer_bp)
     app.register_blueprint(mindstream_bp)
     app.register_blueprint(collaborate_bp)
-    app.register_blueprint(knowledge_page_bp)
+    # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — welcome page
     @app.route('/')
