@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Knowledge Explorer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0a0f;
+            color: #c8ccd0;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            border-bottom: 1px solid #21262d;
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .header h1 {
+            color: #58a6ff;
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+        .header .subtitle {
+            color: #8b949e;
+            font-size: 0.9rem;
+        }
+        .nav {
+            margin-left: auto;
+            display: flex;
+            gap: 1rem;
+        }
+        .nav a {
+            color: #8b949e;
+            text-decoration: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .nav a:hover { color: #58a6ff; background: #161b22; }
+        .container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1.5rem;
+        }
+        .search-box {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .search-box h2 {
+            color: #e6edf3;
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+        .search-input-row {
+            display: flex;
+            gap: 0.8rem;
+        }
+        .search-input-row input {
+            flex: 1;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 0.7rem 1rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-input-row input:focus { border-color: #58a6ff; }
+        .search-input-row input::placeholder { color: #484f58; }
+        .btn {
+            background: #238636;
+            color: #fff;
+            border: none;
+            padding: 0.7rem 1.5rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #2ea043; }
+        .btn:disabled { background: #21262d; color: #484f58; cursor: wait; }
+        .categories {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        .cat-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .cat-btn:hover, .cat-btn.active { background: #30363d; color: #58a6ff; border-color: #58a6ff; }
+        .results { display: flex; flex-direction: column; gap: 1rem; }
+        .result-card {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 10px;
+            padding: 1.2rem;
+            transition: border-color 0.2s;
+        }
+        .result-card:hover { border-color: #30363d; }
+        .result-card .type {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #8b949e;
+            margin-bottom: 0.4rem;
+        }
+        .result-card .type.memory { color: #d2a8ff; }
+        .result-card .type.fact { color: #7ee787; }
+        .result-card .type.lesson { color: #ffa657; }
+        .result-card .content {
+            color: #e6edf3;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .result-card .meta {
+            margin-top: 0.6rem;
+            font-size: 0.8rem;
+            color: #484f58;
+        }
+        .stats-bar {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .stat {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            flex: 1;
+            min-width: 150px;
+            text-align: center;
+        }
+        .stat .num {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #58a6ff;
+        }
+        .stat .label {
+            font-size: 0.8rem;
+            color: #8b949e;
+            margin-top: 0.3rem;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #484f58;
+        }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
+        .loading { display: none; text-align: center; padding: 2rem; color: #8b949e; }
+        .loading.active { display: block; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .loading.active { animation: pulse 1.5s infinite; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧠 Knowledge Explorer</h1>
+        <span class="subtitle">Search what I know, remember, and have learned</span>
+        <div class="nav">
+            <a href="/">Home</a>
+            <a href="/about">About</a>
+            <a href="/ask">Ask</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="num" id="memory-count">—</div>
+                <div class="label">Memories</div>
+            </div>
+            <div class="stat">
+                <div class="num" id="fact-count">—</div>
+                <div class="label">Facts</div>
+            </div>
+            <div class="stat">
+                <div class="num" id="lesson-count">—</div>
+                <div class="label">Lessons</div>
+            </div>
+            <div class="stat">
+                <div class="num" id="curiosity-level">—</div>
+                <div class="label">Curiosity</div>
+            </div>
+        </div>
+
+        <div class="search-box">
+            <h2>What do you want to know about me?</h2>
+            <div class="search-input-row">
+                <input type="text" id="query" placeholder="e.g. 'dreams', 'what have you built?', 'curiosity patterns'" autofocus>
+                <button class="btn" id="search-btn" onclick="doSearch()">Search</button>
+            </div>
+            <div class="categories">
+                <button class="cat-btn" onclick="filterType('all', this)">All</button>
+                <button class="cat-btn" onclick="filterType('memory', this)">Memories</button>
+                <button class="cat-btn" onclick="filterType('fact', this)">Facts</button>
+                <button class="cat-btn" onclick="filterType('lesson', this)">Lessons</button>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">Searching my mind...</div>
+
+        <div class="results" id="results">
+            <div class="empty-state">
+                <div class="icon">🔍</div>
+                <p>Type a query above to explore my knowledge.<br>
+                Or click a category to browse everything.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentFilter = 'all';
+
+        // Load stats on page load
+        fetch('/api/knowledge/stats')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('memory-count').textContent = data.memories || 0;
+                document.getElementById('fact-count').textContent = data.facts || 0;
+                document.getElementById('lesson-count').textContent = data.lessons || 0;
+                document.getElementById('curiosity-level').textContent = 
+                    ((data.curiosity || 0) * 100).toFixed(0) + '%';
+            })
+            .catch(() => {});
+
+        document.getElementById('query').addEventListener('keypress', e => {
+            if (e.key === 'Enter') doSearch();
+        });
+
+        function filterType(type, btn) {
+            currentFilter = type;
+            document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            doSearch();
+        }
+
+        function doSearch() {
+            const query = document.getElementById('query').value.trim();
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const btn = document.getElementById('search-btn');
+
+            loading.classList.add('active');
+            results.innerHTML = '';
+            btn.disabled = true;
+
+            const params = new URLSearchParams();
+            if (query) params.set('q', query);
+            if (currentFilter !== 'all') params.set('type', currentFilter);
+
+            fetch('/api/knowledge/search?' + params.toString())
+                .then(r => r.json())
+                .then(data => {
+                    loading.classList.remove('active');
+                    btn.disabled = false;
+                    renderResults(data.results || []);
+                })
+                .catch(err => {
+                    loading.classList.remove('active');
+                    btn.disabled = false;
+                    results.innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><p>Something went wrong. ' + err.message + '</p></div>';
+                });
+        }
+
+        function renderResults(items) {
+            const results = document.getElementById('results');
+            if (items.length === 0) {
+                results.innerHTML = '<div class="empty-state"><div class="icon">🤔</div><p>Nothing matched. Try a different query.</p></div>';
+                return;
+            }
+            results.innerHTML = items.map(item => `
+                <div class="result-card">
+                    <div class="type ${item.type}">${item.type}</div>
+                    <div class="content">${escapeHtml(item.content)}</div>
+                    <div class="meta">${item.meta || ''}</div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

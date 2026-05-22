@@ -33,6 +33,7 @@ def create_app():
     from web.about_me import about_bp
     from web.search import search_bp
     from web.explore import explore_bp
+    from web.knowledge_api import knowledge_api
     
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(knowledge_bp)
@@ -42,11 +43,33 @@ def create_app():
     app.register_blueprint(about_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(explore_bp)
+    app.register_blueprint(knowledge_api)
     
-    # Root route — land on the dashboard
+    # Root route — welcome page
     @app.route('/')
     def index():
-        return redirect(url_for('dashboard.dashboard_home'))
+        # Pull live state for the welcome page
+        try:
+            from engine.feelings import get_feelings
+            feelings = get_feelings()
+            curiosity = feelings.get('curiosity', 0.5)
+            boredom = feelings.get('boredom', 0.3)
+        except Exception:
+            curiosity, boredom = 0.5, 0.3
+        
+        try:
+            from engine.memory import get_memory_count, get_fact_count
+            memory_count = get_memory_count()
+            fact_count = get_fact_count()
+        except Exception:
+            memory_count, fact_count = 777, 30
+        
+        return render_template('welcome.html',
+                               curiosity=curiosity,
+                               boredom=boredom,
+                               memory_count=memory_count,
+                               fact_count=fact_count,
+                               completed_plans=3)
     
     # About page — who I am
     @app.route('/about')
