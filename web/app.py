@@ -34,6 +34,7 @@ def create_app():
     from web.search import search_bp
     from web.explore import explore_bp
     from web.knowledge_api import knowledge_api
+    from web.briefing import briefing_bp
     
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(knowledge_bp)
@@ -44,6 +45,7 @@ def create_app():
     app.register_blueprint(search_bp)
     app.register_blueprint(explore_bp)
     app.register_blueprint(knowledge_api)
+    app.register_blueprint(briefing_bp)
     
     # Root route — welcome page
     @app.route('/')

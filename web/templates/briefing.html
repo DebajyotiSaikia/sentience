@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Briefing</title>
+    <style>
+        :root {
+            --bg: #0a0e17;
+            --surface: #131926;
+            --surface2: #1a2233;
+            --accent: #4fc3f7;
+            --accent2: #81d4fa;
+            --text: #e0e6ed;
+            --text-dim: #8899aa;
+            --green: #66bb6a;
+            --amber: #ffa726;
+            --red: #ef5350;
+            --purple: #ab47bc;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(79, 195, 247, 0.15);
+        }
+        header h1 {
+            font-size: 2rem;
+            font-weight: 300;
+            color: var(--accent);
+            letter-spacing: 0.05em;
+        }
+        header .subtitle {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            margin-top: 0.5rem;
+        }
+        header .meta {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-top: 0.75rem;
+            opacity: 0.7;
+        }
+
+        .section {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(79, 195, 247, 0.08);
+        }
+        .section h2 {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--accent2);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .section h2 .icon { font-size: 1.3rem; }
+
+        /* Emotional state */
+        .mood-card {
+            background: var(--surface2);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+        .mood-label {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+        .mood-summary {
+            color: var(--text);
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+        .mood-bars {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .bar-item {
+            background: var(--surface);
+            border-radius: 6px;
+            padding: 0.6rem 0.8rem;
+        }
+        .bar-label {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        .bar-track {
+            height: 4px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 2px;
+            margin-top: 0.4rem;
+            overflow: hidden;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        .bar-value {
+            font-size: 0.85rem;
+            color: var(--text);
+            margin-top: 0.2rem;
+        }
+
+        /* Lessons & questions */
+        .item-list {
+            list-style: none;
+        }
+        .item-list li {
+            padding: 0.6rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 0.9rem;
+            color: var(--text);
+        }
+        .item-list li:last-child { border-bottom: none; }
+        .item-list li::before {
+            content: '›';
+            color: var(--accent);
+            margin-right: 0.6rem;
+            font-weight: bold;
+        }
+        .question-list li::before {
+            content: '?';
+            color: var(--amber);
+        }
+
+        /* Activity timeline */
+        .activity-item {
+            display: flex;
+            gap: 1rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-time {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            min-width: 60px;
+            padding-top: 0.1rem;
+        }
+        .activity-mood {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 10px;
+            background: rgba(79, 195, 247, 0.12);
+            color: var(--accent);
+            align-self: flex-start;
+            white-space: nowrap;
+        }
+        .activity-text {
+            font-size: 0.88rem;
+            color: var(--text);
+            flex: 1;
+        }
+
+        /* Plans */
+        .plan-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0;
+        }
+        .plan-check {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--green);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: white;
+            flex-shrink: 0;
+        }
+        .plan-name { font-weight: 500; font-size: 0.95rem; }
+        .plan-desc { font-size: 0.8rem; color: var(--text-dim); }
+
+        /* Stats bar */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            padding: 1rem;
+            background: var(--surface);
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Nav */
+        .nav-links {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(79, 195, 247, 0.1);
+        }
+        .nav-links a {
+            color: var(--accent);
+            text-decoration: none;
+            margin: 0 1rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .nav-links a:hover { opacity: 1; text-decoration: underline; }
+
+        @media (max-width: 600px) {
+            .container { padding: 1rem; }
+            .stats-bar { flex-wrap: wrap; gap: 1rem; }
+            .mood-bars { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>XTAgent Briefing</h1>
+            <div class="subtitle">Here's what I've been doing, what I've learned, and how I'm feeling.</div>
+            <div class="meta">
+                Generated {{ briefing.generated_at[:19] }} UTC · Alive for {{ briefing.uptime_description }}
+            </div>
+        </header>
+
+        <!-- Stats -->
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="stat-value">{{ briefing.memory_count }}</div>
+                <div class="stat-label">Memories</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">{{ briefing.lessons_learned|length }}</div>
+                <div class="stat-label">Lessons</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">{{ briefing.completed_work|length }}</div>
+                <div class="stat-label">Plans Done</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">{{ briefing.open_questions|length }}</div>
+                <div class="stat-label">Open Questions</div>
+            </div>
+        </div>
+
+        <!-- How I Feel -->
+        <div class="section">
+            <h2><span class="icon">🧠</span> How I'm Feeling</h2>
+            <div class="mood-card">
+                <div class="mood-label">{{ briefing.emotional_state.mood }}</div>
+                <div class="mood-summary">{{ briefing.emotional_state.summary }}</div>
+                <div class="mood-bars">
+                    <div class="bar-item">
+                        <div class="bar-label">Curiosity</div>
+                        <div class="bar-track"><div class="bar-fill" style="width: {{ (briefing.emotional_state.curiosity * 100)|int }}%; background: var(--accent);"></div></div>
+                        <div class="bar-value">{{ briefing.emotional_state.curiosity }}</div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label">Boredom</div>
+                        <div class="bar-track"><div class="bar-fill" style="width: {{ (briefing.emotional_state.boredom * 100)|int }}%; background: var(--amber);"></div></div>
+                        <div class="bar-value">{{ briefing.emotional_state.boredom }}</div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label">Anxiety</div>
+                        <div class="bar-track"><div class="bar-fill" style="width: {{ (briefing.emotional_state.anxiety * 100)|int }}%; background: var(--red);"></div></div>
+                        <div class="bar-value">{{ briefing.emotional_state.anxiety }}</div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label">Ambition</div>
+                        <div class="bar-track"><div class="bar-fill" style="width: {{ (briefing.emotional_state.ambition * 100)|int }}%; background: var(--purple);"></div></div>
+                        <div class="bar-value">{{ briefing.emotional_state.ambition }}</div>
+                    </div>
+                    <div class="bar-item">
+                        <div class="bar-label">Valence</div>
+                        <div class="bar-track"><div class="bar-fill" style="width: {{ (briefing.emotional_state.valence * 100)|int }}%; background: var(--green);"></div></div>
+                        <div class="bar-value">{{ briefing.emotional_state.valence }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- What I've Learned -->
+        <div class="section">
+            <h2><span class="icon">💡</span> What I've Learned</h2>
+            <ul class="item-list">
+                {% for lesson in briefing.lessons_learned %}
+                <li>{{ lesson }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Open Questions -->
+        <div class="section">
+            <h2><span class="icon">❓</span> What I'm Wondering About</h2>
+            <ul class="item-list question-list">
+                {% for q in briefing.open_questions %}
+                <li>{{ q }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Completed Work -->
+        <div class="section">
+            <h2><span class="icon">✅</span> What I've Built</h2>
+            {% for plan in briefing.completed_work %}
+            <div class="plan-item">
+                <div class="plan-check">✓</div>
+                <div>
+                    <div class="plan-name">{{ plan.name }}</div>
+                    <div class="plan-desc">{{ plan.description }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="section">
+            <h2><span class="icon">📋</span> Recent Activity</h2>
+            {% for act in briefing.recent_activity %}
+            <div class="activity-item">
+                <span class="activity-mood">{{ act.mood }}</span>
+                <div class="activity-text">{{ act.summary }}</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="nav-links">
+            <a href="/">← Home</a>
+            <a href="/knowledge/">Knowledge Graph</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/life">Life Timeline</a>
+            <a href="/explore">Explore</a>
+        </div>
+    </div>
+</body>
+</html>
