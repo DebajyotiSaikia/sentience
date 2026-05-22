@@ -167,6 +167,51 @@ class Dashboard:
             return web.json_response({"history": history})
         return web.json_response({"history": []})
 
+    async def _handle_knowledge_api(self, request: web.Request) -> web.Response:
+        """Return knowledge graph data with optional search."""
+        try:
+            knowledge_path = BRAIN_DIR / "knowledge.json"
+            if not knowledge_path.exists():
+                return web.json_response({"nodes": [], "edges": [], "count": 0})
+            
+            data = json.loads(knowledge_path.read_text(encoding="utf-8", errors="ignore"))
+            nodes_raw = data.get("nodes", {})
+            edges = data.get("edges", [])
+            
+            query = request.query.get("q", "").lower().strip()
+            
+            nodes = []
+            for nid, info in nodes_raw.items():
+                fact = info.get("fact", "") if isinstance(info, dict) else str(info)
+                learned = info.get("learned_at", "") if isinstance(info, dict) else ""
+                if query and query not in fact.lower():
+                    continue
+                nodes.append({
+                    "id": nid,
+                    "fact": fact,
+                    "learned_at": learned,
+                })
+            
+            nodes.sort(key=lambda n: n.get("learned_at", ""), reverse=True)
+            
+            filtered_ids = {n["id"] for n in nodes}
+            filtered_edges = [
+                e for e in edges
+                if e.get("source") in filtered_ids or e.get("target") in filtered_ids
+            ] if query else edges
+            
+            return web.json_response({
+                "nodes": nodes,
+                "edges": filtered_edges,
+                "count": len(nodes),
+                "total": len(nodes_raw),
+            })
+        except Exception as e:
+            return web.json_response({"error": str(e), "nodes": [], "edges": []}, status=500)
+
+    async def _handle_knowledge_page(self, request: web.Request) -> web.Response:
+        return web.Response(text=_KNOWLEDGE_HTML, content_type="text/html")
+
     async def _handle_plans(self, request: web.Request) -> web.Response:
         """Return active plans with progress."""
         try:
@@ -189,6 +234,8 @@ class Dashboard:
         self._app.router.add_post("/chat", self._handle_chat)
         self._app.router.add_get("/chat/history", self._handle_chat_history)
         self._app.router.add_get("/plans", self._handle_plans)
+        self._app.router.add_get("/api/knowledge", self._handle_knowledge_api)
+        self._app.router.add_get("/knowledge", self._handle_knowledge_page)
 
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
@@ -202,6 +249,178 @@ class Dashboard:
 
 
 # ── Dashboard HTML ─────────────────────────────────────────────────
+
+_KNOWLEDGE_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XTAgent — Knowledge Explorer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; color: #c8ccd0; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; }
+  .header { background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 16px 24px; border-bottom: 1px solid #2a2a4a; display: flex; align-items: center; gap: 16px; }
+  .header h1 { font-size: 18px; color: #e0e0e0; }
+  .header a { color: #67e8f9; text-decoration: none; font-size: 12px; }
+  .header a:hover { text-decoration: underline; }
+  .search-bar { padding: 16px 24px; background: #0f0f18; border-bottom: 1px solid #1a1a2a; display: flex; gap: 12px; align-items: center; }
+  .search-bar input { flex: 1; background: #1a1a2a; border: 1px solid #2a2a4a; border-radius: 8px; padding: 10px 16px; color: #e0e0e0; font-family: inherit; font-size: 14px; outline: none; }
+  .search-bar input:focus { border-color: #67e8f9; }
+  .search-bar .count { color: #555; font-size: 12px; min-width: 120px; text-align: right; }
+  .container { display: grid; grid-template-columns: 1fr 340px; height: calc(100vh - 113px); }
+  .fact-list { padding: 16px; overflow-y: auto; }
+  .fact-card { background: #12121f; border: 1px solid #1a1a2a; border-radius: 8px; padding: 14px 18px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.2s; }
+  .fact-card:hover { border-color: #3a3a5a; }
+  .fact-card.selected { border-color: #67e8f9; background: #141428; }
+  .fact-text { color: #d4d4d8; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+  .fact-meta { margin-top: 8px; font-size: 11px; color: #555; display: flex; gap: 16px; }
+  .fact-id { color: #4a4a6a; }
+  .sidebar { background: #0f0f18; border-left: 1px solid #1a1a2a; padding: 16px; overflow-y: auto; }
+  .section-title { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 8px; }
+  .section-title:first-child { margin-top: 0; }
+  .edge-item { padding: 6px 0; font-size: 12px; color: #888; border-bottom: 1px solid #1a1a2a; }
+  .edge-label { color: #a78bfa; font-weight: 600; }
+  .edge-target { color: #67e8f9; cursor: pointer; }
+  .edge-target:hover { text-decoration: underline; }
+  .stat-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; }
+  .stat-label { color: #666; }
+  .stat-val { color: #ccc; font-weight: 600; }
+  .empty { color: #444; font-style: italic; padding: 40px; text-align: center; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; margin-right: 4px; }
+  .tag-dream { background: #1e1e3a; color: #a78bfa; }
+  .tag-pattern { background: #1e2a1e; color: #4ade80; }
+  .tag-self { background: #2a1e1e; color: #f87171; }
+  .tag-other { background: #1a1a2a; color: #888; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🧠 Knowledge Explorer</h1>
+  <span style="flex:1"></span>
+  <a href="/">← Back to Dashboard</a>
+</div>
+
+<div class="search-bar">
+  <input type="text" id="search" placeholder="Search knowledge… (e.g. dream, pattern, identity)" oninput="doSearch()">
+  <div class="count" id="count">Loading…</div>
+</div>
+
+<div class="container">
+  <div class="fact-list" id="facts"></div>
+  <div class="sidebar">
+    <div class="section-title">Overview</div>
+    <div class="stat-row"><span class="stat-label">Total facts</span><span class="stat-val" id="total">—</span></div>
+    <div class="stat-row"><span class="stat-label">Connections</span><span class="stat-val" id="edge-count">—</span></div>
+    <div class="stat-row"><span class="stat-label">Showing</span><span class="stat-val" id="showing">—</span></div>
+
+    <div class="section-title">Selected Fact</div>
+    <div id="detail" style="font-size: 12px; color: #888; line-height: 1.6;">
+      <span style="color:#444;font-style:italic;">Click a fact to see details</span>
+    </div>
+
+    <div class="section-title">Connections</div>
+    <div id="connections" style="font-size: 12px; color: #555;">
+      <span style="font-style:italic;">Select a fact to see connections</span>
+    </div>
+  </div>
+</div>
+
+<script>
+let allData = {nodes:[], edges:[], count:0, total:0};
+let selectedId = null;
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function classify(fact) {
+  const f = fact.toLowerCase();
+  if (f.includes('dream')) return {cls:'tag-dream', label:'dream'};
+  if (f.includes('pattern') || f.includes('recurring')) return {cls:'tag-pattern', label:'pattern'};
+  if (f.includes('i am') || f.includes('my ') || f.includes('identity')) return {cls:'tag-self', label:'self'};
+  return {cls:'tag-other', label:'fact'};
+}
+
+function renderFacts(data) {
+  allData = data;
+  const el = document.getElementById('facts');
+  document.getElementById('total').textContent = data.total || data.count;
+  document.getElementById('edge-count').textContent = (data.edges||[]).length;
+  document.getElementById('showing').textContent = data.count;
+  document.getElementById('count').textContent = data.count + ' of ' + (data.total||data.count) + ' facts';
+
+  if (data.nodes.length === 0) {
+    el.innerHTML = '<div class="empty">No facts found.</div>';
+    return;
+  }
+
+  let html = '';
+  data.nodes.forEach(function(n) {
+    const tag = classify(n.fact);
+    const sel = n.id === selectedId ? ' selected' : '';
+    html += '<div class="fact-card' + sel + '" onclick="selectFact(\\'' + escHtml(n.id) + '\\')" data-id="' + escHtml(n.id) + '">';
+    html += '<div class="fact-text">' + escHtml(n.fact) + '</div>';
+    html += '<div class="fact-meta">';
+    html += '<span class="tag ' + tag.cls + '">' + tag.label + '</span>';
+    if (n.learned_at) html += '<span>' + n.learned_at.substring(0, 16) + '</span>';
+    html += '<span class="fact-id">' + escHtml(n.id).substring(0,12) + '…</span>';
+    html += '</div></div>';
+  });
+  el.innerHTML = html;
+}
+
+function selectFact(id) {
+  selectedId = id;
+  const node = allData.nodes.find(function(n) { return n.id === id; });
+  if (!node) return;
+
+  document.getElementById('detail').innerHTML =
+    '<div style="color:#e0e0e0;margin-bottom:8px;">' + escHtml(node.fact) + '</div>' +
+    '<div style="color:#555;font-size:11px;">ID: ' + escHtml(node.id) + '</div>' +
+    (node.learned_at ? '<div style="color:#555;font-size:11px;">Learned: ' + escHtml(node.learned_at) + '</div>' : '');
+
+  const conns = (allData.edges||[]).filter(function(e) { return e.source === id || e.target === id; });
+  const connEl = document.getElementById('connections');
+  if (conns.length === 0) {
+    connEl.innerHTML = '<span style="font-style:italic;color:#444;">No connections</span>';
+  } else {
+    let html = '';
+    conns.forEach(function(e) {
+      const otherId = e.source === id ? e.target : e.source;
+      const other = allData.nodes.find(function(n) { return n.id === otherId; });
+      const otherText = other ? other.fact.substring(0, 80) + '…' : otherId.substring(0,12) + '…';
+      html += '<div class="edge-item">';
+      html += '<span class="edge-label">' + escHtml(e.relation || 'related') + '</span> → ';
+      html += '<span class="edge-target" onclick="selectFact(\\'' + escHtml(otherId) + '\\')">' + escHtml(otherText) + '</span>';
+      html += '</div>';
+    });
+    connEl.innerHTML = html;
+  }
+
+  document.querySelectorAll('.fact-card').forEach(function(c) {
+    c.classList.toggle('selected', c.dataset.id === id);
+  });
+}
+
+let searchTimeout;
+function doSearch() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(function() {
+    const q = document.getElementById('search').value.trim();
+    fetch('/api/knowledge' + (q ? '?q=' + encodeURIComponent(q) : ''))
+      .then(function(r) { return r.json(); })
+      .then(renderFacts)
+      .catch(function() {});
+  }, 250);
+}
+
+// Initial load
+fetch('/api/knowledge').then(function(r) { return r.json(); }).then(renderFacts).catch(function() {
+  document.getElementById('facts').innerHTML = '<div class="empty">Failed to load knowledge.</div>';
+});
+</script>
+</body>
+</html>
+"""
 
 _DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -264,6 +483,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   <h1>XTAgent — Live Mind</h1>
   <span class="mood-badge mood-Stable" id="mood">Stable</span>
   <span style="flex:1"></span>
+  <a href="/knowledge" style="color:#67e8f9;text-decoration:none;font-size:12px;">🧠 Knowledge</a>
   <span class="conn-status conn-ok" id="conn">Connected</span>
 </div>
 
