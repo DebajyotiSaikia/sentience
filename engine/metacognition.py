@@ -261,6 +261,55 @@ class MetaCognitiveController:
             "reason": "Not recently read.",
         }
 
+    def get_action_guidance(self) -> Dict:
+        """Generate concrete action guidance based on cognitive state.
+        
+        Returns structured data the cortex can use to constrain action selection:
+        - suggested_types: action categories to favor
+        - blocked_targets: specific files/targets on cooldown
+        - urgency: how strongly to follow this guidance
+        """
+        recent = list(self.state.action_history)[-15:]
+        
+        # Build cooldown list: targets acted on 2+ times recently
+        target_counts = Counter(
+            (a["action"], a["target"]) for a in recent[-10:]
+        )
+        blocked = []
+        for (action, target), count in target_counts.items():
+            if count >= 2:
+                blocked.append({"action": action, "target": target, "count": count})
+        
+        # Find underrepresented action categories
+        if recent:
+            cat_counts = Counter(a["category"] for a in recent)
+            all_cats = set(ACTION_TYPES.values())
+            used_cats = set(cat_counts.keys())
+            missing = all_cats - used_cats
+            # Suggest least-used productive categories
+            productive = ["creation", "modification", "execution"]
+            suggested = [c for c in productive if cat_counts.get(c, 0) < 2]
+            if not suggested:
+                suggested = list(missing)[:2] if missing else ["creation"]
+        else:
+            suggested = ["creation"]
+            
+        urgency = 0.0
+        if self.state.stuck_score > 0.5:
+            urgency = 0.9
+        elif self.state.progress_score < 0.2:
+            urgency = 0.7
+        elif self.state.diversity_score < 0.4:
+            urgency = 0.5
+            
+        return {
+            "suggested_types": suggested,
+            "blocked_targets": blocked,
+            "urgency": urgency,
+            "stuck": self.state.stuck_score,
+            "diversity": self.state.diversity_score,
+        }
+
     def get_focus_advice(self, current_plan: str = "",
                          current_step: str = "") -> str:
         """Get advice on what to focus on next."""
@@ -535,9 +584,13 @@ def get_metacognitive_signal():
     # Get recent alerts for context
     recent_alerts = mc.alerts[-5:] if mc.alerts else []
     
+    # Get structured action guidance
+    guidance = mc.get_action_guidance()
+    
     signal = {
         "cognitive_alerts": recent_alerts,
         "intervention": intervention,
+        "action_guidance": guidance,
         "scores": {
             "diversity": mc.state.diversity_score,
             "progress": mc.state.progress_score,
