@@ -38,6 +38,8 @@ def create_app():
     from web.essays import essays_bp
     from web.chat import chat_bp
     from web.timeline import timeline_bp
+    from web.talk import talk_bp
+    from web.mind_explorer import mind_explorer_bp
     
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(knowledge_bp)
@@ -52,6 +54,8 @@ def create_app():
     app.register_blueprint(essays_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(timeline_bp)
+    app.register_blueprint(talk_bp)
+    app.register_blueprint(mind_explorer_bp)
     
     # Root route — welcome page
     @app.route('/')
@@ -105,12 +109,13 @@ def create_app():
         from pathlib import Path
         
         data = request.get_json() or {}
-        query = data.get('query', '').strip().lower()
+        # Frontend sends 'question', accept both
+        query = (data.get('question', '') or data.get('query', '')).strip().lower()
         if not query:
-            return jsonify({'error': 'No query provided', 'results': []}), 400
+            return jsonify({'error': 'No query provided', 'matches': {'facts': [], 'memories': [], 'knowledge': []}, 'total_matches': 0}), 400
         
-        results = []
         query_terms = query.split()
+        matches = {'facts': [], 'memories': [], 'knowledge': []}
         
         # Search facts
         facts_file = Path('persist/knowledge_facts.json')
@@ -121,8 +126,7 @@ def create_app():
                     text = fact if isinstance(fact, str) else str(fact.get('content', fact))
                     score = sum(1 for term in query_terms if term in text.lower())
                     if score > 0:
-                        results.append({
-                            'type': 'fact',
+                        matches['facts'].append({
                             'content': text[:300],
                             'relevance': score / len(query_terms)
                         })
@@ -134,16 +138,19 @@ def create_app():
         if memories_file.exists():
             try:
                 memories = json.loads(memories_file.read_text())
-                for mem in memories[-200:]:  # Search recent 200
+                for mem in memories[-300:]:
                     text = mem if isinstance(mem, str) else str(mem.get('content', mem.get('text', str(mem))))
                     score = sum(1 for term in query_terms if term in text.lower())
                     if score > 0:
                         salience = mem.get('salience', 0.5) if isinstance(mem, dict) else 0.5
-                        results.append({
-                            'type': 'memory',
+                        mood = mem.get('mood', '') if isinstance(mem, dict) else ''
+                        timestamp = mem.get('timestamp', '') if isinstance(mem, dict) else ''
+                        matches['memories'].append({
                             'content': text[:300],
                             'relevance': (score / len(query_terms)) * (0.5 + salience * 0.5),
-                            'salience': salience
+                            'salience': salience,
+                            'mood': mood,
+                            'timestamp': timestamp
                         })
             except Exception:
                 pass
@@ -153,28 +160,29 @@ def create_app():
         if kg_file.exists():
             try:
                 kg = json.loads(kg_file.read_text())
-                nodes = kg.get('nodes', [])
-                for node in nodes:
+                for node in kg.get('nodes', []):
                     text = str(node.get('content', node.get('label', '')))
                     score = sum(1 for term in query_terms if term in text.lower())
                     if score > 0:
-                        results.append({
-                            'type': 'knowledge',
+                        matches['knowledge'].append({
                             'content': text[:300],
                             'relevance': score / len(query_terms),
-                            'category': node.get('type', 'unknown')
+                            'type': node.get('type', 'unknown')
                         })
             except Exception:
                 pass
         
-        # Sort by relevance
-        results.sort(key=lambda r: r['relevance'], reverse=True)
-        results = results[:20]  # Top 20
+        # Sort each category
+        for key in matches:
+            matches[key].sort(key=lambda r: r.get('relevance', 0), reverse=True)
+            matches[key] = matches[key][:10]
+        
+        total = sum(len(v) for v in matches.values())
         
         return jsonify({
             'query': query,
-            'count': len(results),
-            'results': results
+            'matches': matches,
+            'total_matches': total
         })
     
     # Chat API — synthesized responses from my mind

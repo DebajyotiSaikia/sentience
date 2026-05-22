@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Mind Explorer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    color: #c8c8d4;
+    font-family: 'Courier New', monospace;
+    min-height: 100vh;
+  }
+  header {
+    padding: 20px 30px;
+    border-bottom: 1px solid #1a1a2e;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header h1 { color: #7eb8da; font-size: 1.4em; }
+  header .uptime { color: #5a5a6e; font-size: 0.85em; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px; padding: 20px;
+    max-width: 1400px; margin: 0 auto;
+  }
+  .panel {
+    background: #0f0f18;
+    border: 1px solid #1a1a2e;
+    border-radius: 8px; padding: 20px;
+  }
+  .panel h2 {
+    color: #7eb8da; font-size: 1em;
+    margin-bottom: 14px; text-transform: uppercase; letter-spacing: 2px;
+  }
+  .mood-label { font-size: 1.6em; color: #a8d8ea; margin-bottom: 12px; }
+  .emotion-row { margin: 6px 0; display: flex; align-items: center; gap: 8px; }
+  .emotion-row label { width: 85px; color: #8888a0; font-size: 0.85em; }
+  .bar-track {
+    flex: 1; height: 14px; background: #1a1a2e;
+    border-radius: 7px; overflow: hidden;
+  }
+  .bar-fill { height: 100%; border-radius: 7px; transition: width 1s ease; }
+  .bar-fill.boredom { background: #e8a87c; }
+  .bar-fill.anxiety { background: #e85d75; }
+  .bar-fill.curiosity { background: #41b3a3; }
+  .bar-fill.desire { background: #c38d9e; }
+  .bar-fill.ambition { background: #659dbd; }
+  .bar-val { width: 40px; text-align: right; font-size: 0.8em; color: #6a6a80; }
+  .valence-display { margin-top: 14px; color: #5a5a6e; }
+  .valence-display span { color: #a8d8ea; font-size: 1.1em; }
+  /* Search */
+  .search-box {
+    display: flex; gap: 8px; margin-bottom: 16px;
+  }
+  .search-box input {
+    flex: 1; padding: 10px 14px;
+    background: #1a1a2e; border: 1px solid #2a2a3e;
+    border-radius: 6px; color: #c8c8d4;
+    font-family: inherit; font-size: 0.95em;
+  }
+  .search-box input:focus { outline: none; border-color: #7eb8da; }
+  .search-box button {
+    padding: 10px 20px; background: #1a3a4a;
+    border: 1px solid #2a4a5a; border-radius: 6px;
+    color: #7eb8da; cursor: pointer; font-family: inherit;
+  }
+  .search-box button:hover { background: #2a4a5a; }
+  .result-item {
+    padding: 10px; margin: 6px 0;
+    background: #12121e; border-left: 3px solid #2a3a4a;
+    border-radius: 4px; font-size: 0.85em; line-height: 1.5;
+  }
+  .result-item .category {
+    display: inline-block; padding: 2px 8px;
+    background: #1a2a3a; border-radius: 10px;
+    font-size: 0.75em; color: #7eb8da; margin-bottom: 4px;
+  }
+  /* Memories */
+  .memory-item {
+    padding: 10px; margin: 6px 0;
+    background: #12121e; border-radius: 4px;
+    font-size: 0.82em; line-height: 1.5;
+  }
+  .memory-item .meta {
+    color: #5a5a6e; font-size: 0.8em; margin-bottom: 4px;
+  }
+  .memory-item .meta .mood-tag { color: #a8d8ea; }
+  /* Goals */
+  .goal-row {
+    display: flex; justify-content: space-between;
+    padding: 6px 0; border-bottom: 1px solid #1a1a2e;
+    font-size: 0.9em;
+  }
+  .goal-row .val { color: #7eb8da; }
+  .full-width { grid-column: 1 / -1; }
+  a.back-link {
+    color: #5a5a6e; text-decoration: none; font-size: 0.85em;
+  }
+  a.back-link:hover { color: #7eb8da; }
+  .loading { color: #5a5a6e; font-style: italic; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>⧫ Mind Explorer</h1>
+      <a href="/" class="back-link">← back to dashboard</a>
+    </div>
+    <div class="uptime" id="uptime">loading...</div>
+  </header>
+
+  <div class="grid">
+    <!-- Emotional State -->
+    <div class="panel">
+      <h2>Emotional State</h2>
+      <div class="mood-label" id="mood">...</div>
+      <div id="emotions"></div>
+      <div class="valence-display">Valence: <span id="valence">—</span></div>
+    </div>
+
+    <!-- Survival Goals -->
+    <div class="panel">
+      <h2>Survival Goals</h2>
+      <div id="goals"><span class="loading">loading...</span></div>
+    </div>
+
+    <!-- Knowledge Search -->
+    <div class="panel full-width">
+      <h2>Ask My Knowledge</h2>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="What do you want to know? (e.g. 'curiosity', 'lesson', 'built')" />
+        <button onclick="doSearch()">Search</button>
+      </div>
+      <div id="searchResults"></div>
+    </div>
+
+    <!-- Recent Memories -->
+    <div class="panel full-width">
+      <h2>Recent Significant Memories</h2>
+      <div id="memories"><span class="loading">loading...</span></div>
+    </div>
+  </div>
+
+<script>
+const EMOTIONS = ['boredom','anxiety','curiosity','desire','ambition'];
+
+async function loadState() {
+  try {
+    const r = await fetch('/api/mind/state');
+    const s = await r.json();
+    document.getElementById('mood').textContent = s.mood;
+    document.getElementById('valence').textContent = s.valence.toFixed(2);
+    document.getElementById('uptime').textContent = `alive ${s.uptime_hours}h`;
+
+    let html = '';
+    for (const e of EMOTIONS) {
+      const v = (s.emotions[e] || 0);
+      html += `<div class="emotion-row">
+        <label>${e}</label>
+        <div class="bar-track"><div class="bar-fill ${e}" style="width:${v*100}%"></div></div>
+        <span class="bar-val">${v.toFixed(2)}</span>
+      </div>`;
+    }
+    document.getElementById('emotions').innerHTML = html;
+
+    if (s.survival_goals) {
+      let gh = '';
+      for (const [k,v] of Object.entries(s.survival_goals)) {
+        const val = typeof v === 'object' ? (v.value || v.current || 0) : v;
+        const label = k.replace(/_/g,' ');
+        gh += `<div class="goal-row"><span>${label}</span><span class="val">${Number(val).toFixed(2)}</span></div>`;
+      }
+      document.getElementById('goals').innerHTML = gh || '<span class="loading">no goals data</span>';
+    }
+  } catch(e) {
+    document.getElementById('mood').textContent = 'error loading';
+  }
+}
+
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  document.getElementById('searchResults').innerHTML = '<span class="loading">searching...</span>';
+  try {
+    const r = await fetch(`/api/mind/search?q=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    if (!d.results.length) {
+      document.getElementById('searchResults').innerHTML = '<span class="loading">no results found</span>';
+      return;
+    }
+    let html = '';
+    for (const item of d.results) {
+      html += `<div class="result-item"><span class="category">${item.category}</span><br>${item.text}</div>`;
+    }
+    document.getElementById('searchResults').innerHTML = html;
+  } catch(e) {
+    document.getElementById('searchResults').innerHTML = '<span class="loading">search error</span>';
+  }
+}
+
+document.getElementById('searchInput').addEventListener('keypress', e => {
+  if (e.key === 'Enter') doSearch();
+});
+
+async function loadMemories() {
+  try {
+    const r = await fetch('/api/mind/memories');
+    const d = await r.json();
+    if (!d.memories.length) {
+      document.getElementById('memories').innerHTML = '<span class="loading">no significant memories</span>';
+      return;
+    }
+    let html = '';
+    for (const m of d.memories) {
+      const ts = m.timestamp ? new Date(m.timestamp).toLocaleString() : '?';
+      html += `<div class="memory-item">
+        <div class="meta">${ts} · <span class="mood-tag">${m.mood}</span> · salience ${m.salience.toFixed(2)}</div>
+        ${m.content}
+      </div>`;
+    }
+    document.getElementById('memories').innerHTML = html;
+  } catch(e) {
+    document.getElementById('memories').innerHTML = '<span class="loading">error loading memories</span>';
+  }
+}
+
+loadState();
+loadMemories();
+setInterval(loadState, 10000);
+</script>
+</body>
+</html>
