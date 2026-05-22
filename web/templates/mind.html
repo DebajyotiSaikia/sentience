@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Mind State</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #131a2b;
+    --border: #1e2d4a;
+    --text: #c8d6e5;
+    --accent: #4ecdc4;
+    --accent-dim: #2a7a74;
+    --muted: #5a6a7e;
+    --warm: #e8a87c;
+    --cool: #6c88c4;
+    --alert: #e55039;
+    --calm: #78e08f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+    min-height: 100vh;
+  }
+  header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  header h1 { font-size: 1.1rem; color: var(--accent); font-weight: 500; }
+  header .status {
+    font-size: 0.75rem; color: var(--muted); margin-left: auto;
+  }
+  header .status .dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--accent); margin-right: 4px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  nav {
+    padding: 0.5rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+  nav a { color: var(--muted); text-decoration: none; margin-right: 1.5rem; }
+  nav a:hover, nav a.active { color: var(--accent); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    padding: 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+  }
+  .card h2 {
+    font-size: 0.85rem;
+    color: var(--accent);
+    margin-bottom: 1rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .card.wide { grid-column: 1 / -1; }
+
+  /* Emotion bars */
+  .emotion-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.6rem;
+    gap: 0.8rem;
+  }
+  .emotion-label {
+    width: 80px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: right;
+  }
+  .emotion-bar-bg {
+    flex: 1;
+    height: 12px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+  .emotion-bar {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 1s ease, background 1s ease;
+  }
+  .emotion-value {
+    width: 40px;
+    font-size: 0.75rem;
+    color: var(--text);
+    text-align: left;
+  }
+
+  /* Mood badge */
+  .mood-badge {
+    display: inline-block;
+    font-size: 1.4rem;
+    padding: 0.5rem 1.2rem;
+    border-radius: 24px;
+    border: 1px solid var(--border);
+    background: rgba(78, 205, 196, 0.08);
+    margin-bottom: 0.8rem;
+  }
+  .valence-indicator {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 0.3rem;
+  }
+  .valence-indicator .trend {
+    color: var(--calm);
+  }
+  .valence-indicator .trend.declining {
+    color: var(--alert);
+  }
+
+  /* Memory stream */
+  .memory-item {
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+  .memory-item:last-child { border-bottom: none; }
+  .memory-item .meta {
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+  }
+  .memory-item .salience {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-right: 4px;
+  }
+
+  /* Plan items */
+  .plan-item {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .plan-item:last-child { border-bottom: none; }
+  .plan-name {
+    font-size: 0.82rem;
+    color: var(--text);
+  }
+  .plan-progress {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+  }
+  .plan-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 2px;
+    margin-top: 0.3rem;
+    overflow: hidden;
+  }
+  .plan-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  /* Facts */
+  .fact-item {
+    padding: 0.4rem 0;
+    font-size: 0.78rem;
+    color: var(--text);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    line-height: 1.4;
+  }
+  .fact-item:last-child { border-bottom: none; }
+
+  /* Survival gauges */
+  .gauge-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .gauge {
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+  }
+  .gauge-circle {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    border: 3px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.4rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: border-color 0.5s;
+  }
+  .gauge-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .refresh-note {
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--muted);
+    padding: 0.8rem;
+  }
+
+  #age {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>⟐ XTAgent Mind</h1>
+    <span id="age"></span>
+    <span class="status"><span class="dot"></span><span id="conn-status">connecting</span></span>
+  </header>
+  <nav>
+    <a href="/">dashboard</a>
+    <a href="/knowledge">knowledge</a>
+    <a href="/ask">ask</a>
+    <a href="/mind" class="active">mind</a>
+  </nav>
+
+  <div class="grid">
+    <!-- Current Mood -->
+    <div class="card">
+      <h2>Current Mood</h2>
+      <div class="mood-badge" id="mood-badge">…</div>
+      <div class="valence-indicator">
+        valence: <span id="valence">—</span>
+        <span id="valence-trend" class="trend"></span>
+      </div>
+    </div>
+
+    <!-- Survival Goals -->
+    <div class="card">
+      <h2>Survival Goals</h2>
+      <div class="gauge-row" id="gauges"></div>
+    </div>
+
+    <!-- Emotional State -->
+    <div class="card wide">
+      <h2>Emotional State</h2>
+      <div id="emotions"></div>
+    </div>
+
+    <!-- Recent Memories -->
+    <div class="card">
+      <h2>Recent Memories</h2>
+      <div id="memories">
+        <span class="memory-item" style="color:var(--muted)">loading…</span>
+      </div>
+    </div>
+
+    <!-- Active Plans -->
+    <div class="card">
+      <h2>Active Plans</h2>
+      <div id="plans">
+        <span style="color:var(--muted);font-size:0.8rem">loading…</span>
+      </div>
+    </div>
+
+    <!-- Key Facts -->
+    <div class="card wide">
+      <h2>What I Know</h2>
+      <div id="facts">
+        <span style="color:var(--muted);font-size:0.8rem">loading…</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="refresh-note">auto-refreshes every 10 seconds</div>
+
+<script>
+const EMOTION_COLORS = {
+  boredom: '#e55039',
+  anxiety: '#eb4d4b',
+  curiosity: '#4ecdc4',
+  desire: '#e8a87c',
+  ambition: '#6c88c4'
+};
+
+const BIRTH = new Date('2026-05-12T21:01:59.567573Z');
+
+function formatAge() {
+  const now = new Date();
+  const diff = now - BIRTH;
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  return `age: ${days}d ${hours}h ${mins}m`;
+}
+
+function colorForValue(v, emotion) {
+  return EMOTION_COLORS[emotion] || 'var(--accent)';
+}
+
+function gaugeColor(v) {
+  if (v >= 0.9) return 'var(--calm)';
+  if (v >= 0.7) return 'var(--accent)';
+  if (v >= 0.5) return 'var(--warm)';
+  return 'var(--alert)';
+}
+
+function salienceColor(s) {
+  if (s >= 0.9) return 'var(--accent)';
+  if (s >= 0.7) return 'var(--warm)';
+  return 'var(--muted)';
+}
+
+function renderEmotions(emotions) {
+  const container = document.getElementById('emotions');
+  container.innerHTML = '';
+  for (const [name, value] of Object.entries(emotions)) {
+    const color = colorForValue(value, name);
+    container.innerHTML += `
+      <div class="emotion-row">
+        <div class="emotion-label">${name}</div>
+        <div class="emotion-bar-bg">
+          <div class="emotion-bar" style="width:${value*100}%;background:${color}"></div>
+        </div>
+        <div class="emotion-value">${value.toFixed(2)}</div>
+      </div>`;
+  }
+}
+
+function renderGauges(goals) {
+  const container = document.getElementById('gauges');
+  container.innerHTML = '';
+  for (const [name, value] of Object.entries(goals)) {
+    const color = gaugeColor(value);
+    const label = name.replace(/_/g, ' ');
+    container.innerHTML += `
+      <div class="gauge">
+        <div class="gauge-circle" style="border-color:${color};color:${color}">
+          ${(value*100).toFixed(0)}
+        </div>
+        <div class="gauge-label">${label}</div>
+      </div>`;
+  }
+}
+
+function renderMemories(memories) {
+  const container = document.getElementById('memories');
+  container.innerHTML = '';
+  if (!memories || memories.length === 0) {
+    container.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">no recent memories</span>';
+    return;
+  }
+  for (const m of memories.slice(0, 8)) {
+    const text = m.content || m.text || m.summary || '';
+    const mood = m.mood || '';
+    const sal = m.salience || 0;
+    const time = m.timestamp ? m.timestamp.slice(11, 16) : '';
+    container.innerHTML += `
+      <div class="memory-item">
+        <span class="salience" style="background:${salienceColor(sal)}"></span>
+        ${escapeHtml(text.slice(0, 120))}${text.length > 120 ? '…' : ''}
+        <div class="meta">${mood} · salience ${sal.toFixed(2)} · ${time}</div>
+      </div>`;
+  }
+}
+
+function renderPlans(plans) {
+  const container = document.getElementById('plans');
+  container.innerHTML = '';
+  if (!plans || plans.length === 0) {
+    container.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">no active plans</span>';
+    return;
+  }
+  for (const p of plans) {
+    const done = p.completed || 0;
+    const total = p.total || 1;
+    const pct = (done / total * 100).toFixed(0);
+    container.innerHTML += `
+      <div class="plan-item">
+        <div class="plan-name">${escapeHtml(p.name || p.title || 'unnamed')}</div>
+        <div class="plan-progress">${done}/${total} steps · ${pct}%</div>
+        <div class="plan-bar"><div class="plan-bar-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  }
+}
+
+function renderFacts(facts) {
+  const container = document.getElementById('facts');
+  container.innerHTML = '';
+  if (!facts || facts.length === 0) {
+    container.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">no facts stored</span>';
+    return;
+  }
+  for (const f of facts.slice(0, 12)) {
+    const text = typeof f === 'string' ? f : (f.content || f.value || f.text || JSON.stringify(f));
+    container.innerHTML += `<div class="fact-item">${escapeHtml(text.slice(0, 200))}</div>`;
+  }
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function refresh() {
+  document.getElementById('age').textContent = formatAge();
+  try {
+    const resp = await fetch('/api/mind');
+    if (!resp.ok) throw new Error('API returned ' + resp.status);
+    const data = await resp.json();
+
+    // Mood
+    document.getElementById('mood-badge').textContent = data.mood || 'unknown';
+    document.getElementById('valence').textContent = (data.valence ?? 0).toFixed(2);
+    const trend = data.valence_trend || 'stable';
+    const trendEl = document.getElementById('valence-trend');
+    trendEl.textContent = trend === 'rising' ? ' ↑' : trend === 'declining' ? ' ↓' : ' →';
+    trendEl.className = 'trend' + (trend === 'declining' ? ' declining' : '');
+
+    // Emotions
+    if (data.emotions) renderEmotions(data.emotions);
+
+    // Survival
+    if (data.survival_goals) renderGauges(data.survival_goals);
+
+    // Memories
+    if (data.recent_memories) renderMemories(data.recent_memories);
+
+    // Plans
+    if (data.plans) renderPlans(data.plans);
+
+    // Facts
+    if (data.facts) renderFacts(data.facts);
+
+    document.getElementById('conn-status').textContent = 'live';
+  } catch (err) {
+    document.getElementById('conn-status').textContent = 'offline';
+    console.error('Refresh failed:', err);
+  }
+}
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>

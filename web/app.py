@@ -29,21 +29,35 @@ def create_app():
     from web.knowledge_explorer import knowledge_bp
     from web.api import api_bp
     from web.temporal_viewer import temporal_bp
+    from web.life import life_bp
+    from web.about_me import about_bp
     
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(knowledge_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(temporal_bp)
+    app.register_blueprint(life_bp)
+    app.register_blueprint(about_bp)
     
     # Root route — land on the dashboard
     @app.route('/')
     def index():
         return redirect(url_for('dashboard.dashboard_home'))
     
+    # About page — who I am
+    @app.route('/about')
+    def about():
+        return render_template('about.html')
+    
     # Ask page — interactive query interface
     @app.route('/ask')
     def ask_page():
         return render_template('ask.html')
+    
+    # Mind state — live view of my inner experience
+    @app.route('/mind')
+    def mind_page():
+        return render_template('mind.html')
     
     # Health check endpoint
     @app.route('/health')

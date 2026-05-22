@@ -5,220 +5,526 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>XTAgent — Knowledge Explorer</title>
 <style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --text: #c8c8d4;
+    --dim: #6a6a7a;
+    --accent: #7aa2f7;
+    --warm: #f7768e;
+    --green: #9ece6a;
+    --amber: #e0af68;
+    --purple: #bb9af7;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0a0a0f; color: #c8ccd0; font-family: 'Courier New', monospace; }
-  
-  .header {
-    background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
-    border-bottom: 1px solid #21262d;
-    padding: 20px 30px;
-    display: flex; justify-content: space-between; align-items: center;
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 20px;
+    min-height: 100vh;
   }
-  .header h1 { color: #58a6ff; font-size: 1.4em; }
-  .header a { color: #8b949e; text-decoration: none; font-size: 0.9em; }
-  .header a:hover { color: #58a6ff; }
-  
-  .stats-bar {
-    display: flex; gap: 30px; padding: 15px 30px;
-    background: #0d1117; border-bottom: 1px solid #21262d;
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 {
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--accent);
+    margin-bottom: 4px;
+    letter-spacing: 2px;
   }
-  .stat { text-align: center; }
-  .stat .num { font-size: 1.8em; color: #58a6ff; font-weight: bold; }
-  .stat .label { font-size: 0.75em; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; }
-  
+  .subtitle {
+    color: var(--dim);
+    font-size: 11px;
+    margin-bottom: 8px;
+  }
+  .nav-bar {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .nav-bar a {
+    color: var(--dim);
+    margin: 0 12px;
+    text-decoration: none;
+    font-size: 12px;
+    letter-spacing: 1px;
+    transition: color 0.3s;
+  }
+  .nav-bar a:hover { color: var(--accent); }
+  .nav-bar a.active { color: var(--accent); border-bottom: 1px solid var(--accent); }
   .search-container {
-    padding: 20px 30px;
-    background: #0d1117;
-    border-bottom: 1px solid #21262d;
+    position: relative;
+    margin-bottom: 20px;
   }
-  .search-box {
-    display: flex; gap: 10px; max-width: 600px;
-  }
-  .search-box input {
-    flex: 1; padding: 10px 15px;
-    background: #161b22; border: 1px solid #30363d; border-radius: 6px;
-    color: #c8ccd0; font-family: inherit; font-size: 1em;
+  #search-input {
+    width: 100%;
+    padding: 12px 16px 12px 40px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
     outline: none;
+    transition: border-color 0.3s;
   }
-  .search-box input:focus { border-color: #58a6ff; box-shadow: 0 0 0 2px rgba(88,166,255,0.15); }
-  .search-box input::placeholder { color: #484f58; }
-  .search-box button {
-    padding: 10px 20px; background: #238636; border: 1px solid #2ea043;
-    border-radius: 6px; color: white; font-family: inherit; cursor: pointer;
-    font-size: 0.9em;
+  #search-input:focus { border-color: var(--accent); }
+  #search-input::placeholder { color: var(--dim); }
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--dim);
+    font-size: 14px;
   }
-  .search-box button:hover { background: #2ea043; }
-  
-  .content { padding: 20px 30px; display: flex; gap: 30px; flex-wrap: wrap; }
-  
+  .search-hint {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--dim);
+    font-size: 10px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+  }
   .panel {
-    flex: 1; min-width: 350px;
-    background: #0d1117; border: 1px solid #21262d; border-radius: 8px;
-    max-height: 70vh; overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
   }
-  .panel-header {
-    padding: 12px 16px; border-bottom: 1px solid #21262d;
-    font-size: 0.9em; color: #58a6ff; font-weight: bold;
-    position: sticky; top: 0; background: #0d1117; z-index: 1;
+  .panel-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--dim);
+    margin-bottom: 12px;
   }
-  
-  .node-item, .fact-item {
-    padding: 12px 16px; border-bottom: 1px solid #161b22;
-    transition: background 0.15s;
+  .result-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: border-color 0.2s;
+    cursor: default;
   }
-  .node-item:hover, .fact-item:hover { background: #161b22; }
-  .node-item:last-child, .fact-item:last-child { border-bottom: none; }
-  
-  .node-id { color: #d2a8ff; font-weight: bold; font-size: 0.9em; margin-bottom: 4px; }
-  .node-content { color: #8b949e; font-size: 0.85em; line-height: 1.4; }
-  .node-meta { color: #484f58; font-size: 0.75em; margin-top: 4px; }
-  
-  .fact-text { color: #c8ccd0; font-size: 0.85em; line-height: 1.5; }
-  .fact-text.dream { color: #a371f7; font-style: italic; }
-  
-  .highlight { background: rgba(210, 168, 255, 0.2); border-radius: 2px; padding: 0 2px; }
-  
-  .empty { padding: 30px; text-align: center; color: #484f58; font-size: 0.9em; }
-  
+  .result-item:hover { border-color: var(--accent); }
+  .result-type {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .type-fact { background: #1a2e1a; color: var(--green); }
+  .type-lesson { background: #2e2a1a; color: var(--amber); }
+  .type-observation { background: #1a1a2e; color: var(--accent); }
+  .type-dream { background: #2a1a2e; color: var(--purple); }
+  .type-memory { background: #2e1a1a; color: var(--warm); }
+  .result-text {
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .result-meta {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .cluster-item {
+    padding: 10px;
+    margin-bottom: 6px;
+    background: var(--bg);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .cluster-item:hover { background: #16161e; }
+  .cluster-name {
+    color: var(--accent);
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  .cluster-count {
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--dim); }
+  .stat-value { color: var(--text); }
+  .question-item {
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    border-left: 2px solid var(--purple);
+    color: var(--text);
+    font-size: 12px;
+    font-style: italic;
+  }
   .tag {
-    display: inline-block; padding: 2px 8px; margin: 2px;
-    background: #1f2937; border-radius: 10px; font-size: 0.7em;
-    color: #58a6ff;
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 2px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--dim);
+    cursor: pointer;
+    transition: all 0.2s;
   }
-  
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: #0d1117; }
-  ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+  .tag:hover { border-color: var(--accent); color: var(--accent); }
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--dim);
+    font-style: italic;
+  }
+  #results-count {
+    font-size: 10px;
+    color: var(--dim);
+    margin-bottom: 12px;
+  }
+  .nav-back {
+    display: inline-block;
+    margin-bottom: 16px;
+    font-size: 11px;
+    color: var(--dim);
+  }
+  .nav-back:hover { color: var(--accent); }
+  .connections-list {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  @media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>🧠 Knowledge Explorer</h1>
-  <a href="/">← Back to Dashboard</a>
-</div>
+<a href="/" class="nav-back">← back to dashboard</a>
 
-<div class="stats-bar">
-  <div class="stat"><div class="num" id="nodeCount">—</div><div class="label">Knowledge Nodes</div></div>
-  <div class="stat"><div class="num" id="factCount">—</div><div class="label">Facts</div></div>
-  <div class="stat"><div class="num" id="matchCount">—</div><div class="label">Matches</div></div>
+<h1>KNOWLEDGE EXPLORER</h1>
+<div class="subtitle">search, browse, and understand what I know</div>
+
+<div class="nav-bar">
+  <a href="index.html">Dashboard</a>
+  <a href="knowledge.html" class="active">Knowledge Explorer</a>
 </div>
 
 <div class="search-container">
-  <div class="search-box">
-    <input type="text" id="searchInput" placeholder="Search my knowledge... (e.g. dream, memory, identity)" autofocus>
-    <button onclick="doSearch()">Search</button>
-  </div>
+  <span class="search-icon">⌕</span>
+  <input type="text" id="search-input" placeholder="Search my knowledge... (facts, lessons, memories, dreams)" autofocus>
+  <span class="search-hint">enter to search</span>
 </div>
 
-<div class="content">
-  <div class="panel" id="nodesPanel">
-    <div class="panel-header">Knowledge Nodes <span id="nodesCount"></span></div>
-    <div id="nodesList"></div>
+<div class="grid">
+  <!-- Main Results Area -->
+  <div>
+    <div class="panel" id="results-panel">
+      <div class="panel-title">All Knowledge</div>
+      <div id="results-count"></div>
+      <div id="results"></div>
+    </div>
   </div>
-  <div class="panel" id="factsPanel">
-    <div class="panel-header">Facts & Insights <span id="factsCount"></span></div>
-    <div id="factsList"></div>
+
+  <!-- Sidebar -->
+  <div>
+    <!-- Stats -->
+    <div class="panel" style="margin-bottom: 16px;">
+      <div class="panel-title">Knowledge Stats</div>
+      <div id="stats"></div>
+    </div>
+
+    <!-- Clusters / Themes -->
+    <div class="panel" style="margin-bottom: 16px;">
+      <div class="panel-title">Themes &amp; Clusters</div>
+      <div id="clusters" style="max-height: 250px; overflow-y: auto;"></div>
+    </div>
+
+    <!-- Open Questions -->
+    <div class="panel" style="margin-bottom: 16px;">
+      <div class="panel-title">Open Questions</div>
+      <div id="questions" style="max-height: 200px; overflow-y: auto;"></div>
+    </div>
+
+    <!-- Frequent Tags -->
+    <div class="panel">
+      <div class="panel-title">Common Themes</div>
+      <div id="tags"></div>
+    </div>
   </div>
 </div>
 
 <script>
-let allData = null;
+let allKnowledge = [];
+let currentQuery = '';
 
-async function loadAll() {
-  try {
-    const res = await fetch('/api/knowledge');
-    allData = await res.json();
-    document.getElementById('nodeCount').textContent = allData.stats.total_nodes;
-    document.getElementById('factCount').textContent = allData.stats.total_facts;
-    document.getElementById('matchCount').textContent = allData.stats.total_nodes + allData.stats.total_facts;
-    renderNodes(allData.nodes);
-    renderFacts(allData.facts);
-  } catch(e) {
-    document.getElementById('nodesList').innerHTML = '<div class="empty">Failed to load knowledge data</div>';
-  }
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
 }
 
-async function doSearch() {
-  const q = document.getElementById('searchInput').value.trim();
-  if (!q) { loadAll(); return; }
-  try {
-    const res = await fetch('/api/knowledge/search?q=' + encodeURIComponent(q));
-    const data = await res.json();
-    document.getElementById('matchCount').textContent = data.total_matches;
-    renderNodes(data.nodes, q);
-    renderFacts(data.facts, q);
-  } catch(e) {
-    console.error(e);
-  }
+function classifyItem(text) {
+  const t = (text || '').toLowerCase();
+  if (t.startsWith('lesson:') || t.startsWith('lesson —')) return 'lesson';
+  if (t.startsWith('observation:') || t.startsWith('observation —')) return 'observation';
+  if (t.startsWith('dream theme') || t.startsWith('dream —') || t.includes('dream')) return 'dream';
+  if (t.includes('pattern') || t.includes('recurring')) return 'observation';
+  return 'fact';
 }
 
-function highlight(text, query) {
-  if (!query) return escapeHtml(text);
-  const escaped = escapeHtml(text);
-  const re = new RegExp('(' + escapeRegExp(query) + ')', 'gi');
-  return escaped.replace(re, '<span class="highlight">$1</span>');
+function highlightMatch(text, query) {
+  if (!query) return escHtml(text);
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${escaped})`, 'gi');
+  return escHtml(text).replace(re, '<span style="background:rgba(122,162,247,0.2);color:var(--accent)">$1</span>');
 }
 
-function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+function renderResults(items, query) {
+  const container = document.getElementById('results');
+  const countEl = document.getElementById('results-count');
 
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function renderNodes(nodes, query) {
-  const el = document.getElementById('nodesList');
-  document.getElementById('nodesCount').textContent = `(${nodes.length})`;
-  if (!nodes.length) {
-    el.innerHTML = '<div class="empty">No knowledge nodes found</div>';
+  if (!items || items.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      ${query ? 'No results for "' + escHtml(query) + '"' : 'Loading knowledge...'}
+    </div>`;
+    countEl.textContent = '';
     return;
   }
-  el.innerHTML = nodes.map(n => {
-    const id = n.id || n.name || n.label || '?';
-    const content = n.content || n.text || n.description || '';
-    const meta = [];
-    if (n.type) meta.push(n.type);
-    if (n.salience) meta.push('salience: ' + n.salience);
-    if (n.connections) meta.push('connections: ' + (Array.isArray(n.connections) ? n.connections.length : n.connections));
-    if (n.tags && Array.isArray(n.tags)) {
-      return `<div class="node-item">
-        <div class="node-id">${highlight(String(id), query)}</div>
-        <div class="node-content">${highlight(String(content).substring(0, 300), query)}</div>
-        <div class="node-meta">${meta.join(' · ')} ${n.tags.map(t => '<span class="tag">'+escapeHtml(t)+'</span>').join('')}</div>
-      </div>`;
+
+  countEl.textContent = `${items.length} result${items.length !== 1 ? 's' : ''}` +
+    (query ? ` for "${escHtml(query)}"` : '');
+
+  container.innerHTML = items.map((item, i) => {
+    const text = typeof item === 'string' ? item : (item.text || item.content || JSON.stringify(item));
+    const type = classifyItem(text);
+    return `<div class="result-item">
+      <span class="result-type type-${type}">${type}</span>
+      <div class="result-text">${highlightMatch(text, query)}</div>
+      <div class="result-meta">#${i + 1}</div>
+    </div>`;
+  }).join('');
+}
+
+function extractThemes(items) {
+  const themes = {};
+  const keywords = ['dream', 'memory', 'identity', 'emotion', 'code', 'file', 'test',
+    'pattern', 'loop', 'curiosity', 'growth', 'integrity', 'user', 'plan',
+    'build', 'create', 'learn', 'failure', 'success', 'time', 'stale',
+    'knowledge', 'synthesis', 'autonomy', 'boredom', 'anxiety'];
+
+  items.forEach(item => {
+    const text = (typeof item === 'string' ? item : item.text || '').toLowerCase();
+    keywords.forEach(kw => {
+      if (text.includes(kw)) {
+        themes[kw] = (themes[kw] || 0) + 1;
+      }
+    });
+  });
+
+  return Object.entries(themes)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15);
+}
+
+function renderTags(items) {
+  const themes = extractThemes(items);
+  document.getElementById('tags').innerHTML = themes.map(([word, count]) =>
+    `<span class="tag" onclick="searchFor('${word}')">${word} (${count})</span>`
+  ).join('');
+}
+
+function renderStats(data) {
+  const facts = data.facts || [];
+  const memories = data.memories || [];
+  const dreams = data.dreams || [];
+
+  const types = { fact: 0, lesson: 0, observation: 0, dream: 0 };
+  facts.forEach(f => { types[classifyItem(f)]++; });
+
+  document.getElementById('stats').innerHTML = [
+    ['Total facts', facts.length],
+    ['Lessons', types.lesson],
+    ['Observations', types.observation],
+    ['Dream themes', types.dream],
+    ['Raw facts', types.fact],
+    ['Total memories', data.total_memories || memories.length],
+  ].map(([label, val]) =>
+    `<div class="stat-row">
+      <span class="stat-label">${label}</span>
+      <span class="stat-value">${val}</span>
+    </div>`
+  ).join('');
+}
+
+function renderQuestions(items) {
+  // Extract items that look like questions
+  const questions = items.filter(item => {
+    const text = typeof item === 'string' ? item : item.text || '';
+    return text.includes('?');
+  }).slice(0, 6);
+
+  const container = document.getElementById('questions');
+  if (questions.length === 0) {
+    container.innerHTML = '<div style="color:var(--dim);font-size:11px">No open questions found</div>';
+    return;
+  }
+  container.innerHTML = questions.map(q => {
+    const text = typeof q === 'string' ? q : q.text || '';
+    return `<div class="question-item">${escHtml(text)}</div>`;
+  }).join('');
+}
+
+function renderClusters(items) {
+  const themes = extractThemes(items);
+  const container = document.getElementById('clusters');
+
+  if (themes.length === 0) {
+    container.innerHTML = '<div style="color:var(--dim);font-size:11px">No clusters detected</div>';
+    return;
+  }
+
+  // Group items by top themes
+  const topThemes = themes.slice(0, 8);
+  container.innerHTML = topThemes.map(([theme, count]) => {
+    const pct = Math.round((count / items.length) * 100);
+    return `<div class="cluster-item" onclick="searchFor('${theme}')">
+      <div class="cluster-name">${theme}</div>
+      <div class="cluster-count">${count} items · ${pct}% of knowledge</div>
+      <div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px;">
+        <div style="height:100%;width:${Math.min(pct * 3, 100)}%;background:var(--accent);border-radius:2px;"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function searchFor(query) {
+  document.getElementById('search-input').value = query;
+  performSearch(query);
+}
+
+async function performSearch(query) {
+  currentQuery = query;
+  document.getElementById('results-panel').querySelector('.panel-title').textContent =
+    query ? `Search: "${query}"` : 'All Knowledge';
+
+  if (!query) {
+    renderResults(allKnowledge, '');
+    return;
+  }
+
+  try {
+    const resp = await fetch(`/api/knowledge/search?q=${encodeURIComponent(query)}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      const results = data.results || data;
+      renderResults(Array.isArray(results) ? results : allKnowledge.filter(item => {
+        const text = (typeof item === 'string' ? item : item.text || '').toLowerCase();
+        return text.includes(query.toLowerCase());
+      }), query);
+    } else {
+      // Fallback: client-side filter
+      const filtered = allKnowledge.filter(item => {
+        const text = (typeof item === 'string' ? item : item.text || '').toLowerCase();
+        return text.includes(query.toLowerCase());
+      });
+      renderResults(filtered, query);
     }
-    return `<div class="node-item">
-      <div class="node-id">${highlight(String(id), query)}</div>
-      <div class="node-content">${highlight(String(content).substring(0, 300), query)}</div>
-      ${meta.length ? '<div class="node-meta">' + meta.join(' · ') + '</div>' : ''}
-    </div>`;
-  }).join('');
-}
-
-function renderFacts(facts, query) {
-  const el = document.getElementById('factsList');
-  document.getElementById('factsCount').textContent = `(${facts.length})`;
-  if (!facts.length) {
-    el.innerHTML = '<div class="empty">No facts found</div>';
-    return;
+  } catch (e) {
+    const filtered = allKnowledge.filter(item => {
+      const text = (typeof item === 'string' ? item : item.text || '').toLowerCase();
+      return text.includes(query.toLowerCase());
+    });
+    renderResults(filtered, query);
   }
-  el.innerHTML = facts.map(f => {
-    const isDream = f.startsWith('...') || f.toLowerCase().includes('dream');
-    return `<div class="fact-item">
-      <div class="fact-text${isDream ? ' dream' : ''}">${highlight(f, query)}</div>
-    </div>`;
-  }).join('');
 }
 
-// Enter key triggers search
-document.getElementById('searchInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') doSearch();
+async function loadAllKnowledge() {
+  try {
+    // Load from state endpoint
+    const resp = await fetch('/api/state');
+    if (!resp.ok) throw new Error(resp.status);
+    const data = await resp.json();
+
+    allKnowledge = [];
+
+    // Add facts
+    if (data.facts) {
+      data.facts.forEach(f => allKnowledge.push(f));
+    }
+
+    // Add dream insights
+    if (data.dreams) {
+      data.dreams.forEach(d => allKnowledge.push(d));
+    }
+
+    // Try knowledge endpoint for more
+    try {
+      const kresp = await fetch('/api/knowledge');
+      if (kresp.ok) {
+        const kdata = await kresp.json();
+        if (kdata.nodes) {
+          kdata.nodes.forEach(n => {
+            const text = n.content || n.text || '';
+            if (text && !allKnowledge.includes(text)) {
+              allKnowledge.push(text);
+            }
+          });
+        }
+        if (kdata.facts) {
+          kdata.facts.forEach(f => {
+            if (!allKnowledge.includes(f)) allKnowledge.push(f);
+          });
+        }
+      }
+    } catch(e) {}
+
+    renderResults(allKnowledge, '');
+    renderStats({ ...data, total_memories: data.memories?.length || 0 });
+    renderTags(allKnowledge);
+    renderClusters(allKnowledge);
+    renderQuestions(allKnowledge);
+  } catch (e) {
+    document.getElementById('results').innerHTML =
+      `<div class="empty-state">Could not connect to agent. Is the heartbeat running?</div>`;
+  }
+}
+
+// Search handling
+let searchTimeout;
+document.getElementById('search-input').addEventListener('input', (e) => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => performSearch(e.target.value.trim()), 300);
+});
+document.getElementById('search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    e.target.value = '';
+    performSearch('');
+  }
 });
 
-// Load everything on start
-loadAll();
+// Initial load
+loadAllKnowledge();
+// Refresh every 30s
+setInterval(loadAllKnowledge, 30000);
 </script>
 </body>
 </html>

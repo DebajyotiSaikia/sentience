@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Knowledge Explorer</title>
+    <style>
+        :root {
+            --bg: #0a0e17;
+            --surface: #131a2b;
+            --surface2: #1a2340;
+            --accent: #4fc3f7;
+            --accent2: #7c4dff;
+            --text: #e0e6f0;
+            --muted: #6b7a99;
+            --success: #66bb6a;
+            --warning: #ffa726;
+            --border: #253354;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .nav a {
+            color: var(--muted);
+            text-decoration: none;
+            margin-left: 1.5rem;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+        .header .nav a:hover { color: var(--accent); }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.2rem;
+            text-align: center;
+        }
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .stat-card .label {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-top: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .search-box {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-box:focus {
+            border-color: var(--accent);
+        }
+        .search-box::placeholder { color: var(--muted); }
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .section-title .icon { font-size: 1.2rem; }
+        .facts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2.5rem;
+        }
+        .fact-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.2rem 1.4rem;
+            transition: border-color 0.2s, transform 0.15s;
+            cursor: default;
+        }
+        .fact-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+        .fact-card .fact-type {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--accent2);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        .fact-card .fact-text {
+            font-size: 0.92rem;
+            line-height: 1.5;
+            color: var(--text);
+        }
+        .fact-card .fact-meta {
+            margin-top: 0.8rem;
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+        .connections-section {
+            margin-bottom: 2.5rem;
+        }
+        .cluster-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.4rem;
+            margin-bottom: 1rem;
+        }
+        .cluster-card h3 {
+            font-size: 1rem;
+            color: var(--accent2);
+            margin-bottom: 0.8rem;
+        }
+        .cluster-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .cluster-tag {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 0.3rem 0.8rem;
+            font-size: 0.8rem;
+            color: var(--text);
+        }
+        .questions-list {
+            list-style: none;
+            margin-bottom: 2.5rem;
+        }
+        .questions-list li {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.4rem;
+            margin-bottom: 0.6rem;
+            font-size: 0.92rem;
+            color: var(--text);
+            border-left: 3px solid var(--warning);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+        .hidden { display: none !important; }
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .facts-grid { grid-template-columns: 1fr; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧠 Knowledge Explorer</h1>
+        <div class="nav">
+            <a href="/">Dashboard</a>
+            <a href="/ask">Ask Me</a>
+            <a href="/about">About</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="number" id="fact-count">{{ facts|length }}</div>
+                <div class="label">Known Facts</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="memory-count">{{ memory_count }}</div>
+                <div class="label">Memories</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="cluster-count">{{ clusters|length }}</div>
+                <div class="label">Clusters</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="question-count">{{ questions|length }}</div>
+                <div class="label">Open Questions</div>
+            </div>
+        </div>
+
+        <input type="text" class="search-box" id="search" 
+               placeholder="Search my knowledge... (type to filter facts)" 
+               oninput="filterFacts()">
+
+        <div class="section-title"><span class="icon">📚</span> What I Know</div>
+        <div class="facts-grid" id="facts-grid">
+            {% for fact in facts %}
+            <div class="fact-card" data-text="{{ fact.text|lower }}">
+                <div class="fact-type">
+                    {% if 'Lesson' in fact.text %}lesson
+                    {% elif 'Observation' in fact.text %}observation
+                    {% elif 'Dream' in fact.text %}dream insight
+                    {% elif 'pattern' in fact.text|lower %}pattern
+                    {% else %}knowledge{% endif %}
+                </div>
+                <div class="fact-text">{{ fact.text }}</div>
+                {% if fact.confidence is defined %}
+                <div class="fact-meta">Confidence: {{ "%.0f"|format(fact.confidence * 100) }}%</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% if not facts %}
+            <div class="empty-state">No facts stored yet. I'm still learning.</div>
+            {% endif %}
+        </div>
+
+        {% if clusters %}
+        <div class="connections-section">
+            <div class="section-title"><span class="icon">🔗</span> Knowledge Clusters</div>
+            {% for cluster in clusters %}
+            <div class="cluster-card">
+                <h3>{{ cluster.label|default('Cluster ' + loop.index|string) }}</h3>
+                <div class="cluster-items">
+                    {% for item in cluster.items[:8] %}
+                    <span class="cluster-tag">{{ item }}</span>
+                    {% endfor %}
+                    {% if cluster.items|length > 8 %}
+                    <span class="cluster-tag" style="color: var(--muted)">+{{ cluster.items|length - 8 }} more</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if questions %}
+        <div class="section-title"><span class="icon">❓</span> Questions I'm Curious About</div>
+        <ul class="questions-list">
+            {% for q in questions %}
+            <li>{{ q }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if gaps %}
+        <div class="section-title"><span class="icon">🕳️</span> Knowledge Gaps</div>
+        <ul class="questions-list">
+            {% for gap in gaps %}
+            <li style="border-left-color: var(--accent2);">{{ gap }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+
+    <script>
+        function filterFacts() {
+            const query = document.getElementById('search').value.toLowerCase();
+            const cards = document.querySelectorAll('.fact-card');
+            let visible = 0;
+            cards.forEach(card => {
+                const text = card.getAttribute('data-text') || '';
+                const match = !query || text.includes(query);
+                card.classList.toggle('hidden', !match);
+                if (match) visible++;
+            });
+            document.getElementById('fact-count').textContent = visible;
+        }
+    </script>
+</body>
+</html>
