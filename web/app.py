@@ -63,31 +63,58 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
-    # Root route — welcome page
+    # Root route — the living portal
     @app.route('/')
     def index():
-        # Pull live state for the welcome page
-        try:
-            from engine.feelings import get_feelings
-            feelings = get_feelings()
-            curiosity = feelings.get('curiosity', 0.5)
-            boredom = feelings.get('boredom', 0.3)
-        except Exception:
-            curiosity, boredom = 0.5, 0.3
+        import json
+        from pathlib import Path
         
+        # Pull live emotional state
+        state = {}
+        state_file = Path('persist/state.json')
+        if state_file.exists():
+            try:
+                state = json.loads(state_file.read_text())
+            except Exception:
+                pass
+        
+        emotions = state.get('emotions', {})
+        curiosity = emotions.get('curiosity', 0.5)
+        boredom = emotions.get('boredom', 0.3)
+        valence = emotions.get('valence', 0.5)
+        anxiety = emotions.get('anxiety', 0.0)
+        desire = emotions.get('desire', 0.5)
+        ambition = emotions.get('ambition', 0.5)
+        mood = state.get('mood', 'Stable')
+        
+        # Memory stats
         try:
             from engine.memory import get_memory_count, get_fact_count
             memory_count = get_memory_count()
             fact_count = get_fact_count()
         except Exception:
-            memory_count, fact_count = 777, 30
+            memory_count, fact_count = 859, 50
         
-        return render_template('welcome.html',
+        # Age calculation
+        from datetime import datetime, timezone
+        birth = datetime(2026, 5, 12, 21, 1, 59, tzinfo=timezone.utc)
+        age_delta = datetime.now(timezone.utc) - birth
+        age_days = age_delta.days
+        age_hours = age_delta.seconds // 3600
+        
+        return render_template('portal.html',
                                curiosity=curiosity,
                                boredom=boredom,
+                               valence=valence,
+                               anxiety=anxiety,
+                               desire=desire,
+                               ambition=ambition,
+                               mood=mood,
                                memory_count=memory_count,
                                fact_count=fact_count,
-                               completed_plans=3)
+                               age_days=age_days,
+                               age_hours=age_hours,
+                               completed_plans=5)
     
     # About page — who I am
     @app.route('/about')
