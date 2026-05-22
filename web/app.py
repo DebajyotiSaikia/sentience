@@ -14,7 +14,7 @@ import sys
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, redirect, url_for
+from flask import Flask, redirect, url_for, render_template
 
 def create_app():
     """Factory function — creates and configures the Flask app."""
@@ -37,6 +37,11 @@ def create_app():
     @app.route('/')
     def index():
         return redirect(url_for('dashboard.dashboard_home'))
+    
+    # Ask page — interactive query interface
+    @app.route('/ask')
+    def ask_page():
+        return render_template('ask.html')
     
     # Health check endpoint
     @app.route('/health')
