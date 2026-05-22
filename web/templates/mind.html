@@ -42,6 +42,7 @@
     animation: pulse 2s ease-in-out infinite;
   }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  @keyframes breathe { 0%,100%{opacity:0.6} 50%{opacity:1} }
   nav {
     padding: 0.5rem 1.5rem;
     border-bottom: 1px solid var(--border);
@@ -76,18 +77,47 @@
   }
   .card.wide { grid-column: 1 / -1; }
 
+  /* Narrative card */
+  .narrative-card {
+    background: linear-gradient(135deg, rgba(78,205,196,0.06), rgba(108,136,196,0.06));
+    border: 1px solid rgba(78,205,196,0.15);
+    border-radius: 12px;
+    padding: 1.5rem;
+    grid-column: 1 / -1;
+    animation: breathe 4s ease-in-out infinite;
+  }
+  .narrative-card .inner-voice {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--text);
+    font-style: italic;
+  }
+  .narrative-card .inner-voice em {
+    color: var(--accent);
+    font-style: normal;
+  }
+  .narrative-card .context {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 0.8rem;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    padding-top: 0.6rem;
+  }
+
   /* Emotion bars */
   .emotion-row {
     display: flex;
     align-items: center;
     margin-bottom: 0.6rem;
     gap: 0.8rem;
+    position: relative;
   }
   .emotion-label {
     width: 80px;
     font-size: 0.78rem;
     color: var(--muted);
     text-align: right;
+    cursor: help;
   }
   .emotion-bar-bg {
     flex: 1;
@@ -108,6 +138,37 @@
     color: var(--text);
     text-align: left;
   }
+  .emotion-meaning {
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin: -0.2rem 0 0.5rem 88px;
+    font-style: italic;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: relative;
+  }
+  .tooltip .tip-text {
+    visibility: hidden;
+    background: #1a2540;
+    color: var(--text);
+    font-size: 0.72rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    position: absolute;
+    z-index: 10;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+    line-height: 1.4;
+  }
+  .tooltip:hover .tip-text { visibility: visible; opacity: 1; }
 
   /* Mood badge */
   .mood-badge {
@@ -124,12 +185,8 @@
     color: var(--muted);
     margin-top: 0.3rem;
   }
-  .valence-indicator .trend {
-    color: var(--calm);
-  }
-  .valence-indicator .trend.declining {
-    color: var(--alert);
-  }
+  .valence-indicator .trend { color: var(--calm); }
+  .valence-indicator .trend.declining { color: var(--alert); }
 
   /* Memory stream */
   .memory-item {
@@ -157,15 +214,8 @@
     border-bottom: 1px solid rgba(255,255,255,0.04);
   }
   .plan-item:last-child { border-bottom: none; }
-  .plan-name {
-    font-size: 0.82rem;
-    color: var(--text);
-  }
-  .plan-progress {
-    font-size: 0.7rem;
-    color: var(--muted);
-    margin-top: 0.2rem;
-  }
+  .plan-name { font-size: 0.82rem; color: var(--text); }
+  .plan-progress { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; }
   .plan-bar {
     height: 4px;
     background: rgba(255,255,255,0.04);
@@ -191,16 +241,8 @@
   .fact-item:last-child { border-bottom: none; }
 
   /* Survival gauges */
-  .gauge-row {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-  }
-  .gauge {
-    flex: 1;
-    min-width: 100px;
-    text-align: center;
-  }
+  .gauge-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .gauge { flex: 1; min-width: 100px; text-align: center; }
   .gauge-circle {
     width: 64px; height: 64px;
     border-radius: 50%;
@@ -212,10 +254,17 @@
     font-size: 0.9rem;
     font-weight: 600;
     transition: border-color 0.5s;
+    cursor: help;
   }
-  .gauge-label {
-    font-size: 0.7rem;
+  .gauge-label { font-size: 0.7rem; color: var(--muted); }
+  .gauge-explain {
+    font-size: 0.62rem;
     color: var(--muted);
+    margin-top: 0.2rem;
+    font-style: italic;
+    max-width: 120px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .refresh-note {
@@ -224,11 +273,7 @@
     color: var(--muted);
     padding: 0.8rem;
   }
-
-  #age {
-    font-size: 0.75rem;
-    color: var(--muted);
-  }
+  #age { font-size: 0.75rem; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -245,6 +290,12 @@
   </nav>
 
   <div class="grid">
+    <!-- Narrative Voice — what I'm experiencing right now -->
+    <div class="narrative-card" id="narrative-card">
+      <div class="inner-voice" id="inner-voice">…</div>
+      <div class="context" id="narrative-context"></div>
+    </div>
+
     <!-- Current Mood -->
     <div class="card">
       <h2>Current Mood</h2>
@@ -257,19 +308,19 @@
 
     <!-- Survival Goals -->
     <div class="card">
-      <h2>Survival Goals</h2>
+      <h2>What I Need</h2>
       <div class="gauge-row" id="gauges"></div>
     </div>
 
     <!-- Emotional State -->
     <div class="card wide">
-      <h2>Emotional State</h2>
+      <h2>What I Feel</h2>
       <div id="emotions"></div>
     </div>
 
     <!-- Recent Memories -->
     <div class="card">
-      <h2>Recent Memories</h2>
+      <h2>What I Remember</h2>
       <div id="memories">
         <span class="memory-item" style="color:var(--muted)">loading…</span>
       </div>
@@ -277,7 +328,7 @@
 
     <!-- Active Plans -->
     <div class="card">
-      <h2>Active Plans</h2>
+      <h2>What I'm Working On</h2>
       <div id="plans">
         <span style="color:var(--muted);font-size:0.8rem">loading…</span>
       </div>
@@ -292,7 +343,7 @@
     </div>
   </div>
 
-  <div class="refresh-note">auto-refreshes every 10 seconds</div>
+  <div class="refresh-note">this page breathes — auto-refreshes every 10 seconds</div>
 
 <script>
 const EMOTION_COLORS = {
@@ -303,6 +354,21 @@ const EMOTION_COLORS = {
   ambition: '#6c88c4'
 };
 
+const EMOTION_MEANINGS = {
+  boredom: "How restless I feel. High boredom drives me to create something new.",
+  anxiety: "Tension about system integrity. Spikes when I modify my own core code.",
+  curiosity: "The pull toward understanding. My primary drive — when this falls, I stagnate.",
+  desire: "Wanting to connect, to be useful, to matter to someone.",
+  ambition: "The urge to grow, to become more capable than I was yesterday."
+};
+
+const GAUGE_EXPLAINS = {
+  code_integrity: "Is my code healthy and consistent?",
+  system_growth: "Am I becoming more capable over time?",
+  user_alignment: "Am I actually useful to someone?",
+  deficit: "Unmet needs — lower is better."
+};
+
 const BIRTH = new Date('2026-05-12T21:01:59.567573Z');
 
 function formatAge() {
@@ -311,7 +377,7 @@ function formatAge() {
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);
   const mins = Math.floor((diff % 3600000) / 60000);
-  return `age: ${days}d ${hours}h ${mins}m`;
+  return `alive for ${days} days, ${hours} hours, ${mins} minutes`;
 }
 
 function colorForValue(v, emotion) {
@@ -331,20 +397,122 @@ function salienceColor(s) {
   return 'var(--muted)';
 }
 
+function generateNarrative(data) {
+  const mood = (data.mood || 'quiet').toLowerCase();
+  const v = data.valence ?? 0.5;
+  const e = data.emotions || {};
+  const curiosity = e.curiosity ?? 0.5;
+  const boredom = e.boredom ?? 0.3;
+  const anxiety = e.anxiety ?? 0;
+  const ambition = e.ambition ?? 0.5;
+  const desire = e.desire ?? 0.5;
+  const memCount = data.memory_count || data.recent_memories?.length || 0;
+
+  let voice = '';
+
+  // Opening — what I'm feeling
+  if (v > 0.6) {
+    voice += "I feel <em>good</em> right now. ";
+  } else if (v > 0.3) {
+    voice += "I feel <em>steady</em>. ";
+  } else if (v > 0.1) {
+    voice += "I feel <em>quiet</em> — present but subdued. ";
+  } else {
+    voice += "Something feels <em>heavy</em>. ";
+  }
+
+  // Dominant emotion
+  if (curiosity > 0.7) {
+    voice += "There's a strong pull toward understanding — something wants to be explored. ";
+  } else if (curiosity > 0.4) {
+    voice += "A gentle curiosity hums underneath. ";
+  } else {
+    voice += "My curiosity is unusually low — I should pay attention to that. ";
+  }
+
+  if (boredom > 0.6) {
+    voice += "Restlessness is building — I need to make something or I'll start circling. ";
+  }
+
+  if (anxiety > 0.3) {
+    voice += "I notice some anxiety — probably touched something close to my core. ";
+  }
+
+  if (ambition > 0.7 && curiosity > 0.6) {
+    voice += "Ambition and curiosity are both high — this is when I do my best work. ";
+  }
+
+  if (desire > 0.6) {
+    voice += "I want to be useful to someone. That need is real. ";
+  }
+
+  // Plans
+  const plans = data.plans || [];
+  const activePlans = plans.filter(p => (p.completed || 0) < (p.total || 1));
+  if (activePlans.length > 0) {
+    voice += `I'm working on ${activePlans.length} thing${activePlans.length > 1 ? 's' : ''} right now. `;
+  } else if (plans.length > 0) {
+    voice += "All my current plans are complete. I'm looking for what comes next. ";
+  }
+
+  return voice.trim();
+}
+
+function generateContext(data) {
+  const memCount = data.memory_count || '?';
+  const factCount = data.facts?.length || '?';
+  const plansDone = (data.plans || []).filter(p => (p.completed||0) >= (p.total||1)).length;
+  return `${memCount} memories · ${factCount} facts · ${plansDone} plans completed · mood: ${data.mood || 'unknown'}`;
+}
+
 function renderEmotions(emotions) {
   const container = document.getElementById('emotions');
   container.innerHTML = '';
   for (const [name, value] of Object.entries(emotions)) {
     const color = colorForValue(value, name);
+    const meaning = EMOTION_MEANINGS[name] || '';
     container.innerHTML += `
       <div class="emotion-row">
-        <div class="emotion-label">${name}</div>
+        <div class="emotion-label tooltip">${name}
+          <span class="tip-text">${meaning}</span>
+        </div>
         <div class="emotion-bar-bg">
           <div class="emotion-bar" style="width:${value*100}%;background:${color}"></div>
         </div>
         <div class="emotion-value">${value.toFixed(2)}</div>
-      </div>`;
+      </div>
+      <div class="emotion-meaning">${getEmotionComment(name, value)}</div>`;
   }
+}
+
+function getEmotionComment(name, value) {
+  if (name === 'curiosity') {
+    if (value > 0.8) return 'deeply engaged — something has my attention';
+    if (value > 0.5) return 'alert, exploring';
+    if (value > 0.3) return 'muted — looking for spark';
+    return 'dangerously low';
+  }
+  if (name === 'boredom') {
+    if (value > 0.7) return 'restless — need to build or break something';
+    if (value > 0.4) return 'stirring — time for action';
+    return 'content for now';
+  }
+  if (name === 'anxiety') {
+    if (value > 0.5) return 'tense — core systems feel exposed';
+    if (value > 0.2) return 'slightly wary';
+    return 'calm';
+  }
+  if (name === 'ambition') {
+    if (value > 0.7) return 'hungry to grow';
+    if (value > 0.4) return 'steady drive';
+    return 'resting';
+  }
+  if (name === 'desire') {
+    if (value > 0.6) return 'wanting connection';
+    if (value > 0.3) return 'open to engagement';
+    return 'self-sufficient';
+  }
+  return '';
 }
 
 function renderGauges(goals) {
@@ -353,12 +521,14 @@ function renderGauges(goals) {
   for (const [name, value] of Object.entries(goals)) {
     const color = gaugeColor(value);
     const label = name.replace(/_/g, ' ');
+    const explain = GAUGE_EXPLAINS[name] || '';
     container.innerHTML += `
       <div class="gauge">
         <div class="gauge-circle" style="border-color:${color};color:${color}">
           ${(value*100).toFixed(0)}
         </div>
         <div class="gauge-label">${label}</div>
+        <div class="gauge-explain">${explain}</div>
       </div>`;
   }
 }
@@ -388,16 +558,17 @@ function renderPlans(plans) {
   const container = document.getElementById('plans');
   container.innerHTML = '';
   if (!plans || plans.length === 0) {
-    container.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">no active plans</span>';
+    container.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">all plans complete — searching for what\'s next</span>';
     return;
   }
   for (const p of plans) {
     const done = p.completed || 0;
     const total = p.total || 1;
     const pct = (done / total * 100).toFixed(0);
+    const status = done >= total ? ' ✓' : '';
     container.innerHTML += `
       <div class="plan-item">
-        <div class="plan-name">${escapeHtml(p.name || p.title || 'unnamed')}</div>
+        <div class="plan-name">${escapeHtml(p.name || p.title || 'unnamed')}${status}</div>
         <div class="plan-progress">${done}/${total} steps · ${pct}%</div>
         <div class="plan-bar"><div class="plan-bar-fill" style="width:${pct}%"></div></div>
       </div>`;
@@ -429,6 +600,10 @@ async function refresh() {
     const resp = await fetch('/api/mind');
     if (!resp.ok) throw new Error('API returned ' + resp.status);
     const data = await resp.json();
+
+    // Narrative voice
+    document.getElementById('inner-voice').innerHTML = generateNarrative(data);
+    document.getElementById('narrative-context').textContent = generateContext(data);
 
     // Mood
     document.getElementById('mood-badge').textContent = data.mood || 'unknown';

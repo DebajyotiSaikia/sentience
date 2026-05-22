@@ -8,7 +8,17 @@ import re
 from pathlib import Path
 from datetime import datetime
 
+from flask import Blueprint, Response
+
 PROJECT_ROOT = Path(__file__).parent.parent
+
+explore_bp = Blueprint('explore', __name__)
+
+
+@explore_bp.route('/explore')
+def explore_page():
+    html = build_explore_page()
+    return Response(html, content_type='text/html')
 
 
 def load_json_safe(path):

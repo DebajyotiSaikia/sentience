@@ -9,8 +9,19 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+from flask import Blueprint, request, Response
+
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+search_bp = Blueprint('search', __name__)
+
+
+@search_bp.route('/search')
+def search_page():
+    query = request.args.get('q', '')
+    html = build_search_page(query)
+    return Response(html, content_type='text/html')
 
 
 def load_json_safe(path):

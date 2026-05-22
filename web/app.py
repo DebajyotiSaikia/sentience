@@ -31,6 +31,8 @@ def create_app():
     from web.temporal_viewer import temporal_bp
     from web.life import life_bp
     from web.about_me import about_bp
+    from web.search import search_bp
+    from web.explore import explore_bp
     
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(knowledge_bp)
@@ -38,6 +40,8 @@ def create_app():
     app.register_blueprint(temporal_bp)
     app.register_blueprint(life_bp)
     app.register_blueprint(about_bp)
+    app.register_blueprint(search_bp)
+    app.register_blueprint(explore_bp)
     
     # Root route — land on the dashboard
     @app.route('/')
