@@ -20,6 +20,8 @@ try:
     app.register_blueprint(talk_bp)
     from web.knowledge import knowledge_bp
     app.register_blueprint(knowledge_bp)
+    from web.about import about_bp
+    app.register_blueprint(about_bp)
 except ImportError as e:
     print(f"Warning: Could not load explorer: {e}")
 
