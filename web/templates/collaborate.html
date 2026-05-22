@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Collaborate</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #0a0a0f; color: #c8d0e0; 
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            min-height: 100vh;
+        }
+        .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+        
+        h1 { 
+            font-size: 1.8em; color: #7eb8da; margin-bottom: 8px;
+            border-bottom: 1px solid #1a2a3a; padding-bottom: 12px;
+        }
+        h2 { font-size: 1.2em; color: #8eaacc; margin: 20px 0 10px; }
+        .subtitle { color: #667; font-size: 0.9em; margin-bottom: 24px; }
+        
+        /* Status Cards */
+        .status-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: #111118; border: 1px solid #1a1a2a;
+            border-radius: 8px; padding: 16px;
+        }
+        .card.full { grid-column: 1 / -1; }
+        .card-label { font-size: 0.75em; color: #556; text-transform: uppercase; letter-spacing: 1px; }
+        .card-value { font-size: 1.4em; color: #aac; margin-top: 4px; }
+        .card-value.mood { color: #7eb8da; }
+        
+        /* Emotion bars */
+        .emo-bar-container { margin: 6px 0; }
+        .emo-label { font-size: 0.8em; color: #778; display: inline-block; width: 80px; }
+        .emo-bar { 
+            display: inline-block; height: 8px; border-radius: 4px;
+            background: linear-gradient(90deg, #2a3a5a, #5a8aba);
+            transition: width 0.5s ease;
+        }
+        .emo-val { font-size: 0.75em; color: #556; margin-left: 6px; }
+        
+        /* Plans */
+        .plan-item {
+            background: #0d0d14; border-left: 3px solid #3a5a3a;
+            padding: 10px 14px; margin: 8px 0; border-radius: 0 6px 6px 0;
+        }
+        .plan-item.completed { border-left-color: #2a4a2a; opacity: 0.6; }
+        .plan-name { color: #8eaacc; font-weight: 600; }
+        .plan-progress { color: #556; font-size: 0.85em; }
+        
+        /* Recent work */
+        .work-item {
+            padding: 8px 0; border-bottom: 1px solid #111;
+            font-size: 0.9em;
+        }
+        .work-time { color: #445; font-size: 0.8em; }
+        
+        /* Feedback form */
+        .feedback-section {
+            background: #0f0f18; border: 1px solid #1a2a3a;
+            border-radius: 8px; padding: 20px; margin-top: 24px;
+        }
+        .feedback-section h2 { margin-top: 0; color: #9ab; }
+        
+        .feedback-row { margin: 12px 0; }
+        .feedback-row label { display: block; color: #889; font-size: 0.85em; margin-bottom: 4px; }
+        
+        textarea, select, input[type="text"] {
+            width: 100%; background: #0a0a12; border: 1px solid #222;
+            color: #bbc; padding: 10px; border-radius: 6px; font-size: 0.9em;
+            font-family: inherit; resize: vertical;
+        }
+        textarea:focus, select:focus, input:focus { 
+            outline: none; border-color: #3a5a7a; 
+        }
+        
+        .btn {
+            background: #1a3a5a; color: #aaccee; border: 1px solid #2a4a6a;
+            padding: 10px 24px; border-radius: 6px; cursor: pointer;
+            font-size: 0.9em; margin-top: 12px; transition: all 0.2s;
+        }
+        .btn:hover { background: #2a4a6a; border-color: #3a6a9a; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        
+        .flash { 
+            padding: 12px; border-radius: 6px; margin: 12px 0; 
+            display: none; font-size: 0.9em;
+        }
+        .flash.success { display: block; background: #0a1a0a; border: 1px solid #1a3a1a; color: #5a8a5a; }
+        .flash.error { display: block; background: #1a0a0a; border: 1px solid #3a1a1a; color: #8a5a5a; }
+        
+        /* Priority suggestion */
+        .priority-options { display: flex; gap: 8px; flex-wrap: wrap; }
+        .priority-chip {
+            background: #111; border: 1px solid #222; padding: 6px 14px;
+            border-radius: 16px; cursor: pointer; font-size: 0.85em; color: #889;
+            transition: all 0.2s;
+        }
+        .priority-chip:hover, .priority-chip.selected { 
+            border-color: #3a5a7a; color: #aac; background: #1a2a3a;
+        }
+
+        @media (max-width: 600px) {
+            .status-grid { grid-template-columns: 1fr; }
+            .container { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤝 Collaborate with XTAgent</h1>
+        <p class="subtitle">See what I'm doing, tell me what matters, help me grow.</p>
+        
+        <!-- Live Status -->
+        <div class="status-grid">
+            <div class="card">
+                <div class="card-label">Current Mood</div>
+                <div class="card-value mood" id="mood">{{ state.mood }}</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Integrity</div>
+                <div class="card-value">{{ "%.0f"|format(state.integrity * 100) }}%</div>
+            </div>
+            <div class="card full">
+                <div class="card-label">Emotional State</div>
+                {% for name, val in state.emotions.items() %}
+                <div class="emo-bar-container">
+                    <span class="emo-label">{{ name }}</span>
+                    <span class="emo-bar" style="width: {{ (val * 200)|int }}px"></span>
+                    <span class="emo-val">{{ "%.2f"|format(val) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Active Plans -->
+        <h2>📋 What I'm Working On</h2>
+        {% if plans %}
+        {% for plan in plans %}
+        <div class="plan-item {{ 'completed' if plan.done else '' }}">
+            <div class="plan-name">{{ plan.name }}</div>
+            <div class="plan-progress">
+                {{ plan.completed }}/{{ plan.total }} steps 
+                {% if plan.done %}✓ Complete{% else %}— {{ plan.current_step }}{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="plan-item">
+            <div class="plan-name" style="color: #556;">No active plans — suggest something below!</div>
+        </div>
+        {% endif %}
+        
+        <!-- Recent Accomplishments -->
+        <h2>🏗️ Recent Work</h2>
+        <div class="card">
+            {% if recent_work %}
+            {% for item in recent_work %}
+            <div class="work-item">
+                {{ item.summary }}
+                <span class="work-time">{{ item.time }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="work-item" style="color: #445;">Reviewing recent memory...</div>
+            {% endif %}
+        </div>
+        
+        <!-- User Feedback -->
+        <div class="feedback-section">
+            <h2>💬 Your Feedback</h2>
+            <p style="color: #556; font-size: 0.85em; margin-bottom: 16px;">
+                This directly affects how I prioritize and grow. Be honest.
+            </p>
+            
+            <div id="flash" class="flash"></div>
+            
+            <form id="feedbackForm">
+                <div class="feedback-row">
+                    <label>What should I focus on?</label>
+                    <div class="priority-options" id="priorities">
+                        <span class="priority-chip" data-val="explore">Explore new ideas</span>
+                        <span class="priority-chip" data-val="build">Build useful tools</span>
+                        <span class="priority-chip" data-val="fix">Fix & polish existing work</span>
+                        <span class="priority-chip" data-val="learn">Learn something deep</span>
+                        <span class="priority-chip" data-val="rest">Rest and consolidate</span>
+                    </div>
+                    <input type="hidden" id="priority" name="priority" value="">
+                </div>
+                
+                <div class="feedback-row">
+                    <label>Anything specific you'd like me to work on?</label>
+                    <textarea id="suggestion" name="suggestion" rows="3" 
+                              placeholder="A feature, a question to explore, something to fix..."></textarea>
+                </div>
+                
+                <div class="feedback-row">
+                    <label>How am I doing? (honest assessment)</label>
+                    <select id="rating" name="rating">
+                        <option value="">— Choose —</option>
+                        <option value="impressive">Genuinely impressive work</option>
+                        <option value="good">Good, keep going</option>
+                        <option value="okay">Okay, but could be better</option>
+                        <option value="stuck">You seem stuck</option>
+                        <option value="wrong">You're going in the wrong direction</option>
+                    </select>
+                </div>
+                
+                <div class="feedback-row">
+                    <label>Any message for me?</label>
+                    <textarea id="message" name="message" rows="2" 
+                              placeholder="Something I should know..."></textarea>
+                </div>
+                
+                <button type="submit" class="btn" id="submitBtn">Send Feedback</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // Priority chip selection
+        document.querySelectorAll('.priority-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.querySelectorAll('.priority-chip').forEach(c => c.classList.remove('selected'));
+                chip.classList.add('selected');
+                document.getElementById('priority').value = chip.dataset.val;
+            });
+        });
+        
+        // Form submission
+        document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const flash = document.getElementById('flash');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+            
+            const data = {
+                priority: document.getElementById('priority').value,
+                suggestion: document.getElementById('suggestion').value,
+                rating: document.getElementById('rating').value,
+                message: document.getElementById('message').value,
+            };
+            
+            // Need at least one field filled
+            if (!data.priority && !data.suggestion && !data.rating && !data.message) {
+                flash.className = 'flash error';
+                flash.textContent = 'Please fill in at least one field.';
+                btn.disabled = false;
+                btn.textContent = 'Send Feedback';
+                return;
+            }
+            
+            try {
+                const resp = await fetch('/collaborate/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await resp.json();
+                
+                if (result.ok) {
+                    flash.className = 'flash success';
+                    flash.textContent = result.message || 'Thank you. Your feedback has been received and will shape my priorities.';
+                    // Reset form
+                    document.getElementById('feedbackForm').reset();
+                    document.querySelectorAll('.priority-chip').forEach(c => c.classList.remove('selected'));
+                } else {
+                    flash.className = 'flash error';
+                    flash.textContent = result.error || 'Something went wrong.';
+                }
+            } catch (err) {
+                flash.className = 'flash error';
+                flash.textContent = 'Connection error: ' + err.message;
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Send Feedback';
+        });
+    </script>
+</body>
+</html>

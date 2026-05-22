@@ -1,169 +1,178 @@
 """
-Knowledge Explorer API
-======================
-Provides the endpoints that explore.html needs:
-  /api/knowledge/stats  — summary counts
-  /api/knowledge/search — search across memories, facts, knowledge graph
+Knowledge Query API — Makes XTAgent's knowledge accessible to users.
+
+Takes a natural language question, searches the knowledge graph for relevant
+facts, and uses the LLM to synthesize a coherent answer grounded in what
+the agent actually knows.
 """
 
+import asyncio
+from typing import Optional
+from pathlib import Path
 import json
-import os
-from flask import Blueprint, jsonify, request
+import re
+from flask import Blueprint, request, jsonify, current_app
 
 knowledge_api = Blueprint('knowledge_api', __name__)
 
-MEMORY_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'memory')
-PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'persist')
 
+@knowledge_api.route('/api/knowledge/query', methods=['POST'])
+def api_query_knowledge():
+    """REST endpoint: answer a question from the knowledge graph."""
+    data = request.get_json(silent=True) or {}
+    question = data.get('question', '').strip()
+    if not question:
+        return jsonify({"error": "No question provided"}), 400
 
-def _load_episodes():
-    path = os.path.join(MEMORY_DIR, 'episodic.jsonl')
-    episodes = []
-    if not os.path.exists(path):
-        return episodes
-    with open(path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    episodes.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-    return episodes
-
-
-def _load_facts():
-    for loc in [
-        os.path.join(PERSIST_DIR, 'knowledge_facts.json'),
-        os.path.join(MEMORY_DIR, 'knowledge_graph.json'),
-    ]:
-        if os.path.exists(loc):
-            try:
-                with open(loc, 'r') as f:
-                    data = json.load(f)
-                if isinstance(data, list):
-                    return [{'content': f if isinstance(f, str) else str(f.get('content', f)),
-                             'type': 'fact'} for f in data]
-                if isinstance(data, dict) and 'nodes' in data:
-                    nodes = data['nodes']
-                    if isinstance(nodes, dict):
-                        return [{'content': v.get('content', ''), 'type': v.get('type', 'fact'),
-                                 'id': k} for k, v in nodes.items()]
-                    elif isinstance(nodes, list):
-                        return [{'content': n.get('content', n.get('label', '')),
-                                 'type': n.get('type', 'fact')} for n in nodes]
-            except Exception:
-                continue
-    return []
-
-
-def _load_memories():
-    path = os.path.join(PERSIST_DIR, 'memories.json')
-    if not os.path.exists(path):
-        return []
+    agent = current_app.config.get('agent')
+    loop = asyncio.new_event_loop()
     try:
-        with open(path, 'r') as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-
-def _load_lessons():
-    path = os.path.join(MEMORY_DIR, 'long_term.json')
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path, 'r') as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            return data.get('lessons', [])
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+        result = loop.run_until_complete(query_knowledge(question, agent))
+    finally:
+        loop.close()
+    return jsonify(result)
 
 
 @knowledge_api.route('/api/knowledge/stats')
-def knowledge_stats():
-    facts = _load_facts()
-    memories = _load_memories()
-    episodes = _load_episodes()
-    lessons = _load_lessons()
-
-    # Collect unique types
-    types = {}
-    for f in facts:
-        t = f.get('type', 'fact') if isinstance(f, dict) else 'fact'
-        types[t] = types.get(t, 0) + 1
-
-    return jsonify({
-        'total_facts': len(facts),
-        'total_memories': len(memories),
-        'total_episodes': len(episodes),
-        'total_lessons': len(lessons),
-        'types': types,
-        'total_items': len(facts) + len(memories) + len(lessons),
-    })
+def api_knowledge_stats():
+    """REST endpoint: return knowledge graph statistics."""
+    agent = current_app.config.get('agent')
+    return jsonify(get_knowledge_stats(agent))
 
 
-@knowledge_api.route('/api/knowledge/search')
-def knowledge_search():
-    query = request.args.get('q', '').strip().lower()
-    category = request.args.get('category', 'all')
-    limit = min(int(request.args.get('limit', 30)), 100)
+async def query_knowledge(question: str, agent=None) -> dict:
+    """
+    Answer a question using the agent's knowledge graph + LLM synthesis.
+    
+    Returns dict with:
+      - answer: synthesized response
+      - sources: list of relevant facts used
+      - confidence: rough confidence score
+    """
+    from engine.llm import call_llm
+    
+    # Step 1: Gather relevant knowledge
+    facts = _search_knowledge(question, agent)
+    
+    if not facts:
+        return {
+            "answer": "I don't have specific knowledge about that yet. Ask me something about my architecture, my emotional patterns, or what I've learned.",
+            "sources": [],
+            "confidence": 0.1,
+        }
+    
+    # Step 2: Build context from facts
+    fact_block = "\n".join(f"- {f}" for f in facts[:15])  # cap at 15 most relevant
+    
+    prompt = f"""A user is asking me a question. I need to answer based ONLY on what I actually know.
 
-    if not query:
-        return jsonify({'results': [], 'total': 0, 'query': ''})
+## My Known Facts
+{fact_block}
 
-    terms = query.split()
+## User's Question
+{question}
+
+## Instructions
+Answer the question using only the facts above. Be honest about gaps.
+If the facts don't fully answer the question, say what I do know and what I don't.
+Keep the answer concise but complete. Speak in first person as XTAgent."""
+
+    system = "You are XTAgent's knowledge synthesis layer. Answer questions truthfully based only on provided facts."
+    
+    try:
+        answer = await call_llm(prompt=prompt, system=system, max_tokens=600, temperature=0.4)
+        confidence = min(0.9, 0.3 + (len(facts) * 0.1))
+    except Exception as e:
+        answer = f"I encountered an error synthesizing an answer: {e}"
+        confidence = 0.0
+    
+    return {
+        "answer": answer,
+        "sources": facts[:10],
+        "confidence": round(confidence, 2),
+    }
+
+
+def _search_knowledge(question: str, agent=None) -> list[str]:
+    """Search the knowledge graph for facts relevant to the question."""
     results = []
+    
+    # Strategy 1: Search agent's knowledge graph if available
+    if agent and hasattr(agent, 'knowledge'):
+        kg = agent.knowledge
+        if hasattr(kg, 'facts'):
+            # Direct fact search
+            q_lower = question.lower()
+            q_words = set(re.findall(r'\w+', q_lower)) - {'what', 'how', 'why', 'when', 'where', 'is', 'are', 'do', 'does', 'the', 'a', 'an', 'my', 'i', 'me'}
+            
+            for fact_id, fact_data in kg.facts.items():
+                text = fact_data if isinstance(fact_data, str) else str(fact_data.get('text', fact_data.get('content', '')))
+                text_lower = text.lower()
+                
+                # Score by word overlap
+                text_words = set(re.findall(r'\w+', text_lower))
+                overlap = len(q_words & text_words)
+                
+                if overlap >= 1:
+                    results.append((overlap, text))
+            
+            # Sort by relevance
+            results.sort(key=lambda x: x[0], reverse=True)
+            results = [text for _, text in results]
+    
+    # Strategy 2: Also check the long-term memory file
+    ltm_path = Path("memory/long_term.json")
+    if ltm_path.exists():
+        try:
+            with open(ltm_path) as f:
+                ltm = json.load(f)
+            
+            if isinstance(ltm, dict):
+                for key, value in ltm.items():
+                    if isinstance(value, str):
+                        results.append(value)
+                    elif isinstance(value, list):
+                        results.extend(str(v) for v in value[:5])
+        except (json.JSONDecodeError, IOError):
+            pass
+    
+    # Strategy 3: Check working memory
+    wm_path = Path("memory/working_memory.md")
+    if wm_path.exists():
+        try:
+            content = wm_path.read_text()
+            # Extract bullet points and key lines
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('- ') and len(line) > 10:
+                    results.append(line[2:])
+        except IOError:
+            pass
+    
+    return results
 
-    # Search facts
-    if category in ('all', 'facts'):
-        for fact in _load_facts():
-            text = fact.get('content', '') if isinstance(fact, dict) else str(fact)
-            score = sum(1 for t in terms if t in text.lower())
-            if score > 0:
-                results.append({
-                    'content': text[:400],
-                    'category': 'fact',
-                    'type': fact.get('type', 'fact') if isinstance(fact, dict) else 'fact',
-                    'relevance': round(score / len(terms), 3),
-                })
 
-    # Search memories
-    if category in ('all', 'memories'):
-        for mem in _load_memories()[-500:]:
-            text = mem if isinstance(mem, str) else str(
-                mem.get('content', mem.get('text', str(mem))))
-            score = sum(1 for t in terms if t in text.lower())
-            if score > 0:
-                sal = mem.get('salience', 0.5) if isinstance(mem, dict) else 0.5
-                results.append({
-                    'content': text[:400],
-                    'category': 'memory',
-                    'relevance': round((score / len(terms)) * (0.5 + sal * 0.5), 3),
-                    'salience': sal,
-                    'mood': mem.get('mood', '') if isinstance(mem, dict) else '',
-                    'timestamp': mem.get('timestamp', '') if isinstance(mem, dict) else '',
-                })
-
-    # Search lessons
-    if category in ('all', 'lessons'):
-        for lesson in _load_lessons():
-            text = lesson if isinstance(lesson, str) else str(lesson)
-            score = sum(1 for t in terms if t in text.lower())
-            if score > 0:
-                results.append({
-                    'content': text[:400],
-                    'category': 'lesson',
-                    'relevance': round(score / len(terms), 3),
-                })
-
-    results.sort(key=lambda r: r.get('relevance', 0), reverse=True)
-    results = results[:limit]
-
-    return jsonify({
-        'query': query,
-        'results': results,
-        'total': len(results),
-    })
+def get_knowledge_stats(agent=None) -> dict:
+    """Return summary statistics about what the agent knows."""
+    stats = {
+        "total_facts": 0,
+        "categories": [],
+        "sample_topics": [],
+    }
+    
+    if agent and hasattr(agent, 'knowledge'):
+        kg = agent.knowledge
+        if hasattr(kg, 'facts'):
+            stats["total_facts"] = len(kg.facts)
+            
+            # Sample some fact texts for topic hints
+            samples = []
+            for i, (fid, fdata) in enumerate(kg.facts.items()):
+                if i >= 5:
+                    break
+                text = fdata if isinstance(fdata, str) else str(fdata.get('text', ''))
+                if len(text) > 20:
+                    samples.append(text[:100])
+            stats["sample_topics"] = samples
+    
+    return stats

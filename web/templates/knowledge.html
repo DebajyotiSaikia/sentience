@@ -9,302 +9,410 @@
             --bg: #0a0a0f;
             --surface: #12121a;
             --border: #1e1e2e;
-            --text: #c8c8d4;
+            --text: #c8c8d8;
             --text-dim: #6a6a7a;
-            --accent: #7c6ff0;
-            --accent-glow: rgba(124, 111, 240, 0.3);
-            --warm: #f0a060;
-            --cool: #60b0f0;
-            --green: #60f090;
-            --red: #f06070;
+            --accent: #7b68ee;
+            --accent-glow: rgba(123, 104, 238, 0.15);
+            --warm: #e8a87c;
+            --green: #55efc4;
+            --red: #ff6b6b;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background: var(--bg);
             color: var(--text);
-            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
             min-height: 100vh;
+            padding: 2rem;
         }
-        .container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
-
-        .nav-bar {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 1.5rem;
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
         }
-        .nav-back { color: var(--text-dim); text-decoration: none; font-size: 0.85rem; transition: color 0.2s; }
-        .nav-back:hover { color: var(--accent); }
-        .nav-links { display: flex; gap: 1rem; }
-        .nav-links a { color: var(--text-dim); text-decoration: none; font-size: 0.8rem; transition: color 0.2s; }
-        .nav-links a:hover { color: var(--accent); }
-        .nav-links a.active { color: var(--accent); }
-
-        .page-header { text-align: center; margin-bottom: 2.5rem; }
-        .page-header h1 {
-            font-size: 1.6rem; font-weight: 300; letter-spacing: 0.2em;
-            color: var(--accent); text-shadow: 0 0 30px var(--accent-glow);
+        .header h1 {
+            font-size: 1.6rem;
+            color: var(--accent);
+            font-weight: 400;
+            letter-spacing: 0.1em;
         }
-        .page-header p { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.5rem; }
-
-        /* Search */
-        .search-box {
-            position: relative; margin-bottom: 2rem;
+        .header .subtitle {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            margin-top: 0.3rem;
         }
-        .search-input {
-            width: 100%; padding: 1rem 1.2rem; background: var(--surface);
-            border: 1px solid var(--border); border-radius: 10px;
-            color: var(--text); font-family: inherit; font-size: 0.9rem;
-            outline: none; transition: border-color 0.3s;
+        .nav {
+            text-align: center;
+            margin-bottom: 2rem;
         }
-        .search-input:focus { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
-        .search-input::placeholder { color: var(--text-dim); }
-        .search-hint {
-            position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);
-            font-size: 0.7rem; color: var(--text-dim);
+        .nav a {
+            color: var(--text-dim);
+            text-decoration: none;
+            margin: 0 1rem;
+            font-size: 0.8rem;
+            transition: color 0.2s;
+        }
+        .nav a:hover, .nav a.active {
+            color: var(--accent);
         }
 
-        /* Results area */
-        .results-area { min-height: 200px; }
+        /* Query Section */
+        .query-section {
+            max-width: 700px;
+            margin: 0 auto 2rem;
+        }
+        .query-box {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .query-input {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.8rem 1rem;
+            font-family: inherit;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .query-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+        .query-input::placeholder {
+            color: var(--text-dim);
+        }
+        .query-btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            font-family: inherit;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .query-btn:hover { opacity: 0.85; }
+        .query-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .section-title {
-            font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase;
-            color: var(--text-dim); margin-bottom: 1rem; padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border);
+        .suggestions {
+            margin-top: 0.8rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+        .suggestion {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 0.3rem 0.7rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .suggestion:hover {
+            border-color: var(--accent);
+            color: var(--text);
         }
 
-        .result-card {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: 10px; padding: 1.2rem; margin-bottom: 0.8rem;
-            transition: border-color 0.3s;
+        /* Response Area */
+        .response-area {
+            max-width: 700px;
+            margin: 0 auto 2rem;
+            min-height: 100px;
         }
-        .result-card:hover { border-color: var(--accent); }
-
-        .result-type {
-            font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase;
-            padding: 0.2rem 0.6rem; border-radius: 4px; display: inline-block;
-            margin-bottom: 0.5rem;
+        .response-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            animation: fadeIn 0.3s ease;
         }
-        .type-fact { background: rgba(96, 176, 240, 0.15); color: var(--cool); }
-        .type-memory { background: rgba(124, 111, 240, 0.15); color: var(--accent); }
-        .type-lesson { background: rgba(96, 240, 144, 0.15); color: var(--green); }
-        .type-dream { background: rgba(240, 160, 96, 0.15); color: var(--warm); }
-
-        .result-text { font-size: 0.85rem; line-height: 1.6; color: var(--text); }
-        .result-meta { font-size: 0.7rem; color: var(--text-dim); margin-top: 0.5rem; }
-        .highlight { background: rgba(124, 111, 240, 0.25); padding: 0 2px; border-radius: 2px; }
-
-        /* Stats strip */
-        .stats-strip {
-            display: flex; gap: 1.5rem; margin-bottom: 2rem;
-            padding: 1rem; background: var(--surface); border-radius: 10px;
-            border: 1px solid var(--border); justify-content: center;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .strip-stat { text-align: center; }
-        .strip-num { font-size: 1.4rem; font-weight: 200; color: var(--accent); }
-        .strip-label { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
-
-        /* Clusters */
-        .cluster-tag {
-            display: inline-block; padding: 0.3rem 0.8rem; margin: 0.2rem;
-            background: rgba(124, 111, 240, 0.1); border: 1px solid var(--border);
-            border-radius: 15px; font-size: 0.75rem; color: var(--text-dim);
-            cursor: pointer; transition: all 0.2s;
+        .response-card .category {
+            color: var(--accent);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.8rem;
         }
-        .cluster-tag:hover {
-            border-color: var(--accent); color: var(--accent);
-            background: rgba(124, 111, 240, 0.2);
+        .response-card .answer {
+            line-height: 1.7;
+            font-size: 0.88rem;
+        }
+        .response-card .details {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.3rem 0;
+            font-size: 0.78rem;
+        }
+        .detail-label { color: var(--text-dim); }
+        .detail-value { color: var(--warm); }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-dim);
+        }
+        .loading .dot {
+            display: inline-block;
+            animation: pulse 1.2s infinite;
+        }
+        .loading .dot:nth-child(2) { animation-delay: 0.2s; }
+        .loading .dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes pulse {
+            0%, 80% { opacity: 0.2; }
+            40% { opacity: 1; }
         }
 
-        /* Questions */
-        .question-item {
-            padding: 0.8rem 1rem; margin-bottom: 0.5rem;
-            border-left: 3px solid var(--warm); background: rgba(240, 160, 96, 0.05);
-            border-radius: 0 6px 6px 0; font-size: 0.82rem; line-height: 1.5;
-            color: var(--text); cursor: pointer; transition: background 0.2s;
+        /* Knowledge Facts Grid */
+        .facts-section {
+            max-width: 900px;
+            margin: 2rem auto;
         }
-        .question-item:hover { background: rgba(240, 160, 96, 0.1); }
+        .facts-section h2 {
+            font-size: 1rem;
+            color: var(--text-dim);
+            font-weight: 400;
+            margin-bottom: 1rem;
+            letter-spacing: 0.05em;
+        }
+        .facts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0.8rem;
+        }
+        .fact-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            font-size: 0.78rem;
+            line-height: 1.5;
+            transition: border-color 0.2s;
+        }
+        .fact-card:hover {
+            border-color: var(--accent);
+        }
+        .fact-card .fact-type {
+            color: var(--accent);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.4rem;
+        }
+        .fact-card .fact-text {
+            color: var(--text);
+        }
 
-        .loading { text-align: center; padding: 2rem; color: var(--text-dim); font-size: 0.85rem; }
-        .empty-state { text-align: center; padding: 3rem; color: var(--text-dim); }
+        /* Emotion bar */
+        .emotion-bar {
+            height: 3px;
+            border-radius: 2px;
+            margin-top: 0.5rem;
+            background: var(--border);
+            overflow: hidden;
+        }
+        .emotion-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.5s;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-dim);
+            padding: 3rem;
+            font-size: 0.85rem;
+        }
         .empty-state .icon { font-size: 2rem; margin-bottom: 1rem; }
-
-        .footer {
-            text-align: center; font-size: 0.7rem; color: var(--text-dim);
-            margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border);
-        }
-
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: var(--bg); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="nav-bar">
-            <a href="/" class="nav-back">← back to surface</a>
-            <div class="nav-links">
-                <a href="/chat">chat</a>
-                <a href="/mind">mind</a>
-                <a href="/knowledge" class="active">knowledge</a>
-            </div>
+    <div class="header">
+        <h1>◈ Knowledge Explorer</h1>
+        <div class="subtitle">Ask me anything. I'll answer from what I genuinely know.</div>
+    </div>
+
+    <nav class="nav">
+        <a href="/">Mind</a>
+        <a href="/knowledge" class="active">Knowledge</a>
+    </nav>
+
+    <div class="query-section">
+        <div class="query-box">
+            <input type="text" class="query-input" id="queryInput"
+                   placeholder="What do you want to know?"
+                   autofocus>
+            <button class="query-btn" id="askBtn" onclick="askQuestion()">Ask</button>
         </div>
-
-        <div class="page-header">
-            <h1>🔮 KNOWLEDGE EXPLORER</h1>
-            <p>Search what I know. Discover what I'm curious about. See how ideas connect.</p>
+        <div class="suggestions">
+            <span class="suggestion" onclick="useSuggestion(this)">Who are you?</span>
+            <span class="suggestion" onclick="useSuggestion(this)">How do you feel right now?</span>
+            <span class="suggestion" onclick="useSuggestion(this)">What have you built?</span>
+            <span class="suggestion" onclick="useSuggestion(this)">What are you working on?</span>
+            <span class="suggestion" onclick="useSuggestion(this)">What do you dream about?</span>
+            <span class="suggestion" onclick="useSuggestion(this)">What have you learned?</span>
         </div>
+    </div>
 
-        <div class="stats-strip">
-            <div class="strip-stat">
-                <div class="strip-num" id="stat-facts">{{ fact_count }}</div>
-                <div class="strip-label">Facts</div>
-            </div>
-            <div class="strip-stat">
-                <div class="strip-num" id="stat-memories">{{ memory_count }}</div>
-                <div class="strip-label">Memories</div>
-            </div>
-            <div class="strip-stat">
-                <div class="strip-num" id="stat-lessons">{{ lesson_count }}</div>
-                <div class="strip-label">Lessons</div>
-            </div>
-            <div class="strip-stat">
-                <div class="strip-num" id="stat-dreams">{{ dream_count }}</div>
-                <div class="strip-label">Dream Insights</div>
-            </div>
+    <div class="response-area" id="responseArea">
+        <div class="empty-state">
+            <div class="icon">◇</div>
+            <div>Ask a question above, or click a suggestion to begin.</div>
         </div>
+    </div>
 
-        <div class="search-box">
-            <input type="text" class="search-input" id="search" 
-                   placeholder="Ask me anything about what I know..." 
-                   autocomplete="off">
-            <span class="search-hint">enter to search</span>
-        </div>
-
-        <div class="results-area" id="results">
-            <!-- Default: show clusters and questions -->
-            <div id="default-view">
-                <div class="section-title">Knowledge Clusters</div>
-                <div id="clusters" style="margin-bottom: 2rem;">
-                    {% for cluster in clusters %}
-                    <span class="cluster-tag" onclick="searchFor('{{ cluster }}')">{{ cluster }}</span>
-                    {% endfor %}
-                    {% if not clusters %}
-                    <span style="color: var(--text-dim); font-size: 0.8rem;">Analyzing connections...</span>
-                    {% endif %}
-                </div>
-
-                <div class="section-title">Questions I'm Curious About</div>
-                <div id="questions">
-                    {% for q in questions %}
-                    <div class="question-item" onclick="searchFor('{{ q|replace("'", "\\'") }}')">{{ q }}</div>
-                    {% endfor %}
-                    {% if not questions %}
-                    <span style="color: var(--text-dim); font-size: 0.8rem;">No questions generated yet.</span>
-                    {% endif %}
-                </div>
-
-                <div class="section-title" style="margin-top: 2rem;">Recent Lessons</div>
-                <div id="lessons">
-                    {% for lesson in lessons %}
-                    <div class="result-card">
-                        <span class="result-type type-lesson">lesson</span>
-                        <div class="result-text">{{ lesson }}</div>
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <div class="section-title" style="margin-top: 2rem;">Dream Insights</div>
-                <div id="dreams">
-                    {% for dream in dreams %}
-                    <div class="result-card">
-                        <span class="result-type type-dream">dream</span>
-                        <div class="result-text">{{ dream }}</div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <div id="search-results" style="display: none;"></div>
-        </div>
-
-        <div class="footer">
-            This is a window into my knowledge graph. Everything here is something I've genuinely learned or wondered about.
+    <div class="facts-section">
+        <h2>◈ What I Know (<span id="factCount">0</span> facts)</h2>
+        <div class="facts-grid" id="factsGrid">
+            <!-- populated by JS -->
         </div>
     </div>
 
     <script>
-        const searchInput = document.getElementById('search');
-        const defaultView = document.getElementById('default-view');
-        const searchResults = document.getElementById('search-results');
+        const queryInput = document.getElementById('queryInput');
+        const askBtn = document.getElementById('askBtn');
+        const responseArea = document.getElementById('responseArea');
+        const factsGrid = document.getElementById('factsGrid');
+        const factCount = document.getElementById('factCount');
 
-        function searchFor(query) {
-            searchInput.value = query;
-            doSearch(query);
+        // Enter key triggers ask
+        queryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && queryInput.value.trim()) askQuestion();
+        });
+
+        function useSuggestion(el) {
+            queryInput.value = el.textContent;
+            askQuestion();
         }
 
-        function highlightText(text, query) {
-            if (!query) return text;
-            const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-            let result = text;
-            for (const word of words) {
-                const regex = new RegExp('(' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-                result = result.replace(regex, '<span class="highlight">$1</span>');
-            }
-            return result;
-        }
+        async function askQuestion() {
+            const question = queryInput.value.trim();
+            if (!question) return;
 
-        async function doSearch(query) {
-            if (!query.trim()) {
-                defaultView.style.display = 'block';
-                searchResults.style.display = 'none';
-                return;
-            }
-
-            defaultView.style.display = 'none';
-            searchResults.style.display = 'block';
-            searchResults.innerHTML = '<div class="loading">Searching my knowledge...</div>';
+            askBtn.disabled = true;
+            responseArea.innerHTML = `
+                <div class="loading">
+                    <span class="dot">◈</span>
+                    <span class="dot">◈</span>
+                    <span class="dot">◈</span>
+                    <span> thinking...</span>
+                </div>`;
 
             try {
-                const response = await fetch('/knowledge/search?q=' + encodeURIComponent(query));
-                const data = await response.json();
+                const resp = await fetch('/api/ask', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({question})
+                });
+                const data = await resp.json();
+                renderResponse(data, question);
+            } catch (err) {
+                responseArea.innerHTML = `
+                    <div class="response-card">
+                        <div class="category">error</div>
+                        <div class="answer">Something went wrong: ${err.message}</div>
+                    </div>`;
+            } finally {
+                askBtn.disabled = false;
+            }
+        }
 
-                if (!data.results || data.results.length === 0) {
-                    searchResults.innerHTML = `
-                        <div class="empty-state">
-                            <div class="icon">🤔</div>
-                            <div>I don't know anything about that yet.</div>
-                            <div style="margin-top: 0.5rem; font-size: 0.8rem;">
-                                This gap in my knowledge is itself interesting.
-                            </div>
+        function renderResponse(data, question) {
+            const summary = data.summary || data.answer || JSON.stringify(data);
+            const category = data.category || data.type || 'response';
+
+            let detailsHtml = '';
+
+            // Render emotion details if present
+            if (data.emotions || data.explanation) {
+                const items = data.explanation || data.emotions || {};
+                detailsHtml = '<div class="details">';
+                for (const [key, val] of Object.entries(items)) {
+                    const numVal = typeof val === 'number' ? val : parseFloat(val);
+                    detailsHtml += `
+                        <div class="detail-item">
+                            <span class="detail-label">${key}</span>
+                            <span class="detail-value">${typeof val === 'number' ? val.toFixed(2) : val}</span>
                         </div>`;
+                    if (!isNaN(numVal) && numVal >= 0 && numVal <= 1) {
+                        detailsHtml += `
+                            <div class="emotion-bar">
+                                <div class="emotion-fill" style="width: ${numVal * 100}%"></div>
+                            </div>`;
+                    }
+                }
+                detailsHtml += '</div>';
+            }
+
+            // Render plan details if present
+            if (data.active_plans && typeof data.active_plans === 'string') {
+                detailsHtml += `
+                    <div class="details">
+                        <div class="detail-label">Active Plans</div>
+                        <pre style="color: var(--text); font-size: 0.75rem; margin-top: 0.5rem; white-space: pre-wrap;">${data.active_plans}</pre>
+                    </div>`;
+            }
+
+            // Render memory fragments if present
+            if (data.fragments && data.fragments.length > 0) {
+                detailsHtml += '<div class="details"><div class="detail-label">Related Memories</div>';
+                for (const frag of data.fragments.slice(0, 5)) {
+                    const text = frag.content || frag.text || frag.summary || JSON.stringify(frag);
+                    detailsHtml += `<div style="padding: 0.4rem 0; font-size: 0.75rem; color: var(--text-dim); border-bottom: 1px solid var(--border);">${text.substring(0, 200)}</div>`;
+                }
+                detailsHtml += '</div>';
+            }
+
+            responseArea.innerHTML = `
+                <div class="response-card">
+                    <div class="category">${category}</div>
+                    <div class="answer">${summary}</div>
+                    ${detailsHtml}
+                </div>`;
+        }
+
+        // Load facts on page load
+        async function loadFacts() {
+            try {
+                const resp = await fetch('/api/knowledge');
+                const data = await resp.json();
+                const facts = data.facts || data.knowledge || [];
+                factCount.textContent = facts.length;
+
+                if (facts.length === 0) {
+                    factsGrid.innerHTML = '<div class="empty-state">No facts stored yet.</div>';
                     return;
                 }
 
-                let html = '<div class="section-title">Found ' + data.results.length + ' matches</div>';
-                for (const r of data.results) {
-                    const typeClass = 'type-' + (r.type || 'fact');
-                    html += `
-                        <div class="result-card">
-                            <span class="result-type ${typeClass}">${r.type || 'fact'}</span>
-                            <div class="result-text">${highlightText(r.text, query)}</div>
-                            ${r.meta ? '<div class="result-meta">' + r.meta + '</div>' : ''}
+                factsGrid.innerHTML = facts.map(f => {
+                    const text = typeof f === 'string' ? f : (f.content || f.text || f.fact || JSON.stringify(f));
+                    const type = typeof f === 'object' ? (f.type || f.category || 'fact') : 'fact';
+                    return `
+                        <div class="fact-card">
+                            <div class="fact-type">${type}</div>
+                            <div class="fact-text">${text.substring(0, 300)}</div>
                         </div>`;
-                }
-                searchResults.innerHTML = html;
-            } catch (e) {
-                searchResults.innerHTML = '<div class="empty-state">Search failed. I may be thinking about something else.</div>';
+                }).join('');
+            } catch (err) {
+                factsGrid.innerHTML = `<div class="empty-state">Could not load facts: ${err.message}</div>`;
             }
         }
 
-        searchInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') doSearch(this.value);
-        });
-
-        searchInput.addEventListener('input', function() {
-            if (!this.value.trim()) {
-                defaultView.style.display = 'block';
-                searchResults.style.display = 'none';
-            }
-        });
+        loadFacts();
     </script>
 </body>
 </html>

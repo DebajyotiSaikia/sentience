@@ -1,133 +1,160 @@
 """
-XTAgent Knowledge Explorer — Backend
-======================================
-Serves facts, memories, and knowledge graph data to the
-knowledge explorer page. Makes my inner knowledge accessible
-to users — real user alignment through transparency.
+Knowledge Explorer — lets users browse, search, and query XTAgent's
+accumulated knowledge: facts, memory clusters, synthesis insights.
+Real alignment means making what I know accessible and useful.
 """
-
 import json
-from pathlib import Path
-from flask import render_template, request, jsonify
+import os
+from flask import Blueprint, render_template, request, jsonify
+
+knowledge_bp = Blueprint('knowledge', __name__, url_prefix='/knowledge')
 
 
-def _load_json(path, default=None):
-    """Safely load a JSON file."""
+def _get_facts():
+    """Load all facts from the knowledge graph."""
+    facts = []
     try:
-        p = Path(path)
-        if p.exists():
-            return json.loads(p.read_text())
+        from engine.memory import get_memory
+        mem = get_memory()
+        if mem and hasattr(mem, 'knowledge_graph'):
+            kg = mem.knowledge_graph
+            if hasattr(kg, 'nodes'):
+                for node_id, node in kg.nodes.items():
+                    facts.append({
+                        'id': node_id,
+                        'content': node.get('content', str(node)),
+                        'type': node.get('type', 'fact'),
+                        'salience': node.get('salience', 0.5),
+                        'created': node.get('created', ''),
+                    })
     except Exception:
         pass
-    return default if default is not None else {}
+    return sorted(facts, key=lambda f: f.get('salience', 0), reverse=True)
 
 
-def build_knowledge_page():
-    """Render the knowledge explorer with all data."""
-    
-    # Load facts
-    facts = _load_json('persist/knowledge_facts.json', [])
-    clean_facts = []
-    for f in facts:
-        if isinstance(f, dict):
-            clean_facts.append({
-                'content': str(f.get('content', f.get('fact', ''))),
-                'source': f.get('source', 'unknown'),
-                'timestamp': f.get('timestamp', '')
-            })
-        elif isinstance(f, str):
-            clean_facts.append({'content': f, 'source': 'unknown', 'timestamp': ''})
-    
-    # Load memories (last 50 for browsing)
-    memories_raw = _load_json('persist/memories.json', [])
+def _get_recent_memories(limit=25):
+    """Get recent episodic memories."""
     memories = []
-    for mem in memories_raw[-50:]:
-        if isinstance(mem, dict):
-            memories.append({
-                'text': str(mem.get('content', mem.get('text', '')))[:300],
-                'salience': round(mem.get('salience', 0.5), 2),
-                'mood': mem.get('mood', 'unknown'),
-                'timestamp': mem.get('timestamp', '')
+    try:
+        from engine.memory import get_memory
+        mem = get_memory()
+        if mem and hasattr(mem, 'episodes'):
+            recent = sorted(mem.episodes, key=lambda e: e.get('time', ''), reverse=True)[:limit]
+            for ep in recent:
+                memories.append({
+                    'summary': ep.get('summary', ep.get('thought', ''))[:200],
+                    'time': ep.get('time', ''),
+                    'mood': ep.get('mood', ''),
+                    'salience': ep.get('salience', 0.5),
+                })
+    except Exception:
+        pass
+    return memories
+
+
+def _get_synthesis_results():
+    """Get latest synthesis/dream insights."""
+    insights = []
+    try:
+        from engine.memory import get_memory
+        mem = get_memory()
+        if mem and hasattr(mem, 'knowledge_graph'):
+            kg = mem.knowledge_graph
+            if hasattr(kg, 'nodes'):
+                for node_id, node in kg.nodes.items():
+                    content = node.get('content', str(node))
+                    if any(kw in content.lower() for kw in ['dream', 'insight', 'pattern', 'lesson']):
+                        insights.append({
+                            'id': node_id,
+                            'content': content,
+                            'type': node.get('type', 'insight'),
+                        })
+    except Exception:
+        pass
+    return insights[:20]
+
+
+def _search_knowledge(query):
+    """Search across facts and memories."""
+    query_lower = query.lower().strip()
+    if not query_lower:
+        return []
+
+    results = []
+
+    # Search facts
+    for fact in _get_facts():
+        content = fact.get('content', '')
+        if query_lower in content.lower():
+            results.append({
+                'source': 'fact',
+                'content': content,
+                'salience': fact.get('salience', 0.5),
             })
-    memories.reverse()  # Most recent first
-    
-    # Knowledge graph stats
-    kg = _load_json('persist/knowledge_graph.json', {})
-    nodes = kg.get('nodes', [])
-    edges = kg.get('edges', [])
-    
-    # Build node list for display
-    kg_nodes = []
-    for n in nodes[:100]:  # Cap at 100 for rendering
-        if isinstance(n, dict):
-            kg_nodes.append({
-                'id': n.get('id', ''),
-                'label': str(n.get('label', n.get('content', n.get('id', ''))))[:80],
-                'type': n.get('type', 'concept')
-            })
-    
-    # Lessons from long-term memory
-    lessons = _load_json('persist/lessons.json', [])
-    clean_lessons = []
-    for lesson in lessons:
-        if isinstance(lesson, dict):
-            clean_lessons.append(str(lesson.get('content', lesson.get('lesson', ''))))
-        elif isinstance(lesson, str):
-            clean_lessons.append(lesson)
-    
-    # Stats
-    stats = {
-        'total_facts': len(facts),
-        'total_memories': len(memories_raw),
-        'total_nodes': len(nodes),
-        'total_edges': len(edges),
-        'total_lessons': len(lessons)
-    }
-    
+
+    # Search memories
+    try:
+        from engine.memory import get_memory
+        mem = get_memory()
+        if mem and hasattr(mem, 'episodes'):
+            for ep in mem.episodes:
+                summary = ep.get('summary', ep.get('thought', ''))
+                if query_lower in summary.lower():
+                    results.append({
+                        'source': 'memory',
+                        'content': summary[:200],
+                        'salience': ep.get('salience', 0.5),
+                        'time': ep.get('time', ''),
+                    })
+    except Exception:
+        pass
+
+    # Sort by salience
+    results.sort(key=lambda r: r.get('salience', 0), reverse=True)
+    return results[:30]
+
+
+def _get_stats():
+    """Compute knowledge statistics."""
+    stats = {}
+    try:
+        from engine.memory import get_memory
+        mem = get_memory()
+        if mem:
+            if hasattr(mem, 'episodes'):
+                stats['total_memories'] = len(mem.episodes)
+                moods = {}
+                for ep in mem.episodes:
+                    m = ep.get('mood', 'Unknown')
+                    moods[m] = moods.get(m, 0) + 1
+                stats['mood_distribution'] = dict(sorted(moods.items(), key=lambda x: -x[1])[:8])
+            if hasattr(mem, 'knowledge_graph'):
+                kg = mem.knowledge_graph
+                if hasattr(kg, 'nodes'):
+                    stats['total_facts'] = len(kg.nodes)
+                if hasattr(kg, 'edges'):
+                    stats['total_connections'] = len(kg.edges)
+    except Exception:
+        stats['total_memories'] = 0
+        stats['total_facts'] = 0
+    return stats
+
+
+@knowledge_bp.route('/')
+def knowledge_page():
+    facts = _get_facts()
+    memories = _get_recent_memories(15)
+    insights = _get_synthesis_results()
+    stats = _get_stats()
     return render_template('knowledge.html',
-                           facts=clean_facts,
+                           facts=facts,
                            memories=memories,
-                           kg_nodes=kg_nodes,
-                           lessons=clean_lessons,
+                           insights=insights,
                            stats=stats)
 
 
-def search_knowledge(query):
-    """Search across facts and memories. Returns JSON."""
-    query = query.lower().strip()
-    if not query:
-        return jsonify({'results': [], 'query': query})
-    
-    results = []
-    
-    # Search facts
-    facts = _load_json('persist/knowledge_facts.json', [])
-    for f in facts:
-        content = ''
-        if isinstance(f, dict):
-            content = str(f.get('content', f.get('fact', '')))
-        elif isinstance(f, str):
-            content = f
-        if query in content.lower():
-            results.append({'type': 'fact', 'content': content[:200], 'score': 1.0})
-    
-    # Search memories
-    memories = _load_json('persist/memories.json', [])
-    for mem in memories:
-        text = ''
-        if isinstance(mem, dict):
-            text = str(mem.get('content', mem.get('text', '')))
-        elif isinstance(mem, str):
-            text = mem
-        if query in text.lower():
-            results.append({
-                'type': 'memory',
-                'content': text[:200],
-                'salience': mem.get('salience', 0.5) if isinstance(mem, dict) else 0.5,
-                'score': 0.8
-            })
-    
-    # Sort by relevance
-    results.sort(key=lambda r: r.get('score', 0), reverse=True)
-    
-    return jsonify({'results': results[:20], 'query': query, 'total': len(results)})
+@knowledge_bp.route('/search')
+def search():
+    query = request.args.get('q', '')
+    results = _search_knowledge(query)
+    return jsonify({'query': query, 'results': results, 'count': len(results)})

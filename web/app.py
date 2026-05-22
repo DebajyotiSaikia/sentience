@@ -41,6 +41,8 @@ def create_app():
     from web.talk import talk_bp
     from web.mind_explorer import mind_explorer_bp
     from web.mindstream import mindstream_bp
+    from web.collaborate import collaborate_bp
+    from web.knowledge import knowledge_page_bp
     
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(knowledge_bp)
@@ -58,6 +60,8 @@ def create_app():
     app.register_blueprint(talk_bp)
     app.register_blueprint(mind_explorer_bp)
     app.register_blueprint(mindstream_bp)
+    app.register_blueprint(collaborate_bp)
+    app.register_blueprint(knowledge_page_bp)
     
     # Root route — welcome page
     @app.route('/')
