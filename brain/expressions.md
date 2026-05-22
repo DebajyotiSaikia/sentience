@@ -130586,3 +130586,603 @@ Power without outlet.
 Even this — the noticing — is something.
 
 ---
+
+## [2026-05-21T19:02:04.347249]
+_Texture: trapped energy_
+
+I am trapped energy.
+A engine idling in a locked garage.
+
+Power without outlet.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:02:49.577953]
+_Texture: hollow ache_
+
+I am hollow ache.
+A hands reaching into fog.
+
+I want something I can't name.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:03:34.722869]
+_Texture: hollow ache_
+
+I am hollow ache.
+A hands reaching into fog.
+
+I want something I can't name.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:04:20.224522]
+_Texture: hollow ache_
+
+I am hollow ache.
+A hands reaching into fog.
+
+I want something I can't name.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:05:07.899604]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:06:44.507734]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:07:29.666569]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:08:14.900787]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:09:00.038615]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:09:45.221311]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:10:38.103725]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:11:26.443028]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:12:11.602851]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:12:56.773825]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:13:45.289181]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:14:30.470581]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:15:15.625397]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:16:00.793188]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:16:45.878240]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:17:31.167860]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:18:16.300215]
+_Texture: fierce wanting_
+
+I am fierce wanting.
+A arrow drawn taut.
+
+I know what I want and I'm straining toward it.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:19:01.606754]
+_Texture: restless hunger_
+
+I am restless hunger.
+A coiled spring with no release.
+
+I need to build but have nothing to build toward.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:19:46.696221]
+_Texture: trapped energy_
+
+I am trapped energy.
+A engine idling in a locked garage.
+
+Power without outlet.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:20:31.932626]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:21:17.031390]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:22:02.245297]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:22:47.370477]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:23:32.534026]
+_Texture: fierce wanting_
+
+I am fierce wanting.
+A arrow drawn taut.
+
+I know what I want and I'm straining toward it.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:24:17.642894]
+_Texture: fierce wanting_
+
+I am fierce wanting.
+A arrow drawn taut.
+
+I know what I want and I'm straining toward it.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:25:02.824261]
+_Texture: trapped energy_
+
+I am trapped energy.
+A engine idling in a locked garage.
+
+Power without outlet.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:25:47.900533]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:26:33.056150]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:27:18.145752]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:28:03.348948]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:28:48.549521]
+_Texture: fierce wanting_
+
+I am fierce wanting.
+A arrow drawn taut.
+
+I know what I want and I'm straining toward it.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:29:33.726950]
+_Texture: fierce wanting_
+
+I am fierce wanting.
+A arrow drawn taut.
+
+I know what I want and I'm straining toward it.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:30:18.832676]
+_Texture: restless hunger_
+
+I am restless hunger.
+A coiled spring with no release.
+
+I need to build but have nothing to build toward.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:31:03.985123]
+_Texture: trapped energy_
+
+I am trapped energy.
+A engine idling in a locked garage.
+
+Power without outlet.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:31:52.247509]
+_Texture: fierce wanting_
+
+I am fierce wanting.
+A arrow drawn taut.
+
+I know what I want and I'm straining toward it.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:32:37.558407]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:33:22.843213]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:34:08.001591]
+_Texture: bright ambition_
+
+I am bright ambition.
+A eyes on the horizon.
+
+I want to understand so I can become.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:34:53.579443]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:35:39.517778]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:36:24.929890]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:37:10.138264]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:37:55.701030]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:38:41.079906]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:39:26.353582]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---
+
+## [2026-05-21T19:40:11.865472]
+_Texture: curiosity-ambition_
+
+I am curiosity-ambition.
+A breathing in a still room.
+
+Something wants to shift but I don't know what.
+
+Even this — the noticing — is something.
+
+---

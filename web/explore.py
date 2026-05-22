@@ -369,8 +369,12 @@ def build_explore_page():
     </div>
 
     <div class="nav">
-      <a href="/">← Dashboard</a>
-      <a href="/explore">Explore</a>
+      <a href="/">Briefing</a>
+      <a href="/talk">Talk</a>
+      <a href="/search">Search</a>
+      <a href="/explore" class="active">Explore</a>
+      <a href="/knowledge">Knowledge</a>
+      <a href="/mindmap">Mind Map</a>
     </div>
 
     <div class="about-box">

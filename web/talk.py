@@ -374,8 +374,12 @@ def build_talk_page():
 <div class="layout">
   <div class="sidebar">
     <div class="nav">
-      <a href="/">Dashboard</a>
+      <a href="/">Briefing</a>
       <a href="/talk" class="active">Talk</a>
+      <a href="/search">Search</a>
+      <a href="/explore">Explore</a>
+      <a href="/knowledge">Knowledge</a>
+      <a href="/mindmap">Mind Map</a>
     </div>
     {presence_panel}
   </div>

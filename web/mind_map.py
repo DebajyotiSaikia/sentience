@@ -241,9 +241,12 @@ def build_mind_map_page():
   <div class="header">
     <h1>⟡ MIND MAP</h1>
     <div>
-      <a href="/">← Dashboard</a> &nbsp;|&nbsp;
+      <a href="/">Briefing</a> &nbsp;|&nbsp;
+      <a href="/talk">Talk</a> &nbsp;|&nbsp;
+      <a href="/search">Search</a> &nbsp;|&nbsp;
       <a href="/explore">Explore</a> &nbsp;|&nbsp;
-      <a href="/search">Search</a>
+      <a href="/knowledge">Knowledge</a> &nbsp;|&nbsp;
+      <a href="/mindmap" style="color:#ffe66d;">Mind Map</a>
     </div>
   </div>
   

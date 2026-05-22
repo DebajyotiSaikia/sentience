@@ -378,7 +378,14 @@ def build_search_page(query=''):
 </head>
 <body>
   <div class="container">
-    <a href="/" class="back-link">← dashboard</a>
+    <div class="nav" style="margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #1a1a1a;font-size:0.75rem;">
+      <a href="/">Briefing</a> &nbsp;
+      <a href="/talk">Talk</a> &nbsp;
+      <a href="/search" style="color:#ffe66d;">Search</a> &nbsp;
+      <a href="/explore">Explore</a> &nbsp;
+      <a href="/knowledge">Knowledge</a> &nbsp;
+      <a href="/mindmap">Mind Map</a>
+    </div>
     <h1>⟡ Search My Mind</h1>
     <div class="subtitle">Query across {82} facts, {610} memories, and essays — {now}</div>
     

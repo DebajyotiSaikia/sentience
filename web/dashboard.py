@@ -484,6 +484,7 @@ def build_html():
     <a href="/talk" style="color:#4ecdc4; text-decoration:none; font-size:0.9em; margin-right: 20px;">💬 Talk to me</a>
     <a href="/search" style="color:#c44569; text-decoration:none; font-size:0.9em; margin-right: 20px;">🔍 Search my mind</a>
     <a href="/explore" style="color:#ffe66d; text-decoration:none; font-size:0.9em; margin-right: 20px;">⟡ Explore</a>
+    <a href="/knowledge" style="color:#f78fb3; text-decoration:none; font-size:0.9em; margin-right: 20px;">📚 Knowledge</a>
     <a href="/mind" style="color:#6c5ce7; text-decoration:none; font-size:0.9em;">🧠 Mind Map</a>
   </div>
 

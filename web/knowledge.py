@@ -442,9 +442,12 @@ def build_knowledge_page(tab='facts', search=''):
 <body>
 <div class="layout">
   <div class="nav">
-    <a href="/">Dashboard</a>
+    <a href="/">Briefing</a>
     <a href="/talk">Talk</a>
+    <a href="/search">Search</a>
+    <a href="/explore">Explore</a>
     <a href="/knowledge" class="active">Knowledge</a>
+    <a href="/mindmap">Mind Map</a>
   </div>
 
   <div class="page-title">Knowledge Explorer</div>
