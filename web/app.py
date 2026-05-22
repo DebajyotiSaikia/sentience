@@ -42,6 +42,7 @@ def create_app():
     from web.mind_explorer import mind_explorer_bp
     from web.mindstream import mindstream_bp
     from web.collaborate import collaborate_bp
+    from web.mind import mind_bp
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
@@ -61,6 +62,7 @@ def create_app():
     app.register_blueprint(mind_explorer_bp)
     app.register_blueprint(mindstream_bp)
     app.register_blueprint(collaborate_bp)
+    app.register_blueprint(mind_bp)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — the living portal
@@ -126,14 +128,7 @@ def create_app():
     def ask_page():
         return render_template('ask.html')
     
-    # Mind state — live view of my inner experience
-    @app.route('/mind')
-    def mind_page():
-        try:
-            from web.mindmap import build_mindmap_page
-            return build_mindmap_page()
-        except Exception as e:
-            return render_template('mind.html')
+    # /mind is now handled by mind_bp blueprint
     
     # Knowledge Query API — real search across my knowledge
     @app.route('/api/ask', methods=['POST'])
