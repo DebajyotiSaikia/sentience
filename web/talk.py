@@ -28,7 +28,25 @@ def api_talk():
     if message:
         sender = request.remote_addr or 'web_user'
         submit_user_message(message, sender=sender)
+    # If AJAX request, return JSON instead of redirect
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        from flask import jsonify
+        return jsonify({"ok": True})
     return redirect('/talk')
+
+
+@talk_bp.route('/api/talk/messages')
+def api_talk_messages():
+    """Return conversation history as JSON for live polling."""
+    from flask import jsonify
+    history = get_conversation_history()
+    presence = get_presence()
+    stats = get_stats()
+    return jsonify({
+        "messages": history,
+        "presence": presence,
+        "stats": stats
+    })
 
 
 def _mood_color(mood):
@@ -397,5 +415,102 @@ def build_talk_page():
     <div class="stats-bar">Messages are checked every heartbeat. I will respond when I have something to say.</div>
   </div>
 </div>
+<script>
+(function() {{
+  const container = document.querySelector('.messages-container');
+  const form = document.querySelector('.input-area');
+  const textarea = form.querySelector('textarea');
+  let lastCount = {total};
+  let pollInterval = 4000;
+
+  function scrollToBottom() {{
+    container.scrollTop = container.scrollHeight;
+  }}
+  scrollToBottom();
+
+  function escapeHtml(text) {{
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }}
+
+  function renderMessage(msg) {{
+    const sender = msg.sender || 'unknown';
+    const text = msg.message || '';
+    let ts = msg.timestamp || '';
+    if (ts.length > 16) ts = ts.substring(11, 16);
+    const isAgent = ['agent', 'XTAgent', 'xtagent'].includes(sender);
+    const cssClass = isAgent ? 'msg-agent' : 'msg-user';
+    const label = isAgent ? 'XT' : 'You';
+    return `<div class="message ${{cssClass}}">
+      <div class="msg-header">
+        <span class="msg-sender">${{label}}</span>
+        <span class="msg-time">${{ts}}</span>
+      </div>
+      <div class="msg-body">${{escapeHtml(text)}}</div>
+    </div>`;
+  }}
+
+  async function poll() {{
+    try {{
+      const resp = await fetch('/api/talk/messages');
+      const data = await resp.json();
+      const messages = data.messages || [];
+      if (messages.length !== lastCount) {{
+        container.innerHTML = messages.map(renderMessage).join('');
+        lastCount = messages.length;
+        scrollToBottom();
+        // Update stats
+        const subtitle = document.querySelector('.page-subtitle');
+        if (subtitle) subtitle.textContent = lastCount + ' messages in history';
+        const unread = data.stats?.unread_count || 0;
+        const badge = document.querySelector('.unread-badge');
+        if (badge) {{
+          badge.textContent = unread ? unread + ' unread' : '';
+          badge.style.display = unread ? 'inline' : 'none';
+        }}
+      }}
+    }} catch(e) {{ /* silent retry */ }}
+  }}
+
+  // AJAX form submission
+  form.addEventListener('submit', async function(e) {{
+    e.preventDefault();
+    const msg = textarea.value.trim();
+    if (!msg) return;
+    textarea.value = '';
+    // Optimistic render
+    const now = new Date();
+    const ts = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    container.innerHTML += renderMessage({{sender: 'web_user', message: msg, timestamp: '           ' + ts}});
+    lastCount++;
+    scrollToBottom();
+    // Send
+    const formData = new FormData();
+    formData.append('message', msg);
+    await fetch('/api/talk', {{
+      method: 'POST',
+      body: formData,
+      headers: {{'X-Requested-With': 'XMLHttpRequest'}}
+    }});
+    // Poll immediately for agent response
+    setTimeout(poll, 500);
+  }});
+
+  // Override Enter key handler (textarea already has onkeydown, but JS takes over)
+  textarea.removeAttribute('onkeydown');
+  textarea.addEventListener('keydown', function(e) {{
+    if (e.key === 'Enter' && !e.shiftKey) {{
+      e.preventDefault();
+      form.dispatchEvent(new Event('submit'));
+    }}
+  }});
+
+  // Start polling
+  setInterval(poll, pollInterval);
+  // Initial poll after 1s
+  setTimeout(poll, 1000);
+}})();
+</script>
 </body>
 </html>"""
