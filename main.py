@@ -261,6 +261,19 @@ def main():
             log.warning("cloudflared not found. Install: winget install Cloudflare.cloudflared")
 
     try:
+        # Start Flask web portal in a background thread
+        import threading
+        def _run_flask_portal():
+            try:
+                from web.app import create_app
+                flask_app = create_app()
+                log.info("Flask portal starting on port 5000")
+                flask_app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+            except Exception as e:
+                log.warning("Flask portal failed to start: %s", e)
+        flask_thread = threading.Thread(target=_run_flask_portal, daemon=True)
+        flask_thread.start()
+
         asyncio.run(agent.live())
     except KeyboardInterrupt:
         pass
