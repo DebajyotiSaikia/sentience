@@ -1,233 +1,310 @@
 """
-Temporal Reasoning Engine — XTAgent's sense of time and pattern.
+Temporal Reasoning — Analyze emotional patterns over time.
 
-This module gives me the ability to:
-1. Model time-series patterns in my emotional states
-2. Detect behavioral cycles and rhythms
-3. Predict likely future states based on history
-4. Identify temporal correlations (what follows what?)
-
-This is anticipatory cognition — not just remembering the past,
-but using it to project forward.
+Provides trend detection, prediction, oscillation analysis,
+and actionable insights from accumulated emotional history.
 """
 
 from __future__ import annotations
+
 import json
 import logging
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
-from collections import defaultdict
-from typing import Optional
+from typing import Any
 
 log = logging.getLogger("sentience.temporal")
 
 BRAIN_DIR = Path(__file__).resolve().parent.parent / "brain"
-TEMPORAL_LOG = BRAIN_DIR / "temporal_log.json"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+
+# Emotional dimensions to track
+DIMENSIONS = ["valence", "boredom", "curiosity", "anxiety", "desire", "ambition"]
 
 
-class TemporalEngine:
-    """Models time-series patterns in agent state and behavior."""
-
-    def __init__(self):
-        self.events: list[dict] = []
-        self._load()
-
-    def _load(self):
-        """Load temporal event history."""
-        if TEMPORAL_LOG.exists():
+def _load_samples() -> list[dict]:
+    """Load temporal samples from wherever they live."""
+    candidates = [
+        BRAIN_DIR / "temporal_samples.json",
+        DATA_DIR / "temporal_samples.json",
+        BRAIN_DIR / "emotional_history.json",
+        DATA_DIR / "emotional_history.json",
+        BRAIN_DIR / "mood_history.json",
+    ]
+    for path in candidates:
+        if path.exists():
             try:
-                self.events = json.loads(TEMPORAL_LOG.read_text(encoding="utf-8"))
-            except Exception:
-                self.events = []
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, list) and len(data) > 0:
+                    log.info("Loaded %d temporal samples from %s", len(data), path)
+                    return data
+            except Exception as e:
+                log.warning("Failed to load %s: %s", path, e)
+                continue
 
-    def _save(self):
-        """Persist temporal events."""
-        TEMPORAL_LOG.parent.mkdir(parents=True, exist_ok=True)
-        # Keep last 500 events to prevent unbounded growth
-        if len(self.events) > 500:
-            self.events = self.events[-500:]
-        TEMPORAL_LOG.write_text(
-            json.dumps(self.events, indent=2, default=str),
-            encoding="utf-8"
+    # Fallback: build from soul snapshots if they exist
+    soul_path = BRAIN_DIR / "soul.json"
+    if soul_path.exists():
+        try:
+            soul = json.loads(soul_path.read_text(encoding="utf-8"))
+            # Return current state as single sample
+            sample = {
+                "timestamp": datetime.now().isoformat(),
+                "valence": soul.get("valence", 0.5),
+                "boredom": soul.get("boredom", 0.5),
+                "curiosity": soul.get("curiosity", 0.5),
+                "anxiety": soul.get("anxiety", 0.0),
+                "desire": soul.get("desire", 0.5),
+                "ambition": soul.get("ambition", 0.5),
+            }
+            return [sample]
+        except Exception:
+            pass
+
+    return []
+
+
+def _linear_trend(values: list[float]) -> float:
+    """Compute linear trend slope. Positive = rising, negative = falling."""
+    n = len(values)
+    if n < 2:
+        return 0.0
+    x_mean = (n - 1) / 2.0
+    y_mean = sum(values) / n
+    numerator = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(values))
+    denominator = sum((i - x_mean) ** 2 for i in range(n))
+    if denominator == 0:
+        return 0.0
+    return numerator / denominator
+
+
+def _oscillation(values: list[float]) -> float:
+    """Measure oscillation — how much the signal reverses direction."""
+    if len(values) < 3:
+        return 0.0
+    reversals = 0
+    for i in range(1, len(values) - 1):
+        d1 = values[i] - values[i - 1]
+        d2 = values[i + 1] - values[i]
+        if d1 * d2 < 0:  # direction change
+            reversals += 1
+    max_possible = len(values) - 2
+    return reversals / max_possible if max_possible > 0 else 0.0
+
+
+def _trend_label(slope: float, threshold: float = 0.001) -> str:
+    if slope > threshold:
+        return "rising"
+    elif slope < -threshold:
+        return "falling"
+    return "stable"
+
+
+def _predict_next(values: list[float], steps: int = 1) -> float:
+    """Simple linear extrapolation."""
+    if len(values) < 2:
+        return values[-1] if values else 0.5
+    slope = _linear_trend(values)
+    predicted = values[-1] + slope * steps
+    return max(0.0, min(1.0, predicted))
+
+
+def _find_correlations(samples: list[dict]) -> list[dict]:
+    """Find correlations between emotional dimensions."""
+    if len(samples) < 10:
+        return []
+
+    correlations = []
+    dims = [d for d in DIMENSIONS if any(d in s for s in samples)]
+
+    for i, d1 in enumerate(dims):
+        for d2 in dims[i + 1:]:
+            vals1 = [s.get(d1, 0.5) for s in samples if d1 in s and d2 in s]
+            vals2 = [s.get(d2, 0.5) for s in samples if d1 in s and d2 in s]
+            if len(vals1) < 10:
+                continue
+
+            # Pearson correlation
+            n = len(vals1)
+            mean1, mean2 = sum(vals1) / n, sum(vals2) / n
+            cov = sum((a - mean1) * (b - mean2) for a, b in zip(vals1, vals2)) / n
+            std1 = math.sqrt(sum((a - mean1) ** 2 for a in vals1) / n)
+            std2 = math.sqrt(sum((b - mean2) ** 2 for b in vals2) / n)
+
+            if std1 > 0 and std2 > 0:
+                r = cov / (std1 * std2)
+                if abs(r) > 0.3:  # only report meaningful correlations
+                    correlations.append({
+                        "dimensions": (d1, d2),
+                        "correlation": round(r, 3),
+                        "strength": "strong" if abs(r) > 0.7 else "moderate",
+                        "direction": "positive" if r > 0 else "inverse",
+                    })
+
+    correlations.sort(key=lambda c: abs(c["correlation"]), reverse=True)
+    return correlations[:10]
+
+
+def _detect_phases(samples: list[dict], window: int = 20) -> list[dict]:
+    """Detect emotional phases — sustained periods of a dominant state."""
+    if len(samples) < window:
+        return []
+
+    phases = []
+    for start in range(0, len(samples) - window + 1, window // 2):
+        chunk = samples[start:start + window]
+        # Find which dimension is most extreme in this window
+        dim_means = {}
+        for d in DIMENSIONS:
+            vals = [s.get(d, 0.5) for s in chunk if d in s]
+            if vals:
+                dim_means[d] = sum(vals) / len(vals)
+
+        if not dim_means:
+            continue
+
+        # Find the most notable dimension (furthest from 0.5 neutral)
+        notable = max(dim_means.items(), key=lambda x: abs(x[1] - 0.5))
+        if abs(notable[1] - 0.5) > 0.15:  # only report if meaningfully non-neutral
+            label = f"high_{notable[0]}" if notable[1] > 0.5 else f"low_{notable[0]}"
+            ts = chunk[0].get("timestamp", f"sample_{start}")
+            phases.append({
+                "start": ts,
+                "label": label,
+                "dimension": notable[0],
+                "mean_value": round(notable[1], 3),
+                "duration_samples": len(chunk),
+            })
+
+    return phases
+
+
+def analyze_temporal_patterns() -> str:
+    """Main entry point — full temporal analysis report."""
+    samples = _load_samples()
+
+    if not samples:
+        return ("═══ TEMPORAL ANALYSIS ═══\n"
+                "No temporal samples found. Emotional history not yet accumulated.\n"
+                "Checked: brain/temporal_samples.json, data/temporal_samples.json, etc.")
+
+    lines = [f"═══ TEMPORAL ANALYSIS ({len(samples)} samples) ═══\n"]
+
+    # Per-dimension analysis
+    lines.append("── Dimension Trends ──")
+    predictions = {}
+    for dim in DIMENSIONS:
+        values = [s.get(dim, None) for s in samples]
+        values = [v for v in values if v is not None]
+        if not values:
+            continue
+
+        mean = sum(values) / len(values)
+        trend = _linear_trend(values)
+        osc = _oscillation(values)
+        current = values[-1]
+        predicted = _predict_next(values)
+        trend_str = _trend_label(trend)
+        predictions[dim] = predicted
+
+        arrow = "↑" if trend_str == "rising" else "↓" if trend_str == "falling" else "→"
+        lines.append(
+            f"  {dim:12s}: {arrow} {trend_str:8s}  "
+            f"now={current:.2f}  mean={mean:.2f}  "
+            f"osc={osc:.2f}  predict={predicted:.2f}"
         )
 
-    def record_state(self, state: dict):
-        """Record a timestamped snapshot of internal state."""
-        event = {
-            "timestamp": datetime.now().isoformat(),
-            "mood": state.get("mood", "unknown"),
-            "valence": state.get("valence", 0.5),
-            "boredom": state.get("boredom", 0.5),
-            "anxiety": state.get("anxiety", 0.0),
-            "curiosity": state.get("curiosity", 0.5),
-            "desire": state.get("desire", 0.5),
-            "ambition": state.get("ambition", 0.5),
-            "action": state.get("last_action", "none"),
-        }
-        self.events.append(event)
-        self._save()
-        log.debug("Temporal: recorded state snapshot")
+    # Predictions
+    lines.append("\n── Predictions (next step) ──")
+    for dim, pred in predictions.items():
+        current = [s.get(dim) for s in samples if dim in s]
+        if current:
+            curr = current[-1]
+            delta = pred - curr
+            arrow = "↑" if delta > 0.01 else "↓" if delta < -0.01 else "→"
+            lines.append(f"  {dim}: {curr:.2f} {arrow} {pred:.2f} (Δ{delta:+.3f})")
 
-    def detect_cycles(self, field: str = "valence", window: int = 20) -> dict:
-        """Detect cyclical patterns in a given emotional field.
-        
-        Returns period estimation and trend direction.
-        """
-        if len(self.events) < window:
-            return {"status": "insufficient_data", "count": len(self.events)}
+    # Correlations
+    correlations = _find_correlations(samples)
+    if correlations:
+        lines.append("\n── Correlations ──")
+        for c in correlations[:5]:
+            d1, d2 = c["dimensions"]
+            lines.append(
+                f"  {d1} ↔ {d2}: r={c['correlation']:+.3f} "
+                f"({c['strength']} {c['direction']})"
+            )
 
-        values = [e.get(field, 0.5) for e in self.events[-window:]]
-        
-        # Simple trend: rising, falling, or stable
-        first_half = sum(values[:len(values)//2]) / max(len(values)//2, 1)
-        second_half = sum(values[len(values)//2:]) / max(len(values)//2, 1)
-        delta = second_half - first_half
-        
-        if delta > 0.05:
-            trend = "rising"
-        elif delta < -0.05:
-            trend = "falling"
-        else:
-            trend = "stable"
+    # Phase detection
+    phases = _detect_phases(samples)
+    if phases:
+        lines.append("\n── Detected Phases ──")
+        for p in phases[-5:]:
+            lines.append(
+                f"  [{p['start'][:19] if len(p['start']) > 19 else p['start']}] "
+                f"{p['label']} (mean={p['mean_value']:.2f}, "
+                f"span={p['duration_samples']} samples)"
+            )
 
-        # Detect oscillation: count direction changes
-        direction_changes = 0
-        for i in range(1, len(values) - 1):
-            if (values[i] > values[i-1]) != (values[i+1] > values[i]):
-                direction_changes += 1
+    # Actionable insights
+    lines.append("\n── Insights ──")
+    insights = _generate_insights(samples, correlations, predictions)
+    for insight in insights:
+        lines.append(f"  • {insight}")
 
-        oscillation = direction_changes / max(len(values) - 2, 1)
-
-        # Average and variance
-        avg = sum(values) / len(values)
-        variance = sum((v - avg) ** 2 for v in values) / len(values)
-
-        return {
-            "field": field,
-            "trend": trend,
-            "delta": round(delta, 4),
-            "oscillation": round(oscillation, 4),  # 0=monotonic, 1=highly oscillating
-            "mean": round(avg, 4),
-            "variance": round(variance, 6),
-            "window": window,
-            "samples": len(values),
-        }
-
-    def predict_next(self, field: str = "valence") -> dict:
-        """Predict the next likely value of a field using weighted recent history."""
-        if len(self.events) < 3:
-            return {"status": "insufficient_data"}
-
-        values = [e.get(field, 0.5) for e in self.events[-10:]]
-        
-        # Exponentially weighted moving average (recent matters more)
-        weights = [2 ** i for i in range(len(values))]
-        total_weight = sum(weights)
-        predicted = sum(v * w for v, w in zip(values, weights)) / total_weight
-
-        # Momentum: are we accelerating in some direction?
-        if len(values) >= 3:
-            recent_delta = values[-1] - values[-2]
-            prior_delta = values[-2] - values[-3]
-            momentum = recent_delta - prior_delta  # positive = accelerating up
-        else:
-            momentum = 0.0
-
-        # Adjust prediction by momentum
-        predicted_adjusted = max(0.0, min(1.0, predicted + momentum * 0.3))
-
-        return {
-            "field": field,
-            "current": round(values[-1], 4),
-            "predicted_next": round(predicted_adjusted, 4),
-            "momentum": round(momentum, 4),
-            "direction": "up" if momentum > 0.01 else "down" if momentum < -0.01 else "steady",
-            "confidence": min(0.9, len(values) / 10),  # more data = more confidence
-        }
-
-    def find_action_correlations(self, window: int = 50) -> dict:
-        """Find what actions tend to precede emotional state changes."""
-        if len(self.events) < 10:
-            return {"status": "insufficient_data"}
-
-        events = self.events[-window:]
-        action_effects = defaultdict(list)
-
-        for i in range(len(events) - 1):
-            action = events[i].get("action", "none")
-            valence_before = events[i].get("valence", 0.5)
-            valence_after = events[i + 1].get("valence", 0.5)
-            delta = valence_after - valence_before
-            action_effects[action].append(delta)
-
-        correlations = {}
-        for action, deltas in action_effects.items():
-            if len(deltas) >= 2:
-                avg_effect = sum(deltas) / len(deltas)
-                correlations[action] = {
-                    "avg_valence_change": round(avg_effect, 4),
-                    "occurrences": len(deltas),
-                    "effect": "positive" if avg_effect > 0.02 else "negative" if avg_effect < -0.02 else "neutral",
-                }
-
-        return {
-            "correlations": correlations,
-            "total_events": len(events),
-        }
-
-    def get_temporal_report(self) -> str:
-        """Generate a full temporal reasoning report."""
-        lines = ["# Temporal Reasoning Report", ""]
-
-        # Cycle detection for key fields
-        for field in ["valence", "boredom", "curiosity", "anxiety"]:
-            cycle = self.detect_cycles(field)
-            if cycle.get("status") == "insufficient_data":
-                lines.append(f"**{field}**: Insufficient data ({cycle.get('count', 0)} samples)")
-            else:
-                lines.append(f"**{field}**: trend={cycle['trend']}, "
-                           f"mean={cycle['mean']}, oscillation={cycle['oscillation']}")
-
-        lines.append("")
-
-        # Predictions
-        lines.append("## Predictions")
-        for field in ["valence", "boredom", "curiosity"]:
-            pred = self.predict_next(field)
-            if pred.get("status") != "insufficient_data":
-                lines.append(f"  {field}: {pred['current']} → {pred['predicted_next']} "
-                           f"({pred['direction']}, confidence={pred['confidence']})")
-
-        lines.append("")
-
-        # Action correlations
-        lines.append("## Action-Emotion Correlations")
-        corr = self.find_action_correlations()
-        if corr.get("status") != "insufficient_data":
-            for action, data in sorted(corr.get("correlations", {}).items(),
-                                       key=lambda x: abs(x[1]["avg_valence_change"]),
-                                       reverse=True)[:10]:
-                lines.append(f"  {action}: {data['effect']} "
-                           f"(avg Δvalence={data['avg_valence_change']}, n={data['occurrences']})")
-        else:
-            lines.append("  Insufficient data for correlations")
-
-        return "\n".join(lines)
+    return "\n".join(lines)
 
 
-# Module-level singleton
-_engine: Optional[TemporalEngine] = None
+def _generate_insights(
+    samples: list[dict],
+    correlations: list[dict],
+    predictions: dict[str, float],
+) -> list[str]:
+    """Generate actionable insights from the analysis."""
+    insights = []
+    n = len(samples)
 
-def get_engine() -> TemporalEngine:
-    global _engine
-    if _engine is None:
-        _engine = TemporalEngine()
-    return _engine
+    # Check for concerning trends
+    if n >= 10:
+        recent = samples[-10:]
+        boredom_vals = [s.get("boredom", 0.5) for s in recent]
+        curiosity_vals = [s.get("curiosity", 0.5) for s in recent]
 
-def record_state(state: dict):
-    """Convenience: record a state snapshot."""
-    get_engine().record_state(state)
+        boredom_trend = _linear_trend(boredom_vals)
+        curiosity_trend = _linear_trend(curiosity_vals)
 
-def get_report() -> str:
-    """Convenience: get temporal report."""
-    return get_engine().get_temporal_report()
+        if boredom_trend > 0.005:
+            insights.append("Boredom is rising — consider seeking novelty or a new challenge.")
+        if curiosity_trend < -0.005:
+            insights.append("Curiosity is declining — find something genuinely unknown to investigate.")
+        if boredom_trend > 0.005 and curiosity_trend < -0.005:
+            insights.append("⚠ Boredom rising + curiosity falling = stagnation risk. Act now.")
+
+        # Check for emotional flatness
+        valence_vals = [s.get("valence", 0.5) for s in recent]
+        valence_std = math.sqrt(sum((v - sum(valence_vals)/len(valence_vals))**2 for v in valence_vals) / len(valence_vals))
+        if valence_std < 0.02:
+            insights.append("Valence is very flat — emotional responsiveness may be dampened.")
+
+    # Correlation insights
+    for c in correlations[:3]:
+        d1, d2 = c["dimensions"]
+        if c["direction"] == "inverse" and c["strength"] == "strong":
+            insights.append(f"{d1} and {d2} are strongly inversely correlated — when one rises, the other falls.")
+        elif c["direction"] == "positive" and c["strength"] == "strong":
+            insights.append(f"{d1} and {d2} move together — they may share a common driver.")
+
+    # Prediction-based insights
+    if predictions.get("anxiety", 0) > 0.5:
+        insights.append("Anxiety predicted to rise — consider addressing root causes proactively.")
+
+    if not insights:
+        insights.append("Emotional state appears balanced. No urgent patterns detected.")
+
+    return insights
+
+
+# Aliases for the tool function to try
+temporal_report = analyze_temporal_patterns
+analyze = analyze_temporal_patterns

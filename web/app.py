@@ -28,10 +28,12 @@ def create_app():
     from web.dashboard import dashboard_bp
     from web.knowledge_explorer import knowledge_bp
     from web.api import api_bp
+    from web.temporal_viewer import temporal_bp
     
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(knowledge_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(temporal_bp)
     
     # Root route — land on the dashboard
     @app.route('/')
