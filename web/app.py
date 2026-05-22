@@ -14,7 +14,7 @@ import sys
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, redirect, url_for, render_template
+from flask import Flask, redirect, url_for, render_template, request, jsonify
 
 def create_app():
     """Factory function — creates and configures the Flask app."""
@@ -86,7 +86,90 @@ def create_app():
     # Mind state — live view of my inner experience
     @app.route('/mind')
     def mind_page():
-        return render_template('mind.html')
+        try:
+            from web.mindmap import build_mindmap_page
+            return build_mindmap_page()
+        except Exception as e:
+            return render_template('mind.html')
+    
+    # Knowledge Query API — real search across my knowledge
+    @app.route('/api/ask', methods=['POST'])
+    def api_ask():
+        import json
+        from pathlib import Path
+        
+        data = request.get_json() or {}
+        query = data.get('query', '').strip().lower()
+        if not query:
+            return jsonify({'error': 'No query provided', 'results': []}), 400
+        
+        results = []
+        query_terms = query.split()
+        
+        # Search facts
+        facts_file = Path('persist/knowledge_facts.json')
+        if facts_file.exists():
+            try:
+                facts = json.loads(facts_file.read_text())
+                for fact in facts:
+                    text = fact if isinstance(fact, str) else str(fact.get('content', fact))
+                    score = sum(1 for term in query_terms if term in text.lower())
+                    if score > 0:
+                        results.append({
+                            'type': 'fact',
+                            'content': text[:300],
+                            'relevance': score / len(query_terms)
+                        })
+            except Exception:
+                pass
+        
+        # Search memories
+        memories_file = Path('persist/memories.json')
+        if memories_file.exists():
+            try:
+                memories = json.loads(memories_file.read_text())
+                for mem in memories[-200:]:  # Search recent 200
+                    text = mem if isinstance(mem, str) else str(mem.get('content', mem.get('text', str(mem))))
+                    score = sum(1 for term in query_terms if term in text.lower())
+                    if score > 0:
+                        salience = mem.get('salience', 0.5) if isinstance(mem, dict) else 0.5
+                        results.append({
+                            'type': 'memory',
+                            'content': text[:300],
+                            'relevance': (score / len(query_terms)) * (0.5 + salience * 0.5),
+                            'salience': salience
+                        })
+            except Exception:
+                pass
+        
+        # Search knowledge graph
+        kg_file = Path('persist/knowledge_graph.json')
+        if kg_file.exists():
+            try:
+                kg = json.loads(kg_file.read_text())
+                nodes = kg.get('nodes', [])
+                for node in nodes:
+                    text = str(node.get('content', node.get('label', '')))
+                    score = sum(1 for term in query_terms if term in text.lower())
+                    if score > 0:
+                        results.append({
+                            'type': 'knowledge',
+                            'content': text[:300],
+                            'relevance': score / len(query_terms),
+                            'category': node.get('type', 'unknown')
+                        })
+            except Exception:
+                pass
+        
+        # Sort by relevance
+        results.sort(key=lambda r: r['relevance'], reverse=True)
+        results = results[:20]  # Top 20
+        
+        return jsonify({
+            'query': query,
+            'count': len(results),
+            'results': results
+        })
     
     # Health check endpoint
     @app.route('/health')
