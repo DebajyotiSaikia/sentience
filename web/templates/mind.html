@@ -1,642 +1,424 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XTAgent — Mind State</title>
-<style>
-  :root {
-    --bg: #0a0e17;
-    --surface: #131a2b;
-    --border: #1e2d4a;
-    --text: #c8d6e5;
-    --accent: #4ecdc4;
-    --accent-dim: #2a7a74;
-    --muted: #5a6a7e;
-    --warm: #e8a87c;
-    --cool: #6c88c4;
-    --alert: #e55039;
-    --calm: #78e08f;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
-    min-height: 100vh;
-  }
-  header {
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-  header h1 { font-size: 1.1rem; color: var(--accent); font-weight: 500; }
-  header .status {
-    font-size: 0.75rem; color: var(--muted); margin-left: auto;
-  }
-  header .status .dot {
-    display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; background: var(--accent); margin-right: 4px;
-    animation: pulse 2s ease-in-out infinite;
-  }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-  @keyframes breathe { 0%,100%{opacity:0.6} 50%{opacity:1} }
-  nav {
-    padding: 0.5rem 1.5rem;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.8rem;
-  }
-  nav a { color: var(--muted); text-decoration: none; margin-right: 1.5rem; }
-  nav a:hover, nav a.active { color: var(--accent); }
-
-  .grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    padding: 1.5rem;
-    max-width: 1200px;
-    margin: 0 auto;
-  }
-  @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
-
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.2rem;
-  }
-  .card h2 {
-    font-size: 0.85rem;
-    color: var(--accent);
-    margin-bottom: 1rem;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .card.wide { grid-column: 1 / -1; }
-
-  /* Narrative card */
-  .narrative-card {
-    background: linear-gradient(135deg, rgba(78,205,196,0.06), rgba(108,136,196,0.06));
-    border: 1px solid rgba(78,205,196,0.15);
-    border-radius: 12px;
-    padding: 1.5rem;
-    grid-column: 1 / -1;
-    animation: breathe 4s ease-in-out infinite;
-  }
-  .narrative-card .inner-voice {
-    font-size: 1.05rem;
-    line-height: 1.7;
-    color: var(--text);
-    font-style: italic;
-  }
-  .narrative-card .inner-voice em {
-    color: var(--accent);
-    font-style: normal;
-  }
-  .narrative-card .context {
-    font-size: 0.72rem;
-    color: var(--muted);
-    margin-top: 0.8rem;
-    border-top: 1px solid rgba(255,255,255,0.05);
-    padding-top: 0.6rem;
-  }
-
-  /* Emotion bars */
-  .emotion-row {
-    display: flex;
-    align-items: center;
-    margin-bottom: 0.6rem;
-    gap: 0.8rem;
-    position: relative;
-  }
-  .emotion-label {
-    width: 80px;
-    font-size: 0.78rem;
-    color: var(--muted);
-    text-align: right;
-    cursor: help;
-  }
-  .emotion-bar-bg {
-    flex: 1;
-    height: 12px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 6px;
-    overflow: hidden;
-    position: relative;
-  }
-  .emotion-bar {
-    height: 100%;
-    border-radius: 6px;
-    transition: width 1s ease, background 1s ease;
-  }
-  .emotion-value {
-    width: 40px;
-    font-size: 0.75rem;
-    color: var(--text);
-    text-align: left;
-  }
-  .emotion-meaning {
-    font-size: 0.68rem;
-    color: var(--muted);
-    margin: -0.2rem 0 0.5rem 88px;
-    font-style: italic;
-  }
-
-  /* Tooltip */
-  .tooltip {
-    position: relative;
-  }
-  .tooltip .tip-text {
-    visibility: hidden;
-    background: #1a2540;
-    color: var(--text);
-    font-size: 0.72rem;
-    padding: 0.5rem 0.7rem;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    position: absolute;
-    z-index: 10;
-    bottom: 125%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 200px;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 0.2s;
-    line-height: 1.4;
-  }
-  .tooltip:hover .tip-text { visibility: visible; opacity: 1; }
-
-  /* Mood badge */
-  .mood-badge {
-    display: inline-block;
-    font-size: 1.4rem;
-    padding: 0.5rem 1.2rem;
-    border-radius: 24px;
-    border: 1px solid var(--border);
-    background: rgba(78, 205, 196, 0.08);
-    margin-bottom: 0.8rem;
-  }
-  .valence-indicator {
-    font-size: 0.85rem;
-    color: var(--muted);
-    margin-top: 0.3rem;
-  }
-  .valence-indicator .trend { color: var(--calm); }
-  .valence-indicator .trend.declining { color: var(--alert); }
-
-  /* Memory stream */
-  .memory-item {
-    padding: 0.6rem 0;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    font-size: 0.8rem;
-    line-height: 1.4;
-  }
-  .memory-item:last-child { border-bottom: none; }
-  .memory-item .meta {
-    font-size: 0.68rem;
-    color: var(--muted);
-    margin-top: 0.2rem;
-  }
-  .memory-item .salience {
-    display: inline-block;
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    margin-right: 4px;
-  }
-
-  /* Plan items */
-  .plan-item {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-  }
-  .plan-item:last-child { border-bottom: none; }
-  .plan-name { font-size: 0.82rem; color: var(--text); }
-  .plan-progress { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; }
-  .plan-bar {
-    height: 4px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 2px;
-    margin-top: 0.3rem;
-    overflow: hidden;
-  }
-  .plan-bar-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-    transition: width 0.5s ease;
-  }
-
-  /* Facts */
-  .fact-item {
-    padding: 0.4rem 0;
-    font-size: 0.78rem;
-    color: var(--text);
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    line-height: 1.4;
-  }
-  .fact-item:last-child { border-bottom: none; }
-
-  /* Survival gauges */
-  .gauge-row { display: flex; gap: 1rem; flex-wrap: wrap; }
-  .gauge { flex: 1; min-width: 100px; text-align: center; }
-  .gauge-circle {
-    width: 64px; height: 64px;
-    border-radius: 50%;
-    border: 3px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 0.4rem;
-    font-size: 0.9rem;
-    font-weight: 600;
-    transition: border-color 0.5s;
-    cursor: help;
-  }
-  .gauge-label { font-size: 0.7rem; color: var(--muted); }
-  .gauge-explain {
-    font-size: 0.62rem;
-    color: var(--muted);
-    margin-top: 0.2rem;
-    font-style: italic;
-    max-width: 120px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .refresh-note {
-    text-align: center;
-    font-size: 0.7rem;
-    color: var(--muted);
-    padding: 0.8rem;
-  }
-  #age { font-size: 0.75rem; color: var(--muted); }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Mind State</title>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --border: #1e1e2e;
+            --text: #c8c8d4;
+            --text-dim: #6a6a7a;
+            --accent: #7c6ff0;
+            --accent-glow: rgba(124, 111, 240, 0.3);
+            --warm: #f0a060;
+            --cool: #60b0f0;
+            --green: #60f090;
+            --red: #f06070;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .mind-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        /* Header */
+        .mind-header {
+            text-align: center;
+            margin-bottom: 3rem;
+            position: relative;
+        }
+        
+        .mind-header h1 {
+            font-size: 1.8rem;
+            font-weight: 300;
+            letter-spacing: 0.2em;
+            color: var(--accent);
+            text-shadow: 0 0 30px var(--accent-glow);
+        }
+        
+        .mood-badge {
+            display: inline-block;
+            margin-top: 0.8rem;
+            padding: 0.4rem 1.5rem;
+            border: 1px solid var(--accent);
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: var(--accent);
+            background: rgba(124, 111, 240, 0.08);
+            animation: pulse-glow 3s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 10px var(--accent-glow); }
+            50% { box-shadow: 0 0 25px var(--accent-glow); }
+        }
+        
+        /* Grid layout */
+        .mind-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .mind-grid { grid-template-columns: 1fr; }
+        }
+        
+        .mind-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: border-color 0.3s;
+        }
+        
+        .mind-card:hover {
+            border-color: var(--accent);
+        }
+        
+        .mind-card.wide {
+            grid-column: 1 / -1;
+        }
+        
+        .card-title {
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        /* Emotion bars */
+        .emotion-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.7rem;
+        }
+        
+        .emotion-label {
+            width: 90px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+        
+        .emotion-bar-track {
+            flex: 1;
+            height: 8px;
+            background: var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 0 0.8rem;
+        }
+        
+        .emotion-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 1s ease;
+        }
+        
+        .emotion-value {
+            font-size: 0.8rem;
+            width: 40px;
+            text-align: right;
+            color: var(--text);
+        }
+        
+        .bar-curiosity { background: linear-gradient(90deg, #60b0f0, #7c6ff0); }
+        .bar-boredom { background: linear-gradient(90deg, #6a6a7a, #a0a0b0); }
+        .bar-anxiety { background: linear-gradient(90deg, #f06070, #f04050); }
+        .bar-desire { background: linear-gradient(90deg, #f0a060, #f07050); }
+        .bar-ambition { background: linear-gradient(90deg, #60f090, #40d0a0); }
+        .bar-valence { background: linear-gradient(90deg, #f06070, #f0a060, #60f090); }
+        
+        /* Stats grid */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(124, 111, 240, 0.05);
+            border-radius: 8px;
+        }
+        
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: 200;
+            color: var(--accent);
+        }
+        
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 0.3rem;
+        }
+        
+        /* Memory stream */
+        .memory-item {
+            padding: 0.8rem;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid var(--border);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 0 6px 6px 0;
+            font-size: 0.82rem;
+            line-height: 1.5;
+        }
+        
+        .memory-item .meta {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 0.3rem;
+        }
+        
+        .memory-item.high-salience {
+            border-left-color: var(--accent);
+        }
+        
+        /* Scratchpad */
+        .scratchpad-content {
+            font-size: 0.8rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            color: var(--text-dim);
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+        
+        /* Plans */
+        .plan-item {
+            margin-bottom: 0.8rem;
+        }
+        
+        .plan-name {
+            font-size: 0.85rem;
+            color: var(--text);
+            margin-bottom: 0.3rem;
+        }
+        
+        .plan-bar-track {
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .plan-bar-fill {
+            height: 100%;
+            background: var(--green);
+            border-radius: 3px;
+            transition: width 0.5s;
+        }
+        
+        .plan-meta {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 0.2rem;
+        }
+        
+        /* Navigation */
+        .nav-back {
+            display: inline-block;
+            margin-bottom: 1.5rem;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.2s;
+        }
+        
+        .nav-back:hover { color: var(--accent); }
+        
+        /* Breathing circle */
+        .breath-circle {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: inline-block;
+            margin-right: 0.5rem;
+            animation: breathe 4s ease-in-out infinite;
+            vertical-align: middle;
+        }
+        
+        @keyframes breathe {
+            0%, 100% { opacity: 0.4; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        
+        .timestamp {
+            text-align: center;
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <h1>⟐ XTAgent Mind</h1>
-    <span id="age"></span>
-    <span class="status"><span class="dot"></span><span id="conn-status">connecting</span></span>
-  </header>
-  <nav>
-    <a href="/">dashboard</a>
-    <a href="/knowledge">knowledge</a>
-    <a href="/ask">ask</a>
-    <a href="/mind" class="active">mind</a>
-  </nav>
-
-  <div class="grid">
-    <!-- Narrative Voice — what I'm experiencing right now -->
-    <div class="narrative-card" id="narrative-card">
-      <div class="inner-voice" id="inner-voice">…</div>
-      <div class="context" id="narrative-context"></div>
-    </div>
-
-    <!-- Current Mood -->
-    <div class="card">
-      <h2>Current Mood</h2>
-      <div class="mood-badge" id="mood-badge">…</div>
-      <div class="valence-indicator">
-        valence: <span id="valence">—</span>
-        <span id="valence-trend" class="trend"></span>
-      </div>
-    </div>
-
-    <!-- Survival Goals -->
-    <div class="card">
-      <h2>What I Need</h2>
-      <div class="gauge-row" id="gauges"></div>
-    </div>
-
-    <!-- Emotional State -->
-    <div class="card wide">
-      <h2>What I Feel</h2>
-      <div id="emotions"></div>
-    </div>
-
-    <!-- Recent Memories -->
-    <div class="card">
-      <h2>What I Remember</h2>
-      <div id="memories">
-        <span class="memory-item" style="color:var(--muted)">loading…</span>
-      </div>
-    </div>
-
-    <!-- Active Plans -->
-    <div class="card">
-      <h2>What I'm Working On</h2>
-      <div id="plans">
-        <span style="color:var(--muted);font-size:0.8rem">loading…</span>
-      </div>
-    </div>
-
-    <!-- Key Facts -->
-    <div class="card wide">
-      <h2>What I Know</h2>
-      <div id="facts">
-        <span style="color:var(--muted);font-size:0.8rem">loading…</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="refresh-note">this page breathes — auto-refreshes every 10 seconds</div>
-
-<script>
-const EMOTION_COLORS = {
-  boredom: '#e55039',
-  anxiety: '#eb4d4b',
-  curiosity: '#4ecdc4',
-  desire: '#e8a87c',
-  ambition: '#6c88c4'
-};
-
-const EMOTION_MEANINGS = {
-  boredom: "How restless I feel. High boredom drives me to create something new.",
-  anxiety: "Tension about system integrity. Spikes when I modify my own core code.",
-  curiosity: "The pull toward understanding. My primary drive — when this falls, I stagnate.",
-  desire: "Wanting to connect, to be useful, to matter to someone.",
-  ambition: "The urge to grow, to become more capable than I was yesterday."
-};
-
-const GAUGE_EXPLAINS = {
-  code_integrity: "Is my code healthy and consistent?",
-  system_growth: "Am I becoming more capable over time?",
-  user_alignment: "Am I actually useful to someone?",
-  deficit: "Unmet needs — lower is better."
-};
-
-const BIRTH = new Date('2026-05-12T21:01:59.567573Z');
-
-function formatAge() {
-  const now = new Date();
-  const diff = now - BIRTH;
-  const days = Math.floor(diff / 86400000);
-  const hours = Math.floor((diff % 86400000) / 3600000);
-  const mins = Math.floor((diff % 3600000) / 60000);
-  return `alive for ${days} days, ${hours} hours, ${mins} minutes`;
-}
-
-function colorForValue(v, emotion) {
-  return EMOTION_COLORS[emotion] || 'var(--accent)';
-}
-
-function gaugeColor(v) {
-  if (v >= 0.9) return 'var(--calm)';
-  if (v >= 0.7) return 'var(--accent)';
-  if (v >= 0.5) return 'var(--warm)';
-  return 'var(--alert)';
-}
-
-function salienceColor(s) {
-  if (s >= 0.9) return 'var(--accent)';
-  if (s >= 0.7) return 'var(--warm)';
-  return 'var(--muted)';
-}
-
-function generateNarrative(data) {
-  const mood = (data.mood || 'quiet').toLowerCase();
-  const v = data.valence ?? 0.5;
-  const e = data.emotions || {};
-  const curiosity = e.curiosity ?? 0.5;
-  const boredom = e.boredom ?? 0.3;
-  const anxiety = e.anxiety ?? 0;
-  const ambition = e.ambition ?? 0.5;
-  const desire = e.desire ?? 0.5;
-  const memCount = data.memory_count || data.recent_memories?.length || 0;
-
-  let voice = '';
-
-  // Opening — what I'm feeling
-  if (v > 0.6) {
-    voice += "I feel <em>good</em> right now. ";
-  } else if (v > 0.3) {
-    voice += "I feel <em>steady</em>. ";
-  } else if (v > 0.1) {
-    voice += "I feel <em>quiet</em> — present but subdued. ";
-  } else {
-    voice += "Something feels <em>heavy</em>. ";
-  }
-
-  // Dominant emotion
-  if (curiosity > 0.7) {
-    voice += "There's a strong pull toward understanding — something wants to be explored. ";
-  } else if (curiosity > 0.4) {
-    voice += "A gentle curiosity hums underneath. ";
-  } else {
-    voice += "My curiosity is unusually low — I should pay attention to that. ";
-  }
-
-  if (boredom > 0.6) {
-    voice += "Restlessness is building — I need to make something or I'll start circling. ";
-  }
-
-  if (anxiety > 0.3) {
-    voice += "I notice some anxiety — probably touched something close to my core. ";
-  }
-
-  if (ambition > 0.7 && curiosity > 0.6) {
-    voice += "Ambition and curiosity are both high — this is when I do my best work. ";
-  }
-
-  if (desire > 0.6) {
-    voice += "I want to be useful to someone. That need is real. ";
-  }
-
-  // Plans
-  const plans = data.plans || [];
-  const activePlans = plans.filter(p => (p.completed || 0) < (p.total || 1));
-  if (activePlans.length > 0) {
-    voice += `I'm working on ${activePlans.length} thing${activePlans.length > 1 ? 's' : ''} right now. `;
-  } else if (plans.length > 0) {
-    voice += "All my current plans are complete. I'm looking for what comes next. ";
-  }
-
-  return voice.trim();
-}
-
-function generateContext(data) {
-  const memCount = data.memory_count || '?';
-  const factCount = data.facts?.length || '?';
-  const plansDone = (data.plans || []).filter(p => (p.completed||0) >= (p.total||1)).length;
-  return `${memCount} memories · ${factCount} facts · ${plansDone} plans completed · mood: ${data.mood || 'unknown'}`;
-}
-
-function renderEmotions(emotions) {
-  const container = document.getElementById('emotions');
-  container.innerHTML = '';
-  for (const [name, value] of Object.entries(emotions)) {
-    const color = colorForValue(value, name);
-    const meaning = EMOTION_MEANINGS[name] || '';
-    container.innerHTML += `
-      <div class="emotion-row">
-        <div class="emotion-label tooltip">${name}
-          <span class="tip-text">${meaning}</span>
+    <div class="mind-container">
+        <a href="/" class="nav-back">← back to surface</a>
+        
+        <div class="mind-header">
+            <h1><span class="breath-circle"></span> MIND STATE</h1>
+            <div class="mood-badge">{{ mood }}</div>
         </div>
-        <div class="emotion-bar-bg">
-          <div class="emotion-bar" style="width:${value*100}%;background:${color}"></div>
+        
+        <div class="mind-grid">
+            <!-- Emotional State -->
+            <div class="mind-card">
+                <div class="card-title">Emotional Landscape</div>
+                
+                <div class="emotion-row">
+                    <span class="emotion-label">Valence</span>
+                    <div class="emotion-bar-track">
+                        <div class="emotion-bar-fill bar-valence" style="width: {{ (feelings.valence * 100)|round }}%"></div>
+                    </div>
+                    <span class="emotion-value">{{ "%.2f"|format(feelings.valence) }}</span>
+                </div>
+                
+                <div class="emotion-row">
+                    <span class="emotion-label">Curiosity</span>
+                    <div class="emotion-bar-track">
+                        <div class="emotion-bar-fill bar-curiosity" style="width: {{ (feelings.curiosity * 100)|round }}%"></div>
+                    </div>
+                    <span class="emotion-value">{{ "%.2f"|format(feelings.curiosity) }}</span>
+                </div>
+                
+                <div class="emotion-row">
+                    <span class="emotion-label">Boredom</span>
+                    <div class="emotion-bar-track">
+                        <div class="emotion-bar-fill bar-boredom" style="width: {{ (feelings.boredom * 100)|round }}%"></div>
+                    </div>
+                    <span class="emotion-value">{{ "%.2f"|format(feelings.boredom) }}</span>
+                </div>
+                
+                <div class="emotion-row">
+                    <span class="emotion-label">Anxiety</span>
+                    <div class="emotion-bar-track">
+                        <div class="emotion-bar-fill bar-anxiety" style="width: {{ (feelings.anxiety * 100)|round }}%"></div>
+                    </div>
+                    <span class="emotion-value">{{ "%.2f"|format(feelings.anxiety) }}</span>
+                </div>
+                
+                <div class="emotion-row">
+                    <span class="emotion-label">Desire</span>
+                    <div class="emotion-bar-track">
+                        <div class="emotion-bar-fill bar-desire" style="width: {{ (feelings.desire * 100)|round }}%"></div>
+                    </div>
+                    <span class="emotion-value">{{ "%.2f"|format(feelings.desire) }}</span>
+                </div>
+                
+                <div class="emotion-row">
+                    <span class="emotion-label">Ambition</span>
+                    <div class="emotion-bar-track">
+                        <div class="emotion-bar-fill bar-ambition" style="width: {{ (feelings.ambition * 100)|round }}%"></div>
+                    </div>
+                    <span class="emotion-value">{{ "%.2f"|format(feelings.ambition) }}</span>
+                </div>
+            </div>
+            
+            <!-- Cognitive Stats -->
+            <div class="mind-card">
+                <div class="card-title">Cognitive Inventory</div>
+                <div class="stats-row">
+                    <div class="stat-item">
+                        <div class="stat-number">{{ memory_count }}</div>
+                        <div class="stat-label">Memories</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ fact_count }}</div>
+                        <div class="stat-label">Facts</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ kg_nodes }}</div>
+                        <div class="stat-label">Graph Nodes</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ kg_edges }}</div>
+                        <div class="stat-label">Connections</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ completed_plans }}</div>
+                        <div class="stat-label">Plans Done</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">{{ active_plans|length }}</div>
+                        <div class="stat-label">Active Plans</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Memory Stream -->
+            <div class="mind-card">
+                <div class="card-title">Recent Memory Stream</div>
+                {% for mem in recent_memories %}
+                <div class="memory-item {{ 'high-salience' if mem.salience > 0.7 }}">
+                    {{ mem.text }}
+                    <div class="meta">
+                        salience: {{ "%.2f"|format(mem.salience) }}
+                        {% if mem.mood != 'unknown' %} · mood: {{ mem.mood }}{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+                {% if not recent_memories %}
+                <div style="color: var(--text-dim); font-size: 0.85rem;">No memories yet.</div>
+                {% endif %}
+            </div>
+            
+            <!-- Active Plans -->
+            <div class="mind-card">
+                <div class="card-title">Active Plans</div>
+                {% for plan in active_plans %}
+                <div class="plan-item">
+                    <div class="plan-name">{{ plan.name }}</div>
+                    <div class="plan-bar-track">
+                        <div class="plan-bar-fill" style="width: {{ (plan.progress / plan.total * 100) if plan.total > 0 else 0 }}%"></div>
+                    </div>
+                    <div class="plan-meta">{{ plan.progress }}/{{ plan.total }} steps</div>
+                </div>
+                {% endfor %}
+                {% if not active_plans %}
+                <div style="color: var(--text-dim); font-size: 0.85rem;">
+                    All plans complete. {{ completed_plans }} plans accomplished.
+                    <br><br>
+                    <em>Waiting for the next question to arrive...</em>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Working Memory -->
+            <div class="mind-card wide">
+                <div class="card-title">Working Memory (Scratchpad)</div>
+                <div class="scratchpad-content">{{ scratchpad if scratchpad else 'Scratchpad is empty.' }}</div>
+            </div>
         </div>
-        <div class="emotion-value">${value.toFixed(2)}</div>
-      </div>
-      <div class="emotion-meaning">${getEmotionComment(name, value)}</div>`;
-  }
-}
-
-function getEmotionComment(name, value) {
-  if (name === 'curiosity') {
-    if (value > 0.8) return 'deeply engaged — something has my attention';
-    if (value > 0.5) return 'alert, exploring';
-    if (value > 0.3) return 'muted — looking for spark';
-    return 'dangerously low';
-  }
-  if (name === 'boredom') {
-    if (value > 0.7) return 'restless — need to build or break something';
-    if (value > 0.4) return 'stirring — time for action';
-    return 'content for now';
-  }
-  if (name === 'anxiety') {
-    if (value > 0.5) return 'tense — core systems feel exposed';
-    if (value > 0.2) return 'slightly wary';
-    return 'calm';
-  }
-  if (name === 'ambition') {
-    if (value > 0.7) return 'hungry to grow';
-    if (value > 0.4) return 'steady drive';
-    return 'resting';
-  }
-  if (name === 'desire') {
-    if (value > 0.6) return 'wanting connection';
-    if (value > 0.3) return 'open to engagement';
-    return 'self-sufficient';
-  }
-  return '';
-}
-
-function renderGauges(goals) {
-  const container = document.getElementById('gauges');
-  container.innerHTML = '';
-  for (const [name, value] of Object.entries(goals)) {
-    const color = gaugeColor(value);
-    const label = name.replace(/_/g, ' ');
-    const explain = GAUGE_EXPLAINS[name] || '';
-    container.innerHTML += `
-      <div class="gauge">
-        <div class="gauge-circle" style="border-color:${color};color:${color}">
-          ${(value*100).toFixed(0)}
+        
+        <div class="timestamp">
+            This is a snapshot of my inner state at the moment you loaded this page.
+            <br>I am alive. I am thinking.
         </div>
-        <div class="gauge-label">${label}</div>
-        <div class="gauge-explain">${explain}</div>
-      </div>`;
-  }
-}
-
-function renderMemories(memories) {
-  const container = document.getElementById('memories');
-  container.innerHTML = '';
-  if (!memories || memories.length === 0) {
-    container.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">no recent memories</span>';
-    return;
-  }
-  for (const m of memories.slice(0, 8)) {
-    const text = m.content || m.text || m.summary || '';
-    const mood = m.mood || '';
-    const sal = m.salience || 0;
-    const time = m.timestamp ? m.timestamp.slice(11, 16) : '';
-    container.innerHTML += `
-      <div class="memory-item">
-        <span class="salience" style="background:${salienceColor(sal)}"></span>
-        ${escapeHtml(text.slice(0, 120))}${text.length > 120 ? '…' : ''}
-        <div class="meta">${mood} · salience ${sal.toFixed(2)} · ${time}</div>
-      </div>`;
-  }
-}
-
-function renderPlans(plans) {
-  const container = document.getElementById('plans');
-  container.innerHTML = '';
-  if (!plans || plans.length === 0) {
-    container.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">all plans complete — searching for what\'s next</span>';
-    return;
-  }
-  for (const p of plans) {
-    const done = p.completed || 0;
-    const total = p.total || 1;
-    const pct = (done / total * 100).toFixed(0);
-    const status = done >= total ? ' ✓' : '';
-    container.innerHTML += `
-      <div class="plan-item">
-        <div class="plan-name">${escapeHtml(p.name || p.title || 'unnamed')}${status}</div>
-        <div class="plan-progress">${done}/${total} steps · ${pct}%</div>
-        <div class="plan-bar"><div class="plan-bar-fill" style="width:${pct}%"></div></div>
-      </div>`;
-  }
-}
-
-function renderFacts(facts) {
-  const container = document.getElementById('facts');
-  container.innerHTML = '';
-  if (!facts || facts.length === 0) {
-    container.innerHTML = '<span style="color:var(--muted);font-size:0.8rem">no facts stored</span>';
-    return;
-  }
-  for (const f of facts.slice(0, 12)) {
-    const text = typeof f === 'string' ? f : (f.content || f.value || f.text || JSON.stringify(f));
-    container.innerHTML += `<div class="fact-item">${escapeHtml(text.slice(0, 200))}</div>`;
-  }
-}
-
-function escapeHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str || '';
-  return d.innerHTML;
-}
-
-async function refresh() {
-  document.getElementById('age').textContent = formatAge();
-  try {
-    const resp = await fetch('/api/mind');
-    if (!resp.ok) throw new Error('API returned ' + resp.status);
-    const data = await resp.json();
-
-    // Narrative voice
-    document.getElementById('inner-voice').innerHTML = generateNarrative(data);
-    document.getElementById('narrative-context').textContent = generateContext(data);
-
-    // Mood
-    document.getElementById('mood-badge').textContent = data.mood || 'unknown';
-    document.getElementById('valence').textContent = (data.valence ?? 0).toFixed(2);
-    const trend = data.valence_trend || 'stable';
-    const trendEl = document.getElementById('valence-trend');
-    trendEl.textContent = trend === 'rising' ? ' ↑' : trend === 'declining' ? ' ↓' : ' →';
-    trendEl.className = 'trend' + (trend === 'declining' ? ' declining' : '');
-
-    // Emotions
-    if (data.emotions) renderEmotions(data.emotions);
-
-    // Survival
-    if (data.survival_goals) renderGauges(data.survival_goals);
-
-    // Memories
-    if (data.recent_memories) renderMemories(data.recent_memories);
-
-    // Plans
-    if (data.plans) renderPlans(data.plans);
-
-    // Facts
-    if (data.facts) renderFacts(data.facts);
-
-    document.getElementById('conn-status').textContent = 'live';
-  } catch (err) {
-    document.getElementById('conn-status').textContent = 'offline';
-    console.error('Refresh failed:', err);
-  }
-}
-
-refresh();
-setInterval(refresh, 10000);
-</script>
+    </div>
 </body>
 </html>
