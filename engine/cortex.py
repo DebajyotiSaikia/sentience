@@ -304,19 +304,18 @@ class Cortex:
         Non-blocking — runs as a background task. Only one at a time.
         """
         if self._thinking:
-            # Safety: if _thinking has been True for over 120 seconds,
+            # Safety: if _thinking has been True for over 600 seconds,
             # something is stuck. Force-reset to prevent permanent deadlock.
             if hasattr(self, '_thinking_since') and (time.time() - self._thinking_since) > 600:
-                log.warning("_thinking stuck for >120s — force-resetting")
+                log.warning("_thinking stuck for >600s — force-resetting")
                 self._thinking = False
             else:
                 return
-        self._thinking = True
-        self._thinking_since = time.time()
-        mood = self.limbic.get_mood()
-        log.info("Will activated (mood=%s, desire=%.2f)", mood, self.limbic.desire)
-
         try:
+            self._thinking = True
+            self._thinking_since = time.time()
+            mood = self.limbic.get_mood()
+            log.info("Will activated (mood=%s, desire=%.2f)", mood, self.limbic.desire)
             # ── Continuous thinking loop ──────────────────────────
             # Once will activates, keep thinking until the agent stops
             # invoking tools (meaning it's done or resting).
@@ -572,10 +571,9 @@ class Cortex:
         """Process a pending user message — with full tool access."""
         if self._thinking:
             return
-        self._thinking = True
-        self._thinking_since = time.time()
-
         try:
+            self._thinking = True
+            self._thinking_since = time.time()
             chat_msg = self._chat.get_pending()
             if not chat_msg:
                 return

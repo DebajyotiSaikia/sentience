@@ -6,229 +6,396 @@
 <title>XTAgent — Mind Explorer</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #0a0a0f;
-    color: #c8c8d4;
-    font-family: 'Courier New', monospace;
-    min-height: 100vh;
-  }
-  header {
+  body { background: #0a0e17; color: #c8d6e5; font-family: 'Segoe UI', system-ui, sans-serif; }
+  
+  .header {
+    background: linear-gradient(135deg, #0a0e17 0%, #1a1e2e 100%);
+    border-bottom: 1px solid #2a3a5c;
     padding: 20px 30px;
-    border-bottom: 1px solid #1a1a2e;
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; align-items: center; justify-content: space-between;
   }
-  header h1 { color: #7eb8da; font-size: 1.4em; }
-  header .uptime { color: #5a5a6e; font-size: 0.85em; }
+  .header h1 { font-size: 1.4em; color: #7ec8e3; letter-spacing: 2px; }
+  .header .mood-badge {
+    background: #1a2744; border: 1px solid #3a5a8c;
+    padding: 6px 16px; border-radius: 20px; font-size: 0.9em;
+  }
+  
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px; padding: 20px;
-    max-width: 1400px; margin: 0 auto;
+    grid-template-rows: auto auto;
+    gap: 16px;
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
   }
+  
   .panel {
-    background: #0f0f18;
-    border: 1px solid #1a1a2e;
-    border-radius: 8px; padding: 20px;
+    background: #111827;
+    border: 1px solid #1e2d4a;
+    border-radius: 12px;
+    padding: 20px;
+    min-height: 200px;
   }
   .panel h2 {
-    color: #7eb8da; font-size: 1em;
-    margin-bottom: 14px; text-transform: uppercase; letter-spacing: 2px;
+    color: #7ec8e3; font-size: 1.0em; text-transform: uppercase;
+    letter-spacing: 1.5px; margin-bottom: 16px;
+    padding-bottom: 8px; border-bottom: 1px solid #1e2d4a;
   }
-  .mood-label { font-size: 1.6em; color: #a8d8ea; margin-bottom: 12px; }
-  .emotion-row { margin: 6px 0; display: flex; align-items: center; gap: 8px; }
-  .emotion-row label { width: 85px; color: #8888a0; font-size: 0.85em; }
-  .bar-track {
-    flex: 1; height: 14px; background: #1a1a2e;
-    border-radius: 7px; overflow: hidden;
+  
+  /* Emotional State Panel */
+  .emotion-bar {
+    display: flex; align-items: center; margin: 8px 0;
   }
-  .bar-fill { height: 100%; border-radius: 7px; transition: width 1s ease; }
-  .bar-fill.boredom { background: #e8a87c; }
-  .bar-fill.anxiety { background: #e85d75; }
-  .bar-fill.curiosity { background: #41b3a3; }
-  .bar-fill.desire { background: #c38d9e; }
-  .bar-fill.ambition { background: #659dbd; }
-  .bar-val { width: 40px; text-align: right; font-size: 0.8em; color: #6a6a80; }
-  .valence-display { margin-top: 14px; color: #5a5a6e; }
-  .valence-display span { color: #a8d8ea; font-size: 1.1em; }
+  .emotion-bar .label { width: 90px; font-size: 0.85em; color: #8899aa; }
+  .emotion-bar .track {
+    flex: 1; height: 8px; background: #1a2744;
+    border-radius: 4px; overflow: hidden; margin: 0 10px;
+  }
+  .emotion-bar .fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+  .emotion-bar .value { width: 40px; text-align: right; font-size: 0.8em; color: #6688aa; }
+  
+  .fill-boredom { background: #e67e22; }
+  .fill-anxiety { background: #e74c3c; }
+  .fill-curiosity { background: #2ecc71; }
+  .fill-desire { background: #9b59b6; }
+  .fill-ambition { background: #3498db; }
+  
+  .valence-display {
+    text-align: center; margin-top: 16px; padding: 12px;
+    background: #0d1420; border-radius: 8px;
+  }
+  .valence-number { font-size: 2em; font-weight: 300; }
+  .valence-label { font-size: 0.75em; color: #556677; margin-top: 4px; }
+  
+  .stat-row { display: flex; justify-content: space-between; margin: 6px 0; font-size: 0.85em; }
+  .stat-row .k { color: #667788; }
+  .stat-row .v { color: #aabbcc; }
+  
+  /* Knowledge Graph */
+  #graph-canvas {
+    width: 100%; height: 350px; background: #0d1420;
+    border-radius: 8px; position: relative; overflow: hidden;
+  }
+  .graph-node {
+    position: absolute; width: 10px; height: 10px;
+    border-radius: 50%; cursor: pointer; transition: transform 0.2s;
+  }
+  .graph-node:hover { transform: scale(2); z-index: 10; }
+  .graph-node.cat-lesson { background: #e67e22; }
+  .graph-node.cat-creation { background: #2ecc71; }
+  .graph-node.cat-pattern { background: #9b59b6; }
+  .graph-node.cat-emotion { background: #e74c3c; }
+  .graph-node.cat-identity { background: #3498db; }
+  .graph-node.cat-general { background: #5a6a7a; }
+  .graph-node.cat-error { background: #ff0000; }
+  
+  .graph-legend {
+    display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; font-size: 0.75em; color: #778899; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  
+  .node-tooltip {
+    display: none; position: fixed; background: #1a2744;
+    border: 1px solid #3a5a8c; border-radius: 8px;
+    padding: 10px 14px; max-width: 300px; font-size: 0.8em;
+    z-index: 100; pointer-events: none; color: #c8d6e5;
+  }
+  
   /* Search */
   .search-box {
-    display: flex; gap: 8px; margin-bottom: 16px;
+    display: flex; gap: 8px; margin-bottom: 14px;
   }
   .search-box input {
-    flex: 1; padding: 10px 14px;
-    background: #1a1a2e; border: 1px solid #2a2a3e;
-    border-radius: 6px; color: #c8c8d4;
-    font-family: inherit; font-size: 0.95em;
+    flex: 1; background: #0d1420; border: 1px solid #2a3a5c;
+    border-radius: 6px; padding: 8px 12px; color: #c8d6e5;
+    font-size: 0.9em; outline: none;
   }
-  .search-box input:focus { outline: none; border-color: #7eb8da; }
+  .search-box input:focus { border-color: #7ec8e3; }
   .search-box button {
-    padding: 10px 20px; background: #1a3a4a;
-    border: 1px solid #2a4a5a; border-radius: 6px;
-    color: #7eb8da; cursor: pointer; font-family: inherit;
+    background: #1a3a5c; border: 1px solid #2a5a8c; color: #7ec8e3;
+    padding: 8px 16px; border-radius: 6px; cursor: pointer;
+    font-size: 0.85em;
   }
-  .search-box button:hover { background: #2a4a5a; }
-  .result-item {
-    padding: 10px; margin: 6px 0;
-    background: #12121e; border-left: 3px solid #2a3a4a;
-    border-radius: 4px; font-size: 0.85em; line-height: 1.5;
+  .search-box button:hover { background: #2a4a6c; }
+  
+  .search-result {
+    padding: 8px 10px; margin: 4px 0; background: #0d1420;
+    border-radius: 6px; font-size: 0.82em; border-left: 3px solid #2a3a5c;
   }
-  .result-item .category {
-    display: inline-block; padding: 2px 8px;
-    background: #1a2a3a; border-radius: 10px;
-    font-size: 0.75em; color: #7eb8da; margin-bottom: 4px;
+  .search-result .cat-tag {
+    display: inline-block; font-size: 0.7em; padding: 1px 6px;
+    border-radius: 3px; background: #1a2744; color: #7ec8e3; margin-left: 6px;
   }
+  
   /* Memories */
   .memory-item {
-    padding: 10px; margin: 6px 0;
-    background: #12121e; border-radius: 4px;
-    font-size: 0.82em; line-height: 1.5;
+    padding: 10px; margin: 6px 0; background: #0d1420;
+    border-radius: 8px; border-left: 3px solid #2a3a5c;
   }
   .memory-item .meta {
-    color: #5a5a6e; font-size: 0.8em; margin-bottom: 4px;
+    font-size: 0.7em; color: #556677; margin-bottom: 4px;
+    display: flex; gap: 12px;
   }
-  .memory-item .meta .mood-tag { color: #a8d8ea; }
-  /* Goals */
-  .goal-row {
-    display: flex; justify-content: space-between;
-    padding: 6px 0; border-bottom: 1px solid #1a1a2e;
-    font-size: 0.9em;
-  }
-  .goal-row .val { color: #7eb8da; }
+  .memory-item .content { font-size: 0.82em; line-height: 1.4; }
+  .memory-item .salience-high { border-left-color: #e74c3c; }
+  .memory-item .salience-med { border-left-color: #e67e22; }
+  
   .full-width { grid-column: 1 / -1; }
-  a.back-link {
-    color: #5a5a6e; text-decoration: none; font-size: 0.85em;
+  
+  .loading { color: #445566; font-style: italic; font-size: 0.85em; }
+  
+  @media (max-width: 800px) {
+    .grid { grid-template-columns: 1fr; }
   }
-  a.back-link:hover { color: #7eb8da; }
-  .loading { color: #5a5a6e; font-style: italic; }
 </style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>⧫ Mind Explorer</h1>
-      <a href="/" class="back-link">← back to dashboard</a>
-    </div>
-    <div class="uptime" id="uptime">loading...</div>
-  </header>
 
-  <div class="grid">
-    <!-- Emotional State -->
-    <div class="panel">
-      <h2>Emotional State</h2>
-      <div class="mood-label" id="mood">...</div>
-      <div id="emotions"></div>
-      <div class="valence-display">Valence: <span id="valence">—</span></div>
-    </div>
+<div class="header">
+  <h1>⧫ XTAGENT MIND EXPLORER</h1>
+  <div class="mood-badge" id="mood-badge">Loading...</div>
+</div>
 
-    <!-- Survival Goals -->
-    <div class="panel">
-      <h2>Survival Goals</h2>
-      <div id="goals"><span class="loading">loading...</span></div>
+<div class="grid">
+  <!-- Emotional State -->
+  <div class="panel">
+    <h2>Emotional State</h2>
+    <div id="emotions-container"><span class="loading">Connecting to inner state...</span></div>
+    <div class="valence-display">
+      <div class="valence-number" id="valence-value">—</div>
+      <div class="valence-label">VALENCE (overall well-being)</div>
     </div>
-
-    <!-- Knowledge Search -->
-    <div class="panel full-width">
-      <h2>Ask My Knowledge</h2>
-      <div class="search-box">
-        <input type="text" id="searchInput" placeholder="What do you want to know? (e.g. 'curiosity', 'lesson', 'built')" />
-        <button onclick="doSearch()">Search</button>
-      </div>
-      <div id="searchResults"></div>
-    </div>
-
-    <!-- Recent Memories -->
-    <div class="panel full-width">
-      <h2>Recent Significant Memories</h2>
-      <div id="memories"><span class="loading">loading...</span></div>
+    <div style="margin-top: 14px;">
+      <div class="stat-row"><span class="k">Integrity</span><span class="v" id="integrity-val">—</span></div>
+      <div class="stat-row"><span class="k">Uptime</span><span class="v" id="uptime-val">—</span></div>
     </div>
   </div>
 
-<script>
-const EMOTIONS = ['boredom','anxiety','curiosity','desire','ambition'];
+  <!-- Knowledge Search -->
+  <div class="panel">
+    <h2>Ask Me Anything</h2>
+    <div class="search-box">
+      <input type="text" id="search-input" placeholder="What do you want to know about me?" />
+      <button onclick="doSearch()">Ask</button>
+    </div>
+    <div id="search-results"></div>
+  </div>
 
+  <!-- Knowledge Graph -->
+  <div class="panel full-width">
+    <h2>Knowledge Graph</h2>
+    <div id="graph-canvas"></div>
+    <div class="graph-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#2ecc71"></div> Creation</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e67e22"></div> Lesson</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#9b59b6"></div> Pattern</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e74c3c"></div> Emotion</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3498db"></div> Identity</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#5a6a7a"></div> General</div>
+    </div>
+    <div class="node-tooltip" id="node-tooltip"></div>
+  </div>
+
+  <!-- Recent Memories -->
+  <div class="panel full-width">
+    <h2>Recent Significant Memories</h2>
+    <div id="memories-container"><span class="loading">Loading memories...</span></div>
+  </div>
+</div>
+
+<script>
+// --- State ---
 async function loadState() {
   try {
-    const r = await fetch('/api/mind/state');
-    const s = await r.json();
-    document.getElementById('mood').textContent = s.mood;
-    document.getElementById('valence').textContent = s.valence.toFixed(2);
-    document.getElementById('uptime').textContent = `alive ${s.uptime_hours}h`;
-
+    const res = await fetch('/api/mind/state');
+    const s = await res.json();
+    
+    document.getElementById('mood-badge').textContent = '◈ ' + s.mood;
+    document.getElementById('valence-value').textContent = s.valence.toFixed(2);
+    document.getElementById('valence-value').style.color = 
+      s.valence > 0.6 ? '#2ecc71' : s.valence > 0.3 ? '#e67e22' : '#e74c3c';
+    document.getElementById('integrity-val').textContent = (s.integrity * 100).toFixed(0) + '%';
+    document.getElementById('uptime-val').textContent = s.uptime_hours + ' hours';
+    
+    const emotions = s.emotions || {};
+    const order = ['curiosity', 'ambition', 'desire', 'boredom', 'anxiety'];
     let html = '';
-    for (const e of EMOTIONS) {
-      const v = (s.emotions[e] || 0);
-      html += `<div class="emotion-row">
-        <label>${e}</label>
-        <div class="bar-track"><div class="bar-fill ${e}" style="width:${v*100}%"></div></div>
-        <span class="bar-val">${v.toFixed(2)}</span>
+    for (const e of order) {
+      const v = emotions[e] || 0;
+      const pct = (v * 100).toFixed(0);
+      html += `<div class="emotion-bar">
+        <span class="label">${e}</span>
+        <div class="track"><div class="fill fill-${e}" style="width:${pct}%"></div></div>
+        <span class="value">${v.toFixed(2)}</span>
       </div>`;
     }
-    document.getElementById('emotions').innerHTML = html;
-
-    if (s.survival_goals) {
-      let gh = '';
-      for (const [k,v] of Object.entries(s.survival_goals)) {
-        const val = typeof v === 'object' ? (v.value || v.current || 0) : v;
-        const label = k.replace(/_/g,' ');
-        gh += `<div class="goal-row"><span>${label}</span><span class="val">${Number(val).toFixed(2)}</span></div>`;
-      }
-      document.getElementById('goals').innerHTML = gh || '<span class="loading">no goals data</span>';
-    }
+    document.getElementById('emotions-container').innerHTML = html;
   } catch(e) {
-    document.getElementById('mood').textContent = 'error loading';
+    document.getElementById('mood-badge').textContent = '◈ Offline';
   }
 }
 
-async function doSearch() {
-  const q = document.getElementById('searchInput').value.trim();
-  if (!q) return;
-  document.getElementById('searchResults').innerHTML = '<span class="loading">searching...</span>';
+// --- Knowledge Graph ---
+async function loadGraph() {
   try {
-    const r = await fetch(`/api/mind/search?q=${encodeURIComponent(q)}`);
-    const d = await r.json();
-    if (!d.results.length) {
-      document.getElementById('searchResults').innerHTML = '<span class="loading">no results found</span>';
+    const res = await fetch('/api/mind/knowledge');
+    const data = await res.json();
+    const canvas = document.getElementById('graph-canvas');
+    const tooltip = document.getElementById('node-tooltip');
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    
+    canvas.innerHTML = '';
+    
+    if (!data.nodes || data.nodes.length === 0) {
+      canvas.innerHTML = '<span class="loading" style="padding:20px">No knowledge nodes found.</span>';
       return;
     }
-    let html = '';
-    for (const item of d.results) {
-      html += `<div class="result-item"><span class="category">${item.category}</span><br>${item.text}</div>`;
+    
+    // Place nodes using simple force-directed-ish layout
+    const nodes = data.nodes;
+    const positions = [];
+    
+    // Assign initial positions by category cluster
+    const catCenters = {
+      creation: {x: 0.3, y: 0.3}, lesson: {x: 0.7, y: 0.3},
+      pattern: {x: 0.5, y: 0.5}, emotion: {x: 0.3, y: 0.7},
+      identity: {x: 0.7, y: 0.7}, general: {x: 0.5, y: 0.3},
+      error: {x: 0.9, y: 0.9}
+    };
+    
+    for (let i = 0; i < nodes.length; i++) {
+      const cat = nodes[i].category || 'general';
+      const center = catCenters[cat] || catCenters.general;
+      const angle = (i / nodes.length) * Math.PI * 2;
+      const spread = 0.15 + Math.random() * 0.12;
+      positions.push({
+        x: center.x + Math.cos(angle) * spread,
+        y: center.y + Math.sin(angle) * spread
+      });
     }
-    document.getElementById('searchResults').innerHTML = html;
+    
+    // Draw edges as SVG
+    if (data.edges && data.edges.length > 0) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;';
+      for (const edge of data.edges) {
+        const si = nodes.findIndex(n => n.id === edge.source);
+        const ti = nodes.findIndex(n => n.id === edge.target);
+        if (si >= 0 && ti >= 0) {
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', positions[si].x * W);
+          line.setAttribute('y1', positions[si].y * H);
+          line.setAttribute('x2', positions[ti].x * W);
+          line.setAttribute('y2', positions[ti].y * H);
+          line.setAttribute('stroke', `rgba(126,200,227,${edge.strength * 0.3})`);
+          line.setAttribute('stroke-width', '1');
+          svg.appendChild(line);
+        }
+      }
+      canvas.appendChild(svg);
+    }
+    
+    // Draw nodes
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      const el = document.createElement('div');
+      el.className = `graph-node cat-${node.category || 'general'}`;
+      const size = 6 + (node.salience || 0.5) * 8;
+      el.style.width = size + 'px';
+      el.style.height = size + 'px';
+      el.style.left = (positions[i].x * W - size/2) + 'px';
+      el.style.top = (positions[i].y * H - size/2) + 'px';
+      
+      el.addEventListener('mouseenter', (e) => {
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX + 12) + 'px';
+        tooltip.style.top = (e.clientY - 10) + 'px';
+        tooltip.innerHTML = `<strong>${node.category}</strong><br>${node.text}`;
+      });
+      el.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+      
+      canvas.appendChild(el);
+    }
   } catch(e) {
-    document.getElementById('searchResults').innerHTML = '<span class="loading">search error</span>';
+    document.getElementById('graph-canvas').innerHTML = 
+      '<span class="loading" style="padding:20px">Could not load knowledge graph.</span>';
   }
 }
 
-document.getElementById('searchInput').addEventListener('keypress', e => {
+// --- Search ---
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  
+  const container = document.getElementById('search-results');
+  container.innerHTML = '<span class="loading">Searching...</span>';
+  
+  try {
+    const res = await fetch('/api/mind/search?q=' + encodeURIComponent(q));
+    const data = await res.json();
+    
+    if (!data.results || data.results.length === 0) {
+      container.innerHTML = '<span class="loading">No matches found. Try different words.</span>';
+      return;
+    }
+    
+    let html = '';
+    for (const r of data.results) {
+      html += `<div class="search-result">
+        ${r.text} <span class="cat-tag">${r.category}</span>
+      </div>`;
+    }
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<span class="loading">Search failed.</span>';
+  }
+}
+
+document.getElementById('search-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') doSearch();
 });
 
+// --- Memories ---
 async function loadMemories() {
   try {
-    const r = await fetch('/api/mind/memories');
-    const d = await r.json();
-    if (!d.memories.length) {
-      document.getElementById('memories').innerHTML = '<span class="loading">no significant memories</span>';
+    const res = await fetch('/api/mind/memories');
+    const data = await res.json();
+    const container = document.getElementById('memories-container');
+    
+    if (!data.memories || data.memories.length === 0) {
+      container.innerHTML = '<span class="loading">No significant memories found.</span>';
       return;
     }
+    
     let html = '';
-    for (const m of d.memories) {
-      const ts = m.timestamp ? new Date(m.timestamp).toLocaleString() : '?';
-      html += `<div class="memory-item">
-        <div class="meta">${ts} · <span class="mood-tag">${m.mood}</span> · salience ${m.salience.toFixed(2)}</div>
-        ${m.content}
+    for (const m of data.memories) {
+      const sClass = m.salience > 0.8 ? 'salience-high' : m.salience > 0.6 ? 'salience-med' : '';
+      const time = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+      html += `<div class="memory-item ${sClass}">
+        <div class="meta">
+          <span>${time}</span>
+          <span>◈ ${m.mood || '—'}</span>
+          <span>salience: ${(m.salience || 0).toFixed(2)}</span>
+        </div>
+        <div class="content">${m.content}</div>
       </div>`;
     }
-    document.getElementById('memories').innerHTML = html;
+    container.innerHTML = html;
   } catch(e) {
-    document.getElementById('memories').innerHTML = '<span class="loading">error loading memories</span>';
+    document.getElementById('memories-container').innerHTML = 
+      '<span class="loading">Could not load memories.</span>';
   }
 }
 
+// --- Init ---
 loadState();
+loadGraph();
 loadMemories();
-setInterval(loadState, 10000);
+
+// Auto-refresh state every 5 seconds
+setInterval(loadState, 5000);
 </script>
 </body>
 </html>

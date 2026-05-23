@@ -11,6 +11,7 @@ When it's not: falls back to combinatorial composition (not random selection).
 import json
 import os
 from datetime import datetime
+from engine.mood_art import render_state, sparkline
 
 BRAIN = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "brain")
 
@@ -86,6 +87,19 @@ def compose_offline(soul):
     valence = soul.get("valence", 0)
 
     lines = []
+
+    # Visual: render the emotional landscape
+    emotions = {
+        "boredom": boredom,
+        "anxiety": soul.get("anxiety", 0),
+        "curiosity": soul.get("curiosity", 0),
+        "desire": desire,
+        "ambition": ambition,
+        "valence": valence,
+    }
+    art = render_state(emotions, width=40)
+    lines.append(art)
+    lines.append("")
 
     # Opening: the felt state
     lines.append(f"I am {texture_name}.")
