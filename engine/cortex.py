@@ -721,7 +721,7 @@ class Cortex:
             # ── Tool-enabled response loop ─────────────────────────
             # The agent can now actually DO things for users, not just talk.
             # Loop: think → maybe use tools → think again with results → respond
-            max_steps = 8
+            # No cap — same as autonomous thinking (while True).
             tool_context = ""
             response = None
 
@@ -823,7 +823,8 @@ class Cortex:
                 logging.getLogger("cortex").warning(f"Response principles failed: {_princ_err}")
                 _principles_ctx = ""
 
-            for step in range(max_steps):
+            step = 0
+            while True:
                 self._thinking_since = time.time()
 
                 prompt = (
@@ -900,6 +901,7 @@ class Cortex:
                     except AttributeError:
                         pass
                     log.info("User response step %d — tools invoked, continuing...", step)
+                    step += 1
                     continue  # Loop back with tool results
                 else:
                     # No tools — this is the final conversational response
