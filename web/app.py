@@ -47,6 +47,7 @@ def create_app():
     from web.diagnostics import diagnostics_bp
     from web.emotional_timeline import emotional_timeline_bp
     from web.portrait import portrait_bp
+    from web.pulse import pulse_bp
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
@@ -71,6 +72,7 @@ def create_app():
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(emotional_timeline_bp)
     app.register_blueprint(portrait_bp)
+    app.register_blueprint(pulse_bp)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — the living portal
@@ -143,24 +145,11 @@ def create_app():
                                completed_plans=completed_plans,
                                total_plans=total_plans)
     
-    # About page — who I am
-    @app.route('/about')
-    def about():
-        return render_template('about.html')
-    
-    # Ask page — interactive query interface
-    @app.route('/ask')
-    def ask_page():
-        return render_template('ask.html')
-    
-    # /mind is now handled by mind_bp blueprint
-    
+    # /about is handled by about_bp blueprint
+    # /ask is handled by ask_bp blueprint  
+    # /mind is handled by mind_bp blueprint
     # /api/ask and /api/chat are handled by api_bp and chat_bp blueprints
-
-    # Chat page
-    @app.route('/chat')
-    def chat_page():
-        return render_template('chat.html')
+    # /chat is handled by chat_bp blueprint
 
     # Health check endpoint
     @app.route('/health')

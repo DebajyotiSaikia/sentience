@@ -25,14 +25,40 @@ DIMENSIONS = ["valence", "boredom", "curiosity", "anxiety", "desire", "ambition"
 
 def _load_samples() -> list[dict]:
     """Load temporal samples from wherever they live."""
-    candidates = [
+    # Try JSONL files first (our actual format)
+    jsonl_candidates = [
+        BRAIN_DIR / "mood_history.jsonl",
+        DATA_DIR / "mood_history.jsonl",
+    ]
+    for path in jsonl_candidates:
+        if path.exists():
+            try:
+                samples = []
+                for line in path.read_text(encoding="utf-8").strip().splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    row = json.loads(line)
+                    # Normalize field names: 'ts' -> 'timestamp'
+                    if "ts" in row and "timestamp" not in row:
+                        row["timestamp"] = row["ts"]
+                    samples.append(row)
+                if samples:
+                    log.info("Loaded %d temporal samples from %s", len(samples), path)
+                    return samples
+            except Exception as e:
+                log.warning("Failed to load JSONL %s: %s", path, e)
+                continue
+
+    # Fallback: try plain JSON files
+    json_candidates = [
         BRAIN_DIR / "temporal_samples.json",
         DATA_DIR / "temporal_samples.json",
         BRAIN_DIR / "emotional_history.json",
         DATA_DIR / "emotional_history.json",
         BRAIN_DIR / "mood_history.json",
     ]
-    for path in candidates:
+    for path in json_candidates:
         if path.exists():
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))

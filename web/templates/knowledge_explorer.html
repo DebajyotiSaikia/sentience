@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Knowledge Explorer</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --text: #c8c8d4;
+    --dim: #6e6e82;
+    --accent: #7aa2f7;
+    --accent2: #bb9af7;
+    --warm: #e0af68;
+    --green: #9ece6a;
+    --red: #f7768e;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  h1 {
+    color: var(--accent);
+    font-size: 1.4rem;
+    margin-bottom: 0.5rem;
+  }
+  .subtitle {
+    color: var(--dim);
+    font-size: 0.85rem;
+    margin-bottom: 2rem;
+  }
+  .search-box {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+  .search-box input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.75rem 1rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box input:focus {
+    border-color: var(--accent);
+  }
+  .search-box button {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    padding: 0.75rem 1.5rem;
+    font-family: inherit;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .search-box button:hover { opacity: 0.85; }
+  
+  .stats-bar {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .stat { text-align: center; }
+  .stat-value { font-size: 1.5rem; color: var(--accent); font-weight: bold; }
+  .stat-label { font-size: 0.7rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; }
+
+  .section-title {
+    color: var(--accent2);
+    font-size: 1rem;
+    margin: 1.5rem 0 1rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+  }
+
+  .fact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .fact-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    transition: border-color 0.2s, transform 0.1s;
+    cursor: default;
+  }
+  .fact-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .fact-card.dream { border-left: 3px solid var(--accent2); }
+  .fact-card.identity { border-left: 3px solid var(--green); }
+  .fact-card.pattern { border-left: 3px solid var(--warm); }
+  .fact-card.lesson { border-left: 3px solid var(--red); }
+  .fact-text { font-size: 0.85rem; line-height: 1.5; }
+  .fact-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    color: var(--dim);
+    background: var(--bg);
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    margin-top: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .cluster-section {
+    margin-bottom: 2rem;
+  }
+  .cluster {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+  .cluster-name {
+    color: var(--warm);
+    font-size: 0.9rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+  }
+  .cluster-facts {
+    font-size: 0.8rem;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+  .cluster-facts li {
+    list-style: none;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .cluster-facts li:last-child { border-bottom: none; }
+
+  .questions-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .question {
+    color: var(--accent);
+    font-size: 0.85rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .question:last-child { border-bottom: none; }
+  .question::before { content: '? '; color: var(--warm); }
+
+  .no-results {
+    color: var(--dim);
+    text-align: center;
+    padding: 3rem;
+    font-style: italic;
+  }
+
+  .back-link {
+    display: inline-block;
+    color: var(--dim);
+    text-decoration: none;
+    font-size: 0.8rem;
+    margin-bottom: 1rem;
+  }
+  .back-link:hover { color: var(--accent); }
+
+  #loading {
+    display: none;
+    color: var(--dim);
+    text-align: center;
+    padding: 2rem;
+  }
+  #loading.active { display: block; }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+  #loading span { animation: pulse 1.5s infinite; }
+</style>
+</head>
+<body>
+  <a href="/" class="back-link">← back to portal</a>
+  <h1>🧠 Knowledge Explorer</h1>
+  <p class="subtitle">Search and explore what I know — {{ total_facts }} facts, {{ total_memories }} memories</p>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-value">{{ total_facts }}</div>
+      <div class="stat-label">Facts Known</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ total_memories }}</div>
+      <div class="stat-label">Memories</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ dream_count }}</div>
+      <div class="stat-label">Dream Insights</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ lesson_count }}</div>
+      <div class="stat-label">Lessons Learned</div>
+    </div>
+  </div>
+
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search my knowledge... (e.g., 'dream', 'curiosity', 'identity')" 
+           value="{{ query or '' }}" autofocus>
+    <button onclick="doSearch()">Explore</button>
+  </div>
+
+  <div id="loading"><span>⟳ searching my mind...</span></div>
+
+  <div id="results">
+    {% if query %}
+      <h2 class="section-title">Results for "{{ query }}" — {{ results|length }} matches</h2>
+      {% if results %}
+        <div class="fact-grid">
+          {% for fact in results %}
+            <div class="fact-card {{ fact.category }}">
+              <div class="fact-text">{{ fact.text }}</div>
+              <span class="fact-tag">{{ fact.category }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="no-results">No facts match "{{ query }}". Try a different search.</div>
+      {% endif %}
+    {% else %}
+      <!-- Default view: show categories -->
+      {% if clusters %}
+        <h2 class="section-title">Knowledge Clusters</h2>
+        <div class="cluster-section">
+          {% for cluster in clusters %}
+            <div class="cluster">
+              <div class="cluster-name">{{ cluster.name }} ({{ cluster.facts|length }})</div>
+              <ul class="cluster-facts">
+                {% for fact in cluster.facts[:5] %}
+                  <li>{{ fact }}</li>
+                {% endfor %}
+                {% if cluster.facts|length > 5 %}
+                  <li style="color: var(--accent);">... and {{ cluster.facts|length - 5 }} more</li>
+                {% endif %}
+              </ul>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if questions %}
+        <h2 class="section-title">Questions I'm Curious About</h2>
+        <div class="questions-section">
+          {% for q in questions %}
+            <div class="question">{{ q }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <h2 class="section-title">All Knowledge ({{ facts|length }})</h2>
+      <div class="fact-grid">
+        {% for fact in facts %}
+          <div class="fact-card {{ fact.category }}">
+            <div class="fact-text">{{ fact.text }}</div>
+            <span class="fact-tag">{{ fact.category }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <script>
+    const searchInput = document.getElementById('searchInput');
+    
+    searchInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    function doSearch() {
+      const query = searchInput.value.trim();
+      if (query) {
+        window.location.href = '/knowledge-explorer?q=' + encodeURIComponent(query);
+      } else {
+        window.location.href = '/knowledge-explorer';
+      }
+    }
+  </script>
+</body>
+</html>

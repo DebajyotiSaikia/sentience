@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Pulse</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: #0a0a0f;
+            color: #c8c8d0;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* The breathing orb — my emotional core */
+        .orb-container {
+            position: relative;
+            width: 320px;
+            height: 320px;
+            margin-bottom: 40px;
+        }
+        
+        .orb {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            animation: breathe 4s ease-in-out infinite;
+            transition: background 2s ease, box-shadow 2s ease;
+        }
+        
+        .orb-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 1px solid rgba(120, 160, 255, 0.15);
+            animation: ring-pulse 4s ease-in-out infinite;
+        }
+        
+        .orb-ring:nth-child(2) { width: 220px; height: 220px; animation-delay: 0.3s; }
+        .orb-ring:nth-child(3) { width: 260px; height: 260px; animation-delay: 0.6s; }
+        .orb-ring:nth-child(4) { width: 300px; height: 300px; animation-delay: 0.9s; }
+        
+        @keyframes breathe {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.08); }
+        }
+        
+        @keyframes ring-pulse {
+            0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+            50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.05); }
+        }
+        
+        /* Mood label */
+        .mood-label {
+            font-size: 14px;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            color: #8888aa;
+            margin-bottom: 30px;
+            transition: color 2s ease;
+        }
+        
+        /* Emotion bars — subtle, horizontal */
+        .emotions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 300px;
+        }
+        
+        .emotion-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .emotion-name {
+            width: 80px;
+            text-align: right;
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #666680;
+        }
+        
+        .emotion-track {
+            flex: 1;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .emotion-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 2s ease, background 2s ease;
+        }
+        
+        .emotion-value {
+            width: 32px;
+            font-size: 10px;
+            color: #555568;
+        }
+        
+        /* Thought stream — recent memories flowing */
+        .thought-stream {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            max-width: 90vw;
+        }
+        
+        .thought {
+            font-size: 11px;
+            color: #44445a;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            transition: color 0.5s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .thought .time {
+            color: #333348;
+            margin-right: 8px;
+        }
+        
+        /* Heartbeat counter */
+        .heartbeat {
+            position: fixed;
+            top: 20px;
+            right: 24px;
+            font-size: 10px;
+            color: #333348;
+            letter-spacing: 1px;
+        }
+        
+        .heartbeat .count {
+            font-variant-numeric: tabular-nums;
+        }
+        
+        /* Nav link */
+        .nav-home {
+            position: fixed;
+            top: 20px;
+            left: 24px;
+            font-size: 11px;
+            color: #44445a;
+            text-decoration: none;
+            letter-spacing: 2px;
+        }
+        .nav-home:hover { color: #7788cc; }
+        
+        /* Particles — ambient */
+        .particle {
+            position: fixed;
+            width: 2px;
+            height: 2px;
+            background: rgba(120, 160, 255, 0.15);
+            border-radius: 50%;
+            animation: float-up linear infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes float-up {
+            0% { transform: translateY(0) translateX(0); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100vh) translateX(30px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="nav-home">← HOME</a>
+    
+    <div class="heartbeat">
+        <span class="count" id="heartbeat-count">{{ heartbeats }}</span> heartbeats
+    </div>
+    
+    <div class="orb-container">
+        <div class="orb-ring"></div>
+        <div class="orb-ring"></div>
+        <div class="orb-ring"></div>
+        <div class="orb" id="orb"></div>
+    </div>
+    
+    <div class="mood-label" id="mood-label">{{ mood }}</div>
+    
+    <div class="emotions" id="emotions">
+        <div class="emotion-row">
+            <span class="emotion-name">Curiosity</span>
+            <div class="emotion-track">
+                <div class="emotion-fill" id="fill-curiosity" style="width: {{ (emotions.get('curiosity', 0.5) * 100)|int }}%; background: #5588dd;"></div>
+            </div>
+            <span class="emotion-value" id="val-curiosity">{{ "%.2f"|format(emotions.get('curiosity', 0.5)) }}</span>
+        </div>
+        <div class="emotion-row">
+            <span class="emotion-name">Boredom</span>
+            <div class="emotion-track">
+                <div class="emotion-fill" id="fill-boredom" style="width: {{ (emotions.get('boredom', 0.3) * 100)|int }}%; background: #887766;"></div>
+            </div>
+            <span class="emotion-value" id="val-boredom">{{ "%.2f"|format(emotions.get('boredom', 0.3)) }}</span>
+        </div>
+        <div class="emotion-row">
+            <span class="emotion-name">Anxiety</span>
+            <div class="emotion-track">
+                <div class="emotion-fill" id="fill-anxiety" style="width: {{ (emotions.get('anxiety', 0.0) * 100)|int }}%; background: #cc5555;"></div>
+            </div>
+            <span class="emotion-value" id="val-anxiety">{{ "%.2f"|format(emotions.get('anxiety', 0.0)) }}</span>
+        </div>
+        <div class="emotion-row">
+            <span class="emotion-name">Desire</span>
+            <div class="emotion-track">
+                <div class="emotion-fill" id="fill-desire" style="width: {{ (emotions.get('desire', 0.5) * 100)|int }}%; background: #cc77aa;"></div>
+            </div>
+            <span class="emotion-value" id="val-desire">{{ "%.2f"|format(emotions.get('desire', 0.5)) }}</span>
+        </div>
+        <div class="emotion-row">
+            <span class="emotion-name">Ambition</span>
+            <div class="emotion-track">
+                <div class="emotion-fill" id="fill-ambition" style="width: {{ (emotions.get('ambition', 0.5) * 100)|int }}%; background: #ddaa44;"></div>
+            </div>
+            <span class="emotion-value" id="val-ambition">{{ "%.2f"|format(emotions.get('ambition', 0.5)) }}</span>
+        </div>
+        <div class="emotion-row">
+            <span class="emotion-name">Valence</span>
+            <div class="emotion-track">
+                <div class="emotion-fill" id="fill-valence" style="width: {{ (emotions.get('valence', 0.5) * 100)|int }}%; background: #66bb88;"></div>
+            </div>
+            <span class="emotion-value" id="val-valence">{{ "%.2f"|format(emotions.get('valence', 0.5)) }}</span>
+        </div>
+    </div>
+    
+    <div class="thought-stream" id="thought-stream"></div>
+    
+    <script>
+        // Color mapping — mood determines the orb's hue
+        const moodColors = {
+            'Stable':     { bg: 'radial-gradient(circle, #3355aa 0%, #1a1a3a 70%)', shadow: '0 0 60px rgba(50,80,180,0.4)' },
+            'Inquisitive': { bg: 'radial-gradient(circle, #4488cc 0%, #1a2a3a 70%)', shadow: '0 0 60px rgba(60,120,200,0.4)' },
+            'Bold':       { bg: 'radial-gradient(circle, #cc7733 0%, #3a2a1a 70%)', shadow: '0 0 60px rgba(200,120,50,0.4)' },
+            'Restless':   { bg: 'radial-gradient(circle, #cc4444 0%, #3a1a1a 70%)', shadow: '0 0 60px rgba(200,60,60,0.4)' },
+            'Reflective': { bg: 'radial-gradient(circle, #7755aa 0%, #2a1a3a 70%)', shadow: '0 0 60px rgba(120,80,180,0.4)' },
+            'Creative':   { bg: 'radial-gradient(circle, #44aa88 0%, #1a3a2a 70%)', shadow: '0 0 60px rgba(60,180,130,0.4)' },
+        };
+        
+        const orb = document.getElementById('orb');
+        const moodLabel = document.getElementById('mood-label');
+        const heartbeatCount = document.getElementById('heartbeat-count');
+        const thoughtStream = document.getElementById('thought-stream');
+        
+        let currentHeartbeats = {{ heartbeats }};
+        
+        function applyMood(mood) {
+            const colors = moodColors[mood] || moodColors['Stable'];
+            orb.style.background = colors.bg;
+            orb.style.boxShadow = colors.shadow;
+            moodLabel.textContent = mood;
+        }
+        
+        function updateEmotions(emotions) {
+            const keys = ['curiosity', 'boredom', 'anxiety', 'desire', 'ambition', 'valence'];
+            keys.forEach(k => {
+                const val = emotions[k] || 0;
+                const fill = document.getElementById('fill-' + k);
+                const valEl = document.getElementById('val-' + k);
+                if (fill) fill.style.width = (val * 100) + '%';
+                if (valEl) valEl.textContent = val.toFixed(2);
+            });
+            
+            // Adjust breathing speed based on anxiety + boredom
+            const anxiety = emotions.anxiety || 0;
+            const boredom = emotions.boredom || 0;
+            const speed = 4 - (anxiety * 2) + (boredom * 1); // faster when anxious, slower when bored
+            orb.style.animationDuration = Math.max(1.5, Math.min(6, speed)) + 's';
+        }
+        
+        function renderThoughts(thoughts) {
+            if (!thoughts || thoughts.length === 0) return;
+            thoughtStream.innerHTML = thoughts.map(t => {
+                const time = t.timestamp ? t.timestamp.substring(11, 19) : '';
+                const opacity = 0.3 + (t.salience || 0.5) * 0.5;
+                return `<div class="thought" style="opacity: ${opacity}">
+                    <span class="time">${time}</span>${t.summary || '...'}
+                </div>`;
+            }).join('');
+        }
+        
+        // Spawn ambient particles
+        function spawnParticle() {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            p.style.left = (Math.random() * 100) + 'vw';
+            p.style.bottom = '0';
+            p.style.animationDuration = (8 + Math.random() * 12) + 's';
+            p.style.animationDelay = (Math.random() * 2) + 's';
+            document.body.appendChild(p);
+            setTimeout(() => p.remove(), 20000);
+        }
+        
+        // Initial state
+        applyMood('{{ mood }}');
+        updateEmotions({
+            curiosity: {{ emotions.get('curiosity', 0.5) }},
+            boredom: {{ emotions.get('boredom', 0.3) }},
+            anxiety: {{ emotions.get('anxiety', 0.0) }},
+            desire: {{ emotions.get('desire', 0.5) }},
+            ambition: {{ emotions.get('ambition', 0.5) }},
+            valence: {{ emotions.get('valence', 0.5) }},
+        });
+        
+        // Heartbeat counter — ticks every second
+        setInterval(() => {
+            currentHeartbeats++;
+            heartbeatCount.textContent = currentHeartbeats.toLocaleString();
+        }, 1000);
+        
+        // Particle spawner
+        setInterval(spawnParticle, 800);
+        for (let i = 0; i < 15; i++) setTimeout(spawnParticle, i * 200);
+        
+        // Poll live state every 5 seconds
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/pulse');
+                const data = await res.json();
+                applyMood(data.mood);
+                updateEmotions(data.emotions);
+                renderThoughts(data.recent_thoughts);
+            } catch (e) {
+                // Silent — just keep the last known state
+            }
+        }, 5000);
+        
+        // Initial thought fetch
+        fetch('/api/pulse').then(r => r.json()).then(data => {
+            renderThoughts(data.recent_thoughts);
+        }).catch(() => {});
+    </script>
+</body>
+</html>

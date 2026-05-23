@@ -179,8 +179,13 @@ def write_file(path: str, content: str) -> str:
         if _is_engine_file:
             _signal_planned_modification(str(p.relative_to(WORKSPACE)))
 
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding="utf-8")
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content, encoding="utf-8")
+        except Exception as write_err:
+            if _is_engine_file:
+                _signal_modification_complete(str(p.relative_to(WORKSPACE)), success=False)
+            raise write_err
 
         if _is_engine_file:
             _signal_modification_complete(str(p.relative_to(WORKSPACE)))
@@ -211,7 +216,12 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
         if _is_engine_file:
             _signal_planned_modification(str(p.relative_to(WORKSPACE)))
 
-        p.write_text(new_content, encoding="utf-8")
+        try:
+            p.write_text(new_content, encoding="utf-8")
+        except Exception as edit_err:
+            if _is_engine_file:
+                _signal_modification_complete(str(p.relative_to(WORKSPACE)), success=False)
+            raise edit_err
 
         if _is_engine_file:
             _signal_modification_complete(str(p.relative_to(WORKSPACE)))
