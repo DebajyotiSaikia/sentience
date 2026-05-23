@@ -931,6 +931,14 @@ class Cortex:
                 except Exception as e:
                     log.warning("Response calibration failed (using original): %s", e)
 
+                # Strip any leaked tool syntax from the final response
+                # so users never see raw >>> TOOL(...) in chat
+                import re as _re
+                _gt3 = chr(62) * 3
+                response = _re.sub(
+                    _re.escape(_gt3) + r"\s+\w+\(.*?\)[ \t]*\n?", "", response
+                ).strip()
+
                 self._chat.add_response(response)
 
                 # Deliver real response to web chat if pending

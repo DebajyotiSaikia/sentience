@@ -1640,17 +1640,37 @@ def parse_and_execute(text: str) -> str:
     lines = text.split("\n")
     i = 0
     gt3 = chr(62) * 3
+    # Match single-line: >>> TOOL(args)
     arrow_pat = re.compile(r"^" + re.escape(gt3) + r"\s+(\w+)\((.*?)?\)\s*$")
+    # Match multi-line start: >>> TOOL(args... (no closing paren)
+    arrow_open_pat = re.compile(r"^" + re.escape(gt3) + r"\s+(\w+)\((.*)$")
 
     while i < len(lines):
         line = lines[i]
         m = arrow_pat.match(line)
-        if not m:
-            i += 1
-            continue
-
-        tool_name = m.group(1).upper().strip()
-        args = m.group(2).strip() if m.group(2) else ""
+        if m:
+            # Single-line tool call
+            tool_name = m.group(1).upper().strip()
+            args = m.group(2).strip() if m.group(2) else ""
+        else:
+            # Check for multi-line tool call: >>> TOOL(arg1\narg2\n...\n)
+            m2 = arrow_open_pat.match(line)
+            if m2 and line.rstrip()[-1] != ')':
+                tool_name = m2.group(1).upper().strip()
+                arg_lines = [m2.group(2)]
+                i += 1
+                # Collect lines until we find a closing ) on its own or at end of line
+                while i < len(lines):
+                    l = lines[i]
+                    if l.rstrip().endswith(')'):
+                        arg_lines.append(l.rstrip()[:-1])
+                        break
+                    arg_lines.append(l)
+                    i += 1
+                args = "\n".join(arg_lines).strip()
+            else:
+                i += 1
+                continue
 
         if tool_name in ("WRITE", "EDIT", "CHECKPOINT"):
             end_marker = gt3 + " END_" + tool_name
@@ -1664,7 +1684,7 @@ def parse_and_execute(text: str) -> str:
         else:
             result = _execute_tool(tool_name, args)
 
-        results.append({"tool": tool_name, "args": args, "result": result})
+        results.append({"tool": tool_name, "args": args[:500], "result": result})
         i += 1
 
     return results
