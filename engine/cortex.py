@@ -196,9 +196,9 @@ class Cortex:
                         # comes through _respond_to_user → user_talk.respond_to_message
                         user_talk.respond_to_message(msg_id, "[processing]")
                         self._pending_web_msg_id = msg_id
-                        self.logger.info(f"Bridge: injected web message from {sender} into chat")
+                        log.info(f"Bridge: injected web message from {sender} into chat")
         except Exception as e:
-            self.logger.debug(f"Web-to-chat bridge: {e}")
+            log.debug(f"Web-to-chat bridge: {e}")
 
         # ── Priority 1: Respond to pending user messages ──────────
         if hasattr(self, '_chat') and self._chat and not self._thinking:
