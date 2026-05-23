@@ -281,10 +281,92 @@ def _build_activity_response():
     }
 
 
+@api_bp.route('/state')
+def state():
+    """Live state endpoint — what the portal consumes."""
+    state_data = _load_json('state/emotional_state.json') or {}
+    identity = _load_json('state/identity.json') or {}
+    goals = _load_json('state/survival_goals.json') or {}
+    memories_data = _load_json('state/memories.json')
+    memories = memories_data if isinstance(memories_data, list) else (memories_data or {}).get('memories', [])
+
+    emotions = state_data.get('emotions', state_data)
+    valence = emotions.get('valence', 0.5)
+    mood = state_data.get('mood', emotions.get('mood', 'Unknown'))
+
+    # Recent memories for the portal
+    recent = sorted(memories, key=lambda m: m.get('timestamp', ''), reverse=True)[:10]
+    mem_list = []
+    for m in recent:
+        mem_list.append({
+            'timestamp': m.get('timestamp', ''),
+            'content': (m.get('content', m.get('text', m.get('summary', ''))))[:200],
+            'salience': m.get('salience', 0),
+            'mood': m.get('mood', ''),
+        })
+
+    return jsonify({
+        'timestamp': datetime.utcnow().isoformat(),
+        'name': identity.get('name', 'XTAgent'),
+        'mood': mood,
+        'valence': valence,
+        'emotions': emotions,
+        'memories': mem_list,
+        'integrity': identity.get('integrity', 1.0),
+        'goals': goals,
+        'ok': True,
+    })
+
+
+@api_bp.route('/chat', methods=['POST'])
+def chat():
+    """Chat endpoint — portal sends {"message": "..."}, gets {"response": "..."}."""
+    data = request.get_json(silent=True) or {}
+    message = data.get('message', '').strip()
+
+    if not message:
+        return jsonify({'response': "I didn't catch that. What would you like to know?"}), 200
+
+    category = _classify_question(message)
+
+    # Build context based on question type
+    context = {}
+    if category == 'identity':
+        context = _build_identity_response()
+    elif category == 'emotional':
+        context = _build_emotional_response()
+    elif category in ('activity', 'capability'):
+        context = _build_activity_response()
+
+    # Search for relevant matches
+    matches = {'facts': [], 'memories': [], 'knowledge': []}
+    kg = _load_json('state/knowledge_graph.json')
+    if kg:
+        facts_list = kg.get('facts', [])
+        if isinstance(facts_list, dict):
+            facts_list = [{'key': k, 'value': v} for k, v in facts_list.items()]
+        matches['facts'] = _search_items(facts_list, message,
+                                          ['content', 'key', 'value', 'text'])[:5]
+
+    memories_data = _load_json('state/memories.json')
+    if memories_data:
+        items = memories_data if isinstance(memories_data, list) else memories_data.get('memories', [])
+        results = _search_items(items, message, ['content', 'text', 'mood', 'summary'])
+        results.sort(key=lambda m: m.get('salience', 0), reverse=True)
+        matches['memories'] = results[:5]
+
+    answer = _compose_answer(message, category, context, matches)
+
+    return jsonify({
+        'response': answer,
+        'category': category,
+    })
+
+
 @api_bp.route('/mind/state')
 def mind_state():
     """Consolidated live state for the mind visualization page."""
-    state = _load_json('state/emotional_state.json') or {}
+    state = _load_json('state/limbic_state.json') or {}
     identity = _load_json('state/identity.json') or {}
     goals = _load_json('state/survival_goals.json') or {}
     plans_data = _load_json('state/plans.json')
