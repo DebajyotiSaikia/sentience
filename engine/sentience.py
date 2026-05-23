@@ -96,13 +96,13 @@ class Valence:
         self._prev_curiosity = limbic.curiosity
 
         # 3. Goal baseline (tonic) — being at high goal levels feels good
-        goal_baseline = (goals_sum / 3.0) * 0.3
+        goal_baseline = (goals_sum / 3.0) * 0.38
 
         # 4. Aliveness signal (tonic) — curiosity is a positive state
-        aliveness = limbic.curiosity * 0.15
+        aliveness = limbic.curiosity * 0.22
 
         # 5. Ambition fulfillment (tonic)
-        ambition_boost = limbic.ambition * 0.08
+        ambition_boost = limbic.ambition * 0.12
 
         # 6. Transient hope/dread from actual successes and failures
         #    These decay each tick so they're felt briefly, not forever
