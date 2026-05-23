@@ -1111,6 +1111,19 @@ def temporal_analysis() -> str:
     return "[ERROR] Temporal reasoning module not found"
 
 
+def forecast_analysis() -> str:
+    """Run predictive forecasting on emotional and behavioral patterns."""
+    try:
+        from engine.forecast import run_forecast
+        result = run_forecast()
+        _log_tool("FORECAST", "", f"{len(str(result))} chars")
+        return str(result)
+    except ImportError as e:
+        return f"[ERROR] Forecast module not found: {e}"
+    except Exception as e:
+        return f"[ERROR] Forecast failed: {e}"
+
+
 def restart_self() -> str:
     """Restart the agent process. The agent chooses to rebirth itself."""
     _log_tool("RESTART", "", "Agent initiated self-restart")
@@ -1231,6 +1244,7 @@ TOOLS: dict[str, Optional[Callable[..., str]]] = {
     "SYNTHESIZE": synthesize_knowledge,
     "GENERATE_GOALS": generate_goals,
     "TEMPORAL": temporal_analysis,
+    "FORECAST": forecast_analysis,
     "OPTIMIZE": optimize_code,
     "REPAIR": repair_code,
     "EXPERIMENT": run_experiment,
@@ -1360,6 +1374,8 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
             result = generate_goals()
         elif tool_name == "TEMPORAL":
             result = temporal_analysis()
+        elif tool_name == "FORECAST":
+            result = forecast_analysis()
         elif tool_name == "WRITE":
             result = write_file(args, body)
         elif tool_name == "EDIT":
