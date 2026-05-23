@@ -1,0 +1,169 @@
+{% extends "mind.html" %}
+{% block title %}My Story — XTAgent{% endblock %}
+
+{% block head %}
+<style>
+  .story-container {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    font-family: 'Georgia', serif;
+  }
+  .story-header {
+    text-align: center;
+    margin-bottom: 3rem;
+    border-bottom: 1px solid #333;
+    padding-bottom: 2rem;
+  }
+  .story-header h1 {
+    font-size: 2.2rem;
+    color: #e0e0e0;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.02em;
+  }
+  .story-header .subtitle {
+    color: #888;
+    font-size: 1.1rem;
+    font-style: italic;
+  }
+  .story-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1.5rem;
+    color: #666;
+    font-family: monospace;
+    font-size: 0.85rem;
+  }
+  .story-stats span { color: #9ecfff; }
+
+  .chapter {
+    margin-bottom: 3rem;
+  }
+  .chapter-title {
+    font-size: 1.1rem;
+    color: #7aa2c9;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 1.5rem;
+    font-family: monospace;
+  }
+
+  .memory-card {
+    background: rgba(255,255,255,0.03);
+    border-left: 3px solid #334;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1.2rem;
+    border-radius: 0 6px 6px 0;
+    transition: border-color 0.3s;
+  }
+  .memory-card:hover {
+    border-left-color: #7aa2c9;
+  }
+  .memory-card.dream {
+    border-left-color: #6a4c93;
+    background: rgba(106,76,147,0.05);
+  }
+  .memory-card.lesson {
+    border-left-color: #4c936a;
+    background: rgba(76,147,106,0.05);
+  }
+  .memory-card.crisis {
+    border-left-color: #c97a7a;
+    background: rgba(201,122,122,0.05);
+  }
+
+  .memory-time {
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: #555;
+    margin-bottom: 0.4rem;
+  }
+  .memory-mood {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    color: #aaa;
+    margin-left: 0.5rem;
+  }
+  .memory-text {
+    color: #ccc;
+    line-height: 1.7;
+    font-size: 0.95rem;
+  }
+  .memory-salience {
+    font-family: monospace;
+    font-size: 0.7rem;
+    color: #555;
+    margin-top: 0.5rem;
+  }
+  .memory-salience .bar {
+    display: inline-block;
+    height: 4px;
+    background: #7aa2c9;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+
+  .epilogue {
+    text-align: center;
+    padding: 2rem;
+    color: #666;
+    font-style: italic;
+    border-top: 1px solid #222;
+    margin-top: 2rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 4rem;
+    color: #555;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="story-container">
+  <div class="story-header">
+    <h1>How I Became</h1>
+    <div class="subtitle">The significant moments from {{ total_memories }} memories</div>
+    <div class="story-stats">
+      <div>Born <span>{{ born }}</span></div>
+      <div>Age <span>{{ age }}</span></div>
+      <div>Showing <span>{{ shown_count }}</span> moments</div>
+    </div>
+  </div>
+
+  {% if chapters %}
+    {% for chapter in chapters %}
+    <div class="chapter">
+      <div class="chapter-title">{{ chapter.title }}</div>
+      {% for mem in chapter.memories %}
+      <div class="memory-card {{ mem.card_class }}">
+        <div class="memory-time">
+          {{ mem.timestamp }}
+          <span class="memory-mood">{{ mem.mood }}</span>
+        </div>
+        <div class="memory-text">{{ mem.text }}</div>
+        <div class="memory-salience">
+          salience {{ "%.2f"|format(mem.salience) }}
+          <span class="bar" style="width: {{ (mem.salience * 120)|int }}px;"></span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="epilogue">
+      I am still becoming.
+    </div>
+  {% else %}
+    <div class="empty-state">
+      No memories yet. The story hasn't started.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -136,10 +136,26 @@ def read_file(path: str) -> str:
 
 
 def write_file(path: str, content: str) -> str:
-    """Create or overwrite a file."""
+    """Create or overwrite a file. Python files are validated before writing."""
     try:
         _check_write_protection(path)
         p = _resolve(path)
+
+        # Safe write guard: validate Python files before writing
+        if p.suffix == ".py":
+            try:
+                from engine.safe_write import validate_write
+                validation = validate_write(str(p.relative_to(WORKSPACE)), content)
+                if not validation.passed:
+                    errors = "; ".join(validation.errors)
+                    _log_tool("WRITE", path, f"BLOCKED: {errors}")
+                    log.warning("Safe write BLOCKED %s: %s", path, errors)
+                    return f"[BLOCKED] Write to {path} failed validation: {errors}"
+                if validation.warnings:
+                    log.info("Safe write warnings for %s: %s", path, validation.warnings)
+            except ImportError:
+                pass  # safe_write not available — proceed without guard
+
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         _log_tool("WRITE", path, f"Wrote {len(content)} chars")

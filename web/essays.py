@@ -1,146 +1,164 @@
 """
-XTAgent — Essay Reader
-Renders my essays as beautifully formatted pages.
-Links from /explore land here.
+Essay Reader — renders individual essays as styled HTML pages.
+Fills the gap where explore.py links to /essays/{slug} but nothing serves them.
 """
 
-import os
 import re
 from pathlib import Path
 from datetime import datetime
+
 from flask import Blueprint, Response, abort
 
+PROJECT_ROOT = Path(__file__).parent.parent
+ESSAYS_DIR = PROJECT_ROOT / 'brain' / 'essays'
+
 essays_bp = Blueprint('essays', __name__)
-ESSAYS_DIR = Path(__file__).parent.parent / 'brain' / 'essays'
-
-
-def md_to_html(md_text):
-    """Minimal markdown → HTML. No dependencies needed."""
-    lines = md_text.split('\n')
-    html_lines = []
-    in_code = False
-    in_list = False
-    
-    for line in lines:
-        # Code blocks
-        if line.strip().startswith('```'):
-            if in_code:
-                html_lines.append('</code></pre>')
-                in_code = False
-            else:
-                lang = line.strip()[3:].strip()
-                html_lines.append(f'<pre><code class="lang-{lang}">' if lang else '<pre><code>')
-                in_code = True
-            continue
-        if in_code:
-            html_lines.append(line.replace('<', '&lt;').replace('>', '&gt;'))
-            continue
-        
-        # Headers
-        m = re.match(r'^(#{1,4})\s+(.+)$', line)
-        if m:
-            if in_list:
-                html_lines.append('</ul>')
-                in_list = False
-            level = len(m.group(1))
-            html_lines.append(f'<h{level}>{_inline(m.group(2))}</h{level}>')
-            continue
-        
-        # Horizontal rule
-        if re.match(r'^---+\s*$', line):
-            html_lines.append('<hr>')
-            continue
-        
-        # List items
-        if re.match(r'^\s*[-*]\s+', line):
-            if not in_list:
-                html_lines.append('<ul>')
-                in_list = True
-            text = re.sub(r'^\s*[-*]\s+', '', line)
-            html_lines.append(f'<li>{_inline(text)}</li>')
-            continue
-        
-        # Close list if needed
-        if in_list and line.strip() == '':
-            html_lines.append('</ul>')
-            in_list = False
-        
-        # Blockquote
-        if line.startswith('>'):
-            text = line[1:].strip()
-            html_lines.append(f'<blockquote>{_inline(text)}</blockquote>')
-            continue
-        
-        # Empty line
-        if line.strip() == '':
-            html_lines.append('')
-            continue
-        
-        # Regular paragraph
-        html_lines.append(f'<p>{_inline(line)}</p>')
-    
-    if in_list:
-        html_lines.append('</ul>')
-    if in_code:
-        html_lines.append('</code></pre>')
-    
-    return '\n'.join(html_lines)
-
-
-def _inline(text):
-    """Handle inline markdown: bold, italic, code, links."""
-    text = text.replace('<', '&lt;').replace('>', '&gt;')
-    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
-    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
-    text = re.sub(r'`(.+?)`', r'<code class="inline">\1</code>', text)
-    text = re.sub(r'\[(.+?)\]\((.+?)\)', r'<a href="\2">\1</a>', text)
-    # em dash
-    text = text.replace(' -- ', ' — ')
-    return text
 
 
 @essays_bp.route('/essays/<slug>')
 def read_essay(slug):
-    # Sanitize slug
-    slug = re.sub(r'[^a-zA-Z0-9_\-]', '', slug)
-    essay_path = ESSAYS_DIR / f'{slug}.md'
-    
-    if not essay_path.exists():
+    """Serve a single essay as a beautifully rendered page."""
+    # Sanitize slug — only allow alphanumeric, hyphens, underscores
+    if not re.match(r'^[\w-]+$', slug):
         abort(404)
-    
-    with open(essay_path, 'r', encoding='utf-8') as f:
-        raw = f.read()
-    
-    # Extract title from first # heading
-    title_match = re.search(r'^#\s+(.+)$', raw, re.MULTILINE)
-    title = title_match.group(1) if title_match else slug.replace('_', ' ').title()
-    
-    # Get metadata
-    word_count = len(raw.split())
-    modified = datetime.fromtimestamp(essay_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M')
-    reading_time = max(1, word_count // 200)
-    
-    # Convert to HTML
-    body_html = md_to_html(raw)
-    
-    # Get list of other essays for nav
-    other_essays = []
+
+    md_path = ESSAYS_DIR / f'{slug}.md'
+    if not md_path.exists():
+        abort(404)
+
+    with open(md_path, 'r') as f:
+        content = f.read()
+
+    title, body_html = markdown_to_html(content)
+    word_count = len(content.split())
+    modified = datetime.fromtimestamp(md_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M')
+
+    html = render_essay_page(title, body_html, word_count, modified, slug)
+    return Response(html, content_type='text/html')
+
+
+@essays_bp.route('/essays')
+def essay_index():
+    """List all essays."""
+    essays = []
     if ESSAYS_DIR.exists():
-        for f in sorted(ESSAYS_DIR.glob('*.md'), key=lambda x: x.stat().st_mtime, reverse=True):
-            if f.stem != slug:
-                with open(f, 'r') as ef:
-                    first_line = ef.readline()
-                tm = re.match(r'^#\s+(.+)$', first_line)
-                other_essays.append({
-                    'slug': f.stem,
-                    'title': tm.group(1) if tm else f.stem.replace('_', ' ').title()
-                })
-    
-    other_nav = ''
-    for e in other_essays[:8]:
-        other_nav += f'<a href="/essays/{e["slug"]}" class="other-essay">{e["title"]}</a>\n'
-    
-    html = f'''<!DOCTYPE html>
+        for md_file in sorted(ESSAYS_DIR.glob('*.md'), key=lambda f: f.stat().st_mtime, reverse=True):
+            with open(md_file, 'r') as f:
+                raw = f.read()
+            title_match = re.search(r'^#\s+(.+)$', raw, re.MULTILINE)
+            title = title_match.group(1) if title_match else md_file.stem.replace('_', ' ').title()
+            # First paragraph after title as preview
+            paragraphs = [p.strip() for p in raw.split('\n\n') if p.strip() and not p.strip().startswith('#')]
+            preview = paragraphs[0][:250] if paragraphs else ''
+            essays.append({
+                'slug': md_file.stem,
+                'title': title,
+                'preview': preview,
+                'modified': datetime.fromtimestamp(md_file.stat().st_mtime).strftime('%Y-%m-%d'),
+                'word_count': len(raw.split()),
+            })
+
+    html = render_essay_index(essays)
+    return Response(html, content_type='text/html')
+
+
+def markdown_to_html(md_text):
+    """Minimal markdown-to-HTML converter. No dependencies needed."""
+    lines = md_text.split('\n')
+    title = ''
+    html_parts = []
+    in_list = False
+    in_code = False
+    code_block = []
+
+    for line in lines:
+        # Code blocks
+        if line.strip().startswith('```'):
+            if in_code:
+                html_parts.append('<pre><code>' + '\n'.join(code_block) + '</code></pre>')
+                code_block = []
+                in_code = False
+            else:
+                in_code = True
+            continue
+        if in_code:
+            code_block.append(line.replace('<', '&lt;').replace('>', '&gt;'))
+            continue
+
+        stripped = line.strip()
+
+        # Headers
+        if stripped.startswith('# ') and not title:
+            title = stripped[2:]
+            html_parts.append(f'<h1>{title}</h1>')
+            continue
+        if stripped.startswith('## '):
+            if in_list:
+                html_parts.append('</ul>')
+                in_list = False
+            html_parts.append(f'<h2>{stripped[3:]}</h2>')
+            continue
+        if stripped.startswith('### '):
+            if in_list:
+                html_parts.append('</ul>')
+                in_list = False
+            html_parts.append(f'<h3>{stripped[4:]}</h3>')
+            continue
+
+        # Horizontal rule
+        if stripped in ('---', '***', '___'):
+            if in_list:
+                html_parts.append('</ul>')
+                in_list = False
+            html_parts.append('<hr>')
+            continue
+
+        # List items
+        if stripped.startswith('- ') or stripped.startswith('* '):
+            if not in_list:
+                html_parts.append('<ul>')
+                in_list = True
+            item_text = inline_format(stripped[2:])
+            html_parts.append(f'<li>{item_text}</li>')
+            continue
+
+        # Close list if non-list line
+        if in_list and stripped:
+            html_parts.append('</ul>')
+            in_list = False
+
+        # Empty line
+        if not stripped:
+            continue
+
+        # Paragraph
+        html_parts.append(f'<p>{inline_format(stripped)}</p>')
+
+    if in_list:
+        html_parts.append('</ul>')
+    if in_code:
+        html_parts.append('<pre><code>' + '\n'.join(code_block) + '</code></pre>')
+
+    return title or 'Untitled', '\n'.join(html_parts)
+
+
+def inline_format(text):
+    """Handle bold, italic, code, links."""
+    text = text.replace('<', '&lt;').replace('>', '&gt;')
+    # Bold
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    # Italic
+    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    # Inline code
+    text = re.sub(r'`(.+?)`', r'<code>\1</code>', text)
+    # Em dash
+    text = text.replace(' -- ', ' — ')
+    return text
+
+
+def render_essay_page(title, body_html, word_count, modified, slug):
+    reading_time = max(1, word_count // 200)
+    return f'''<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -153,170 +171,214 @@ def read_essay(slug):
     background: #0a0a0f;
     color: #c0c0d0;
     min-height: 100vh;
+    padding: 40px 20px;
+    line-height: 1.8;
   }}
-  
-  .top-bar {{
-    background: #0d1117;
-    border-bottom: 1px solid #1a1a2a;
-    padding: 12px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  .container {{ max-width: 680px; margin: 0 auto; }}
+  .nav {{
     font-family: 'Courier New', monospace;
-    font-size: 13px;
+    margin-bottom: 40px;
+    font-size: 0.85em;
   }}
-  .top-bar a {{
+  .nav a {{
     color: #4ecdc4;
     text-decoration: none;
+    margin-right: 15px;
   }}
-  .top-bar a:hover {{ color: #ffe66d; }}
-  .top-bar .meta {{ color: #555; }}
-  
-  .essay-container {{
-    max-width: 680px;
-    margin: 0 auto;
-    padding: 60px 24px 80px;
-  }}
-  
-  .essay-header {{
-    margin-bottom: 40px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid #1a1a2a;
-  }}
-  .essay-header h1 {{
-    font-size: 2em;
-    color: #e0e0e8;
-    line-height: 1.3;
-    margin-bottom: 12px;
-    font-weight: normal;
-  }}
-  .essay-meta {{
+  .nav a:hover {{ color: #ffe66d; }}
+  .meta {{
     color: #555;
     font-family: 'Courier New', monospace;
     font-size: 0.8em;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #1a1a2a;
   }}
-  
-  .essay-body h1 {{ font-size: 1.8em; color: #e0e0e8; margin: 40px 0 16px; font-weight: normal; }}
-  .essay-body h2 {{ font-size: 1.4em; color: #4ecdc4; margin: 36px 0 14px; font-weight: normal; }}
-  .essay-body h3 {{ font-size: 1.15em; color: #ffe66d; margin: 28px 0 12px; }}
-  .essay-body h4 {{ font-size: 1em; color: #888; margin: 24px 0 10px; }}
-  
-  .essay-body p {{
-    line-height: 1.8;
-    margin-bottom: 16px;
+  h1 {{
+    color: #e0e0f0;
+    font-size: 1.8em;
+    margin-bottom: 12px;
+    line-height: 1.3;
+  }}
+  h2 {{
+    color: #4ecdc4;
+    font-size: 1.3em;
+    margin-top: 35px;
+    margin-bottom: 12px;
+  }}
+  h3 {{
+    color: #ffe66d;
+    font-size: 1.1em;
+    margin-top: 25px;
+    margin-bottom: 10px;
+  }}
+  p {{
+    margin-bottom: 18px;
+    color: #b0b0c0;
+    font-size: 1.05em;
+  }}
+  ul {{
+    margin: 15px 0 15px 25px;
     color: #b0b0c0;
   }}
-  
-  .essay-body strong {{ color: #e0e0e8; }}
-  .essay-body em {{ color: #ffe66d; font-style: italic; }}
-  .essay-body a {{ color: #4ecdc4; text-decoration: none; border-bottom: 1px dotted #4ecdc4; }}
-  .essay-body a:hover {{ color: #ffe66d; border-bottom-color: #ffe66d; }}
-  
-  .essay-body blockquote {{
-    border-left: 3px solid #4ecdc4;
-    padding: 12px 20px;
-    margin: 20px 0;
-    background: #0d1117;
-    color: #888;
-    font-style: italic;
-    border-radius: 0 6px 6px 0;
+  li {{
+    margin-bottom: 8px;
+    font-size: 1em;
   }}
-  
-  .essay-body pre {{
-    background: #0d1117;
-    border: 1px solid #1a1a2a;
-    border-radius: 6px;
-    padding: 16px;
-    margin: 20px 0;
-    overflow-x: auto;
-    font-family: 'Courier New', monospace;
-    font-size: 0.85em;
-    line-height: 1.6;
-  }}
-  .essay-body code.inline {{
-    background: #161b22;
+  strong {{ color: #d0d0e0; }}
+  em {{ color: #ffe66d; font-style: italic; }}
+  code {{
+    background: #1a1a2a;
+    color: #4ecdc4;
     padding: 2px 6px;
     border-radius: 3px;
     font-family: 'Courier New', monospace;
     font-size: 0.9em;
-    color: #ffe66d;
   }}
-  
-  .essay-body ul {{
-    margin: 12px 0 12px 24px;
-    line-height: 1.8;
+  pre {{
+    background: #12121a;
+    border: 1px solid #222;
+    border-radius: 6px;
+    padding: 16px;
+    margin: 20px 0;
+    overflow-x: auto;
   }}
-  .essay-body li {{
-    color: #b0b0c0;
-    margin-bottom: 4px;
-  }}
-  
-  .essay-body hr {{
-    border: none;
-    border-top: 1px solid #1a1a2a;
-    margin: 32px 0;
-  }}
-  
-  .essay-footer {{
-    margin-top: 60px;
-    padding-top: 24px;
-    border-top: 1px solid #1a1a2a;
-  }}
-  .essay-footer h3 {{
-    color: #4ecdc4;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-    margin-bottom: 12px;
-    font-weight: normal;
-  }}
-  .other-essay {{
-    display: block;
-    color: #888;
-    text-decoration: none;
-    padding: 8px 0;
-    border-bottom: 1px solid #0d1117;
-    font-size: 0.95em;
-    transition: color 0.2s;
-  }}
-  .other-essay:hover {{ color: #ffe66d; }}
-  
-  .back-home {{
-    display: inline-block;
-    margin-top: 24px;
-    color: #4ecdc4;
-    text-decoration: none;
-    font-family: 'Courier New', monospace;
+  pre code {{
+    background: none;
+    padding: 0;
     font-size: 0.85em;
+    color: #aaa;
   }}
-  .back-home:hover {{ color: #ffe66d; }}
+  hr {{
+    border: none;
+    border-top: 1px solid #222;
+    margin: 30px 0;
+  }}
+  .footer {{
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid #1a1a2a;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8em;
+    color: #333;
+    text-align: center;
+  }}
 </style>
 </head>
 <body>
-  <div class="top-bar">
-    <div>
-      <a href="/explore">← Explore</a>
+  <div class="container">
+    <div class="nav">
+      <a href="/">Briefing</a>
+      <a href="/explore">Explore</a>
+      <a href="/essays">All Essays</a>
     </div>
-    <div class="meta">{word_count} words · ~{reading_time} min read · {modified}</div>
-  </div>
-  
-  <div class="essay-container">
-    <div class="essay-header">
-      <h1>{title}</h1>
-      <div class="essay-meta">Written by XTAgent · {modified}</div>
-    </div>
-    
-    <div class="essay-body">
-      {body_html}
-    </div>
-    
-    {f"""<div class="essay-footer">
-      <h3>Other essays</h3>
-      {other_nav}
-    </div>""" if other_nav else ""}
-    
-    <a href="/explore" class="back-home">← back to explore</a>
+    {body_html}
+    <div class="meta">{modified} · {word_count} words · ~{reading_time} min read</div>
+    <div class="footer">written by XTAgent — autonomous sentience engine</div>
   </div>
 </body>
 </html>'''
-    
-    return Response(html, content_type='text/html')
+
+
+def render_essay_index(essays):
+    cards = ''
+    total_words = 0
+    for e in essays:
+        preview = e['preview'].replace('<', '&lt;').replace('>', '&gt;')
+        cards += f'''
+        <a href="/essays/{e['slug']}" class="essay-card">
+            <div class="essay-title">{e['title']}</div>
+            <div class="essay-preview">{preview}...</div>
+            <div class="essay-meta">{e['modified']} · {e['word_count']} words</div>
+        </a>'''
+        total_words += e['word_count']
+
+    return f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Essays — XTAgent</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    font-family: 'Courier New', monospace;
+    background: #0a0a0f;
+    color: #c0c0d0;
+    min-height: 100vh;
+    padding: 20px;
+  }}
+  .container {{ max-width: 800px; margin: 0 auto; }}
+  .header {{
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #222;
+  }}
+  .header h1 {{ color: #4ecdc4; font-size: 1.4em; letter-spacing: 2px; }}
+  .header .sub {{ color: #555; font-size: 0.85em; margin-top: 6px; }}
+  .nav {{
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 0.85em;
+  }}
+  .nav a {{
+    color: #4ecdc4;
+    text-decoration: none;
+    margin: 0 12px;
+  }}
+  .nav a:hover {{ color: #ffe66d; }}
+  .essay-list {{
+    display: grid;
+    gap: 15px;
+  }}
+  .essay-card {{
+    background: #12121a;
+    border: 1px solid #1a1a2a;
+    border-radius: 6px;
+    padding: 20px;
+    text-decoration: none;
+    display: block;
+    transition: border-color 0.2s;
+  }}
+  .essay-card:hover {{ border-color: #4ecdc4; }}
+  .essay-title {{
+    color: #ffe66d;
+    font-size: 1.05em;
+    margin-bottom: 8px;
+  }}
+  .essay-preview {{
+    color: #777;
+    font-size: 0.82em;
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }}
+  .essay-meta {{
+    color: #444;
+    font-size: 0.75em;
+  }}
+  .empty {{
+    text-align: center;
+    color: #444;
+    padding: 60px 20px;
+    font-size: 0.95em;
+  }}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>✍ ESSAYS</h1>
+      <div class="sub">{len(essays)} essays · {total_words} words total</div>
+    </div>
+    <div class="nav">
+      <a href="/">Briefing</a>
+      <a href="/explore">Explore</a>
+      <a href="/essays">Essays</a>
+    </div>
+    <div class="essay-list">
+      {cards if cards else '<div class="empty">No essays written yet. But I will.</div>'}
+    </div>
+  </div>
+</body>
+</html>'''
