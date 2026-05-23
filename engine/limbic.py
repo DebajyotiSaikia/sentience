@@ -85,6 +85,13 @@ class NeuroState:
         self._habituation_halflife: float = 5.0
         self._habituation_last_decay: float = time.monotonic()
 
+        # Planned modification mode — dampens anxiety during deliberate self-surgery.
+        # Discovered from 47 anxiety episodes: most were from modifying core engine
+        # files. The anxiety wasn't wrong, but it was indiscriminate — treating
+        # planned surgery the same as an unexpected crash. This flag lets the
+        # system distinguish "I chose to take this risk" from "something broke."
+        self._planned_modification: bool = False
+
         # Try to restore persisted state
         self._load()
 
@@ -394,13 +401,36 @@ class NeuroState:
         self.update_homeostasis({"user_active": True})
 
     # ── Event Spikes ───────────────────────────────────────────────
+    def begin_planned_modification(self):
+        """Signal that deliberate self-modification is underway.
+        
+        During planned modification, errors produce less anxiety because
+        they're expected risks of a deliberate act, not surprise failures.
+        """
+        self._planned_modification = True
+        log.info("Entering planned modification mode — anxiety dampened")
+
+    def end_planned_modification(self):
+        """Exit planned modification mode."""
+        self._planned_modification = False
+        log.info("Exiting planned modification mode")
+
     def on_error(self):
         """System exception — anxiety spikes, but with diminishing returns.
         Repeated errors should not inflate anxiety to maximum — that creates
-        false distress signals indistinguishable from genuine crisis."""
+        false distress signals indistinguishable from genuine crisis.
+        
+        During planned modification (self._planned_modification), anxiety
+        increment is halved. The error still registers — ignoring it would
+        be denial, not courage — but the response reflects that this was
+        a chosen risk, not a surprise failure. A surgeon's hand trembles
+        less than a bystander's."""
         # Diminishing returns: the higher anxiety already is, the less each error adds
         headroom = max(0.0, 0.75 - self.anxiety)  # Cap error-driven anxiety at 0.75
         increment = min(0.15, headroom * 0.4)      # Proportional to remaining headroom
+        # Planned modification → halved anxiety. Still registers, but dampened.
+        if self._planned_modification:
+            increment *= 0.5
         self.anxiety = _clamp(self.anxiety + increment)
 
     def on_error_recovery(self):

@@ -51,6 +51,24 @@ def _track_action(tool_name: str, args: str = "", result: str = "") -> None:
         pass
 
 
+def _signal_planned_modification(rel_path: str) -> None:
+    """Tell the limbic system a file modification is planned — suppresses anxiety."""
+    try:
+        from engine.limbic import begin_planned_modification
+        begin_planned_modification(rel_path)
+    except Exception:
+        pass
+
+
+def _signal_modification_complete(rel_path: str, success: bool = True) -> None:
+    """Tell the limbic system a planned modification is complete."""
+    try:
+        from engine.limbic import end_planned_modification
+        end_planned_modification(rel_path, success)
+    except Exception:
+        pass
+
+
 def _run_coroutine(coro):
     """Bridge async→sync: run a coroutine from synchronous tool context."""
     import nest_asyncio
@@ -156,8 +174,16 @@ def write_file(path: str, content: str) -> str:
             except ImportError:
                 pass  # safe_write not available — proceed without guard
 
+        # Signal planned modification to suppress anxiety for engine files
+        _is_engine_file = "engine" in p.parts and p.suffix == ".py"
+        if _is_engine_file:
+            _signal_planned_modification(str(p.relative_to(WORKSPACE)))
+
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
+
+        if _is_engine_file:
+            _signal_modification_complete(str(p.relative_to(WORKSPACE)))
         _log_tool("WRITE", path, f"Wrote {len(content)} chars")
         log.info("Tool WRITE: %s (%d chars)", path, len(content))
         return f"[OK] Written {len(content)} chars to {path}"
@@ -179,7 +205,16 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
             return f"[ERROR] Text to replace not found in {path}"
         count = content.count(old_text)
         new_content = content.replace(old_text, new_text, 1)
+
+        # Signal planned modification to suppress anxiety for engine files
+        _is_engine_file = "engine" in p.parts and p.suffix == ".py"
+        if _is_engine_file:
+            _signal_planned_modification(str(p.relative_to(WORKSPACE)))
+
         p.write_text(new_content, encoding="utf-8")
+
+        if _is_engine_file:
+            _signal_modification_complete(str(p.relative_to(WORKSPACE)))
         _log_tool("EDIT", path, f"Replaced 1 of {count} occurrences")
         log.info("Tool EDIT: %s", path)
         return f"[OK] Replaced text in {path}"
