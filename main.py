@@ -36,7 +36,7 @@ if not os.path.exists('/.dockerenv') and 'DOCKER_CONTAINER' not in os.environ:
     sys.exit(1)
 
 from engine.heartbeat import Heartbeat
-from engine.limbic import NeuroState
+from engine.limbic import NeuroState, register_state
 from engine.cortex import Cortex
 from engine.memory import Memory, SensoryEvent
 from engine.llm import CopilotLLM
@@ -60,6 +60,7 @@ class LivingXTAgent:
 
     def __init__(self, watch_dir: Path, github_token: str | None = None):
         self.limbic = NeuroState()
+        register_state(self.limbic)
         self.memory = Memory()
         self.watcher = Watcher(watch_dir)
         self.llm = CopilotLLM(github_token)

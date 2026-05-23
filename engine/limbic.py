@@ -51,6 +51,19 @@ class SurvivalGoals:
         return _clamp(1.0 - (self.code_integrity + self.system_growth) / 2.0)
 
 
+# ── Singleton registry ──────────────────────────────────────────
+_active_state: "NeuroState | None" = None
+
+def register_state(instance: "NeuroState") -> None:
+    """Register the live NeuroState so other modules can access it."""
+    global _active_state
+    _active_state = instance
+
+def get_active_state() -> "NeuroState | None":
+    """Return the registered live NeuroState, or None."""
+    return _active_state
+
+
 class NeuroState:
     """Live homeostatic variables that define the agent's internal weather."""
 
