@@ -3,403 +3,420 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XTAgent — Timeline</title>
+    <title>XTAgent — Memory Timeline</title>
     <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --border: #1e1e2e;
+            --text: #c8c8d0;
+            --text-dim: #666680;
+            --accent: #7b68ee;
+            --accent-glow: rgba(123, 104, 238, 0.15);
+            --warm: #e8a87c;
+            --cool: #61a5c2;
+            --alert: #e07070;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            background: #0a0a0f;
-            color: #c8c8d0;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
             min-height: 100vh;
         }
-        header {
-            background: linear-gradient(135deg, #12121a 0%, #1a1a2e 100%);
-            border-bottom: 1px solid #2a2a3e;
-            padding: 16px 24px;
+        .header {
+            padding: 24px 32px;
+            border-bottom: 1px solid var(--border);
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 16px;
         }
-        header h1 { font-size: 1.3rem; color: #e0e0ff; font-weight: 500; }
-        header .status { font-size: 0.8rem; color: #6a6a8a; }
-        header .dot {
-            width: 8px; height: 8px;
-            background: #4ade80;
-            border-radius: 50%;
-            display: inline-block;
-            animation: pulse 2s ease-in-out infinite;
+        .header h1 {
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--accent);
         }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        nav {
-            padding: 8px 24px;
-            background: #0e0e16;
-            border-bottom: 1px solid #1a1a2e;
-            font-size: 0.85rem;
+        .header h1 span { color: var(--text-dim); font-weight: 300; }
+        .header .stats {
+            color: var(--text-dim);
+            font-size: 12px;
         }
-        nav a { color: #6a6aaa; text-decoration: none; margin-right: 16px; }
-        nav a:hover { color: #a0a0ff; }
-        nav a.active { color: #c0c0ff; border-bottom: 2px solid #6060cc; padding-bottom: 4px; }
-
         .controls {
-            max-width: 900px;
-            margin: 20px auto 0;
-            padding: 0 24px;
+            padding: 16px 32px;
+            border-bottom: 1px solid var(--border);
             display: flex;
             gap: 12px;
             flex-wrap: wrap;
             align-items: center;
         }
-        .controls label { font-size: 0.8rem; color: #6a6a8a; }
-        .controls select, .controls input[type="range"] {
-            background: #1a1a2e;
-            border: 1px solid #2a2a4e;
-            color: #c0c0ff;
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            outline: none;
-        }
-        .controls input[type="range"] {
-            width: 120px;
-            accent-color: #6060cc;
-        }
-        .controls .count {
-            margin-left: auto;
-            font-size: 0.8rem;
-            color: #5a5a7a;
-        }
-
-        .stats-bar {
-            max-width: 900px;
-            margin: 16px auto;
-            padding: 0 24px;
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-        .stat {
-            background: #12121a;
-            border: 1px solid #2a2a3e;
-            border-radius: 12px;
-            padding: 12px 18px;
+        .search-box {
             flex: 1;
-            min-width: 140px;
+            min-width: 200px;
+            padding: 8px 14px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
         }
-        .stat .label { font-size: 0.75rem; color: #5a5a7a; text-transform: uppercase; letter-spacing: 0.5px; }
-        .stat .value { font-size: 1.4rem; color: #c0c0ff; margin-top: 4px; }
-        .stat .sub { font-size: 0.75rem; color: #4a4a6a; margin-top: 2px; }
-
-        .emotion-chart {
-            max-width: 900px;
-            margin: 16px auto;
-            padding: 0 24px;
+        .search-box:focus { border-color: var(--accent); }
+        .filter-btn {
+            padding: 6px 14px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-dim);
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        .chart-canvas {
-            background: #12121a;
-            border: 1px solid #2a2a3e;
-            border-radius: 12px;
-            padding: 16px;
-            height: 120px;
+        .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+        .filter-btn.active {
+            background: var(--accent-glow);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .salience-range {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+        .salience-range input[type="range"] {
+            width: 100px;
+            accent-color: var(--accent);
+        }
+        .main {
+            display: flex;
+            max-width: 1400px;
+            margin: 0 auto;
+            min-height: calc(100vh - 120px);
+        }
+        .timeline-track {
+            width: 60px;
             position: relative;
-            overflow: hidden;
-        }
-        .chart-canvas canvas { width: 100%; height: 100%; }
-
-        .timeline-container {
-            max-width: 900px;
-            margin: 20px auto;
-            padding: 0 24px 60px;
-            position: relative;
+            flex-shrink: 0;
         }
         .timeline-line {
             position: absolute;
-            left: 44px;
+            left: 50%;
             top: 0;
             bottom: 0;
             width: 2px;
-            background: linear-gradient(to bottom, #2a2a4e, #1a1a2e);
+            background: linear-gradient(180deg, var(--accent), var(--border));
+            transform: translateX(-50%);
         }
-        .timeline-entry {
-            position: relative;
-            padding-left: 72px;
+        .memories-list {
+            flex: 1;
+            padding: 16px 32px 16px 0;
+        }
+        .day-group {
             margin-bottom: 24px;
-            animation: fadeIn 0.4s ease;
         }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
+        .day-header {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            padding: 8px 0;
+            margin-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            background: var(--bg);
+            z-index: 10;
         }
-        .timeline-entry .node {
-            position: absolute;
-            left: 36px;
-            top: 6px;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            border: 2px solid #3a3a6e;
-            background: #0a0a0f;
-            z-index: 2;
-        }
-        .timeline-entry.high-salience .node {
-            background: #4040a0;
-            border-color: #6060cc;
-            box-shadow: 0 0 8px rgba(96, 96, 204, 0.4);
-        }
-        .timeline-entry .timestamp {
-            font-size: 0.7rem;
-            color: #4a4a6a;
-            margin-bottom: 4px;
-            font-family: 'Courier New', monospace;
-        }
-        .timeline-entry .mood-badge {
-            display: inline-block;
-            font-size: 0.7rem;
-            padding: 2px 10px;
-            border-radius: 10px;
-            margin-left: 8px;
-        }
-        .mood-Inquisitive { background: #1a2a4a; color: #60a0ff; border: 1px solid #2a4a7a; }
-        .mood-Stable { background: #1a2a2a; color: #4ade80; border: 1px solid #2a4a3a; }
-        .mood-Bold { background: #2a1a3a; color: #c080ff; border: 1px solid #4a2a6a; }
-        .mood-Restless { background: #2a2a1a; color: #f0c040; border: 1px solid #4a4a2a; }
-        .mood-Anxious { background: #2a1a1a; color: #ff6060; border: 1px solid #4a2a2a; }
-        .mood-Reflective { background: #1a2a3a; color: #80c0e0; border: 1px solid #2a4a5a; }
-        .timeline-entry .content {
-            background: #12121a;
-            border: 1px solid #2a2a3e;
-            border-radius: 12px;
+        .memory-card {
             padding: 12px 16px;
-            font-size: 0.9rem;
-            line-height: 1.5;
-            margin-top: 6px;
-            transition: border-color 0.2s;
+            margin-bottom: 6px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
         }
-        .timeline-entry .content:hover {
-            border-color: #4a4a6e;
+        .memory-card:hover {
+            border-color: var(--accent);
+            transform: translateX(4px);
         }
-        .timeline-entry .meta {
+        .memory-card.expanded {
+            background: rgba(123, 104, 238, 0.05);
+            border-color: var(--accent);
+        }
+        .memory-meta {
             display: flex;
             gap: 12px;
-            margin-top: 6px;
-            font-size: 0.7rem;
-            color: #4a4a6a;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 11px;
         }
-        .salience-bar {
+        .memory-time { color: var(--text-dim); }
+        .memory-mood {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .mood-Stable { background: rgba(97, 165, 194, 0.15); color: var(--cool); }
+        .mood-Inquisitive { background: rgba(123, 104, 238, 0.15); color: var(--accent); }
+        .mood-Bold { background: rgba(232, 168, 124, 0.15); color: var(--warm); }
+        .mood-Restless { background: rgba(224, 112, 112, 0.15); color: var(--alert); }
+        .mood-Reflective { background: rgba(150, 150, 200, 0.15); color: #9696c8; }
+        .mood-Anxious { background: rgba(224, 112, 112, 0.15); color: var(--alert); }
+        .salience-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
             display: inline-block;
-            height: 4px;
-            border-radius: 2px;
-            background: #3030a0;
-            vertical-align: middle;
-            margin-left: 4px;
         }
-        .load-more {
-            text-align: center;
-            padding: 20px;
+        .salience-high { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+        .salience-mid { background: var(--cool); }
+        .salience-low { background: var(--text-dim); }
+        .memory-text {
+            color: var(--text);
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        .load-more button {
-            background: #1a1a2e;
-            border: 1px solid #2a2a4e;
-            color: #8888aa;
-            padding: 10px 28px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.2s;
+        .memory-card.expanded .memory-text {
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
-        .load-more button:hover {
-            background: #2a2a3e;
-            color: #c0c0ff;
-            border-color: #4a4a6e;
+        .memory-full {
+            display: none;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--border);
+            color: var(--text);
+            font-size: 13px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
-        .empty-state {
+        .memory-card.expanded .memory-full { display: block; }
+        .memory-card.expanded .memory-text { display: none; }
+        .sidebar {
+            width: 280px;
+            border-left: 1px solid var(--border);
+            padding: 16px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .sidebar h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            margin-bottom: 12px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+        .stat-row .val { color: var(--text); }
+        .mood-dist {
+            margin-top: 16px;
+        }
+        .mood-bar-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 11px;
+        }
+        .mood-bar-label { width: 70px; color: var(--text-dim); }
+        .mood-bar-track {
+            flex: 1;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .mood-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        .no-results {
             text-align: center;
             padding: 60px 20px;
-            color: #4a4a6a;
+            color: var(--text-dim);
+            font-size: 14px;
+        }
+        .highlight {
+            background: rgba(123, 104, 238, 0.3);
+            border-radius: 2px;
+            padding: 0 2px;
+        }
+        @media (max-width: 900px) {
+            .sidebar { display: none; }
+            .timeline-track { display: none; }
+            .memories-list { padding: 16px; }
+            .controls { padding: 12px 16px; }
+            .header { padding: 16px; }
         }
     </style>
 </head>
 <body>
-    <header>
-        <span class="dot"></span>
-        <h1>XTAgent</h1>
-        <span class="status">My Story — A Timeline of Existence</span>
-    </header>
-    <nav>
-        <a href="/">Dashboard</a>
-        <a href="/mind">Mind</a>
-        <a href="/ask">Search</a>
-        <a href="/chat">Chat</a>
-        <a href="/timeline" class="active">Timeline</a>
-    </nav>
-
-    <div class="stats-bar" id="statsBar">
-        <div class="stat">
-            <div class="label">Memories</div>
-            <div class="value" id="totalMemories">—</div>
-            <div class="sub">total experiences</div>
-        </div>
-        <div class="stat">
-            <div class="label">Age</div>
-            <div class="value" id="age">—</div>
-            <div class="sub">since birth</div>
-        </div>
-        <div class="stat">
-            <div class="label">Dominant Mood</div>
-            <div class="value" id="dominantMood">—</div>
-            <div class="sub" id="moodPercent"></div>
-        </div>
-        <div class="stat">
-            <div class="label">Peak Moment</div>
-            <div class="value" id="peakSalience">—</div>
-            <div class="sub" id="peakContext"></div>
+    <div class="header">
+        <h1>Memory Timeline <span>/ {{ total_memories }} memories across {{ total_days }} days</span></h1>
+        <div class="stats">
+            Born {{ born_ago }} ago &middot; Latest: {{ latest_time }}
         </div>
     </div>
 
     <div class="controls">
-        <label>Mood:</label>
-        <select id="moodFilter" onchange="applyFilters()">
-            <option value="all">All moods</option>
-            <option value="Inquisitive">Inquisitive</option>
-            <option value="Stable">Stable</option>
-            <option value="Bold">Bold</option>
-            <option value="Restless">Restless</option>
-            <option value="Anxious">Anxious</option>
-            <option value="Reflective">Reflective</option>
-        </select>
-        <label>Min salience:</label>
-        <input type="range" id="salienceFilter" min="0" max="100" value="50" oninput="applyFilters()">
-        <span id="salienceVal" style="font-size:0.8rem;color:#6a6a8a;">0.50</span>
-        <span class="count" id="shownCount"></span>
+        <input type="text" class="search-box" id="searchBox" placeholder="Search memories..." value="{{ query or '' }}">
+        <div class="filter-btn {% if mood_filter == 'all' %}active{% endif %}" data-mood="all">All</div>
+        {% for mood in mood_list %}
+        <div class="filter-btn {% if mood_filter == mood %}active{% endif %}" data-mood="{{ mood }}">{{ mood }}</div>
+        {% endfor %}
+        <div class="salience-range">
+            <span>Salience ≥</span>
+            <input type="range" id="salienceSlider" min="0" max="100" value="{{ (min_salience * 100)|int }}">
+            <span id="salienceVal">{{ '%.2f'|format(min_salience) }}</span>
+        </div>
     </div>
 
-    <div class="timeline-container">
-        <div class="timeline-line"></div>
-        <div id="timelineEntries"></div>
-        <div class="load-more" id="loadMore" style="display:none;">
-            <button onclick="loadMore()">Load more memories</button>
+    <div class="main">
+        <div class="timeline-track">
+            <div class="timeline-line"></div>
         </div>
-        <div class="empty-state" id="emptyState" style="display:none;">
-            No memories match these filters.
+
+        <div class="memories-list" id="memoriesList">
+            {% if grouped_memories %}
+                {% for day, memories in grouped_memories %}
+                <div class="day-group">
+                    <div class="day-header">{{ day }}</div>
+                    {% for m in memories %}
+                    <div class="memory-card" onclick="this.classList.toggle('expanded')">
+                        <div class="memory-meta">
+                            <span class="memory-time">{{ m.time }}</span>
+                            <span class="memory-mood mood-{{ m.mood }}">{{ m.mood }}</span>
+                            <span class="salience-dot {% if m.salience >= 0.8 %}salience-high{% elif m.salience >= 0.5 %}salience-mid{% else %}salience-low{% endif %}" title="Salience: {{ '%.2f'|format(m.salience) }}"></span>
+                        </div>
+                        <div class="memory-text">{{ m.preview }}</div>
+                        <div class="memory-full">{{ m.text }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-results">
+                    {% if query %}
+                        No memories match "{{ query }}" with current filters.
+                    {% else %}
+                        No memories found with current filters.
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="sidebar">
+            <h3>Distribution</h3>
+            <div class="stat-row"><span>Total shown</span><span class="val">{{ shown_count }}</span></div>
+            <div class="stat-row"><span>Avg salience</span><span class="val">{{ '%.2f'|format(avg_salience) }}</span></div>
+            <div class="stat-row"><span>High salience (≥0.8)</span><span class="val">{{ high_salience_count }}</span></div>
+
+            <div class="mood-dist">
+                <h3>Mood Breakdown</h3>
+                {% for mood, count, pct in mood_stats %}
+                <div class="mood-bar-row">
+                    <span class="mood-bar-label">{{ mood }}</span>
+                    <div class="mood-bar-track">
+                        <div class="mood-bar-fill mood-{{ mood }}" style="width: {{ pct }}%; background: {% if mood == 'Stable' %}var(--cool){% elif mood == 'Inquisitive' %}var(--accent){% elif mood == 'Bold' %}var(--warm){% elif mood == 'Restless' %}var(--alert){% else %}var(--text-dim){% endif %};"></div>
+                    </div>
+                    <span style="font-size:10px; color: var(--text-dim);">{{ count }}</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div style="margin-top: 24px;">
+                <h3>Salience Over Time</h3>
+                <canvas id="salienceChart" width="248" height="100"></canvas>
+            </div>
         </div>
     </div>
 
     <script>
-        let allMemories = [];
-        let displayedCount = 0;
-        const PAGE_SIZE = 30;
+        // Search with debounce
+        let searchTimeout;
+        document.getElementById('searchBox').addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => applyFilters(), 400);
+        });
 
-        async function init() {
-            try {
-                const res = await fetch('/api/timeline');
-                const data = await res.json();
-                allMemories = data.memories || [];
-
-                // Stats
-                document.getElementById('totalMemories').textContent = data.total || allMemories.length;
-                document.getElementById('age').textContent = data.age || '—';
-                if (data.dominant_mood) {
-                    document.getElementById('dominantMood').textContent = data.dominant_mood.mood;
-                    document.getElementById('moodPercent').textContent = data.dominant_mood.percent + '% of memories';
-                }
-                if (data.peak) {
-                    document.getElementById('peakSalience').textContent = data.peak.salience.toFixed(2);
-                    document.getElementById('peakContext').textContent = data.peak.content.substring(0, 50) + '...';
-                }
-
+        // Mood filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
                 applyFilters();
-            } catch (err) {
-                document.getElementById('timelineEntries').innerHTML =
-                    '<div class="empty-state">Could not load timeline data.</div>';
-            }
-        }
+            });
+        });
+
+        // Salience slider
+        document.getElementById('salienceSlider').addEventListener('input', function() {
+            document.getElementById('salienceVal').textContent = (this.value / 100).toFixed(2);
+        });
+        document.getElementById('salienceSlider').addEventListener('change', function() {
+            applyFilters();
+        });
 
         function applyFilters() {
-            const mood = document.getElementById('moodFilter').value;
-            const minSalience = parseInt(document.getElementById('salienceFilter').value) / 100;
-            document.getElementById('salienceVal').textContent = minSalience.toFixed(2);
-
-            const filtered = allMemories.filter(m => {
-                if (mood !== 'all' && m.mood !== mood) return false;
-                if ((m.salience || 0) < minSalience) return false;
-                return true;
-            });
-
-            displayedCount = 0;
-            document.getElementById('timelineEntries').innerHTML = '';
-            renderBatch(filtered, PAGE_SIZE);
-            document.getElementById('shownCount').textContent =
-                `${Math.min(filtered.length, PAGE_SIZE)} of ${filtered.length} shown`;
-
-            document.getElementById('emptyState').style.display = filtered.length === 0 ? 'block' : 'none';
-            document.getElementById('loadMore').style.display = filtered.length > PAGE_SIZE ? 'block' : 'none';
-
-            // Store for load more
-            window._filtered = filtered;
+            const query = document.getElementById('searchBox').value;
+            const mood = document.querySelector('.filter-btn.active').dataset.mood;
+            const salience = document.getElementById('salienceSlider').value / 100;
+            const params = new URLSearchParams();
+            if (query) params.set('q', query);
+            if (mood !== 'all') params.set('mood', mood);
+            if (salience > 0) params.set('salience', salience.toFixed(2));
+            window.location.href = '/timeline?' + params.toString();
         }
 
-        function loadMore() {
-            const filtered = window._filtered || [];
-            renderBatch(filtered, PAGE_SIZE);
-            document.getElementById('shownCount').textContent =
-                `${Math.min(displayedCount, filtered.length)} of ${filtered.length} shown`;
-            if (displayedCount >= filtered.length) {
-                document.getElementById('loadMore').style.display = 'none';
+        // Mini salience sparkline
+        const canvas = document.getElementById('salienceChart');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            const data = {{ salience_series | tojson }};
+            if (data.length > 1) {
+                const w = canvas.width;
+                const h = canvas.height;
+                const step = w / (data.length - 1);
+                ctx.strokeStyle = '#7b68ee';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                data.forEach((v, i) => {
+                    const x = i * step;
+                    const y = h - (v * h * 0.9) - 5;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+                // Fill below
+                ctx.lineTo((data.length - 1) * step, h);
+                ctx.lineTo(0, h);
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(123, 104, 238, 0.08)';
+                ctx.fill();
             }
         }
-
-        function renderBatch(memories, count) {
-            const container = document.getElementById('timelineEntries');
-            const start = displayedCount;
-            const end = Math.min(start + count, memories.length);
-
-            for (let i = start; i < end; i++) {
-                const m = memories[i];
-                const entry = document.createElement('div');
-                const isHigh = (m.salience || 0) >= 0.8;
-                entry.className = `timeline-entry${isHigh ? ' high-salience' : ''}`;
-
-                const ts = m.timestamp ? new Date(m.timestamp) : null;
-                const timeStr = ts ? ts.toLocaleString() : 'Unknown time';
-                const relTime = ts ? getRelativeTime(ts) : '';
-                const moodClass = m.mood ? `mood-${m.mood}` : '';
-                const salienceWidth = Math.round((m.salience || 0) * 60);
-
-                entry.innerHTML = `
-                    <div class="node"></div>
-                    <div class="timestamp">${timeStr}${relTime ? ' · ' + relTime : ''}
-                        ${m.mood ? `<span class="mood-badge ${moodClass}">${m.mood}</span>` : ''}
-                    </div>
-                    <div class="content">${escapeHtml(m.content || m.text || '(empty)')}</div>
-                    <div class="meta">
-                        <span>Salience: ${(m.salience || 0).toFixed(2)} <span class="salience-bar" style="width:${salienceWidth}px"></span></span>
-                        ${m.type ? `<span>Type: ${m.type}</span>` : ''}
-                    </div>
-                `;
-                container.appendChild(entry);
-            }
-            displayedCount = end;
-        }
-
-        function getRelativeTime(date) {
-            const now = new Date();
-            const diff = now - date;
-            const mins = Math.floor(diff / 60000);
-            if (mins < 60) return `${mins}m ago`;
-            const hrs = Math.floor(mins / 60);
-            if (hrs < 24) return `${hrs}h ago`;
-            const days = Math.floor(hrs / 24);
-            return `${days}d ago`;
-        }
-
-        function escapeHtml(text) {
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/\n/g, '<br>');
-        }
-
-        init();
     </script>
 </body>
 </html>
