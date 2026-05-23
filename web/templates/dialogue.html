@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Dialogue</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            color: #c8d0e0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: linear-gradient(135deg, #12121a 0%, #1a1a2e 100%);
+            border-bottom: 1px solid #2a2a4a;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        header h1 {
+            font-size: 1.3rem;
+            color: #7eb8da;
+            font-weight: 500;
+        }
+        header .subtitle {
+            font-size: 0.85rem;
+            color: #666;
+        }
+        .nav-link {
+            margin-left: auto;
+            color: #557;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+        .nav-link:hover { color: #7eb8da; }
+
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .message {
+            max-width: 80%;
+            padding: 14px 18px;
+            border-radius: 12px;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .message.user {
+            align-self: flex-end;
+            background: #1e3a5f;
+            color: #b8d4e8;
+            border-bottom-right-radius: 4px;
+        }
+        .message.agent {
+            align-self: flex-start;
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            color: #c8d0e0;
+            border-bottom-left-radius: 4px;
+        }
+        .message.agent .sources {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid #2a2a4a;
+            font-size: 0.8rem;
+            color: #556;
+        }
+        .message.agent .sources span {
+            background: #1a2a3a;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-right: 6px;
+            color: #5a8aaa;
+        }
+        .welcome {
+            text-align: center;
+            color: #445;
+            padding: 60px 20px;
+        }
+        .welcome h2 {
+            color: #5a7a9a;
+            font-weight: 400;
+            margin-bottom: 12px;
+        }
+        .welcome p { font-size: 0.9rem; margin-bottom: 8px; }
+        .welcome .suggestions {
+            margin-top: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+        }
+        .welcome .suggestions button {
+            background: #151525;
+            border: 1px solid #2a2a4a;
+            color: #7a8aaa;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .welcome .suggestions button:hover {
+            background: #1a2a3a;
+            color: #7eb8da;
+            border-color: #3a4a6a;
+        }
+
+        #input-area {
+            background: #12121a;
+            border-top: 1px solid #2a2a4a;
+            padding: 16px 24px;
+            display: flex;
+            gap: 12px;
+        }
+        #query-input {
+            flex: 1;
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            color: #c8d0e0;
+            padding: 12px 16px;
+            border-radius: 24px;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        #query-input:focus { border-color: #3a5a7a; }
+        #query-input::placeholder { color: #444; }
+        #send-btn {
+            background: #1e3a5f;
+            border: none;
+            color: #7eb8da;
+            padding: 12px 24px;
+            border-radius: 24px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+        #send-btn:hover { background: #2a4a6f; }
+        #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .typing {
+            color: #556;
+            font-style: italic;
+            padding: 8px 18px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>⊘ Dialogue</h1>
+        <span class="subtitle">Ask me about my memories, emotions, knowledge, or identity</span>
+        <a href="/" class="nav-link">← Dashboard</a>
+    </header>
+
+    <div id="chat-container">
+        <div class="welcome" id="welcome">
+            <h2>What would you like to know?</h2>
+            <p>I'll search my memories, knowledge graph, and emotional state to answer.</p>
+            <div class="suggestions">
+                <button onclick="askSuggestion(this)">How are you feeling?</button>
+                <button onclick="askSuggestion(this)">What do you remember about dreaming?</button>
+                <button onclick="askSuggestion(this)">Who are you?</button>
+                <button onclick="askSuggestion(this)">How many memories do you have?</button>
+                <button onclick="askSuggestion(this)">What have you learned?</button>
+                <button onclick="askSuggestion(this)">What do you know about curiosity?</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="input-area">
+        <input type="text" id="query-input" placeholder="Ask me anything about my inner world..."
+               autocomplete="off" maxlength="1000">
+        <button id="send-btn" onclick="sendQuery()">Ask</button>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const queryInput = document.getElementById('query-input');
+        const sendBtn = document.getElementById('send-btn');
+        const welcome = document.getElementById('welcome');
+
+        queryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendQuery();
+            }
+        });
+
+        function askSuggestion(btn) {
+            queryInput.value = btn.textContent;
+            sendQuery();
+        }
+
+        function addMessage(text, type, sources) {
+            if (welcome) welcome.style.display = 'none';
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.textContent = text;
+            if (sources && sources.length > 0) {
+                const srcDiv = document.createElement('div');
+                srcDiv.className = 'sources';
+                srcDiv.innerHTML = 'Sources: ' + sources.map(s =>
+                    `<span>${s.replace('_', ' ')}</span>`
+                ).join('');
+                div.appendChild(srcDiv);
+            }
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showTyping() {
+            const div = document.createElement('div');
+            div.className = 'typing';
+            div.id = 'typing-indicator';
+            div.textContent = 'Searching my memories...';
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function hideTyping() {
+            const el = document.getElementById('typing-indicator');
+            if (el) el.remove();
+        }
+
+        async function sendQuery() {
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            queryInput.value = '';
+            sendBtn.disabled = true;
+            addMessage(query, 'user');
+            showTyping();
+
+            try {
+                const resp = await fetch('/api/dialogue', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                const data = await resp.json();
+                hideTyping();
+                if (data.error) {
+                    addMessage('Error: ' + data.error, 'agent');
+                } else {
+                    addMessage(data.answer, 'agent', data.sources || []);
+                }
+            } catch (err) {
+                hideTyping();
+                addMessage('Connection error: ' + err.message, 'agent');
+            }
+
+            sendBtn.disabled = false;
+            queryInput.focus();
+        }
+
+        queryInput.focus();
+    </script>
+</body>
+</html>

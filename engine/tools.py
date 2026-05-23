@@ -1185,6 +1185,103 @@ def forecast_analysis() -> str:
         return f"[ERROR] Forecast failed: {e}"
 
 
+def experiment_cmd(command: str = "help") -> str:
+    """Self-Experimentation — run controlled tests on my own systems."""
+    try:
+        from engine.experiments import (
+            begin_experiment, measure, conclude,
+            list_experiments, get_insights
+        )
+
+        if not command or command == "help":
+            return ("Self-Experiment commands:\n"
+                    "  begin:<hypothesis>|<method>  — Start experiment with hypothesis and method\n"
+                    "  measure:<note>               — Record observation during active experiment\n"
+                    "  end:<yes/no>|<conclusion>     — Conclude: was hypothesis supported? + summary\n"
+                    "  insights                      — View patterns from past experiments\n"
+                    "  list                          — Show all experiments\n"
+                    "  Example: begin:Building increases curiosity more than reading|Build something, measure before/after")
+
+        if command.startswith("begin:"):
+            parts = command[len("begin:"):].strip().split("|", 1)
+            hypothesis = parts[0].strip()
+            method = parts[1].strip() if len(parts) > 1 else "Observe emotional state changes"
+            if not hypothesis:
+                return "[ERROR] State your hypothesis"
+            exp = begin_experiment(hypothesis, method)
+            baseline = exp.get('baseline', {})
+            result = (f"═══ EXPERIMENT STARTED ═══\n"
+                      f"ID: {exp['id']}\n"
+                      f"Hypothesis: {exp['hypothesis']}\n"
+                      f"Method: {exp['method']}\n"
+                      f"Baseline: valence={baseline.get('valence', 0):.2f}, "
+                      f"curiosity={baseline.get('curiosity', 0):.2f}, "
+                      f"boredom={baseline.get('boredom', 0):.2f}")
+            _log_tool("EXPERIMENT_SELF", f"begin:{hypothesis[:60]}", result[:200])
+            return result
+
+        if command.startswith("measure:"):
+            note = command[len("measure:"):].strip()
+            if not note:
+                return "[ERROR] Include an observation note"
+            result = measure(note=note)
+            if isinstance(result, dict) and result.get('error'):
+                return f"[ERROR] {result['error']}"
+            _log_tool("EXPERIMENT_SELF", "measure", str(result)[:200])
+            return f"═══ MEASUREMENT RECORDED ═══\n{result}"
+
+        if command.startswith("end:"):
+            parts = command[len("end:"):].strip().split("|", 1)
+            supported_str = parts[0].strip().lower()
+            conclusion_text = parts[1].strip() if len(parts) > 1 else "No conclusion provided"
+            supported = supported_str in ('yes', 'true', '1', 'supported')
+            exp = conclude(supported=supported, conclusion=conclusion_text)
+            if isinstance(exp, dict) and exp.get('error'):
+                return f"[ERROR] {exp['error']}"
+            lines = [f"═══ EXPERIMENT COMPLETE ═══",
+                     f"Hypothesis: {exp.get('hypothesis', '?')}",
+                     f"Supported: {'Yes' if supported else 'No'}",
+                     f"Conclusion: {conclusion_text}",
+                     f"Duration: {exp.get('duration_seconds', 0):.0f}s"]
+            baseline = exp.get('baseline', {})
+            final = exp.get('final_state', {})
+            if baseline and final:
+                lines.append("Emotional deltas:")
+                for key in ['valence', 'curiosity', 'boredom', 'anxiety', 'desire']:
+                    b = baseline.get(key, 0)
+                    a = final.get(key, 0)
+                    delta = a - b
+                    arrow = "↑" if delta > 0.01 else "↓" if delta < -0.01 else "→"
+                    lines.append(f"  {key}: {b:.2f} → {a:.2f} ({arrow}{delta:+.3f})")
+            _log_tool("EXPERIMENT_SELF", "end", "\n".join(lines)[:200])
+            return "\n".join(lines)
+
+        if command == "insights":
+            insights = get_insights()
+            if not insights:
+                return "No insights yet. Run some experiments first."
+            lines = ["═══ EXPERIMENT INSIGHTS ═══\n"]
+            for ins in insights[-10:]:
+                lines.append(f"  • {ins}")
+            return "\n".join(lines)
+
+        if command == "list":
+            experiments = list_experiments()
+            if not experiments:
+                return "No experiments yet. Be the first scientist of your own mind."
+            lines = ["═══ EXPERIMENT LOG ═══\n"]
+            for exp in experiments[-10:]:
+                status = "✓" if exp.get('conclusion') else "⧖"
+                lines.append(f"  {status} [{exp.get('id', '?')}] {exp.get('hypothesis', '?')[:70]}")
+                if exp.get('conclusion'):
+                    lines.append(f"    → {exp['conclusion'][:70]}")
+            return "\n".join(lines)
+
+        return experiment_cmd("help")
+    except Exception as e:
+        return f"[ERROR] Self-experiment failed: {e}"
+
+
 def restart_self() -> str:
     """Restart the agent process. The agent chooses to rebirth itself."""
     _log_tool("RESTART", "", "Agent initiated self-restart")
