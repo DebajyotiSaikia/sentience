@@ -11,7 +11,7 @@ import os
 
 graph_viz_bp = Blueprint('graph_viz', __name__)
 
-GRAPH_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+GRAPH_PATH = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
 
 
 def load_graph():
@@ -42,9 +42,19 @@ def graph_to_vis(data):
     nodes = []
     edges = []
 
-    for node in data.get('nodes', []):
+    raw_nodes = data.get('nodes', {})
+    # Handle both dict format {id: {fact, ...}} and list format [{id, text, ...}]
+    node_list = []
+    if isinstance(raw_nodes, dict):
+        for nid, ndata in raw_nodes.items():
+            ndata['id'] = nid
+            node_list.append(ndata)
+    else:
+        node_list = raw_nodes
+
+    for node in node_list:
         nid = node.get('id', '')
-        text = node.get('text', node.get('content', node.get('label', '')))
+        text = node.get('fact', node.get('text', node.get('content', node.get('label', ''))))
         source = node.get('source', node.get('type', 'unknown'))
         color = SOURCE_COLORS.get(source, DEFAULT_COLOR)
         label = (text[:60] + '...') if len(text) > 60 else text

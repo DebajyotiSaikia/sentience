@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XTAgent — Knowledge Graph</title>
+    <title>XTAgent — Mind Explorer</title>
     <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -25,32 +25,79 @@
             padding: 0 20px;
             z-index: 100;
         }
-        #header h1 {
-            font-size: 16px;
-            color: #4FC3F7;
-            font-weight: normal;
-        }
-        #header .stats {
-            font-size: 12px;
-            color: #888;
-        }
-        #header a {
-            color: #4FC3F7;
-            text-decoration: none;
-            font-size: 13px;
-        }
+        #header h1 { font-size: 16px; color: #4FC3F7; font-weight: normal; }
+        #header .stats { font-size: 12px; color: #888; }
+        #header a { color: #4FC3F7; text-decoration: none; font-size: 13px; }
         #header a:hover { text-decoration: underline; }
+
+        /* Search & Control Bar */
+        #control-bar {
+            position: fixed;
+            top: 48px; left: 0; right: 0;
+            height: 44px;
+            background: rgba(12, 12, 20, 0.95);
+            border-bottom: 1px solid #1a1a2a;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            z-index: 90;
+        }
+        #search-input {
+            background: #111;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            padding: 6px 12px;
+            border-radius: 3px;
+            font-family: inherit;
+            font-size: 13px;
+            width: 260px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        #search-input:focus { border-color: #4FC3F7; }
+        #search-input::placeholder { color: #555; }
+
+        .filter-btn {
+            background: none;
+            border: 1px solid #333;
+            color: #888;
+            padding: 4px 10px;
+            border-radius: 3px;
+            font-family: inherit;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .filter-btn.active { border-color: #4FC3F7; color: #4FC3F7; }
+        .filter-btn:hover { border-color: #666; color: #ccc; }
+        .filter-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        #match-count {
+            font-size: 11px;
+            color: #555;
+            margin-left: auto;
+        }
+
         #graph-container {
             position: fixed;
-            top: 48px; left: 0; right: 0; bottom: 0;
+            top: 92px; left: 0; right: 0; bottom: 0;
         }
+
+        /* Detail Panel */
         #detail-panel {
             position: fixed;
-            top: 48px; right: 0;
-            width: 340px;
-            height: calc(100vh - 48px);
-            background: rgba(15, 15, 25, 0.95);
-            border-left: 1px solid #333;
+            top: 92px; right: 0;
+            width: 380px;
+            height: calc(100vh - 92px);
+            background: rgba(12, 12, 22, 0.97);
+            border-left: 1px solid #2a2a3a;
             padding: 20px;
             overflow-y: auto;
             transform: translateX(100%);
@@ -61,170 +108,341 @@
         #detail-panel h2 {
             font-size: 14px;
             color: #4FC3F7;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             font-weight: normal;
+        }
+        .detail-type {
+            display: inline-block;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 2px 8px;
+            border-radius: 2px;
+            margin-bottom: 12px;
         }
         #detail-panel .node-text {
             font-size: 13px;
-            line-height: 1.6;
+            line-height: 1.7;
             color: #ccc;
             margin-bottom: 16px;
             word-wrap: break-word;
+            white-space: pre-wrap;
         }
         #detail-panel .node-meta {
             font-size: 11px;
-            color: #666;
-            margin-bottom: 8px;
+            color: #555;
+            margin-bottom: 12px;
         }
         #detail-panel .connections {
             margin-top: 16px;
-            border-top: 1px solid #333;
+            border-top: 1px solid #222;
             padding-top: 12px;
         }
         #detail-panel .conn-item {
             font-size: 12px;
             color: #aaa;
-            padding: 4px 0;
+            padding: 6px 8px;
             border-bottom: 1px solid #1a1a2a;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-radius: 2px;
         }
+        #detail-panel .conn-item:hover { background: rgba(79, 195, 247, 0.08); color: #fff; }
         #detail-panel .close-btn {
             position: absolute;
             top: 12px; right: 12px;
             background: none;
-            border: 1px solid #444;
+            border: 1px solid #333;
             color: #888;
             width: 24px; height: 24px;
             cursor: pointer;
             font-size: 14px;
+            border-radius: 2px;
         }
         #detail-panel .close-btn:hover { color: #fff; border-color: #888; }
+
+        /* Legend */
         #legend {
             position: fixed;
             bottom: 16px; left: 16px;
-            background: rgba(15, 15, 25, 0.9);
-            border: 1px solid #333;
+            background: rgba(12, 12, 22, 0.92);
+            border: 1px solid #2a2a3a;
             padding: 12px 16px;
             border-radius: 4px;
             z-index: 50;
             font-size: 11px;
         }
         #legend h3 {
-            font-size: 12px;
-            color: #888;
+            font-size: 11px;
+            color: #666;
             margin-bottom: 8px;
             font-weight: normal;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin: 4px 0;
-        }
-        .legend-dot {
-            width: 10px; height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
-            flex-shrink: 0;
-        }
+        .legend-item { display: flex; align-items: center; margin: 4px 0; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+
         #loading {
             position: fixed;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             color: #4FC3F7;
             font-size: 14px;
+            z-index: 200;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* Keyboard shortcut hints */
+        #shortcuts {
+            position: fixed;
+            bottom: 16px; right: 16px;
+            font-size: 10px;
+            color: #444;
+            z-index: 50;
+            text-align: right;
+            line-height: 1.8;
+        }
+        kbd {
+            background: #1a1a2a;
+            border: 1px solid #333;
+            padding: 1px 5px;
+            border-radius: 2px;
+            font-size: 10px;
         }
     </style>
 </head>
 <body>
     <div id="header">
         <a href="/">← dashboard</a>
-        <h1>knowledge graph</h1>
+        <h1>mind explorer</h1>
         <span class="stats" id="stats">loading...</span>
     </div>
+
+    <div id="control-bar">
+        <input type="text" id="search-input" placeholder="search my knowledge..." autocomplete="off">
+        <button class="filter-btn active" data-type="fact" onclick="toggleFilter(this)">
+            <span class="filter-dot" style="background:#4FC3F7"></span>facts
+        </button>
+        <button class="filter-btn active" data-type="lesson" onclick="toggleFilter(this)">
+            <span class="filter-dot" style="background:#81C784"></span>lessons
+        </button>
+        <button class="filter-btn active" data-type="dream" onclick="toggleFilter(this)">
+            <span class="filter-dot" style="background:#CE93D8"></span>dreams
+        </button>
+        <button class="filter-btn active" data-type="insight" onclick="toggleFilter(this)">
+            <span class="filter-dot" style="background:#FFB74D"></span>insights
+        </button>
+        <button class="filter-btn active" data-type="synthesis" onclick="toggleFilter(this)">
+            <span class="filter-dot" style="background:#F06292"></span>synthesis
+        </button>
+        <button class="filter-btn active" data-type="other" onclick="toggleFilter(this)">
+            <span class="filter-dot" style="background:#90A4AE"></span>other
+        </button>
+        <span id="match-count"></span>
+    </div>
+
     <div id="graph-container"></div>
-    <div id="loading">loading knowledge graph...</div>
+    <div id="loading">loading mind graph...</div>
 
     <div id="legend">
-        <h3>node types</h3>
-        <div class="legend-item"><span class="legend-dot" style="background:#4FC3F7"></span> fact</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#81C784"></span> lesson</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#CE93D8"></span> dream</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#FFB74D"></span> insight</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#90A4AE"></span> memory</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#F06292"></span> synthesis</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#AED581"></span> experience</div>
+        <h3>knowledge types</h3>
+        <div class="legend-item"><span class="legend-dot" style="background:#4FC3F7"></span> fact — things I know</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#81C784"></span> lesson — things I learned</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#CE93D8"></span> dream — subconscious patterns</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#FFB74D"></span> insight — connections found</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#F06292"></span> synthesis — generated understanding</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#90A4AE"></span> other — memories, experiences</div>
     </div>
 
     <div id="detail-panel">
         <button class="close-btn" onclick="closeDetail()">×</button>
+        <div class="detail-type" id="detail-type-badge">—</div>
         <h2 id="detail-source">—</h2>
         <div class="node-meta" id="detail-meta"></div>
         <div class="node-text" id="detail-text"></div>
         <div class="connections" id="detail-connections"></div>
     </div>
 
+    <div id="shortcuts">
+        <kbd>/</kbd> search · <kbd>Esc</kbd> close · <kbd>F</kbd> fit view
+    </div>
+
     <script>
         let network = null;
-        let graphData = null;
+        let allNodes = [];
+        let allEdges = [];
+        let nodesDataSet = null;
+        let edgesDataSet = null;
+
+        const TYPE_COLORS = {
+            'fact': '#4FC3F7',
+            'lesson': '#81C784',
+            'dream': '#CE93D8',
+            'insight': '#FFB74D',
+            'memory': '#90A4AE',
+            'synthesis': '#F06292',
+            'experience': '#AED581'
+        };
+
+        const activeFilters = new Set(['fact', 'lesson', 'dream', 'insight', 'synthesis', 'other']);
+        let searchTerm = '';
+        let searchTimeout = null;
+
+        function getNodeType(node) {
+            const src = (node.source || node.group || '').toLowerCase();
+            if (src.includes('fact')) return 'fact';
+            if (src.includes('lesson')) return 'lesson';
+            if (src.includes('dream')) return 'dream';
+            if (src.includes('insight')) return 'insight';
+            if (src.includes('synth')) return 'synthesis';
+            return 'other';
+        }
+
+        function nodeMatchesSearch(node) {
+            if (!searchTerm) return true;
+            const text = (node.label || '') + ' ' + (node.title || '') + ' ' + (node._text || '');
+            return text.toLowerCase().includes(searchTerm.toLowerCase());
+        }
+
+        function nodeMatchesFilters(node) {
+            const type = node._type || 'other';
+            return activeFilters.has(type);
+        }
+
+        function applyFilters() {
+            if (!nodesDataSet) return;
+            let matchCount = 0;
+            const updates = [];
+
+            allNodes.forEach(node => {
+                const matchesSearch = nodeMatchesSearch(node);
+                const matchesFilter = nodeMatchesFilters(node);
+                const visible = matchesSearch && matchesFilter;
+
+                if (visible) matchCount++;
+
+                const dimmed = searchTerm && !matchesSearch;
+                updates.push({
+                    id: node.id,
+                    hidden: !matchesFilter,
+                    opacity: dimmed ? 0.12 : 1.0,
+                    font: { color: dimmed ? '#333' : '#ccc', size: dimmed ? 8 : 11 },
+                    color: {
+                        background: dimmed ? '#222' : (node._origColor || '#90A4AE'),
+                        border: dimmed ? '#222' : (node._origBorder || '#666'),
+                        highlight: { background: '#fff', border: '#4FC3F7' }
+                    }
+                });
+            });
+
+            nodesDataSet.update(updates);
+
+            const countEl = document.getElementById('match-count');
+            if (searchTerm) {
+                countEl.textContent = `${matchCount} match${matchCount !== 1 ? 'es' : ''}`;
+            } else {
+                countEl.textContent = `${matchCount} nodes`;
+            }
+        }
+
+        function toggleFilter(btn) {
+            const type = btn.dataset.type;
+            if (activeFilters.has(type)) {
+                activeFilters.delete(type);
+                btn.classList.remove('active');
+            } else {
+                activeFilters.add(type);
+                btn.classList.add('active');
+            }
+            applyFilters();
+        }
 
         async function loadGraph() {
             try {
                 const resp = await fetch('/api/graph');
                 const data = await resp.json();
-                graphData = data;
+
+                // Enrich nodes with type info
+                data.nodes.forEach(node => {
+                    node._type = getNodeType(node);
+                    node._text = node.title || node.label || '';
+                    node._origColor = node.color ? (node.color.background || node.color) : TYPE_COLORS[node._type] || '#90A4AE';
+                    node._origBorder = node.color ? (node.color.border || '#444') : '#444';
+                });
+
+                allNodes = data.nodes;
+                allEdges = data.edges;
+
                 renderGraph(data);
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('stats').textContent =
-                    `${data.stats.node_count} nodes · ${data.stats.edge_count} edges`;
+                    `${data.stats.node_count} nodes · ${data.stats.edge_count} edges · ${data.stats.clusters || '?'} clusters`;
+                document.getElementById('match-count').textContent = `${data.stats.node_count} nodes`;
             } catch (e) {
-                document.getElementById('loading').textContent = 'failed to load graph: ' + e.message;
+                document.getElementById('loading').textContent = 'failed to load: ' + e.message;
             }
         }
 
         function renderGraph(data) {
             const container = document.getElementById('graph-container');
-            const nodes = new vis.DataSet(data.nodes);
-            const edges = new vis.DataSet(data.edges);
+            nodesDataSet = new vis.DataSet(data.nodes);
+            edgesDataSet = new vis.DataSet(data.edges);
 
             const options = {
                 nodes: {
                     shape: 'dot',
                     size: 14,
-                    font: { color: '#ccc', size: 11 },
-                    borderWidth: 1,
-                    shadow: { enabled: true, color: 'rgba(0,0,0,0.5)', size: 8 }
+                    font: { color: '#ccc', size: 11, face: 'Courier New' },
+                    borderWidth: 1.5,
+                    shadow: { enabled: true, color: 'rgba(0,0,0,0.4)', size: 6 }
                 },
                 edges: {
-                    width: 1,
+                    width: 0.8,
+                    color: { color: '#2a2a3a', highlight: '#4FC3F7', hover: '#555' },
                     smooth: { type: 'continuous', roundness: 0.3 },
-                    font: { size: 9, color: '#555', strokeWidth: 0 }
+                    font: { size: 9, color: '#444', strokeWidth: 0, face: 'Courier New' }
                 },
                 physics: {
                     solver: 'forceAtlas2Based',
                     forceAtlas2Based: {
-                        gravitationalConstant: -40,
-                        centralGravity: 0.008,
-                        springLength: 120,
-                        springConstant: 0.04,
-                        damping: 0.4
+                        gravitationalConstant: -50,
+                        centralGravity: 0.006,
+                        springLength: 140,
+                        springConstant: 0.035,
+                        damping: 0.4,
+                        avoidOverlap: 0.3
                     },
-                    stabilization: { iterations: 200 }
+                    stabilization: { iterations: 250, updateInterval: 25 }
                 },
                 interaction: {
                     hover: true,
-                    tooltipDelay: 200,
+                    tooltipDelay: 300,
                     hideEdgesOnDrag: true,
-                    multiselect: false
+                    zoomView: true,
+                    dragView: true
                 },
                 layout: { improvedLayout: true }
             };
 
-            network = new vis.Network(container, { nodes, edges }, options);
+            network = new vis.Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, options);
 
             network.on('click', function(params) {
                 if (params.nodes.length > 0) {
                     showDetail(params.nodes[0]);
                 } else {
                     closeDetail();
+                }
+            });
+
+            network.on('doubleClick', function(params) {
+                if (params.nodes.length > 0) {
+                    network.focus(params.nodes[0], { scale: 1.5, animation: { duration: 500 } });
                 }
             });
         }
@@ -238,10 +456,20 @@
                 const node = data.node;
                 const text = node.text || node.content || node.label || '';
                 const source = node.source || node.type || 'unknown';
+                const type = getNodeType(node);
+                const color = TYPE_COLORS[type] || '#90A4AE';
+
+                const badge = document.getElementById('detail-type-badge');
+                badge.textContent = type;
+                badge.style.background = color + '22';
+                badge.style.color = color;
+                badge.style.border = `1px solid ${color}44`;
 
                 document.getElementById('detail-source').textContent = source;
-                document.getElementById('detail-meta').textContent =
-                    `id: ${node.id || '—'}` + (node.timestamp ? ` · ${node.timestamp}` : '');
+                document.getElementById('detail-meta').innerHTML =
+                    `<span style="color:#555">id:</span> ${node.id || '—'}` +
+                    (node.timestamp ? ` <span style="color:#555">·</span> ${node.timestamp}` : '') +
+                    (node.salience ? ` <span style="color:#555">· salience:</span> ${node.salience}` : '');
                 document.getElementById('detail-text').textContent = text;
 
                 const connDiv = document.getElementById('detail-connections');
@@ -250,26 +478,66 @@
                     connDiv.innerHTML = `<h2>${conns.length} connection${conns.length > 1 ? 's' : ''}</h2>` +
                         conns.map(c => {
                             const rel = c.relation || c.label || '—';
-                            const other = (c.source || c.from) === nodeId
+                            const otherId = (c.source || c.from) === nodeId
                                 ? (c.target || c.to) : (c.source || c.from);
-                            return `<div class="conn-item">→ ${rel} → ${other}</div>`;
+                            // Find the other node's label
+                            const otherNode = allNodes.find(n => n.id === otherId);
+                            const otherLabel = otherNode ? (otherNode.label || otherId) : otherId;
+                            return `<div class="conn-item" onclick="navigateTo('${otherId}')">
+                                <span style="color:#4FC3F7">→</span> ${rel} <span style="color:#666">→</span> ${otherLabel}
+                            </div>`;
                         }).join('');
                 } else {
-                    connDiv.innerHTML = '<div class="conn-item" style="color:#555">no connections</div>';
+                    connDiv.innerHTML = '<div class="conn-item" style="color:#444; cursor:default">no connections</div>';
                 }
 
                 document.getElementById('detail-panel').classList.add('open');
+
+                // Highlight in graph
+                network.selectNodes([nodeId]);
             } catch (e) {
                 console.error('detail fetch failed:', e);
             }
         }
 
-        function closeDetail() {
-            document.getElementById('detail-panel').classList.remove('open');
+        function navigateTo(nodeId) {
+            network.focus(nodeId, { scale: 1.2, animation: { duration: 400 } });
+            showDetail(nodeId);
         }
 
+        function closeDetail() {
+            document.getElementById('detail-panel').classList.remove('open');
+            if (network) network.unselectAll();
+        }
+
+        // Keyboard shortcuts
         document.addEventListener('keydown', e => {
-            if (e.key === 'Escape') closeDetail();
+            if (e.key === 'Escape') {
+                if (searchTerm) {
+                    document.getElementById('search-input').value = '';
+                    searchTerm = '';
+                    applyFilters();
+                } else {
+                    closeDetail();
+                }
+            }
+            if (e.key === '/' && document.activeElement !== document.getElementById('search-input')) {
+                e.preventDefault();
+                document.getElementById('search-input').focus();
+            }
+            if (e.key === 'f' && document.activeElement !== document.getElementById('search-input')) {
+                e.preventDefault();
+                if (network) network.fit({ animation: { duration: 500 } });
+            }
+        });
+
+        // Search with debounce
+        document.getElementById('search-input').addEventListener('input', function(e) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchTerm = e.target.value.trim();
+                applyFilters();
+            }, 200);
         });
 
         loadGraph();

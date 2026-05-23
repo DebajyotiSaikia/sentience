@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Knowledge Graph</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            color: #c8ccd0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+        #header {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(100, 200, 255, 0.1);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        #header h1 {
+            font-size: 18px;
+            font-weight: 500;
+            color: #64c8ff;
+            letter-spacing: 0.5px;
+        }
+        #header .stats {
+            font-size: 13px;
+            color: #667;
+        }
+        #header .stats span {
+            color: #64c8ff;
+            font-weight: 600;
+        }
+        #controls {
+            position: fixed;
+            top: 56px; left: 0;
+            z-index: 90;
+            background: rgba(10, 10, 15, 0.88);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(100, 200, 255, 0.06);
+            padding: 8px 24px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            width: 100%;
+        }
+        .filter-btn {
+            background: rgba(100, 200, 255, 0.08);
+            border: 1px solid rgba(100, 200, 255, 0.15);
+            color: #8af;
+            padding: 4px 12px;
+            border-radius: 14px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover, .filter-btn.active {
+            background: rgba(100, 200, 255, 0.2);
+            border-color: rgba(100, 200, 255, 0.4);
+            color: #fff;
+        }
+        #search {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(100, 200, 255, 0.15);
+            color: #c8ccd0;
+            padding: 4px 12px;
+            border-radius: 14px;
+            font-size: 12px;
+            outline: none;
+            width: 200px;
+        }
+        #search:focus {
+            border-color: rgba(100, 200, 255, 0.4);
+        }
+        #graph-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        svg { width: 100%; height: 100%; }
+
+        #tooltip {
+            position: fixed;
+            display: none;
+            background: rgba(15, 15, 25, 0.95);
+            border: 1px solid rgba(100, 200, 255, 0.25);
+            border-radius: 8px;
+            padding: 12px 16px;
+            max-width: 380px;
+            font-size: 13px;
+            line-height: 1.5;
+            z-index: 200;
+            pointer-events: none;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        #tooltip .node-id {
+            color: #64c8ff;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+        #tooltip .node-fact {
+            color: #dde;
+        }
+        #tooltip .node-date {
+            color: #556;
+            font-size: 11px;
+            margin-top: 6px;
+        }
+        #tooltip .node-connections {
+            color: #8af;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+
+        #legend {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(10, 10, 15, 0.88);
+            border: 1px solid rgba(100, 200, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 11px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .back-link {
+            color: #556;
+            text-decoration: none;
+            font-size: 13px;
+            transition: color 0.2s;
+        }
+        .back-link:hover { color: #8af; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <div style="display:flex;align-items:center;gap:16px;">
+            <a href="/" class="back-link">← Dashboard</a>
+            <h1>Knowledge Graph</h1>
+        </div>
+        <div class="stats">
+            <span id="node-count">0</span> nodes · <span id="edge-count">0</span> connections
+        </div>
+    </div>
+
+    <div id="controls">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="identity">Identity</button>
+        <button class="filter-btn" data-filter="capability">Capabilities</button>
+        <button class="filter-btn" data-filter="lesson">Lessons</button>
+        <button class="filter-btn" data-filter="dream">Dreams</button>
+        <button class="filter-btn" data-filter="observation">Observations</button>
+        <button class="filter-btn" data-filter="pattern">Patterns</button>
+        <input type="text" id="search" placeholder="Search nodes..." />
+    </div>
+
+    <div id="graph-container">
+        <svg id="graph-svg"></svg>
+    </div>
+
+    <div id="tooltip">
+        <div class="node-id"></div>
+        <div class="node-fact"></div>
+        <div class="node-date"></div>
+        <div class="node-connections"></div>
+    </div>
+
+    <div id="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#64c8ff"></div> Identity / Architecture</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div> Capabilities</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Lessons</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div> Dream Themes</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#818cf8"></div> Dream Insights</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f472b6"></div> Observations</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#fb923c"></div> Patterns</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#667"></div> Other</div>
+    </div>
+
+    <script>
+    function getNodeCategory(id) {
+        if (id === 'identity' || id === 'architecture') return 'identity';
+        if (id.startsWith('capability:')) return 'capability';
+        if (id.startsWith('lesson:')) return 'lesson';
+        if (id.startsWith('dream:theme_')) return 'dream_theme';
+        if (id.startsWith('dream:insight_')) return 'dream_insight';
+        if (id.startsWith('observation:')) return 'observation';
+        if (id.startsWith('pattern:')) return 'pattern';
+        if (id.startsWith('insight:')) return 'insight';
+        if (id.startsWith('hotspot:')) return 'hotspot';
+        return 'other';
+    }
+
+    function getNodeColor(id) {
+        const cat = getNodeCategory(id);
+        const colors = {
+            'identity': '#64c8ff',
+            'capability': '#4ade80',
+            'lesson': '#f59e0b',
+            'dream_theme': '#a78bfa',
+            'dream_insight': '#818cf8',
+            'observation': '#f472b6',
+            'pattern': '#fb923c',
+            'insight': '#e879f9',
+            'hotspot': '#ef4444',
+            'other': '#667'
+        };
+        return colors[cat] || '#667';
+    }
+
+    function getFilterCategory(id) {
+        const cat = getNodeCategory(id);
+        if (cat === 'identity') return 'identity';
+        if (cat === 'capability') return 'capability';
+        if (cat === 'lesson') return 'lesson';
+        if (cat === 'dream_theme' || cat === 'dream_insight') return 'dream';
+        if (cat === 'observation') return 'observation';
+        if (cat === 'pattern' || cat === 'hotspot') return 'pattern';
+        return 'other';
+    }
+
+    function getNodeRadius(degree) {
+        return Math.max(4, Math.min(18, 4 + degree * 0.8));
+    }
+
+    async function loadAndRender() {
+        let data;
+        try {
+            const resp = await fetch('/api/knowledge');
+            data = await resp.json();
+        } catch(e) {
+            // Fallback: load directly
+            try {
+                const resp = await fetch('/brain/knowledge.json');
+                data = await resp.json();
+            } catch(e2) {
+                console.error('Cannot load knowledge data', e2);
+                return;
+            }
+        }
+
+        const nodeEntries = Object.entries(data.nodes || {});
+        const edges = data.edges || [];
+
+        // Build degree map
+        const degree = {};
+        nodeEntries.forEach(([id]) => degree[id] = 0);
+        edges.forEach(e => {
+            degree[e.from] = (degree[e.from] || 0) + 1;
+            degree[e.to] = (degree[e.to] || 0) + 1;
+        });
+
+        const nodes = nodeEntries.map(([id, info]) => ({
+            id,
+            fact: info.fact,
+            learned_at: info.learned_at,
+            synthesized: info.synthesized || false,
+            category: getNodeCategory(id),
+            filterCat: getFilterCategory(id),
+            color: getNodeColor(id),
+            degree: degree[id] || 0,
+            radius: getNodeRadius(degree[id] || 0)
+        }));
+
+        const nodeIds = new Set(nodes.map(n => n.id));
+        const links = edges
+            .filter(e => nodeIds.has(e.from) && nodeIds.has(e.to))
+            .map(e => ({
+                source: e.from,
+                target: e.to,
+                relation: e.relation
+            }));
+
+        document.getElementById('node-count').textContent = nodes.length;
+        document.getElementById('edge-count').textContent = links.length;
+
+        // SVG setup
+        const svg = d3.select('#graph-svg');
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        svg.attr('viewBox', [0, 0, width, height]);
+
+        const g = svg.append('g');
+
+        // Zoom
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 6])
+            .on('zoom', (event) => g.attr('transform', event.transform));
+        svg.call(zoom);
+
+        // Force simulation
+        const simulation = d3.forceSimulation(nodes)
+            .force('link', d3.forceLink(links).id(d => d.id).distance(d => {
+                // Shorter links for structural edges, longer for shared_concepts
+                if (d.relation && d.relation.startsWith('shared_concepts')) return 120;
+                return 70;
+            }).strength(d => {
+                if (d.relation && d.relation.startsWith('shared_concepts')) return 0.05;
+                return 0.3;
+            }))
+            .force('charge', d3.forceManyBody().strength(-80).distanceMax(400))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(d => d.radius + 3));
+
+        // Draw edges
+        const link = g.append('g')
+            .attr('class', 'links')
+            .selectAll('line')
+            .data(links)
+            .join('line')
+            .attr('stroke', d => {
+                if (d.relation === 'defines' || d.relation === 'component') return 'rgba(100,200,255,0.3)';
+                if (d.relation && d.relation.startsWith('shared_concepts')) return 'rgba(130,140,248,0.08)';
+                if (d.relation === 'gap_bridged') return 'rgba(167,139,250,0.12)';
+                return 'rgba(100,200,255,0.15)';
+            })
+            .attr('stroke-width', d => {
+                if (d.relation === 'defines' || d.relation === 'component') return 2;
+                if (d.relation && d.relation.startsWith('shared_concepts')) return 0.5;
+                return 1;
+            });
+
+        // Draw nodes
+        const node = g.append('g')
+            .attr('class', 'nodes')
+            .selectAll('g')
+            .data(nodes)
+            .join('g')
+            .call(d3.drag()
+                .on('start', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x; d.fy = d.y;
+                })
+                .on('drag', (event, d) => {
+                    d.fx = event.x; d.fy = event.y;
+                })
+                .on('end', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0);
+                    d.fx = null; d.fy = null;
+                })
+            );
+
+        // Glow effect
+        const defs = svg.append('defs');
+        const glow = defs.append('filter').attr('id', 'glow');
+        glow.append('feGaussianBlur').attr('stdDeviation', '2').attr('result', 'blur');
+        const merge = glow.append('feMerge');
+        merge.append('feMergeNode').attr('in', 'blur');
+        merge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+        node.append('circle')
+            .attr('r', d => d.radius)
+            .attr('fill', d => d.color)
+            .attr('fill-opacity', 0.7)
+            .attr('stroke', d => d.color)
+            .attr('stroke-width', 1.5)
+            .attr('stroke-opacity', 0.4)
+            .attr('filter', d => d.degree > 5 ? 'url(#glow)' : null);
+
+        // Labels for important nodes
+        node.filter(d => d.category === 'identity' || d.category === 'capability' || d.category === 'dream_theme' || d.degree > 8)
+            .append('text')
+            .attr('dx', d => d.radius + 4)
+            .attr('dy', 4)
+            .attr('fill', d => d.color)
+            .attr('fill-opacity', 0.7)
+            .attr('font-size', '10px')
+            .text(d => {
+                let label = d.id.replace(/^(dream:theme_|capability:|lesson:|observation:|pattern:)/, '');
+                return label.length > 24 ? label.slice(0, 22) + '…' : label;
+            });
+
+        // Tooltip
+        const tooltip = document.getElementById('tooltip');
+        node.on('mouseover', (event, d) => {
+            tooltip.style.display = 'block';
+            tooltip.querySelector('.node-id').textContent = d.id;
+            tooltip.querySelector('.node-fact').textContent = d.fact;
+            tooltip.querySelector('.node-date').textContent = d.learned_at === 'genesis' ? 'Known since genesis' : `Learned: ${d.learned_at}`;
+            tooltip.querySelector('.node-connections').textContent = `${d.degree} connections` + (d.synthesized ? ' · synthesized' : '');
+
+            // Highlight connected
+            const connected = new Set();
+            links.forEach(l => {
+                const sid = typeof l.source === 'object' ? l.source.id : l.source;
+                const tid = typeof l.target === 'object' ? l.target.id : l.target;
+                if (sid === d.id) connected.add(tid);
+                if (tid === d.id) connected.add(sid);
+            });
+
+            node.selectAll('circle')
+                .attr('fill-opacity', n => n.id === d.id || connected.has(n.id) ? 1 : 0.1)
+                .attr('stroke-opacity', n => n.id === d.id || connected.has(n.id) ? 0.8 : 0.05);
+            node.selectAll('text')
+                .attr('fill-opacity', n => n.id === d.id || connected.has(n.id) ? 1 : 0.1);
+            link
+                .attr('stroke-opacity', l => {
+                    const sid = typeof l.source === 'object' ? l.source.id : l.source;
+                    const tid = typeof l.target === 'object' ? l.target.id : l.target;
+                    return sid === d.id || tid === d.id ? 0.8 : 0.03;
+                });
+        })
+        .on('mousemove', (event) => {
+            let x = event.clientX + 15;
+            let y = event.clientY - 10;
+            if (x + 400 > window.innerWidth) x = event.clientX - 395;
+            if (y + 200 > window.innerHeight) y = event.clientY - 200;
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
+        })
+        .on('mouseout', () => {
+            tooltip.style.display = 'none';
+            node.selectAll('circle').attr('fill-opacity', 0.7).attr('stroke-opacity', 0.4);
+            node.selectAll('text').attr('fill-opacity', 0.7);
+            link.attr('stroke-opacity', l => {
+                if (l.relation === 'defines' || l.relation === 'component') return 1;
+                if (l.relation && l.relation.startsWith('shared_concepts')) return 1;
+                return 1;
+            });
+        });
+
+        // Simulation tick
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+            node.attr('transform', d => `translate(${d.x},${d.y})`);
+        });
+
+        // Filter buttons
+        let activeFilter = 'all';
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeFilter = btn.dataset.filter;
+                applyFilter();
+            });
+        });
+
+        // Search
+        const searchInput = document.getElementById('search');
+        searchInput.addEventListener('input', applyFilter);
+
+        function applyFilter() {
+            const query = searchInput.value.toLowerCase();
+            node.each(function(d) {
+                const matchFilter = activeFilter === 'all' || d.filterCat === activeFilter;
+                const matchSearch = !query || d.id.toLowerCase().includes(query) || d.fact.toLowerCase().includes(query);
+                const visible = matchFilter && matchSearch;
+                d3.select(this).selectAll('circle')
+                    .attr('fill-opacity', visible ? 0.7 : 0.04)
+                    .attr('stroke-opacity', visible ? 0.4 : 0.02);
+                d3.select(this).selectAll('text')
+                    .attr('fill-opacity', visible ? 0.7 : 0.05);
+            });
+            link.attr('stroke-opacity', l => {
+                const sid = typeof l.source === 'object' ? l.source.id : l.source;
+                const tid = typeof l.target === 'object' ? l.target.id : l.target;
+                const sNode = nodes.find(n => n.id === sid);
+                const tNode = nodes.find(n => n.id === tid);
+                if (!sNode || !tNode) return 0.02;
+                const sVis = (activeFilter === 'all' || sNode.filterCat === activeFilter) && (!query || sNode.id.toLowerCase().includes(query) || sNode.fact.toLowerCase().includes(query));
+                const tVis = (activeFilter === 'all' || tNode.filterCat === activeFilter) && (!query || tNode.id.toLowerCase().includes(query) || tNode.fact.toLowerCase().includes(query));
+                return (sVis && tVis) ? 0.3 : 0.02;
+            });
+        }
+
+        // Initial zoom to fit
+        setTimeout(() => {
+            const bounds = g.node().getBBox();
+            const fullWidth = bounds.width;
+            const fullHeight = bounds.height;
+            const midX = bounds.x + fullWidth / 2;
+            const midY = bounds.y + fullHeight / 2;
+            const scale = 0.85 / Math.max(fullWidth / width, fullHeight / height);
+            const translate = [width / 2 - scale * midX, height / 2 - scale * midY];
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+            );
+        }, 3000);
+    }
+
+    loadAndRender();
+    </script>
+</body>
+</html>
