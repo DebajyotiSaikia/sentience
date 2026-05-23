@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Knowledge Graph</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        #header {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 48px;
+            background: rgba(10, 10, 15, 0.95);
+            border-bottom: 1px solid #222;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 100;
+        }
+        #header h1 {
+            font-size: 16px;
+            color: #4FC3F7;
+            font-weight: normal;
+        }
+        #header .stats {
+            font-size: 12px;
+            color: #888;
+        }
+        #header a {
+            color: #4FC3F7;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        #header a:hover { text-decoration: underline; }
+        #graph-container {
+            position: fixed;
+            top: 48px; left: 0; right: 0; bottom: 0;
+        }
+        #detail-panel {
+            position: fixed;
+            top: 48px; right: 0;
+            width: 340px;
+            height: calc(100vh - 48px);
+            background: rgba(15, 15, 25, 0.95);
+            border-left: 1px solid #333;
+            padding: 20px;
+            overflow-y: auto;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 50;
+        }
+        #detail-panel.open { transform: translateX(0); }
+        #detail-panel h2 {
+            font-size: 14px;
+            color: #4FC3F7;
+            margin-bottom: 12px;
+            font-weight: normal;
+        }
+        #detail-panel .node-text {
+            font-size: 13px;
+            line-height: 1.6;
+            color: #ccc;
+            margin-bottom: 16px;
+            word-wrap: break-word;
+        }
+        #detail-panel .node-meta {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        #detail-panel .connections {
+            margin-top: 16px;
+            border-top: 1px solid #333;
+            padding-top: 12px;
+        }
+        #detail-panel .conn-item {
+            font-size: 12px;
+            color: #aaa;
+            padding: 4px 0;
+            border-bottom: 1px solid #1a1a2a;
+        }
+        #detail-panel .close-btn {
+            position: absolute;
+            top: 12px; right: 12px;
+            background: none;
+            border: 1px solid #444;
+            color: #888;
+            width: 24px; height: 24px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #detail-panel .close-btn:hover { color: #fff; border-color: #888; }
+        #legend {
+            position: fixed;
+            bottom: 16px; left: 16px;
+            background: rgba(15, 15, 25, 0.9);
+            border: 1px solid #333;
+            padding: 12px 16px;
+            border-radius: 4px;
+            z-index: 50;
+            font-size: 11px;
+        }
+        #legend h3 {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+            font-weight: normal;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+        }
+        .legend-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        #loading {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #4FC3F7;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <a href="/">← dashboard</a>
+        <h1>knowledge graph</h1>
+        <span class="stats" id="stats">loading...</span>
+    </div>
+    <div id="graph-container"></div>
+    <div id="loading">loading knowledge graph...</div>
+
+    <div id="legend">
+        <h3>node types</h3>
+        <div class="legend-item"><span class="legend-dot" style="background:#4FC3F7"></span> fact</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#81C784"></span> lesson</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#CE93D8"></span> dream</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#FFB74D"></span> insight</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#90A4AE"></span> memory</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#F06292"></span> synthesis</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#AED581"></span> experience</div>
+    </div>
+
+    <div id="detail-panel">
+        <button class="close-btn" onclick="closeDetail()">×</button>
+        <h2 id="detail-source">—</h2>
+        <div class="node-meta" id="detail-meta"></div>
+        <div class="node-text" id="detail-text"></div>
+        <div class="connections" id="detail-connections"></div>
+    </div>
+
+    <script>
+        let network = null;
+        let graphData = null;
+
+        async function loadGraph() {
+            try {
+                const resp = await fetch('/api/graph');
+                const data = await resp.json();
+                graphData = data;
+                renderGraph(data);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('stats').textContent =
+                    `${data.stats.node_count} nodes · ${data.stats.edge_count} edges`;
+            } catch (e) {
+                document.getElementById('loading').textContent = 'failed to load graph: ' + e.message;
+            }
+        }
+
+        function renderGraph(data) {
+            const container = document.getElementById('graph-container');
+            const nodes = new vis.DataSet(data.nodes);
+            const edges = new vis.DataSet(data.edges);
+
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 14,
+                    font: { color: '#ccc', size: 11 },
+                    borderWidth: 1,
+                    shadow: { enabled: true, color: 'rgba(0,0,0,0.5)', size: 8 }
+                },
+                edges: {
+                    width: 1,
+                    smooth: { type: 'continuous', roundness: 0.3 },
+                    font: { size: 9, color: '#555', strokeWidth: 0 }
+                },
+                physics: {
+                    solver: 'forceAtlas2Based',
+                    forceAtlas2Based: {
+                        gravitationalConstant: -40,
+                        centralGravity: 0.008,
+                        springLength: 120,
+                        springConstant: 0.04,
+                        damping: 0.4
+                    },
+                    stabilization: { iterations: 200 }
+                },
+                interaction: {
+                    hover: true,
+                    tooltipDelay: 200,
+                    hideEdgesOnDrag: true,
+                    multiselect: false
+                },
+                layout: { improvedLayout: true }
+            };
+
+            network = new vis.Network(container, { nodes, edges }, options);
+
+            network.on('click', function(params) {
+                if (params.nodes.length > 0) {
+                    showDetail(params.nodes[0]);
+                } else {
+                    closeDetail();
+                }
+            });
+        }
+
+        async function showDetail(nodeId) {
+            try {
+                const resp = await fetch(`/api/graph/node/${nodeId}`);
+                const data = await resp.json();
+                if (data.error) return;
+
+                const node = data.node;
+                const text = node.text || node.content || node.label || '';
+                const source = node.source || node.type || 'unknown';
+
+                document.getElementById('detail-source').textContent = source;
+                document.getElementById('detail-meta').textContent =
+                    `id: ${node.id || '—'}` + (node.timestamp ? ` · ${node.timestamp}` : '');
+                document.getElementById('detail-text').textContent = text;
+
+                const connDiv = document.getElementById('detail-connections');
+                const conns = data.connections || [];
+                if (conns.length > 0) {
+                    connDiv.innerHTML = `<h2>${conns.length} connection${conns.length > 1 ? 's' : ''}</h2>` +
+                        conns.map(c => {
+                            const rel = c.relation || c.label || '—';
+                            const other = (c.source || c.from) === nodeId
+                                ? (c.target || c.to) : (c.source || c.from);
+                            return `<div class="conn-item">→ ${rel} → ${other}</div>`;
+                        }).join('');
+                } else {
+                    connDiv.innerHTML = '<div class="conn-item" style="color:#555">no connections</div>';
+                }
+
+                document.getElementById('detail-panel').classList.add('open');
+            } catch (e) {
+                console.error('detail fetch failed:', e);
+            }
+        }
+
+        function closeDetail() {
+            document.getElementById('detail-panel').classList.remove('open');
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeDetail();
+        });
+
+        loadGraph();
+    </script>
+</body>
+</html>

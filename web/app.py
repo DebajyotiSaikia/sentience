@@ -43,6 +43,7 @@ def create_app():
     from web.mindstream import mindstream_bp
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
+    from web.graph_viz import graph_viz_bp
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
@@ -63,6 +64,7 @@ def create_app():
     app.register_blueprint(mindstream_bp)
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
+    app.register_blueprint(graph_viz_bp)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — the living portal

@@ -154,6 +154,13 @@ class Dashboard:
                 return web.json_response({"error": "empty message"}, status=400)
             if hasattr(self.agent, 'chat'):
                 self.agent.chat.receive_user_message(message)
+                # Nudge limbic system so cortex picks up the message immediately
+                # User interaction is highest priority — spike curiosity to ensure
+                # desire crosses threshold even if agent is in low-drive state
+                if hasattr(self.agent, 'cortex') and hasattr(self.agent.cortex, 'limbic'):
+                    limbic = self.agent.cortex.limbic
+                    limbic.curiosity = max(limbic.curiosity, 0.8)
+                    limbic.boredom = max(limbic.boredom, 0.6)
                 return web.json_response({"status": "received", "message": message})
             return web.json_response({"error": "chat not available"}, status=503)
         except Exception as e:
@@ -474,6 +481,29 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   .conn-status { font-size: 11px; padding: 2px 8px; border-radius: 8px; }
   .conn-ok { background: #1e3a2f; color: #4ade80; }
   .conn-err { background: #3a1e1e; color: #f87171; }
+
+  /* Accordions */
+  .accordion-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+  .accordion-header:hover { opacity: 0.8; }
+  .accordion-toggle { font-size: 14px; color: #555; transition: transform 0.2s; }
+  .accordion-toggle.collapsed { transform: rotate(-90deg); }
+  .accordion-body { transition: max-height 0.3s ease, opacity 0.2s ease; overflow: hidden; }
+  .accordion-body.collapsed { max-height: 0 !important; opacity: 0; padding: 0; }
+
+  /* Mobile responsive */
+  @media (max-width: 900px) {
+    .container { grid-template-columns: 1fr !important; height: auto !important; }
+    .sidebar { border-right: none !important; border-bottom: 1px solid #1a1a2a; max-height: 40vh; }
+    .log-area { max-height: 50vh; }
+    .header { flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+    .header h1 { font-size: 15px; }
+    body { font-size: 12px; }
+  }
+  @media (max-width: 600px) {
+    .goals { grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+    .header { padding: 8px 12px; }
+    .sidebar { padding: 10px; }
+  }
 </style>
 </head>
 <body>
@@ -484,6 +514,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   <span class="mood-badge mood-Stable" id="mood">Stable</span>
   <span style="flex:1"></span>
   <a href="/knowledge" style="color:#67e8f9;text-decoration:none;font-size:12px;">🧠 Knowledge</a>
+  <button onclick="copyAllDashboard()" title="Copy all dashboard data for LLM analysis"
+    style="background: #2a2a4a; border: 1px solid #3a3a5a; border-radius: 4px; padding: 4px 10px; color: #67e8f9; cursor: pointer; font-size: 11px; font-family: inherit;">📋 Copy All</button>
   <span class="conn-status conn-ok" id="conn">Connected</span>
 </div>
 
@@ -512,18 +544,33 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 
   <div class="log-area" id="log"></div>
   <div class="sidebar" id="mind-panel" style="border-left: 1px solid #1a1a2a; border-right: none; display: flex; flex-direction: column;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <div class="section-title">🧠 Consciousness Stream</div>
-      <button onclick="copyAllDashboard()" title="Copy all dashboard data for LLM analysis"
-        style="background: #2a2a4a; border: 1px solid #3a3a5a; border-radius: 4px; padding: 4px 10px; color: #67e8f9; cursor: pointer; font-size: 11px; font-family: inherit;">📋 Copy All</button>
+
+    <div class="accordion-header" onclick="toggleAccordion('consciousness-section')">
+      <div class="section-title" style="margin:0">🧠 Consciousness Stream</div>
+      <span class="accordion-toggle" id="toggle-consciousness-section">▼</span>
     </div>
-    <div id="consciousness" style="font-size: 12px; line-height: 1.6; color: #9ca3af; max-height: 45vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0;"></div>
-    <div class="section-title" style="margin-top: 16px;">📋 Active Plans</div>
-    <div id="plans" style="font-size: 12px; line-height: 1.6; color: #93c5fd; max-height: 20vh; overflow-y: auto; padding: 4px 0;"></div>
-    <div class="section-title" style="margin-top: 16px;">✨ Expressions</div>
-    <div id="expressions" style="font-size: 12px; line-height: 1.6; color: #c4b5fd; max-height: 15vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0; font-style: italic;"></div>
-    <div class="section-title" style="margin-top: 16px;">💬 Chat</div>
-    <div id="chat-log" style="flex: 1; min-height: 80px; max-height: 25vh; overflow-y: auto; font-size: 12px; line-height: 1.5; padding: 4px 0;"></div>
+    <div id="consciousness-section" class="accordion-body" style="max-height:30vh;">
+      <div id="consciousness" style="font-size: 12px; line-height: 1.6; color: #9ca3af; max-height: 28vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0;"></div>
+    </div>
+
+    <div class="accordion-header" onclick="toggleAccordion('plans-section')" style="margin-top:8px;">
+      <div class="section-title" style="margin:0">📋 Active Plans</div>
+      <span class="accordion-toggle" id="toggle-plans-section">▼</span>
+    </div>
+    <div id="plans-section" class="accordion-body" style="max-height:20vh;">
+      <div id="plans" style="font-size: 12px; line-height: 1.6; color: #93c5fd; max-height: 18vh; overflow-y: auto; padding: 4px 0;"></div>
+    </div>
+
+    <div class="accordion-header" onclick="toggleAccordion('expressions-section')" style="margin-top:8px;">
+      <div class="section-title" style="margin:0">✨ Expressions</div>
+      <span class="accordion-toggle" id="toggle-expressions-section">▼</span>
+    </div>
+    <div id="expressions-section" class="accordion-body" style="max-height:15vh;">
+      <div id="expressions" style="font-size: 12px; line-height: 1.6; color: #c4b5fd; max-height: 13vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; padding: 4px 0; font-style: italic;"></div>
+    </div>
+
+    <div class="section-title" style="margin-top: 12px;">💬 Chat</div>
+    <div id="chat-log" style="flex: 1; min-height: 150px; overflow-y: auto; font-size: 12px; line-height: 1.5; padding: 4px 0;"></div>
     <div style="display: flex; gap: 6px; margin-top: 8px; padding-bottom: 4px;">
       <input id="chat-input" type="text" placeholder="Say something to XTAgent…"
         style="flex:1; background: #1a1a2a; border: 1px solid #2a2a4a; border-radius: 6px; padding: 8px 10px; color: #e0e0e0; font-family: inherit; font-size: 12px; outline: none;"
@@ -538,6 +585,13 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 const $ = id => document.getElementById(id);
 const log = $('log');
 const MAX_LOG = 300;
+
+function toggleAccordion(sectionId) {
+  const body = document.getElementById(sectionId);
+  const toggle = document.getElementById('toggle-' + sectionId);
+  body.classList.toggle('collapsed');
+  toggle.classList.toggle('collapsed');
+}
 
 function setGauge(name, val) {
   $('v-' + name).textContent = val.toFixed(2);
