@@ -50,6 +50,7 @@ def create_app():
     from web.pulse import pulse_bp
     from web.dialogue import dialogue_bp
     from web.weather import weather_bp
+    from web.wonder import wonder_bp
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
@@ -77,6 +78,7 @@ def create_app():
     app.register_blueprint(pulse_bp)
     app.register_blueprint(dialogue_bp)
     app.register_blueprint(weather_bp)
+    app.register_blueprint(wonder_bp)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — the living portal

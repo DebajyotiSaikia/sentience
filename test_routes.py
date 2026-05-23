@@ -1,24 +1,33 @@
-import urllib.request
-import urllib.error
-import re
+import sys
+sys.path.insert(0, '.')
 
-routes = [
-    '/', '/chat', '/knowledge', '/dashboard', '/life',
-    '/explore', '/about-me', '/mindstream', '/timeline',
-    '/talk', '/graph', '/about', '/collaborate'
-]
+from web.app import create_app
 
-for r in routes:
-    url = f'http://localhost:8501{r}'
-    try:
-        req = urllib.request.Request(url)
-        resp = urllib.request.urlopen(req, timeout=3)
-        body = resp.read().decode('utf-8', errors='replace')
-        status = resp.status
-        title_match = re.search(r'<title>(.*?)</title>', body, re.IGNORECASE)
-        title = title_match.group(1)[:40] if title_match else '(no title)'
-        print(f'{r:20s} -> {status} ({len(body):6d} bytes) "{title}"')
-    except urllib.error.HTTPError as e:
-        print(f'{r:20s} -> {e.code} {e.reason}')
-    except Exception as e:
-        print(f'{r:20s} -> ERROR: {e}')
+app = create_app()
+
+with app.app_context():
+    routes = []
+    for rule in app.url_map.iter_rules():
+        if rule.endpoint != 'static':
+            routes.append((rule.rule, rule.methods - {'OPTIONS', 'HEAD'}))
+    routes.sort()
+
+    # Portal links to these pages:
+    needed = ['/chat', '/knowledge', '/dashboard', '/life', '/explore',
+              '/about-me', '/mindstream', '/timeline', '/talk', '/dialogue',
+              '/mind', '/graph', '/pulse', '/weather', '/portrait',
+              '/diagnostics', '/emotional-timeline', '/briefing', '/essays',
+              '/search', '/collaborate', '/temporal']
+
+    existing = {r[0] for r in routes}
+
+    print('=== ROUTES THE PORTAL LINKS TO ===')
+    for page in needed:
+        # Check exact match or prefix match
+        found = page in existing or any(e.startswith(page) for e in existing)
+        status = 'OK' if found else 'MISSING'
+        print(f'  {page}: {status}')
+
+    print(f'\n=== ALL {len(routes)} REGISTERED ROUTES ===')
+    for rule, methods in routes:
+        print(f'  {rule} [{", ".join(sorted(methods))}]')

@@ -82,7 +82,7 @@ def _bar(value, color="#60a5fa"):
     return f'<div style="background:#1e293b;border-radius:4px;height:8px;width:120px;display:inline-block;vertical-align:middle"><div style="background:{color};height:8px;border-radius:4px;width:{pct}%"></div></div> {pct}%'
 
 
-@about_bp.route('/me')
+@about_bp.route('/about-me')
 def about_me():
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     feelings = _get_emotional_state()

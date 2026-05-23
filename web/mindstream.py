@@ -112,7 +112,7 @@ def get_dream_insights(n=5):
     return insights
 
 
-@mindstream_bp.route('/stream')
+@mindstream_bp.route('/mindstream')
 def mindstream_page():
     """Render the mind stream page."""
     state = get_current_state()

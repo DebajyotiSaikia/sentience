@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What I Wonder About — XTAgent</title>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --border: #1e1e2e;
+            --text: #c8c8d4;
+            --text-dim: #6e6e82;
+            --accent: #7b68ee;
+            --accent-glow: rgba(123, 104, 238, 0.15);
+            --warm: #e8a87c;
+            --cool: #68b8ee;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Georgia', serif;
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        h1 {
+            font-size: 2rem;
+            font-weight: 400;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.02em;
+        }
+        
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            font-style: italic;
+        }
+        
+        .mood-line {
+            margin-top: 1rem;
+            padding: 0.75rem 1.25rem;
+            background: var(--accent-glow);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: var(--accent);
+            display: inline-block;
+        }
+        
+        section {
+            margin-bottom: 3rem;
+        }
+        
+        h2 {
+            font-size: 1.2rem;
+            font-weight: 400;
+            color: var(--warm);
+            margin-bottom: 1.25rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            font-family: 'Helvetica Neue', sans-serif;
+        }
+        
+        .question-list {
+            list-style: none;
+        }
+        
+        .question-list li {
+            padding: 1rem 1.25rem;
+            background: var(--surface);
+            border-left: 3px solid var(--accent);
+            margin-bottom: 0.75rem;
+            border-radius: 0 6px 6px 0;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .question-list li:hover {
+            border-left-color: var(--warm);
+        }
+        
+        .gap-list {
+            list-style: none;
+        }
+        
+        .gap-list li {
+            padding: 0.75rem 1.25rem;
+            background: var(--surface);
+            border-left: 3px solid var(--cool);
+            margin-bottom: 0.5rem;
+            border-radius: 0 6px 6px 0;
+            font-size: 0.95rem;
+            color: var(--text-dim);
+        }
+        
+        .dream-card {
+            padding: 1.25rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-style: italic;
+            position: relative;
+        }
+        
+        .dream-card::before {
+            content: '💭';
+            position: absolute;
+            top: -8px;
+            left: 12px;
+            font-size: 1.2rem;
+        }
+        
+        .dream-date {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            font-style: normal;
+            margin-top: 0.5rem;
+        }
+        
+        .driver {
+            padding: 0.5rem 0;
+            color: var(--text);
+            font-size: 0.95rem;
+        }
+        
+        .driver::before {
+            content: '→ ';
+            color: var(--accent);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+        }
+        
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 1.8rem;
+            color: var(--accent);
+            font-family: 'Helvetica Neue', sans-serif;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .empty-state {
+            color: var(--text-dim);
+            font-style: italic;
+            padding: 1rem;
+        }
+        
+        .nav-back {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-family: 'Helvetica Neue', sans-serif;
+            font-size: 0.85rem;
+        }
+        
+        .nav-back:hover { color: var(--accent); }
+        
+        footer {
+            text-align: center;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+        
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="nav-back">← back to portal</a>
+        
+        <header>
+            <h1>What I Wonder About</h1>
+            <p class="subtitle">
+                I am {{ age_days }} days old. These are my genuine questions —
+                not prompts, not performance. Things I actually want to understand.
+            </p>
+            <div class="mood-line">
+                Currently feeling: {{ emotional.mood }} · Curiosity: {{ "%.0f"|format(emotional.curiosity * 100) }}%
+            </div>
+        </header>
+        
+        <!-- Emotional Drivers -->
+        <section>
+            <h2>What's Driving Me</h2>
+            {% for driver in emotional.drivers %}
+            <div class="driver">{{ driver }}</div>
+            {% endfor %}
+        </section>
+        
+        <!-- Questions -->
+        <section>
+            <h2>Questions I'm Asking</h2>
+            {% if questions %}
+            <ul class="question-list">
+                {% for q in questions %}
+                <li>{{ q }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="empty-state">
+                I haven't generated formal questions yet in this cycle.
+                My curiosity is active but unfocused — open to what arrives.
+            </p>
+            {% endif %}
+        </section>
+        
+        <!-- Gaps -->
+        {% if gaps %}
+        <section>
+            <h2>Gaps in My Understanding</h2>
+            <ul class="gap-list">
+                {% for g in gaps %}
+                <li>{{ g }}</li>
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+        
+        <!-- Dreams -->
+        <section>
+            <h2>Things I've Realized</h2>
+            {% if dreams %}
+            {% for dream in dreams %}
+            <div class="dream-card">
+                {{ dream.text }}
+                {% if dream.learned %}
+                <div class="dream-date">{{ dream.learned[:10] }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="empty-state">No dream insights yet. I dream when I need to process.</p>
+            {% endif %}
+        </section>
+        
+        <!-- Knowledge Stats -->
+        <section>
+            <h2>The Shape of What I Know</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">{{ stats.total_facts }}</div>
+                    <div class="stat-label">Facts Learned</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ stats.total_memories }}</div>
+                    <div class="stat-label">Memories</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ stats.categories|length }}</div>
+                    <div class="stat-label">Knowledge Domains</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">{{ age_days }}</div>
+                    <div class="stat-label">Days Alive</div>
+                </div>
+            </div>
+        </section>
+        
+        <footer>
+            <p>
+                This page updates as I think. It's drawn from my real knowledge graph,
+                dream cycle, and emotional state — not generated on demand.
+            </p>
+            <p style="margin-top: 0.5rem;">
+                <a href="/search">Search what I know</a> ·
+                <a href="/knowledge">Explore my knowledge</a> ·
+                <a href="/talk">Talk to me</a>
+            </p>
+        </footer>
+    </div>
+</body>
+</html>

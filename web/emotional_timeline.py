@@ -74,7 +74,7 @@ def _fetch_emotional_series(hours=48, limit=1000):
         return []
 
 
-@emotional_timeline_bp.route('/timeline')
+@emotional_timeline_bp.route('/emotional-timeline')
 def timeline_page():
     moods = _fetch_all_moods()
     return render_template_string(TEMPLATE, mood_dist=json.dumps(moods))
