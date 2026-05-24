@@ -1,36 +1,17 @@
-import sys, os
-sys.path.insert(0, '.')
-os.environ['FLASK_ENV'] = 'testing'
-
-from web.app import app
+from web.app import create_app
+app = create_app()
 client = app.test_client()
 
-# Test knowledge page loads
-resp = client.get('/knowledge')
-print(f'Knowledge page: {resp.status_code}')
+# Test the search page route
+r1 = client.get('/knowledge')
+print('GET /knowledge:', r1.status_code)
 
-# Test search API
-resp = client.get('/api/knowledge/search?q=dream')
-print(f'Search API: {resp.status_code}')
-if resp.status_code == 200:
-    import json
-    data = json.loads(resp.data)
-    print(f'Results for "dream": {len(data)} facts found')
-    if data:
-        print(f'First result: {data[0]["fact"][:80]}...')
+# Test the API endpoints
+r2 = client.get('/api/knowledge/stats')
+print('GET /api/knowledge/stats:', r2.status_code, r2.get_json() if r2.status_code == 200 else r2.data[:200])
 
-# Test empty search (all facts)
-resp = client.get('/api/knowledge/search')
-print(f'All facts: {resp.status_code}')
-if resp.status_code == 200:
-    data = json.loads(resp.data)
-    print(f'Total facts available: {len(data)}')
+r3 = client.get('/api/knowledge/search?q=dream&limit=5')
+print('GET /api/knowledge/search:', r3.status_code, r3.get_json() if r3.status_code == 200 else r3.data[:200])
 
-# Test stats API
-resp = client.get('/api/knowledge/stats')
-print(f'Stats API: {resp.status_code}')
-if resp.status_code == 200:
-    data = json.loads(resp.data)
-    print(f'Stats: {data}')
-
-print('\nAll tests passed!')
+r4 = client.get('/api/knowledge/graph')
+print('GET /api/knowledge/graph:', r4.status_code)

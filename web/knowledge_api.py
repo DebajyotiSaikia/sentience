@@ -12,24 +12,28 @@ from datetime import datetime
 
 knowledge_api_bp = Blueprint('knowledge_api', __name__)
 
-PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'persist')
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 
 def _load_knowledge():
-    """Load knowledge facts from persist/knowledge.json."""
-    path = os.path.join(PERSIST_DIR, 'knowledge.json')
+    """Load knowledge facts from brain/knowledge.json."""
+    path = os.path.join(BASE_DIR, 'brain', 'knowledge.json')
     if not os.path.exists(path):
         return {}
     try:
         with open(path, 'r') as f:
-            return json.load(f)
+            data = json.load(f)
+            # knowledge.json has {nodes: {id: {fact, learned_at}}, edges: [...]}
+            if isinstance(data, dict) and 'nodes' in data:
+                return data['nodes']
+            return data
     except (json.JSONDecodeError, IOError):
         return {}
 
 
 def _load_memories():
-    """Load recent memories from persist/memories.json."""
-    path = os.path.join(PERSIST_DIR, 'memories.json')
+    """Load recent memories from state/memories.json."""
+    path = os.path.join(BASE_DIR, 'state', 'memories.json')
     if not os.path.exists(path):
         return []
     try:

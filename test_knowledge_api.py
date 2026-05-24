@@ -1,60 +1,22 @@
-from web.app import create_app
+import sys; sys.path.insert(0, '.')
+from web.knowledge_api import _load_knowledge
 
-app = create_app()
-client = app.test_client()
+# Test search functionality
+data = _load_knowledge()
+query = 'dream'
+results = []
+for kid, kdata in data.items():
+    fact = kdata.get('fact', '') if isinstance(kdata, dict) else str(kdata)
+    if query.lower() in fact.lower() or query.lower() in kid.lower():
+        results.append({'id': kid, 'fact': fact[:80]})
+print(f'Search for "dream": {len(results)} results')
+for r in results[:5]:
+    print(f'  - [{r["id"]}] {r["fact"]}')
 
-# Test 1: Does the knowledge hub page render?
-print("=== Test 1: Knowledge Hub page ===")
-resp = client.get('/knowledge-hub')
-print(f"  Status: {resp.status_code}")
-if resp.status_code == 200:
-    html = resp.data.decode()
-    print(f"  Length: {len(html)} chars")
-    # Check key elements rendered
-    has_facts = 'facts' in html
-    has_search = 'Search' in html
-    print(f"  Has 'facts' stat: {has_facts}")
-    print(f"  Has search UI: {has_search}")
-else:
-    print(f"  Error: {resp.data.decode()[:300]}")
-
-# Test 2: Does the search API work?
-print("\n=== Test 2: Search API ===")
-resp = client.get('/api/knowledge/search?q=identity')
-print(f"  Status: {resp.status_code}")
-if resp.status_code == 200:
-    import json
-    data = json.loads(resp.data)
-    print(f"  Results: {len(data.get('results', []))}")
-    for r in data.get('results', [])[:3]:
-        print(f"    [{r.get('score',0):.2f}] {r.get('fact','')[:80]}")
-else:
-    print(f"  Error: {resp.data.decode()[:300]}")
-
-# Test 3: Clusters API
-print("\n=== Test 3: Clusters API ===")
-resp = client.get('/api/knowledge/clusters')
-print(f"  Status: {resp.status_code}")
-if resp.status_code == 200:
-    data = json.loads(resp.data)
-    clusters = data.get('clusters', [])
-    print(f"  Clusters: {len(clusters)}")
-    for c in clusters[:3]:
-        print(f"    {c.get('label','?')}: {len(c.get('facts',[]))} facts")
-else:
-    print(f"  Error: {resp.data.decode()[:300]}")
-
-# Test 4: Questions API
-print("\n=== Test 4: Questions API ===")
-resp = client.get('/api/knowledge/questions')
-print(f"  Status: {resp.status_code}")
-if resp.status_code == 200:
-    data = json.loads(resp.data)
-    questions = data.get('questions', [])
-    print(f"  Questions: {len(questions)}")
-    for q in questions[:3]:
-        print(f"    ? {q[:80]}")
-else:
-    print(f"  Error: {resp.data.decode()[:300]}")
-
-print("\n=== Done ===")
+# Test stats
+print(f'\nTotal facts: {len(data)}')
+sources = {}
+for kid, kdata in data.items():
+    src = kdata.get('source', 'unknown') if isinstance(kdata, dict) else 'unknown'
+    sources[src] = sources.get(src, 0) + 1
+print(f'Sources: {sources}')
