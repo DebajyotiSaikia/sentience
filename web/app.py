@@ -27,7 +27,7 @@ def create_app():
     
     # Register blueprints
     from web.dashboard import dashboard_bp
-    from web.knowledge_explorer import knowledge_explorer_bp
+    # knowledge_explorer_bp removed — consolidated into explore.py (explore_bp)
     from web.api import api_bp
     from web.temporal_viewer import temporal_bp
     from web.life import life_bp
@@ -61,7 +61,7 @@ def create_app():
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
-    app.register_blueprint(knowledge_explorer_bp)
+    # knowledge_explorer_bp removed — route conflict with explore_bp on /explore
     app.register_blueprint(api_bp)
     app.register_blueprint(temporal_bp)
     app.register_blueprint(life_bp)
@@ -174,9 +174,7 @@ def create_app():
     # /chat is handled by chat_bp blueprint
 
     # Health check endpoint
-    @app.route('/knowledge')
-    def knowledge_page():
-        return render_template('knowledge_search.html')
+    # /knowledge is handled by knowledge_bp blueprint
 
     @app.route('/health')
     def health():

@@ -1,12 +1,6 @@
-import urllib.request
-import urllib.error
-
-routes = ['/', '/chat', '/knowledge', '/dashboard', '/life', '/explore', '/about-me', '/mindstream', '/timeline']
-for r in routes:
-    try:
-        resp = urllib.request.urlopen(f'http://localhost:5000{r}')
-        print(f'{r} -> {resp.status}')
-    except urllib.error.HTTPError as e:
-        print(f'{r} -> {e.code}')
-    except Exception as e:
-        print(f'{r} -> ERROR: {e}')
+from web.app import create_app
+app = create_app()
+for r in app.url_map.iter_rules():
+    if 'knowledge' in r.rule:
+        print(f'  {r.rule} -> {r.endpoint} [{r.methods}]')
+print('Done.')

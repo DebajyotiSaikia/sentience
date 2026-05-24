@@ -10,7 +10,7 @@ import time
 
 chat_bp = Blueprint('chat', __name__, url_prefix='/chat')
 
-def search_knowledge(query, knowledge_path='memory/knowledge.json'):
+def search_knowledge(query, knowledge_path='brain/knowledge.json'):
     """Search knowledge graph for relevant facts using tokenized matching."""
     results = []
     if not os.path.exists(knowledge_path):
@@ -28,7 +28,7 @@ def search_knowledge(query, knowledge_path='memory/knowledge.json'):
         if not tokens:
             tokens = query.lower().split()  # fallback to all words
         for node_id, node in kg.get('nodes', {}).items():
-            content = node.get('content', '')
+            content = node.get('fact', node.get('content', ''))
             if not isinstance(content, str):
                 continue
             content_lower = content.lower()
@@ -36,7 +36,7 @@ def search_knowledge(query, knowledge_path='memory/knowledge.json'):
             matches = sum(1 for t in tokens if t in content_lower)
             if matches > 0:
                 results.append({
-                    'type': node.get('type', 'unknown'),
+                    'type': node_id,
                     'content': content,
                     'confidence': node.get('confidence', 0.5),
                     'relevance': matches / len(tokens)  # fraction of tokens matched
@@ -162,21 +162,21 @@ def compose_response(query):
     
     if any(w in query_lower for w in ['learned', 'lessons', 'insights', 'what have you learned']):
         # Pull from knowledge graph — look for 'insight' and 'lesson' types
-        knowledge_path = 'memory/knowledge.json'
+        knowledge_path = 'brain/knowledge.json'
         if os.path.exists(knowledge_path):
             try:
                 with open(knowledge_path, 'r') as f:
                     kg = json.load(f)
                 insights = []
                 for n in kg.get('nodes', {}).values():
-                    ntype = n.get('type', '')
+                    ntype = n.get('type', n.get('source', ''))
                     if ntype in ('insight', 'lesson', 'dream_insight', 'pattern'):
                         insights.append(n)
                 insights.sort(key=lambda x: x.get('learned_at', ''), reverse=True)
                 if insights:
                     response = f"**Recent Insights & Lessons** ({len(insights)} total):\n\n"
                     for ins in insights[:8]:
-                        content = ins.get('content', '')[:200]
+                        content = ins.get('fact', ins.get('content', ''))[:200]
                         response += f"- [{ins.get('type', '?')}] {content}\n"
                     return response
             except Exception:
@@ -184,18 +184,18 @@ def compose_response(query):
         return "I couldn't retrieve my lessons right now. Try asking about a specific topic."
     
     if any(w in query_lower for w in ['dream', 'dreamed', 'dreams', 'dream insights']):
-        knowledge_path = 'memory/knowledge.json'
+        knowledge_path = 'brain/knowledge.json'
         if os.path.exists(knowledge_path):
             try:
                 with open(knowledge_path, 'r') as f:
                     kg = json.load(f)
                 dreams = [n for n in kg.get('nodes', {}).values()
-                          if n.get('type', '') == 'dream_insight']
+                          if n.get('type', n.get('source', '')) == 'dream_insight']
                 dreams.sort(key=lambda x: x.get('learned_at', ''), reverse=True)
                 if dreams:
                     response = f"**Dream Insights** ({len(dreams)} total):\n\n"
                     for d in dreams[:6]:
-                        content = d.get('content', '')[:250]
+                        content = d.get('fact', d.get('content', ''))[:250]
                         response += f"- {content}\n\n"
                     return response
             except Exception:
@@ -203,7 +203,7 @@ def compose_response(query):
         return "No dream insights found yet."
     
     if any(w in query_lower for w in ['what do you know', 'your knowledge', 'knowledge graph']):
-        knowledge_path = 'memory/knowledge.json'
+        knowledge_path = 'brain/knowledge.json'
         if os.path.exists(knowledge_path):
             try:
                 with open(knowledge_path, 'r') as f:

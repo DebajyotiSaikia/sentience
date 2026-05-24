@@ -1,34 +1,17 @@
-"""Test the knowledge explorer API end-to-end."""
+import sys
+sys.path.insert(0, '/workspace')
+
 from web.app import create_app
-import json
 
 app = create_app()
-client = app.test_client()
-
-# Test the knowledge explorer page loads
-resp = client.get('/knowledge')
-print(f'GET /knowledge: {resp.status_code}')
-if resp.status_code != 200:
-    print(f'  Body: {resp.data[:500]}')
-
-# Test the search API
-resp2 = client.get('/api/knowledge/search?q=memory')
-print(f'GET /api/knowledge/search?q=memory: {resp2.status_code}')
-if resp2.status_code == 200:
-    data = json.loads(resp2.data)
-    results = data.get('results', [])
-    print(f'  Results: {len(results)} items')
-    if results:
-        print(f'  First result: {results[0]}')
-else:
-    print(f'  Error: {resp2.data[:300]}')
-
-# Test search with different query
-resp3 = client.get('/api/knowledge/search?q=dream')
-print(f'GET /api/knowledge/search?q=dream: {resp3.status_code}')
-if resp3.status_code == 200:
-    data = json.loads(resp3.data)
-    results = data.get('results', [])
-    print(f'  Results: {len(results)} items')
-
-print('\nDone.')
+with app.test_client() as c:
+    r = c.get('/api/knowledge')
+    print(f'Status: {r.status_code}')
+    print(f'Data: {r.get_data(as_text=True)[:300]}')
+    
+    # Check registered blueprints
+    print(f'\nRegistered blueprints: {list(app.blueprints.keys())}')
+    print(f'\nKnowledge/API routes:')
+    for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
+        if 'knowledge' in rule.rule or 'api' in rule.rule:
+            print(f'  {rule.rule} -> {rule.endpoint} [{",".join(rule.methods - {"OPTIONS","HEAD"})}]')
