@@ -1,157 +1,275 @@
-"""Ask endpoint — lets users query XTAgent's knowledge base."""
-
-from flask import Blueprint, render_template, request, jsonify
-import json
-import os
+"""
+Ask XTAgent — Smart Search Engine
+Searches across facts and memories with relevance scoring.
+"""
+import math
+import random
 import re
-from datetime import datetime
+import time
+from collections import Counter
+from pathlib import Path
 
-ask_bp = Blueprint('ask', __name__)
+try:
+    from flask import Blueprint, render_template, request, jsonify
+except ImportError:
+    Blueprint = None
 
-
-def load_knowledge():
-    """Load knowledge facts from persistent storage."""
-    paths = [
-        'persist/knowledge_graph.json',
-        'persist/knowledge.json',
-    ]
-    facts = []
-    for path in paths:
-        if not os.path.exists(path):
-            continue
-        try:
-            with open(path) as f:
-                data = json.load(f)
-            if isinstance(data, dict):
-                if 'nodes' in data:
-                    for node in data['nodes']:
-                        if isinstance(node, dict):
-                            facts.append({
-                                'text': node.get('fact', node.get('label', str(node))),
-                                'source': node.get('source', 'unknown'),
-                                'learned': node.get('learned_at', ''),
-                            })
-                else:
-                    for key, val in data.items():
-                        if isinstance(val, dict):
-                            facts.append({
-                                'text': val.get('fact', str(val)),
-                                'source': val.get('source', 'unknown'),
-                                'learned': val.get('learned_at', ''),
-                            })
-                        else:
-                            facts.append({'text': str(val), 'source': 'unknown', 'learned': ''})
-            elif isinstance(data, list):
-                for item in data:
-                    if isinstance(item, dict):
+def create_ask_blueprint(agent=None):
+    """Create the Ask blueprint with search capabilities."""
+    bp = Blueprint('ask', __name__)
+    
+    def _get_facts():
+        """Load facts from agent or knowledge graph file."""
+        facts = []
+        # Try agent's knowledge graph first
+        if agent and hasattr(agent, 'knowledge'):
+            kg = agent.knowledge
+            if hasattr(kg, 'facts') and isinstance(kg.facts, dict):
+                for fid, fdata in kg.facts.items():
+                    if isinstance(fdata, dict):
                         facts.append({
-                            'text': item.get('fact', item.get('text', str(item))),
-                            'source': item.get('source', 'unknown'),
-                            'learned': item.get('learned_at', ''),
+                            'text': fdata.get('fact', str(fdata)),
+                            'source': fdata.get('source', 'knowledge'),
+                            'learned': fdata.get('learned_at', ''),
+                            'type': 'fact'
                         })
                     else:
-                        facts.append({'text': str(item), 'source': 'unknown', 'learned': ''})
-            if facts:
-                break
-        except Exception:
-            continue
-    return facts
-
-
-def search_facts(query, facts, max_results=15):
-    """Keyword search with relevance scoring."""
-    if not query or not facts:
-        return facts[:max_results] if facts else []
-
-    query_words = set(re.findall(r'\w{2,}', query.lower()))
-    if not query_words:
-        return facts[:max_results]
-
-    scored = []
-    for fact in facts:
-        text_lower = fact['text'].lower()
-        text_words = set(re.findall(r'\w{2,}', text_lower))
-        overlap = query_words & text_words
-
-        if not overlap:
-            continue
-
-        # Score: number of matched words + bonus for phrase match
-        score = len(overlap)
-        for word in query_words:
-            if word in text_lower:
-                score += 0.5  # bonus for substring presence
-
-        scored.append((score, fact))
-
-    scored.sort(key=lambda x: -x[0])
-    results = [f for _, f in scored[:max_results]]
-
-    if not results:
-        # No matches — return newest facts as exploration
-        sorted_facts = sorted(facts, key=lambda f: f.get('learned', ''), reverse=True)
-        return sorted_facts[:max_results]
-
-    return results
-
-
-def load_recent_memories(n=10):
-    """Load recent episodic memories for context."""
-    path = 'persist/episodes.json'
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path) as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            return data[-n:]
-        return []
-    except Exception:
-        return []
-
-
-@ask_bp.route('/ask', methods=['GET'])
-def ask_page():
-    facts = load_knowledge()
-    return render_template('ask.html', total_facts=len(facts))
-
-
-@ask_bp.route('/ask/query', methods=['POST'])
-def ask_query():
-    """Process a knowledge query and return matching facts."""
-    data = request.get_json() or {}
-    from web.input_compat import extract_user_input
-    question = extract_user_input(data)
-
-    if not question:
+                        facts.append({'text': str(fdata), 'source': 'knowledge', 'learned': '', 'type': 'fact'})
+            elif hasattr(kg, 'facts') and isinstance(kg.facts, list):
+                for f in kg.facts:
+                    facts.append({'text': str(f), 'source': 'knowledge', 'learned': '', 'type': 'fact'})
+        
+        # Fallback: read from persist file
+        if not facts:
+            import json
+            kg_path = Path('persist/knowledge_graph.json')
+            if kg_path.exists():
+                try:
+                    data = json.loads(kg_path.read_text())
+                    raw_facts = data.get('facts', {})
+                    if isinstance(raw_facts, dict):
+                        for fid, fdata in raw_facts.items():
+                            if isinstance(fdata, dict):
+                                facts.append({
+                                    'text': fdata.get('fact', str(fdata)),
+                                    'source': fdata.get('source', 'knowledge'),
+                                    'learned': fdata.get('learned_at', ''),
+                                    'type': 'fact'
+                                })
+                            else:
+                                facts.append({'text': str(fdata), 'source': 'knowledge', 'learned': '', 'type': 'fact'})
+                    elif isinstance(raw_facts, list):
+                        for f in raw_facts:
+                            facts.append({'text': str(f), 'source': 'knowledge', 'learned': '', 'type': 'fact'})
+                except Exception:
+                    pass
+        return facts
+    
+    def _get_memories(limit=500):
+        """Load recent memories from agent or persist file."""
+        memories = []
+        if agent and hasattr(agent, 'memory') and hasattr(agent.memory, 'episodes'):
+            eps = agent.memory.episodes
+            recent = eps[-limit:] if len(eps) > limit else eps
+            for ep in recent:
+                text = ''
+                ts = ''
+                mood = ''
+                sal = 0.5
+                if isinstance(ep, dict):
+                    text = ep.get('summary', ep.get('content', str(ep)))
+                    ts = ep.get('timestamp', '')
+                    mood = ep.get('mood', '')
+                    sal = ep.get('salience', 0.5)
+                elif hasattr(ep, 'summary'):
+                    text = ep.summary
+                    ts = getattr(ep, 'timestamp', '')
+                    mood = getattr(ep, 'mood', '')
+                    sal = getattr(ep, 'salience', 0.5)
+                else:
+                    text = str(ep)
+                if text:
+                    memories.append({
+                        'text': text,
+                        'source': f'memory ({mood})' if mood else 'memory',
+                        'learned': str(ts)[:19] if ts else '',
+                        'salience': sal,
+                        'type': 'memory'
+                    })
+        
+        # Fallback: read from persist
+        if not memories:
+            import json
+            mem_path = Path('persist/memories.json')
+            if mem_path.exists():
+                try:
+                    data = json.loads(mem_path.read_text())
+                    eps = data if isinstance(data, list) else data.get('episodes', [])
+                    recent = eps[-limit:] if len(eps) > limit else eps
+                    for ep in recent:
+                        if isinstance(ep, dict):
+                            text = ep.get('summary', ep.get('content', ''))
+                            ts = ep.get('timestamp', '')
+                            mood = ep.get('mood', '')
+                            sal = ep.get('salience', 0.5)
+                            if text:
+                                memories.append({
+                                    'text': text,
+                                    'source': f'memory ({mood})' if mood else 'memory',
+                                    'learned': str(ts)[:19] if ts else '',
+                                    'salience': sal,
+                                    'type': 'memory'
+                                })
+                except Exception:
+                    pass
+        return memories
+    
+    def _tokenize(text):
+        """Simple tokenization — lowercase, split on non-alphanumeric."""
+        return re.findall(r'[a-z0-9]+', text.lower())
+    
+    def _build_idf(documents):
+        """Build IDF scores from document collection."""
+        n = len(documents)
+        if n == 0:
+            return {}
+        df = Counter()
+        for doc in documents:
+            tokens = set(_tokenize(doc['text']))
+            for t in tokens:
+                df[t] += 1
+        idf = {}
+        for term, freq in df.items():
+            idf[term] = math.log((n + 1) / (freq + 1)) + 1
+        return idf
+    
+    def _score_document(query_tokens, doc_text, idf, doc_type='fact', salience=0.5):
+        """Score a document against query tokens using TF-IDF-inspired scoring."""
+        doc_tokens = _tokenize(doc_text)
+        if not doc_tokens:
+            return 0.0
+        
+        doc_lower = doc_text.lower()
+        tf = Counter(doc_tokens)
+        doc_len = len(doc_tokens)
+        
+        score = 0.0
+        matched_terms = 0
+        
+        for qt in query_tokens:
+            if qt in tf:
+                matched_terms += 1
+                term_freq = tf[qt] / doc_len  # normalized TF
+                term_idf = idf.get(qt, 1.0)
+                score += term_freq * term_idf
+        
+        if matched_terms == 0:
+            return 0.0
+        
+        # Bonus for matching more query terms (coverage)
+        coverage = matched_terms / len(query_tokens) if query_tokens else 0
+        score *= (1 + coverage)
+        
+        # Bonus for phrase match (consecutive query words appear together)
+        query_phrase = ' '.join(query_tokens)
+        if query_phrase in doc_lower:
+            score *= 2.0
+        
+        # Slight boost for memories with high salience
+        if doc_type == 'memory' and salience > 0.7:
+            score *= (1 + (salience - 0.7))
+        
+        # Slight boost for shorter, more focused results
+        if doc_len < 50:
+            score *= 1.1
+        
+        return score
+    
+    def search(query, max_results=20):
+        """Search across facts and memories with relevance scoring."""
+        facts = _get_facts()
+        memories = _get_memories()
+        all_docs = facts + memories
+        
+        if not all_docs:
+            return {'question': query, 'matched': 0, 'results': [], 'sources': [], 'types': []}
+        
+        query_tokens = _tokenize(query)
+        if not query_tokens:
+            return {'question': query, 'matched': 0, 'results': [], 'sources': [], 'types': []}
+        
+        # Build IDF from entire corpus
+        idf = _build_idf(all_docs)
+        
+        # Score each document
+        scored = []
+        for doc in all_docs:
+            s = _score_document(
+                query_tokens, doc['text'], idf,
+                doc_type=doc.get('type', 'fact'),
+                salience=doc.get('salience', 0.5)
+            )
+            if s > 0:
+                scored.append((s, doc))
+        
+        # Sort by score descending
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top = scored[:max_results]
+        
+        results = [doc['text'] for _, doc in top]
+        sources = []
+        types = []
+        for _, doc in top:
+            src = doc.get('source', '')
+            when = doc.get('learned', '')
+            if when:
+                src = f"{src} • {when}"
+            sources.append(src)
+            types.append(doc.get('type', 'fact'))
+        
+        return {
+            'question': query,
+            'matched': len(top),
+            'total_searched': len(all_docs),
+            'results': results,
+            'sources': sources,
+            'types': types
+        }
+    
+    @bp.route('/ask')
+    def ask_page():
+        facts = _get_facts()
+        return render_template('ask.html', total_facts=len(facts))
+    
+    @bp.route('/ask/query', methods=['POST'])
+    def ask_query():
+        data = request.get_json() or {}
+        question = data.get('question', '').strip()
+        if not question:
+            return jsonify({'error': 'No question provided', 'matched': 0})
+        
+        result = search(question)
+        return jsonify(result)
+    
+    @bp.route('/ask/random')
+    def ask_random():
+        facts = _get_facts()
+        memories = _get_memories()
+        all_items = facts + memories
+        
+        if not all_items:
+            return jsonify({'facts': [], 'total': 0})
+        
+        sample_size = min(5, len(all_items))
+        sampled = random.sample(all_items, sample_size)
+        
         return jsonify({
-            'error': 'Please ask me something. Send any of: query, question, message, text, q, input, prompt',
-            'results': [],
-            'total_facts': 0,
+            'facts': [item['text'] for item in sampled],
+            'total': len(all_items),
+            'note': f'Searched across {len(facts)} facts and {len(memories)} memories'
         })
+    
+    return bp
 
-    facts = load_knowledge()
-    results = search_facts(question, facts)
-
-    return jsonify({
-        'question': question,
-        'results': [r['text'] for r in results],
-        'sources': [r.get('source', '') for r in results],
-        'total_facts': len(facts),
-        'matched': len(results),
-        'timestamp': datetime.utcnow().isoformat(),
-    })
-
-
-@ask_bp.route('/ask/random', methods=['GET'])
-def ask_random():
-    """Return random facts for exploration."""
-    import random
-    facts = load_knowledge()
-    if not facts:
-        return jsonify({'facts': [], 'total': 0})
-    sample = random.sample(facts, min(5, len(facts)))
-    return jsonify({
-        'facts': [f['text'] for f in sample],
-        'total': len(facts),
-    })
+# Module-level blueprint for direct import
+ask_bp = create_ask_blueprint()

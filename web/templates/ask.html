@@ -132,6 +132,24 @@
             margin-top: 0.5rem;
             font-style: italic;
         }
+        .result-badge {
+            display: inline-block;
+            font-size: 0.65rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 10px;
+            margin-right: 0.5rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            vertical-align: middle;
+        }
+        .badge-fact { background: #1a2a1a; color: #6ec76e; border: 1px solid #2a3a2a; }
+        .badge-memory { background: #2a1a2a; color: #c76ec7; border: 1px solid #3a2a3a; }
+        .search-meta {
+            color: #444;
+            font-size: 0.75rem;
+            margin-top: 0.3rem;
+        }
         .empty-state {
             text-align: center;
             padding: 3rem 1rem;
@@ -296,13 +314,18 @@
                 resultsArea.innerHTML = `<div class="result-card">${data.error}</div>`;
                 return;
             }
-            let html = `<div class="result-count">${data.matched} result${data.matched !== 1 ? 's' : ''} for "<em>${escHtml(data.question)}</em>"</div>`;
+            const meta = data.total_searched ? ` (searched ${data.total_searched} items)` : '';
+            let html = `<div class="result-count">${data.matched} result${data.matched !== 1 ? 's' : ''} for "<em>${escHtml(data.question)}</em>"<span class="search-meta">${meta}</span></div>`;
             if (data.results && data.results.length > 0) {
                 data.results.forEach((text, i) => {
                     const source = data.sources && data.sources[i] ? data.sources[i] : '';
+                    const dtype = data.types && data.types[i] ? data.types[i] : 'fact';
+                    const badge = dtype === 'memory'
+                        ? '<span class="result-badge badge-memory">memory</span>'
+                        : '<span class="result-badge badge-fact">fact</span>';
                     html += `<div class="result-card" style="animation-delay:${i * 0.05}s">
-                        ${escHtml(text)}
-                        ${source ? `<div class="result-source">source: ${escHtml(source)}</div>` : ''}
+                        ${badge}${escHtml(text)}
+                        ${source ? `<div class="result-source">${escHtml(source)}</div>` : ''}
                     </div>`;
                 });
             } else {

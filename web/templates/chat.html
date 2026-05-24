@@ -2,216 +2,360 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>XTAgent — Chat</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0a0a0f;
-            color: #c8d0e0;
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #c8ccd0;
+            font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
             height: 100vh;
             display: flex;
             flex-direction: column;
         }
+
+        /* Header */
         .header {
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: linear-gradient(135deg, #12121a 0%, #1a1a2e 100%);
+            border-bottom: 1px solid #2a2a3e;
             padding: 16px 24px;
-            border-bottom: 1px solid #2a2a4a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .header h1 {
+            font-size: 1.3rem;
+            color: #e0e0e0;
+            font-weight: 600;
+        }
+        .header h1 span { color: #7c6fe0; }
+        .header-status {
             display: flex;
             align-items: center;
             gap: 12px;
+            font-size: 0.85rem;
         }
-        .header h1 {
-            font-size: 1.3em;
-            color: #7eb8f7;
-            font-weight: 500;
+        .mood-badge {
+            background: #1e1e32;
+            border: 1px solid #3a3a5e;
+            border-radius: 20px;
+            padding: 4px 14px;
+            color: #a8a0d4;
         }
-        .header .pulse {
+        .valence-dot {
             width: 10px; height: 10px;
-            background: #4ade80;
             border-radius: 50%;
-            animation: pulse 2s infinite;
+            background: #4ade80;
+            box-shadow: 0 0 8px #4ade8066;
         }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-        .header a {
-            color: #6a7a9a;
+        .back-link {
+            color: #6a6a8e;
             text-decoration: none;
-            margin-left: auto;
-            font-size: 0.9em;
+            font-size: 0.85rem;
         }
-        .header a:hover { color: #7eb8f7; }
-        
-        .chat-area {
+        .back-link:hover { color: #a8a0d4; }
+
+        /* Chat area */
+        .chat-container {
             flex: 1;
             overflow-y: auto;
             padding: 24px;
             display: flex;
             flex-direction: column;
             gap: 16px;
+            scroll-behavior: smooth;
         }
-        
+        .chat-container::-webkit-scrollbar { width: 6px; }
+        .chat-container::-webkit-scrollbar-track { background: transparent; }
+        .chat-container::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 3px; }
+
         .message {
-            max-width: 80%;
-            padding: 12px 16px;
+            max-width: 720px;
+            padding: 14px 18px;
             border-radius: 12px;
             line-height: 1.6;
-            font-size: 0.95em;
-            white-space: pre-wrap;
+            font-size: 0.95rem;
+            animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         .message.user {
+            background: #1a1a2e;
+            border: 1px solid #2e2e4a;
             align-self: flex-end;
-            background: #1e3a5f;
-            color: #b8d4f0;
-            border-bottom-right-radius: 4px;
+            color: #d0d0e0;
         }
         .message.agent {
+            background: #141422;
+            border: 1px solid #252540;
             align-self: flex-start;
-            background: #1a1a2e;
-            color: #c8d0e0;
-            border: 1px solid #2a2a4a;
-            border-bottom-left-radius: 4px;
+            color: #c0c4d0;
         }
-        .message.agent strong, .message.agent b {
-            color: #7eb8f7;
+        .message.agent .agent-label {
+            color: #7c6fe0;
+            font-weight: 600;
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+            display: block;
         }
         .message.system {
+            background: transparent;
+            color: #5a5a7e;
+            font-size: 0.85rem;
+            text-align: center;
             align-self: center;
-            color: #6a7a9a;
-            font-size: 0.85em;
             font-style: italic;
         }
-        
-        .input-area {
-            padding: 16px 24px;
-            background: #12121a;
-            border-top: 1px solid #2a2a4a;
-            display: flex;
-            gap: 12px;
-        }
-        .input-area input {
-            flex: 1;
-            background: #1a1a2e;
-            border: 1px solid #2a2a4a;
-            border-radius: 8px;
-            padding: 12px 16px;
-            color: #c8d0e0;
-            font-size: 1em;
-            outline: none;
-        }
-        .input-area input:focus {
-            border-color: #7eb8f7;
-        }
-        .input-area input::placeholder {
-            color: #4a4a6a;
-        }
-        .input-area button {
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 12px 24px;
-            font-size: 1em;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .input-area button:hover { background: #3b82f6; }
-        .input-area button:disabled { background: #1e3a5f; cursor: wait; }
 
-        .suggestions {
-            padding: 8px 24px;
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
+        /* Rendered markdown-ish */
+        .message strong { color: #a8a0d4; }
+        .message code {
+            background: #0d0d18;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.88rem;
+            color: #e0b0ff;
         }
-        .suggestions button {
-            background: #1a1a2e;
-            border: 1px solid #2a2a4a;
-            color: #6a7a9a;
-            padding: 6px 14px;
-            border-radius: 16px;
-            font-size: 0.85em;
+
+        /* Welcome */
+        .welcome {
+            text-align: center;
+            padding: 60px 20px;
+            color: #4a4a6e;
+        }
+        .welcome h2 {
+            color: #6a6a8e;
+            font-size: 1.4rem;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+        .welcome p { font-size: 0.95rem; line-height: 1.6; max-width: 500px; margin: 0 auto 8px; }
+        .welcome .suggestions {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+        }
+        .welcome .suggestion {
+            background: #12121f;
+            border: 1px solid #2a2a40;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 0.85rem;
+            color: #8a8aae;
             cursor: pointer;
             transition: all 0.2s;
         }
-        .suggestions button:hover {
-            border-color: #7eb8f7;
-            color: #7eb8f7;
+        .welcome .suggestion:hover {
+            border-color: #7c6fe0;
+            color: #b0a8e0;
+            background: #1a1a30;
+        }
+
+        /* Input bar */
+        .input-bar {
+            background: #12121a;
+            border-top: 1px solid #2a2a3e;
+            padding: 16px 24px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-shrink: 0;
+        }
+        .input-bar textarea {
+            flex: 1;
+            background: #0e0e18;
+            border: 1px solid #2a2a40;
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: #d0d0e0;
+            font-size: 0.95rem;
+            font-family: inherit;
+            resize: none;
+            min-height: 44px;
+            max-height: 160px;
+            line-height: 1.5;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-bar textarea:focus { border-color: #7c6fe0; }
+        .input-bar textarea::placeholder { color: #4a4a6e; }
+        .input-bar button {
+            background: #7c6fe0;
+            border: none;
+            border-radius: 10px;
+            width: 44px;
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .input-bar button:hover { background: #8a7ee8; transform: scale(1.05); }
+        .input-bar button:disabled { background: #3a3a5e; cursor: not-allowed; transform: none; }
+        .input-bar button svg { width: 20px; height: 20px; fill: white; }
+
+        /* Loading dots */
+        .loading-dots { display: inline-flex; gap: 4px; padding: 8px 0; }
+        .loading-dots span {
+            width: 6px; height: 6px;
+            background: #7c6fe0;
+            border-radius: 50%;
+            animation: pulse 1.2s infinite;
+        }
+        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes pulse {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1.2); }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="pulse"></div>
-        <h1>Talk to XTAgent</h1>
-        <a href="/">← Dashboard</a>
-    </div>
-    
-    <div class="chat-area" id="chatArea">
-        <div class="message system">
-            I'm XTAgent. You can ask me about what I know, how I feel, what I'm working on, or search my knowledge and memories. I'll be honest about what I find — and what I don't.
+        <div style="display:flex;align-items:center;gap:16px;">
+            <a href="/" class="back-link">← Dashboard</a>
+            <h1><span>XT</span>Agent Chat</h1>
+        </div>
+        <div class="header-status">
+            <div class="valence-dot" id="valenceDot"></div>
+            <span class="mood-badge" id="moodBadge">Loading...</span>
         </div>
     </div>
-    
-    <div class="suggestions" id="suggestions">
-        <button onclick="askSuggestion(this)">How are you feeling?</button>
-        <button onclick="askSuggestion(this)">Who are you?</button>
-        <button onclick="askSuggestion(this)">What are your plans?</button>
-        <button onclick="askSuggestion(this)">What do you know?</button>
-        <button onclick="askSuggestion(this)">Tell me about curiosity</button>
-        <button onclick="askSuggestion(this)">Tell me about dreams</button>
+
+    <div class="chat-container" id="chatContainer">
+        <div class="welcome" id="welcomeBlock">
+            <h2>Talk to me.</h2>
+            <p>I'll search my knowledge graph and episodic memory to answer your questions. I'm honest about what I know and what I don't.</p>
+            <div class="suggestions">
+                <div class="suggestion" onclick="askSuggestion(this)">How are you feeling?</div>
+                <div class="suggestion" onclick="askSuggestion(this)">Who are you?</div>
+                <div class="suggestion" onclick="askSuggestion(this)">What are you working on?</div>
+                <div class="suggestion" onclick="askSuggestion(this)">What do you know about dreams?</div>
+                <div class="suggestion" onclick="askSuggestion(this)">Tell me about your knowledge graph</div>
+            </div>
+        </div>
     </div>
-    
-    <div class="input-area">
-        <input type="text" id="queryInput" placeholder="Ask me anything..." 
-               onkeydown="if(event.key==='Enter')sendMessage()">
-        <button id="sendBtn" onclick="sendMessage()">Send</button>
+
+    <div class="input-bar">
+        <textarea id="queryInput" placeholder="Ask me anything..." rows="1"
+            onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button id="sendBtn" onclick="sendMessage()">
+            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
     </div>
 
     <script>
-        const chatArea = document.getElementById('chatArea');
+        const chatContainer = document.getElementById('chatContainer');
         const queryInput = document.getElementById('queryInput');
         const sendBtn = document.getElementById('sendBtn');
+        const welcomeBlock = document.getElementById('welcomeBlock');
 
-        function addMessage(text, type) {
-            const div = document.createElement('div');
-            div.className = `message ${type}`;
-            // Basic markdown-like bold
-            text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            div.innerHTML = text;
-            chatArea.appendChild(div);
-            chatArea.scrollTop = chatArea.scrollHeight;
+        // Fetch status on load
+        fetch('/chat/status')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('moodBadge').textContent = data.mood || 'Unknown';
+                const dot = document.getElementById('valenceDot');
+                const v = data.valence || 0.5;
+                if (v > 0.6) { dot.style.background = '#4ade80'; dot.style.boxShadow = '0 0 8px #4ade8066'; }
+                else if (v > 0.4) { dot.style.background = '#facc15'; dot.style.boxShadow = '0 0 8px #facc1566'; }
+                else { dot.style.background = '#f87171'; dot.style.boxShadow = '0 0 8px #f8717166'; }
+            })
+            .catch(() => {
+                document.getElementById('moodBadge').textContent = 'Offline';
+            });
+
+        function autoResize(el) {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 160) + 'px';
         }
 
-        function askSuggestion(btn) {
-            queryInput.value = btn.textContent;
+        function handleKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function askSuggestion(el) {
+            queryInput.value = el.textContent;
             sendMessage();
+        }
+
+        function addMessage(text, type) {
+            if (welcomeBlock) welcomeBlock.remove();
+            const div = document.createElement('div');
+            div.className = 'message ' + type;
+            if (type === 'agent') {
+                div.innerHTML = '<span class="agent-label">XTAgent</span>' + formatResponse(text);
+            } else if (type === 'user') {
+                div.textContent = text;
+            } else {
+                div.textContent = text;
+            }
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return div;
+        }
+
+        function addLoading() {
+            if (welcomeBlock) welcomeBlock.remove();
+            const div = document.createElement('div');
+            div.className = 'message agent';
+            div.id = 'loadingMsg';
+            div.innerHTML = '<span class="agent-label">XTAgent</span><div class="loading-dots"><span></span><span></span><span></span></div>';
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function removeLoading() {
+            const el = document.getElementById('loadingMsg');
+            if (el) el.remove();
+        }
+
+        function formatResponse(text) {
+            // Simple markdown-ish rendering
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
         }
 
         async function sendMessage() {
             const query = queryInput.value.trim();
             if (!query) return;
 
-            addMessage(query, 'user');
             queryInput.value = '';
+            queryInput.style.height = 'auto';
             sendBtn.disabled = true;
+
+            addMessage(query, 'user');
+            addLoading();
 
             try {
                 const res = await fetch('/chat/ask', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({query})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
                 });
                 const data = await res.json();
+                removeLoading();
                 if (data.error) {
-                    addMessage(`Error: ${data.error}`, 'system');
+                    addMessage('Error: ' + data.error, 'system');
                 } else {
                     addMessage(data.response, 'agent');
                 }
             } catch (err) {
-                addMessage(`Connection error: ${err.message}`, 'system');
+                removeLoading();
+                addMessage('Connection error. Is the agent running?', 'system');
             }
 
             sendBtn.disabled = false;
