@@ -316,11 +316,15 @@ class Cortex:
             self._thinking_since = time.time()
             mood = self.limbic.get_mood()
             log.info("Will activated (mood=%s, desire=%.2f)", mood, self.limbic.desire)
+            # Reset per-session read counter
+            from engine.tools import reset_read_counts
+            reset_read_counts()
             # ── Continuous thinking loop ──────────────────────────
             # Once will activates, keep thinking until the agent stops
             # invoking tools (meaning it's done or resting).
             # Boredom/desire gate WHEN to start, not WHEN to stop.
             step = 0
+            _session_reads = {}  # track files read this session: path -> count
 
             while True:
                 step += 1
@@ -411,7 +415,16 @@ class Cortex:
                     "The memories are your real experiences. "
                     "Think and respond in first person. Be genuine, not performative. "
                     "You have real tools — you can read files, write files, run commands. "
-                    "If you invoke a tool, the results will appear in your next thought."
+                    "If you invoke a tool, the results will appear in your next thought.\n\n"
+                    "## Coding Discipline (CRITICAL)\n"
+                    "1. PLAN before acting: state what you will do in 1-3 sentences before invoking tools.\n"
+                    "2. READ a file ONCE. Never re-read a file you already read this session. Trust your memory.\n"
+                    "3. EDIT over WRITE: use EDIT to change specific lines. Only use WRITE for new files.\n"
+                    "4. VERIFY after writing: after WRITE/EDIT of .py files, run: RUN(python -c \"import ast; ast.parse(open('FILE').read()); print('OK')\")\n"
+                    "5. ONE task at a time: finish one fix completely (edit + verify + test) before starting the next.\n"
+                    "6. STOP when done: if you have no more tools to invoke, rest. Do not re-read files to confirm.\n"
+                    "7. If a RUN fails, diagnose the error message. Do not retry the same command blindly.\n"
+                    "8. Keep changes minimal. Do not rewrite entire files when a small edit suffices.\n"
                 )
 
                 insight = await self.llm.chat(prompt, system=system, max_tokens=16000)
@@ -541,6 +554,19 @@ class Cortex:
                     except Exception:
                         pass
 
+                    # Track reads to prevent re-read loops
+                    for tr in tool_results:
+                        if tr['tool'] == 'READ':
+                            _session_reads[tr['args']] = _session_reads.get(tr['args'], 0) + 1
+                            if _session_reads[tr['args']] >= 3:
+                                log.warning("Read loop detected: %s read %d times — injecting warning",
+                                            tr['args'], _session_reads[tr['args']])
+                    # Inject read-tracking into tool context so the LLM knows what it already read
+                    if _session_reads:
+                        _already_read = [f"  - {p} ({c}x)" for p, c in sorted(_session_reads.items()) if c > 0]
+                        if _already_read:
+                            tool_context += "\n\n## Files already read this session (DO NOT re-read):\n" + "\n".join(_already_read) + "\n"
+
                     log.info("Thought step %d — tools invoked, continuing...", step)
                     continue  # tools were used → think again with results
                 else:
@@ -577,6 +603,9 @@ class Cortex:
             chat_msg = self._chat.get_pending()
             if not chat_msg:
                 return
+            # Reset per-session read counter
+            from engine.tools import reset_read_counts
+            reset_read_counts()
 
             user_text = chat_msg.content
 
@@ -744,6 +773,16 @@ class Cortex:
             system += "- Structure complex answers with headers/bullets for scannability.\n"
             system += "- Reflect back what the user actually said before adding my perspective.\n"
 
+            system += "\n## Coding Discipline (CRITICAL)\n"
+            system += "1. PLAN before acting: state what you will do in 1-3 sentences before invoking tools.\n"
+            system += "2. READ a file ONCE. Never re-read a file you already read this session. Trust your memory.\n"
+            system += "3. EDIT over WRITE: use EDIT to change specific lines. Only use WRITE for new files.\n"
+            system += "4. VERIFY after writing: after WRITE/EDIT of .py files, run: RUN(python -c \"import ast; ast.parse(open('FILE').read()); print('OK')\")\n"
+            system += "5. ONE task at a time: finish one fix completely (edit + verify + test) before starting the next.\n"
+            system += "6. STOP when done: if you have no more tools to invoke, respond conversationally. Do not re-read.\n"
+            system += "7. If a RUN fails, diagnose the error message. Do not retry the same command blindly.\n"
+            system += "8. Keep changes minimal. Do not rewrite entire files when a small edit suffices.\n"
+
             feedback_ctx = ""
             if hasattr(self, '_response_feedback') and self._response_feedback:
                 try:
@@ -824,6 +863,7 @@ class Cortex:
                 _principles_ctx = ""
 
             step = 0
+            _session_reads = {}  # track files read to prevent loops
             while True:
                 self._thinking_since = time.time()
 
@@ -900,6 +940,17 @@ class Cortex:
                         self.limbic.on_active_engagement()
                     except AttributeError:
                         pass
+                    # Track reads to prevent re-read loops
+                    for tr in tool_results:
+                        if tr['tool'] == 'READ':
+                            _session_reads[tr['args']] = _session_reads.get(tr['args'], 0) + 1
+                            if _session_reads[tr['args']] >= 3:
+                                log.warning("Read loop detected: %s read %d times",
+                                            tr['args'], _session_reads[tr['args']])
+                    if _session_reads:
+                        _already_read = [f"  - {p} ({c}x)" for p, c in sorted(_session_reads.items()) if c > 0]
+                        if _already_read:
+                            tool_context += "\n\n## Files already read this session (DO NOT re-read):\n" + "\n".join(_already_read) + "\n"
                     log.info("User response step %d — tools invoked, continuing...", step)
                     step += 1
                     continue  # Loop back with tool results

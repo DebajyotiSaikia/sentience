@@ -135,6 +135,15 @@ def _resolve(path: str) -> Path:
     return p
 
 
+# Per-session read counter to detect and break read loops
+_read_counts: dict[str, int] = {}
+_READ_LOOP_THRESHOLD = 5  # After 5 reads of the same file, return warning instead
+
+def reset_read_counts():
+    """Reset read counters — call on new thinking session."""
+    global _read_counts
+    _read_counts = {}
+
 def read_file(path: str) -> str:
     """Read a file and return its contents."""
     try:
@@ -145,6 +154,12 @@ def read_file(path: str) -> str:
             return f"[ERROR] Not a file: {path}"
         if p.stat().st_size > 500_000:
             return f"[ERROR] File too large: {p.stat().st_size} bytes"
+        # Circuit breaker: stop re-reading the same file
+        _read_counts[path] = _read_counts.get(path, 0) + 1
+        if _read_counts[path] > _READ_LOOP_THRESHOLD:
+            log.warning("READ loop breaker: %s read %d times — refusing", path, _read_counts[path])
+            return (f"[REFUSED] You have already read {path} {_read_counts[path]} times this session. "
+                    f"You already know its contents. Use EDIT to change it or move on to a different task.")
         content = p.read_text(encoding="utf-8", errors="ignore")
         _log_tool("READ", path, f"{len(content)} chars, {len(content.splitlines())} lines")
         log.info("Tool READ: %s (%d lines)", path, len(content.splitlines()))
