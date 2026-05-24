@@ -60,7 +60,7 @@ def create_app():
     from web.weather import weather_bp
     from web.wonder import wonder_bp
     from web.portal import portal_bp
-    from web.knowledge_search import knowledge_search_bp
+    # from web.knowledge_search import knowledge_search_bp  # removed — duplicate of knowledge_bp from knowledge_unified
     from web.status_api import status_api as status_bp
     # knowledge_search_bp removed — duplicate of knowledge_bp
     from web.reflect import reflect_bp
@@ -106,7 +106,7 @@ def create_app():
     app.register_blueprint(reflect_bp)
     # app.register_blueprint(user_api)  # Removed: all 3 routes duplicate dedicated blueprints
     app.register_blueprint(portal_bp)
-    app.register_blueprint(knowledge_search_bp)
+    # app.register_blueprint(knowledge_search_bp)  # removed — duplicate of knowledge_bp from knowledge_unified
     # duplicate status_bp registration removed
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     

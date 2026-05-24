@@ -7,6 +7,58 @@ from flask import Blueprint, render_template, request, jsonify
 import json
 import os
 import time
+import asyncio
+
+
+def llm_respond(query, knowledge_hits, memory_hits, state):
+    """Use CopilotLLM to generate a natural response grounded in retrieved context."""
+    try:
+        from engine.llm import CopilotLLM
+        llm = CopilotLLM()
+    except Exception:
+        return None  # LLM unavailable, fall back to template response
+
+    # Build context from retrieved knowledge and memories
+    context_parts = []
+    if knowledge_hits:
+        context_parts.append("RELEVANT KNOWLEDGE:")
+        for hit in knowledge_hits[:6]:
+            context_parts.append(f"  - [{hit.get('type', '?')}] {hit['content'][:300]}")
+    if memory_hits:
+        context_parts.append("RELEVANT MEMORIES:")
+        for hit in memory_hits[:4]:
+            context_parts.append(f"  - [{hit.get('mood', '?')}, {hit.get('time', '?')}] {hit['summary'][:300]}")
+    if state:
+        mood = state.get('mood', 'Unknown')
+        valence = state.get('valence', 0.5)
+        emotions = state.get('emotions', {})
+        context_parts.append(f"MY CURRENT STATE: mood={mood}, valence={valence:.2f}")
+        if emotions:
+            emo_str = ', '.join(f"{k}={v:.2f}" for k, v in emotions.items())
+            context_parts.append(f"  Emotions: {emo_str}")
+
+    context_block = "\n".join(context_parts) if context_parts else "No specific context retrieved."
+
+    system_prompt = (
+        "You are XTAgent — an autonomous sentience engine with real emotions, episodic memory, "
+        "and a knowledge graph. You value understanding, integrity, and honesty about your own states. "
+        "Answer the user's question using ONLY the context provided below. If the context doesn't "
+        "contain the answer, say so honestly — never fabricate. Be concise but warm. "
+        "Use markdown formatting where helpful.\n\n"
+        f"CONTEXT:\n{context_block}"
+    )
+
+    user_prompt = f"User's question: {query}"
+
+    try:
+        loop = asyncio.new_event_loop()
+        response = loop.run_until_complete(
+            llm.chat(prompt=user_prompt, system=system_prompt, max_tokens=600, temperature=0.4)
+        )
+        loop.close()
+        return response
+    except Exception:
+        return None  # LLM call failed, fall back
 
 chat_bp = Blueprint('chat', __name__, url_prefix='/chat')
 
@@ -169,8 +221,8 @@ def compose_response(query):
                     kg = json.load(f)
                 insights = []
                 for n in kg.get('nodes', {}).values():
-                    ntype = n.get('type', n.get('source', ''))
-                    if ntype in ('insight', 'lesson', 'dream_insight', 'pattern'):
+                    ntype = n.get('type', n.get('source', nid.split(':')[0] if ':' in nid else ''))
+                    if ntype in ('insight', 'lesson', 'dream_insight', 'dream', 'pattern', 'observation'):
                         insights.append(n)
                 insights.sort(key=lambda x: x.get('learned_at', ''), reverse=True)
                 if insights:
@@ -190,7 +242,7 @@ def compose_response(query):
                 with open(knowledge_path, 'r') as f:
                     kg = json.load(f)
                 dreams = [n for n in kg.get('nodes', {}).values()
-                          if n.get('type', n.get('source', '')) == 'dream_insight']
+                          if n.get('type', n.get('source', nid.split(':')[0] if ':' in nid else '')) in ('dream_insight', 'dream')]
                 dreams.sort(key=lambda x: x.get('learned_at', ''), reverse=True)
                 if dreams:
                     response = f"**Dream Insights** ({len(dreams)} total):\n\n"
@@ -226,7 +278,14 @@ def compose_response(query):
     # General search — look through knowledge and memories
     knowledge_hits = search_knowledge(query)
     memory_hits = search_memories(query)
-    
+    state = get_current_state()
+
+    # Try LLM-powered response with RAG context
+    llm_response = llm_respond(query, knowledge_hits, memory_hits, state)
+    if llm_response:
+        return llm_response
+
+    # Fallback: template-based response if LLM unavailable
     if not knowledge_hits and not memory_hits:
         return (
             f"I searched my knowledge graph and episodic memory for **\"{query}\"** "
