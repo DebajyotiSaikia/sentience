@@ -252,3 +252,6 @@ def boundaries():
         'honesty_note': "These boundaries are self-assessed. I may not know what I don't know.",
         'total_knowledge': len(facts) + len(lessons) + len(memories)
     })
+
+# Alias for backward compatibility — app.py imports this name
+knowledge_bp = knowledge_search_bp

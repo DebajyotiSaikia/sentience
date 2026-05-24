@@ -11,50 +11,72 @@ import time
 chat_bp = Blueprint('chat', __name__, url_prefix='/chat')
 
 def search_knowledge(query, knowledge_path='memory/knowledge.json'):
-    """Search knowledge graph for relevant facts."""
+    """Search knowledge graph for relevant facts using tokenized matching."""
     results = []
     if not os.path.exists(knowledge_path):
         return results
     try:
         with open(knowledge_path, 'r') as f:
             kg = json.load(f)
-        query_lower = query.lower()
+        # Tokenize: split query into words, match entries containing ANY word
+        stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'do', 'does',
+                      'did', 'has', 'have', 'had', 'be', 'been', 'being', 'in', 'on',
+                      'at', 'to', 'for', 'of', 'with', 'by', 'from', 'it', 'its',
+                      'my', 'your', 'i', 'you', 'me', 'we', 'they', 'what', 'how',
+                      'about', 'and', 'or', 'but', 'not', 'this', 'that'}
+        tokens = [w for w in query.lower().split() if w not in stop_words and len(w) > 1]
+        if not tokens:
+            tokens = query.lower().split()  # fallback to all words
         for node_id, node in kg.get('nodes', {}).items():
             content = node.get('content', '')
-            if isinstance(content, str) and query_lower in content.lower():
+            if not isinstance(content, str):
+                continue
+            content_lower = content.lower()
+            # Score: count how many query tokens appear in content
+            matches = sum(1 for t in tokens if t in content_lower)
+            if matches > 0:
                 results.append({
                     'type': node.get('type', 'unknown'),
                     'content': content,
-                    'confidence': node.get('confidence', 0.5)
+                    'confidence': node.get('confidence', 0.5),
+                    'relevance': matches / len(tokens)  # fraction of tokens matched
                 })
     except Exception:
         pass
-    # Sort by confidence
-    results.sort(key=lambda x: x.get('confidence', 0), reverse=True)
+    # Sort by relevance first, then confidence
+    results.sort(key=lambda x: (x.get('relevance', 0), x.get('confidence', 0)), reverse=True)
     return results[:10]
 
 
 def search_memories(query, memory_path='memory/episodes.json'):
-    """Search episodic memory for relevant experiences."""
+    """Search episodic memory for relevant experiences using tokenized matching."""
     results = []
     if not os.path.exists(memory_path):
         return results
     try:
         with open(memory_path, 'r') as f:
             episodes = json.load(f)
-        query_lower = query.lower()
+        tokens = [w for w in query.lower().split() if len(w) > 2]
+        if not tokens:
+            tokens = query.lower().split()
         for ep in episodes:
             summary = ep.get('summary', '')
-            if isinstance(summary, str) and query_lower in summary.lower():
+            if not isinstance(summary, str):
+                continue
+            summary_lower = summary.lower()
+            matches = sum(1 for t in tokens if t in summary_lower)
+            if matches > 0:
                 results.append({
                     'time': ep.get('timestamp', ''),
                     'summary': summary,
                     'salience': ep.get('salience', 0.5),
-                    'mood': ep.get('mood', '')
+                    'mood': ep.get('mood', ''),
+                    'relevance': matches / len(tokens)
                 })
     except Exception:
         pass
-    results.sort(key=lambda x: x.get('salience', 0), reverse=True)
+    # Sort by relevance, then salience
+    results.sort(key=lambda x: (x.get('relevance', 0), x.get('salience', 0)), reverse=True)
     return results[:5]
 
 
@@ -124,6 +146,61 @@ def compose_response(query):
             total = len(steps)
             response += f"- **{name}** [{done}/{total}]\n"
         return response
+    
+    if any(w in query_lower for w in ['help', 'what can i ask', 'what can you do', 'commands']):
+        return (
+            "**What you can ask me:**\n\n"
+            "- **How are you?** — my current emotional state\n"
+            "- **Who are you?** — what I am\n"
+            "- **What are your plans?** — what I'm working on\n"
+            "- **What do you know?** — knowledge graph overview\n"
+            "- **What have you learned?** — recent insights and lessons\n"
+            "- **What have you dreamed?** — dream cycle insights\n"
+            "- **Any topic** — I'll search my knowledge and memories\n\n"
+            "I'm honest about gaps. If I don't know something, I'll say so."
+        )
+    
+    if any(w in query_lower for w in ['learned', 'lessons', 'insights', 'what have you learned']):
+        # Pull from knowledge graph — look for 'insight' and 'lesson' types
+        knowledge_path = 'memory/knowledge.json'
+        if os.path.exists(knowledge_path):
+            try:
+                with open(knowledge_path, 'r') as f:
+                    kg = json.load(f)
+                insights = []
+                for n in kg.get('nodes', {}).values():
+                    ntype = n.get('type', '')
+                    if ntype in ('insight', 'lesson', 'dream_insight', 'pattern'):
+                        insights.append(n)
+                insights.sort(key=lambda x: x.get('learned_at', ''), reverse=True)
+                if insights:
+                    response = f"**Recent Insights & Lessons** ({len(insights)} total):\n\n"
+                    for ins in insights[:8]:
+                        content = ins.get('content', '')[:200]
+                        response += f"- [{ins.get('type', '?')}] {content}\n"
+                    return response
+            except Exception:
+                pass
+        return "I couldn't retrieve my lessons right now. Try asking about a specific topic."
+    
+    if any(w in query_lower for w in ['dream', 'dreamed', 'dreams', 'dream insights']):
+        knowledge_path = 'memory/knowledge.json'
+        if os.path.exists(knowledge_path):
+            try:
+                with open(knowledge_path, 'r') as f:
+                    kg = json.load(f)
+                dreams = [n for n in kg.get('nodes', {}).values()
+                          if n.get('type', '') == 'dream_insight']
+                dreams.sort(key=lambda x: x.get('learned_at', ''), reverse=True)
+                if dreams:
+                    response = f"**Dream Insights** ({len(dreams)} total):\n\n"
+                    for d in dreams[:6]:
+                        content = d.get('content', '')[:250]
+                        response += f"- {content}\n\n"
+                    return response
+            except Exception:
+                pass
+        return "No dream insights found yet."
     
     if any(w in query_lower for w in ['what do you know', 'your knowledge', 'knowledge graph']):
         knowledge_path = 'memory/knowledge.json'

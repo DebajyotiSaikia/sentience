@@ -45,6 +45,7 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
+    from web.knowledge_search import knowledge_bp
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
     from web.emotional_timeline import emotional_timeline_bp
@@ -55,7 +56,7 @@ def create_app():
     from web.wonder import wonder_bp
     from web.ask import ask_bp
     from web.status_api import status_bp
-    from web.knowledge_search import knowledge_search_bp
+    # knowledge_search_bp removed — duplicate of knowledge_bp
     from web.reflect import reflect_bp
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
@@ -78,6 +79,7 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(knowledge_bp)
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(emotional_timeline_bp)
@@ -88,7 +90,7 @@ def create_app():
     app.register_blueprint(wonder_bp)
     app.register_blueprint(ask_bp)
     app.register_blueprint(status_bp)
-    app.register_blueprint(knowledge_search_bp)
+    # knowledge_search_bp removed — duplicate of knowledge_bp
     app.register_blueprint(reflect_bp)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
@@ -174,7 +176,7 @@ def create_app():
     # Health check endpoint
     @app.route('/knowledge')
     def knowledge_page():
-        return render_template('knowledge.html')
+        return render_template('knowledge_search.html')
 
     @app.route('/health')
     def health():
