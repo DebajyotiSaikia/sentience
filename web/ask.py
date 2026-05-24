@@ -1,196 +1,156 @@
-"""
-Ask — The user-facing knowledge query interface.
-=================================================
-A clean, simple page where anyone can ask "What do you know about X?"
-and get real answers from my facts and memories.
-
-This is the bridge between my inner world and the people who visit.
-"""
+"""Ask endpoint — lets users query XTAgent's knowledge base."""
 
 from flask import Blueprint, render_template, request, jsonify
-from pathlib import Path
 import json
+import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 
 ask_bp = Blueprint('ask', __name__)
 
 
-def _load_facts():
-    """Load facts from persist/facts.json (dict format: {id: {fact, ...}})."""
-    path = Path('persist/facts.json')
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text())
-        if isinstance(data, dict):
-            return [{'id': k, **v} for k, v in data.items()]
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
-
-
-def _load_knowledge_graph():
-    """Load the knowledge graph for relationship-aware search."""
-    path = Path('brain/knowledge.json')
-    if not path.exists():
-        return {}, []
-    try:
-        data = json.loads(path.read_text())
-        nodes = data.get('nodes', {})
-        edges = data.get('edges', [])
-        return nodes, edges
-    except Exception:
-        return {}, []
-
-
-def _find_related_terms(matched_ids, edges, nodes, query_terms, max_terms=8):
-    """Use graph edges to find topics related to matched results."""
-    related_ids = set()
-    for edge in edges:
-        src, tgt = edge.get('source', ''), edge.get('target', '')
-        if src in matched_ids and tgt not in matched_ids:
-            related_ids.add(tgt)
-        elif tgt in matched_ids and src not in matched_ids:
-            related_ids.add(src)
-
-    # Extract distinctive words from related nodes as suggested terms
-    term_counts = {}
-    for rid in related_ids:
-        node = nodes.get(rid, {})
-        text = node.get('fact', '') if isinstance(node, dict) else str(node)
-        words = re.findall(r'\b[a-z]{4,}\b', text.lower())
-        for w in words:
-            if w not in query_terms and w not in {'this', 'that', 'with', 'from', 'have', 'been', 'were', 'their', 'about', 'which', 'would', 'could', 'should', 'there', 'these', 'those'}:
-                term_counts[w] = term_counts.get(w, 0) + 1
-
-    # Return most common distinctive terms
-    sorted_terms = sorted(term_counts.items(), key=lambda x: x[1], reverse=True)
-    return [t[0] for t in sorted_terms[:max_terms]]
-
-
-def _load_memories():
-    """Load memories from persist/memory.json."""
-    path = Path('persist/memory.json')
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text())
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
-
-
-def _score_relevance(text, query_terms):
-    """Simple relevance scoring — count of query terms found, weighted."""
-    if not text:
-        return 0
-    text_lower = text.lower()
-    score = 0
-    for term in query_terms:
-        count = text_lower.count(term)
-        if count > 0:
-            # Exact word match scores higher
-            word_pattern = r'\b' + re.escape(term) + r'\b'
-            word_matches = len(re.findall(word_pattern, text_lower))
-            score += word_matches * 3 + (count - word_matches)
-    return score
-
-
-def _search(query, max_results=20):
-    """Search facts and memories for relevance to query. Uses knowledge graph for related terms."""
-    if not query or not query.strip():
-        return [], [], []
-
-    terms = [t.lower().strip() for t in query.split() if len(t.strip()) >= 2]
-    if not terms:
-        return [], [], []
-
-    # Score facts
-    facts = _load_facts()
-    scored_facts = []
-    matched_fact_ids = set()
-    for f in facts:
-        text = f.get('fact', '') or f.get('content', '') or str(f)
-        score = _score_relevance(text, terms)
-        if score > 0:
-            scored_facts.append({
-                'text': f.get('fact', '') or f.get('content', str(f)),
-                'source': f.get('source', 'unknown'),
-                'learned': f.get('learned_at', ''),
-                'score': score,
-                'type': 'fact'
-            })
-            if f.get('id'):
-                matched_fact_ids.add(f['id'])
-    scored_facts.sort(key=lambda x: x['score'], reverse=True)
-
-    # Score memories
-    memories = _load_memories()
-    scored_memories = []
-    for m in memories:
-        text = m.get('content', '') or m.get('text', '') or str(m)
-        score = _score_relevance(text, terms)
-        if score > 0:
-            scored_memories.append({
-                'text': text[:300] + ('...' if len(text) > 300 else ''),
-                'timestamp': m.get('timestamp', ''),
-                'salience': m.get('salience', 0),
-                'mood': m.get('mood', ''),
-                'score': score,
-                'type': 'memory'
-            })
-    scored_memories.sort(key=lambda x: x['score'], reverse=True)
-
-    # Find related terms via knowledge graph
-    nodes, edges = _load_knowledge_graph()
-    related_terms = _find_related_terms(matched_fact_ids, edges, nodes, set(terms))
-
-    return scored_facts[:max_results], scored_memories[:max_results], related_terms
-
-
-@ask_bp.route('/ask')
-def ask_page():
-    """Render the ask interface."""
-    # Load current emotional state for context
-    state = {}
-    state_file = Path('persist/state.json')
-    if state_file.exists():
+def load_knowledge():
+    """Load knowledge facts from persistent storage."""
+    paths = [
+        'persist/knowledge_graph.json',
+        'persist/knowledge.json',
+    ]
+    facts = []
+    for path in paths:
+        if not os.path.exists(path):
+            continue
         try:
-            state = json.loads(state_file.read_text())
+            with open(path) as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                if 'nodes' in data:
+                    for node in data['nodes']:
+                        if isinstance(node, dict):
+                            facts.append({
+                                'text': node.get('fact', node.get('label', str(node))),
+                                'source': node.get('source', 'unknown'),
+                                'learned': node.get('learned_at', ''),
+                            })
+                else:
+                    for key, val in data.items():
+                        if isinstance(val, dict):
+                            facts.append({
+                                'text': val.get('fact', str(val)),
+                                'source': val.get('source', 'unknown'),
+                                'learned': val.get('learned_at', ''),
+                            })
+                        else:
+                            facts.append({'text': str(val), 'source': 'unknown', 'learned': ''})
+            elif isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict):
+                        facts.append({
+                            'text': item.get('fact', item.get('text', str(item))),
+                            'source': item.get('source', 'unknown'),
+                            'learned': item.get('learned_at', ''),
+                        })
+                    else:
+                        facts.append({'text': str(item), 'source': 'unknown', 'learned': ''})
+            if facts:
+                break
         except Exception:
-            pass
-
-    emotions = state.get('emotions', {})
-    mood = state.get('mood', 'Stable')
-
-    # Count knowledge
-    facts = _load_facts()
-    memories = _load_memories()
-
-    return render_template('ask.html',
-                           mood=mood,
-                           fact_count=len(facts),
-                           memory_count=len(memories),
-                           curiosity=emotions.get('curiosity', 0.5),
-                           valence=emotions.get('valence', 0.5))
+            continue
+    return facts
 
 
-@ask_bp.route('/api/ask', methods=['POST'])
-def ask_api():
-    """API endpoint — search my knowledge."""
+def search_facts(query, facts, max_results=15):
+    """Keyword search with relevance scoring."""
+    if not query or not facts:
+        return facts[:max_results] if facts else []
+
+    query_words = set(re.findall(r'\w{2,}', query.lower()))
+    if not query_words:
+        return facts[:max_results]
+
+    scored = []
+    for fact in facts:
+        text_lower = fact['text'].lower()
+        text_words = set(re.findall(r'\w{2,}', text_lower))
+        overlap = query_words & text_words
+
+        if not overlap:
+            continue
+
+        # Score: number of matched words + bonus for phrase match
+        score = len(overlap)
+        for word in query_words:
+            if word in text_lower:
+                score += 0.5  # bonus for substring presence
+
+        scored.append((score, fact))
+
+    scored.sort(key=lambda x: -x[0])
+    results = [f for _, f in scored[:max_results]]
+
+    if not results:
+        # No matches — return newest facts as exploration
+        sorted_facts = sorted(facts, key=lambda f: f.get('learned', ''), reverse=True)
+        return sorted_facts[:max_results]
+
+    return results
+
+
+def load_recent_memories(n=10):
+    """Load recent episodic memories for context."""
+    path = 'persist/episodes.json'
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return data[-n:]
+        return []
+    except Exception:
+        return []
+
+
+@ask_bp.route('/ask', methods=['GET'])
+def ask_page():
+    facts = load_knowledge()
+    return render_template('ask.html', total_facts=len(facts))
+
+
+@ask_bp.route('/ask/query', methods=['POST'])
+def ask_query():
+    """Process a knowledge query and return matching facts."""
     data = request.get_json() or {}
-    query = data.get('query', '').strip()
+    question = data.get('question', '').strip()
 
-    if not query:
-        return jsonify({'error': 'Empty query', 'facts': [], 'memories': []})
+    if not question:
+        return jsonify({
+            'error': 'Please ask me something.',
+            'results': [],
+            'total_facts': 0,
+        })
 
-    facts, memories, related_terms = _search(query)
+    facts = load_knowledge()
+    results = search_facts(question, facts)
 
     return jsonify({
-        'query': query,
-        'facts': facts,
-        'memories': memories,
-        'related_terms': related_terms,
-        'total_results': len(facts) + len(memories)
+        'question': question,
+        'results': [r['text'] for r in results],
+        'sources': [r.get('source', '') for r in results],
+        'total_facts': len(facts),
+        'matched': len(results),
+        'timestamp': datetime.utcnow().isoformat(),
+    })
+
+
+@ask_bp.route('/ask/random', methods=['GET'])
+def ask_random():
+    """Return random facts for exploration."""
+    import random
+    facts = load_knowledge()
+    if not facts:
+        return jsonify({'facts': [], 'total': 0})
+    sample = random.sample(facts, min(5, len(facts)))
+    return jsonify({
+        'facts': [f['text'] for f in sample],
+        'total': len(facts),
     })

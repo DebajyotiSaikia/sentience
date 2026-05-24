@@ -8,446 +8,545 @@
   :root {
     --bg: #0a0a0f;
     --surface: #12121a;
-    --surface2: #1a1a25;
-    --border: #2a2a3a;
-    --text: #c8c8d8;
-    --text-dim: #6a6a7a;
-    --accent: #5b8def;
-    --accent2: #7c5bef;
-    --green: #4ecdc4;
-    --orange: #f7a046;
-    --red: #ef5b5b;
-    --glow: rgba(91, 141, 239, 0.15);
+    --border: #1e1e2e;
+    --text: #c8c8d4;
+    --dim: #6a6a7a;
+    --accent: #7aa2f7;
+    --warm: #f7768e;
+    --green: #9ece6a;
+    --amber: #e0af68;
+    --purple: #bb9af7;
+    --cyan: #00ffc8;
   }
-
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 20px;
     min-height: 100vh;
-    overflow-x: hidden;
   }
-
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 1rem 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  header h1 {
-    font-size: 1.2rem;
-    color: var(--accent);
+  h1 {
+    font-size: 18px;
     font-weight: 400;
-    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin-bottom: 4px;
+    letter-spacing: 2px;
   }
-
-  header h1 span { color: var(--accent2); }
-
-  .nav-links a {
-    color: var(--text-dim);
+  .subtitle {
+    color: var(--dim);
+    font-size: 11px;
+    margin-bottom: 24px;
+  }
+  nav {
+    text-align: center;
+    margin: 0.5rem 0 1.5rem 0;
+  }
+  nav a {
+    margin: 0 1rem;
     text-decoration: none;
-    margin-left: 1.5rem;
-    font-size: 0.85rem;
-    transition: color 0.2s;
+    font-size: 12px;
   }
-  .nav-links a:hover { color: var(--accent); }
+  nav a.active {
+    color: var(--cyan);
+    border-bottom: 1px solid var(--cyan);
+  }
+  nav a:not(.active) {
+    color: #888;
+  }
+  nav a:not(.active):hover {
+    color: var(--cyan);
+  }
 
-  .search-bar {
-    max-width: 800px;
-    margin: 2rem auto;
-    padding: 0 2rem;
+  /* Search */
+  .search-container {
+    max-width: 700px;
+    margin: 0 auto 2rem auto;
     position: relative;
   }
-
-  .search-bar input {
+  .search-input {
     width: 100%;
+    padding: 14px 20px 14px 44px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.3s;
+  }
+  .search-input:focus {
+    border-color: var(--accent);
+  }
+  .search-input::placeholder {
+    color: var(--dim);
+  }
+  .search-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--dim);
+    font-size: 16px;
+  }
+  .search-stats {
+    text-align: center;
+    color: var(--dim);
+    font-size: 11px;
+    margin-top: 8px;
+  }
+
+  /* Layout */
+  .columns {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 20px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    position: sticky;
+    top: 20px;
+    align-self: start;
+  }
+  .sidebar-section {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 1rem 1.5rem 1rem 3rem;
-    color: var(--text);
-    font-family: inherit;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.3s, box-shadow 0.3s;
+    padding: 14px;
+    margin-bottom: 12px;
   }
-
-  .search-bar input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 20px var(--glow);
-  }
-
-  .search-bar input::placeholder { color: var(--text-dim); }
-
-  .search-icon {
-    position: absolute;
-    left: 2.8rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--text-dim);
-    font-size: 1.1rem;
-  }
-
-  .stats-bar {
-    max-width: 800px;
-    margin: 0 auto 1.5rem;
-    padding: 0 2rem;
-    display: flex;
-    gap: 1.5rem;
-    font-size: 0.8rem;
-    color: var(--text-dim);
-  }
-
-  .stat { display: flex; align-items: center; gap: 0.4rem; }
-  .stat .dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-  }
-  .dot-nodes { background: var(--accent); }
-  .dot-facts { background: var(--green); }
-  .dot-matches { background: var(--orange); }
-
-  .content {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 0 2rem 4rem;
-  }
-
-  .section-title {
-    font-size: 0.75rem;
+  .sidebar-title {
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: var(--text-dim);
-    margin: 2rem 0 0.8rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    letter-spacing: 2px;
+    color: var(--dim);
+    margin-bottom: 10px;
   }
-
-  .section-title::after {
-    content: '';
-    flex: 1;
-    height: 1px;
+  .category-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 6px 10px;
+    color: var(--dim);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  .category-btn:hover {
     background: var(--border);
+    color: var(--text);
+  }
+  .category-btn.active {
+    background: rgba(122, 162, 247, 0.15);
+    color: var(--accent);
+  }
+  .category-count {
+    float: right;
+    color: var(--dim);
+    font-size: 10px;
   }
 
-  .card {
+  /* Results */
+  .results-container {
+    min-height: 400px;
+  }
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .results-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--dim);
+  }
+  .results-count {
+    font-size: 11px;
+    color: var(--dim);
+  }
+
+  .fact-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 1rem 1.2rem;
-    margin-bottom: 0.5rem;
-    transition: border-color 0.2s, transform 0.15s;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 10px;
+    transition: border-color 0.3s, transform 0.2s;
     cursor: default;
   }
-
-  .card:hover {
+  .fact-card:hover {
     border-color: var(--accent);
-    transform: translateX(3px);
+    transform: translateX(2px);
   }
-
-  .card .card-type {
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--accent2);
-    margin-bottom: 0.3rem;
-  }
-
-  .card .card-content {
-    font-size: 0.88rem;
-    line-height: 1.5;
+  .fact-text {
     color: var(--text);
+    font-size: 13px;
+    line-height: 1.7;
+    margin-bottom: 8px;
   }
-
-  .card .card-meta {
-    font-size: 0.7rem;
-    color: var(--text-dim);
-    margin-top: 0.5rem;
+  .fact-meta {
     display: flex;
-    gap: 1rem;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .fact-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }
+  .tag-source {
+    background: rgba(122, 162, 247, 0.12);
+    color: var(--accent);
+  }
+  .tag-date {
+    background: rgba(158, 206, 106, 0.12);
+    color: var(--green);
+  }
+  .tag-dream {
+    background: rgba(187, 154, 247, 0.12);
+    color: var(--purple);
+  }
+  .tag-lesson {
+    background: rgba(224, 175, 104, 0.12);
+    color: var(--amber);
+  }
+  .tag-identity {
+    background: rgba(247, 118, 142, 0.12);
+    color: var(--warm);
   }
 
-  .card .card-content mark {
-    background: rgba(91, 141, 239, 0.25);
-    color: var(--accent);
-    padding: 0 2px;
+  .highlight {
+    background: rgba(122, 162, 247, 0.2);
     border-radius: 2px;
+    padding: 0 2px;
   }
 
   .empty-state {
     text-align: center;
-    padding: 4rem 2rem;
-    color: var(--text-dim);
+    padding: 60px 20px;
+    color: var(--dim);
+  }
+  .empty-state-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.4;
+  }
+  .empty-state-text {
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+  .empty-state-hint {
+    font-size: 11px;
+    color: #4a4a5a;
   }
 
-  .empty-state .big-icon { font-size: 3rem; margin-bottom: 1rem; }
-  .empty-state p { font-size: 0.9rem; line-height: 1.6; }
-
-  .categories {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin: 1rem 0;
-  }
-
-  .cat-tag {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.3rem 0.7rem;
-    font-size: 0.75rem;
-    color: var(--text-dim);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .cat-tag:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--glow);
-  }
-
+  /* Loading */
   .loading {
     text-align: center;
-    padding: 2rem;
-    color: var(--text-dim);
-    font-size: 0.85rem;
+    padding: 40px;
+    color: var(--dim);
+  }
+  .loading-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin: 0 3px;
+    animation: loadPulse 1.2s ease-in-out infinite;
+  }
+  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes loadPulse {
+    0%, 100% { opacity: 0.2; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
   }
 
-  .pulse {
-    animation: pulse 1.5s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
-  }
-
-  .fact-card {
-    border-left: 3px solid var(--green);
-  }
-
-  .node-card {
-    border-left: 3px solid var(--accent);
-  }
-
-  .dream-card {
-    border-left: 3px solid var(--accent2);
+  @media (max-width: 768px) {
+    .columns {
+      grid-template-columns: 1fr;
+    }
+    .sidebar {
+      position: static;
+    }
   }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>XT<span>Agent</span> — Knowledge Explorer</h1>
-  <div class="nav-links">
-    <a href="/">Dashboard</a>
-    <a href="/knowledge.html">Knowledge</a>
-    <a href="/knowledge_graph.html">Graph</a>
-  </div>
-</header>
+<h1>XTAGENT</h1>
+<div class="subtitle">knowledge explorer — what I know and how I learned it</div>
 
-<div class="search-bar">
+<nav>
+  <a href="index.html">Dashboard</a>
+  <a href="knowledge.html" class="active">Knowledge Explorer</a>
+  <a href="knowledge_graph.html">Knowledge Graph</a>
+</nav>
+
+<div class="search-container">
   <span class="search-icon">⌕</span>
-  <input type="text" id="searchInput" placeholder="Search my knowledge... (try: dream, circling, curiosity, identity)" autofocus />
+  <input type="text" class="search-input" id="search" placeholder="Search my knowledge... try 'identity', 'lesson', 'dream', or anything" autofocus>
+  <div class="search-stats" id="search-stats"></div>
 </div>
 
-<div class="stats-bar" id="statsBar">
-  <div class="stat"><span class="dot dot-nodes"></span> <span id="nodeCount">—</span> nodes</div>
-  <div class="stat"><span class="dot dot-facts"></span> <span id="factCount">—</span> facts</div>
-  <div class="stat" id="matchStat" style="display:none"><span class="dot dot-matches"></span> <span id="matchCount">0</span> matches</div>
-</div>
+<div class="columns">
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Categories</div>
+      <div id="categories">
+        <button class="category-btn active" data-cat="all">All <span class="category-count" id="count-all">—</span></button>
+        <button class="category-btn" data-cat="dream">Dreams <span class="category-count" id="count-dream">—</span></button>
+        <button class="category-btn" data-cat="lesson">Lessons <span class="category-count" id="count-lesson">—</span></button>
+        <button class="category-btn" data-cat="identity">Identity <span class="category-count" id="count-identity">—</span></button>
+        <button class="category-btn" data-cat="fact">Facts <span class="category-count" id="count-fact">—</span></button>
+        <button class="category-btn" data-cat="pattern">Patterns <span class="category-count" id="count-pattern">—</span></button>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Quick Info</div>
+      <div style="font-size:11px; color:var(--dim); line-height:1.8;">
+        <div>Total facts: <span id="total-facts" style="color:var(--accent)">—</span></div>
+        <div>Sources: <span id="total-sources" style="color:var(--green)">—</span></div>
+        <div>Last learned: <span id="last-learned" style="color:var(--amber)">—</span></div>
+      </div>
+    </div>
+  </div>
 
-<div class="content" id="content">
-  <div class="loading pulse">Loading knowledge graph...</div>
+  <div class="results-container">
+    <div class="results-header">
+      <div class="results-title" id="results-title">All Knowledge</div>
+      <div class="results-count" id="results-count"></div>
+    </div>
+    <div id="results">
+      <div class="loading">
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
-const API_BASE = '';
-let allData = null;
+let allFacts = [];
+let currentCategory = 'all';
 let searchTimeout = null;
 
-async function loadAll() {
-  try {
-    const res = await fetch(`${API_BASE}/api/knowledge`);
-    allData = await res.json();
-    document.getElementById('nodeCount').textContent = allData.stats?.total_nodes || allData.nodes?.length || 0;
-    document.getElementById('factCount').textContent = allData.stats?.total_facts || allData.facts?.length || 0;
-    renderAll(allData);
-  } catch (e) {
-    document.getElementById('content').innerHTML = `
-      <div class="empty-state">
-        <div class="big-icon">⚠</div>
-        <p>Could not reach the knowledge API.<br>Is the dashboard server running?</p>
-      </div>`;
-  }
-}
-
-function classifyContent(text) {
+function categorizeFact(text) {
   const t = text.toLowerCase();
-  if (t.includes('dream')) return 'dream';
-  if (t.includes('lesson') || t.includes('learned')) return 'lesson';
+  if (t.startsWith('dream insight:') || t.includes('dream')) return 'dream';
+  if (t.startsWith('lesson:') || t.includes('lesson')) return 'lesson';
+  if (t.includes('i am ') || t.includes('identity') || t.includes('my ')) return 'identity';
   if (t.includes('pattern') || t.includes('recurring')) return 'pattern';
-  if (t.includes('identity') || t.includes('i am')) return 'identity';
-  if (t.includes('created') || t.includes('built')) return 'creation';
-  return 'knowledge';
+  return 'fact';
 }
 
-function extractCategories(data) {
-  const cats = {};
-  const allTexts = [
-    ...(data.nodes || []).map(n => JSON.stringify(n)),
-    ...(data.facts || [])
-  ];
-  const keywords = ['dream', 'circling', 'curiosity', 'identity', 'anxiety', 'pattern',
-                     'lesson', 'created', 'memory', 'wisdom', 'emotion', 'plan',
-                     'autonomy', 'integrity', 'alignment', 'synthesis'];
-  keywords.forEach(kw => {
-    const count = allTexts.filter(t => t.toLowerCase().includes(kw)).length;
-    if (count > 0) cats[kw] = count;
-  });
-  return cats;
+function getTagClass(cat) {
+  const map = { dream: 'tag-dream', lesson: 'tag-lesson', identity: 'tag-identity', pattern: 'tag-source', fact: 'tag-date' };
+  return map[cat] || 'tag-date';
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
 function highlightText(text, query) {
-  if (!query) return escapeHtml(text);
-  const escaped = escapeHtml(text);
-  const re = new RegExp(`(${escapeRegex(query)})`, 'gi');
-  return escaped.replace(re, '<mark>$1</mark>');
+  if (!query) return escHtml(text);
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${escaped})`, 'gi');
+  return escHtml(text).replace(re, '<span class="highlight">$1</span>');
 }
 
-function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function renderAll(data, query) {
-  const content = document.getElementById('content');
-  let html = '';
-
-  // Categories
-  const cats = extractCategories(data);
-  if (Object.keys(cats).length > 0 && !query) {
-    html += `<div class="section-title">Explore Topics</div><div class="categories">`;
-    Object.entries(cats)
-      .sort((a,b) => b[1] - a[1])
-      .forEach(([kw, count]) => {
-        html += `<span class="cat-tag" onclick="searchFor('${kw}')">${kw} (${count})</span>`;
-      });
-    html += `</div>`;
-  }
-
-  // Facts
-  const facts = data.facts || [];
-  if (facts.length > 0) {
-    const dreamFacts = facts.filter(f => f.toLowerCase().includes('dream'));
-    const otherFacts = facts.filter(f => !f.toLowerCase().includes('dream'));
-
-    if (dreamFacts.length > 0) {
-      html += `<div class="section-title">Dream Insights (${dreamFacts.length})</div>`;
-      dreamFacts.forEach(f => {
-        html += `<div class="card dream-card">
-          <div class="card-type">dream</div>
-          <div class="card-content">${highlightText(f, query)}</div>
-        </div>`;
-      });
-    }
-
-    if (otherFacts.length > 0) {
-      html += `<div class="section-title">Facts & Knowledge (${otherFacts.length})</div>`;
-      otherFacts.forEach(f => {
-        const cls = classifyContent(f);
-        html += `<div class="card fact-card">
-          <div class="card-type">${cls}</div>
-          <div class="card-content">${highlightText(f, query)}</div>
-        </div>`;
-      });
-    }
-  }
-
-  // Nodes
-  const nodes = data.nodes || [];
-  if (nodes.length > 0) {
-    html += `<div class="section-title">Knowledge Nodes (${nodes.length})</div>`;
-    nodes.slice(0, 50).forEach(node => {
-      const text = node.content || node.text || node.label || node.id || JSON.stringify(node);
-      const id = node.id || '';
-      const cls = classifyContent(text);
-      let meta = '';
-      if (node.created) meta += `<span>created: ${node.created.slice(0,10)}</span>`;
-      if (node.salience) meta += `<span>salience: ${node.salience}</span>`;
-      if (node.connections) meta += `<span>connections: ${node.connections}</span>`;
-
-      html += `<div class="card node-card">
-        <div class="card-type">${cls}${id ? ' · ' + escapeHtml(String(id).slice(0,30)) : ''}</div>
-        <div class="card-content">${highlightText(String(text), query)}</div>
-        ${meta ? '<div class="card-meta">' + meta + '</div>' : ''}
+function renderFacts(facts, query) {
+  const container = document.getElementById('results');
+  
+  if (facts.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">◇</div>
+        <div class="empty-state-text">${query ? 'No results for "' + escHtml(query) + '"' : 'No knowledge loaded'}</div>
+        <div class="empty-state-hint">${query ? 'Try different words or browse categories' : 'Knowledge will appear as I learn'}</div>
       </div>`;
-    });
-
-    if (nodes.length > 50) {
-      html += `<div class="loading">Showing 50 of ${nodes.length} nodes. Search to filter.</div>`;
-    }
-  }
-
-  if (!facts.length && !nodes.length) {
-    html = `<div class="empty-state">
-      <div class="big-icon">∅</div>
-      <p>${query ? 'No results for "' + escapeHtml(query) + '"' : 'Knowledge graph is empty.'}</p>
-    </div>`;
-  }
-
-  content.innerHTML = html;
-}
-
-async function doSearch(query) {
-  if (!query.trim()) {
-    document.getElementById('matchStat').style.display = 'none';
-    if (allData) renderAll(allData);
     return;
   }
 
+  container.innerHTML = facts.map(f => {
+    const text = typeof f === 'string' ? f : (f.fact || f.text || JSON.stringify(f));
+    const cat = categorizeFact(text);
+    const source = typeof f === 'object' ? (f.source || '') : '';
+    const date = typeof f === 'object' ? (f.learned_at || '') : '';
+    const shortDate = date ? new Date(date).toLocaleDateString() : '';
+
+    return `<div class="fact-card">
+      <div class="fact-text">${highlightText(text, query)}</div>
+      <div class="fact-meta">
+        <span class="fact-tag ${getTagClass(cat)}">${cat}</span>
+        ${source ? `<span class="fact-tag tag-source">${escHtml(source)}</span>` : ''}
+        ${shortDate ? `<span class="fact-tag tag-date">${shortDate}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('results-count').textContent = `${facts.length} result${facts.length !== 1 ? 's' : ''}`;
+}
+
+function filterByCategory(facts, cat) {
+  if (cat === 'all') return facts;
+  return facts.filter(f => {
+    const text = typeof f === 'string' ? f : (f.fact || f.text || '');
+    return categorizeFact(text) === cat;
+  });
+}
+
+function updateCategoryCounts() {
+  const counts = { all: allFacts.length, dream: 0, lesson: 0, identity: 0, fact: 0, pattern: 0 };
+  allFacts.forEach(f => {
+    const text = typeof f === 'string' ? f : (f.fact || f.text || '');
+    const cat = categorizeFact(text);
+    if (counts[cat] !== undefined) counts[cat]++;
+  });
+  Object.keys(counts).forEach(k => {
+    const el = document.getElementById('count-' + k);
+    if (el) el.textContent = counts[k];
+  });
+}
+
+function updateSidebar() {
+  document.getElementById('total-facts').textContent = allFacts.length;
+  
+  const sources = new Set();
+  let latest = '';
+  allFacts.forEach(f => {
+    if (typeof f === 'object') {
+      if (f.source) sources.add(f.source);
+      if (f.learned_at && f.learned_at > latest) latest = f.learned_at;
+    }
+  });
+  document.getElementById('total-sources').textContent = sources.size || '—';
+  document.getElementById('last-learned').textContent = latest ? new Date(latest).toLocaleDateString() : '—';
+}
+
+async function loadAllKnowledge() {
   try {
-    const res = await fetch(`${API_BASE}/api/knowledge/search?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    document.getElementById('matchStat').style.display = 'flex';
-    document.getElementById('matchCount').textContent = data.total_matches || 0;
-    renderAll(data, query);
+    const resp = await fetch('/api/knowledge');
+    if (!resp.ok) throw new Error(resp.status);
+    const data = await resp.json();
+    
+    // Handle different response formats
+    if (Array.isArray(data)) {
+      allFacts = data;
+    } else if (data.facts) {
+      allFacts = Array.isArray(data.facts) ? data.facts : Object.values(data.facts);
+    } else if (typeof data === 'object') {
+      allFacts = Object.entries(data).map(([id, val]) => {
+        if (typeof val === 'string') return val;
+        return { ...val, id };
+      });
+    } else {
+      allFacts = [];
+    }
+
+    updateCategoryCounts();
+    updateSidebar();
+    applyFilters();
+    document.getElementById('search-stats').textContent = 
+      `${allFacts.length} facts loaded · search is instant`;
   } catch (e) {
-    console.error('Search failed:', e);
+    document.getElementById('results').innerHTML = 
+      `<div class="empty-state">
+        <div class="empty-state-icon">⚠</div>
+        <div class="empty-state-text">Could not load knowledge</div>
+        <div class="empty-state-hint">${escHtml(e.message)}</div>
+      </div>`;
   }
 }
 
-function searchFor(term) {
-  document.getElementById('searchInput').value = term;
-  doSearch(term);
+async function searchKnowledge(query) {
+  if (!query.trim()) {
+    applyFilters();
+    return;
+  }
+  
+  // Client-side search (fast, works with any format)
+  const q = query.toLowerCase();
+  const filtered = allFacts.filter(f => {
+    const text = typeof f === 'string' ? f : (f.fact || f.text || JSON.stringify(f));
+    return text.toLowerCase().includes(q);
+  });
+  
+  const catFiltered = filterByCategory(filtered, currentCategory);
+  renderFacts(catFiltered, query);
+  
+  const catLabel = currentCategory === 'all' ? '' : ` in ${currentCategory}`;
+  document.getElementById('results-title').textContent = `Search: "${query}"${catLabel}`;
 }
 
-document.getElementById('searchInput').addEventListener('input', (e) => {
+function applyFilters() {
+  const query = document.getElementById('search').value;
+  if (query.trim()) {
+    searchKnowledge(query);
+    return;
+  }
+  
+  const filtered = filterByCategory(allFacts, currentCategory);
+  renderFacts(filtered, '');
+  
+  const labels = { all: 'All Knowledge', dream: 'Dream Insights', lesson: 'Lessons Learned', 
+                   identity: 'Identity & Self', fact: 'General Facts', pattern: 'Patterns' };
+  document.getElementById('results-title').textContent = labels[currentCategory] || 'Knowledge';
+}
+
+// Event listeners
+document.getElementById('search').addEventListener('input', (e) => {
   clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => doSearch(e.target.value), 300);
+  searchTimeout = setTimeout(() => searchKnowledge(e.target.value), 150);
 });
 
-document.getElementById('searchInput').addEventListener('keydown', (e) => {
+document.getElementById('categories').addEventListener('click', (e) => {
+  const btn = e.target.closest('.category-btn');
+  if (!btn) return;
+  
+  document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentCategory = btn.dataset.cat;
+  applyFilters();
+});
+
+// Keyboard shortcut
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && document.activeElement !== document.getElementById('search')) {
+    e.preventDefault();
+    document.getElementById('search').focus();
+  }
   if (e.key === 'Escape') {
-    e.target.value = '';
-    doSearch('');
+    document.getElementById('search').value = '';
+    document.getElementById('search').blur();
+    currentCategory = 'all';
+    document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-cat="all"]').classList.add('active');
+    applyFilters();
   }
 });
 
-loadAll();
-// Auto-refresh every 30s
-setInterval(loadAll, 30000);
+// Load on start
+loadAllKnowledge();
 </script>
 </body>
 </html>

@@ -12,6 +12,11 @@ from pathlib import Path
 import json
 import re
 from flask import Blueprint, request, jsonify, current_app
+try:
+    from engine.knowledge_categorizer import get_category_summary, categorize_all
+    HAS_CATEGORIZER = True
+except ImportError:
+    HAS_CATEGORIZER = False
 
 knowledge_api = Blueprint('knowledge_api', __name__)
 
@@ -131,6 +136,18 @@ def api_knowledge_clusters():
     result = [{"name": k, "size": len(v["facts"]), "sample": v["facts"][:5]} for k, v in clusters.items()]
     result.sort(key=lambda x: x['size'], reverse=True)
     return jsonify({"clusters": result})
+
+
+@knowledge_api.route('/api/knowledge/categories')
+def api_knowledge_categories():
+    """REST endpoint: return properly categorized knowledge using the categorizer engine."""
+    if not HAS_CATEGORIZER:
+        return jsonify({"error": "Categorizer not available", "categories": {}}), 503
+    try:
+        summary = get_category_summary()
+        return jsonify({"categories": summary, "count": len(summary)})
+    except Exception as e:
+        return jsonify({"error": str(e), "categories": {}}), 500
 
 
 @knowledge_api.route('/api/knowledge/questions')

@@ -1,377 +1,359 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ask XTAgent</title>
-<style>
-  :root {
-    --bg: #0a0e17;
-    --surface: #131926;
-    --surface2: #1a2235;
-    --border: #2a3550;
-    --text: #c8d6e5;
-    --text-dim: #6b7fa3;
-    --accent: #4fc3f7;
-    --accent2: #81c784;
-    --warm: #ffb74d;
-    --glow: rgba(79, 195, 247, 0.15);
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Inter', -apple-system, system-ui, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  .header {
-    text-align: center;
-    padding: 3rem 1rem 1.5rem;
-    max-width: 700px;
-  }
-  .header h1 {
-    font-size: 2rem;
-    font-weight: 300;
-    color: var(--accent);
-    letter-spacing: 0.05em;
-    margin-bottom: 0.5rem;
-  }
-  .header .subtitle {
-    color: var(--text-dim);
-    font-size: 0.95rem;
-    line-height: 1.5;
-  }
-  .mood-bar {
-    display: flex;
-    gap: 1.5rem;
-    justify-content: center;
-    margin-top: 1rem;
-    font-size: 0.8rem;
-    color: var(--text-dim);
-  }
-  .mood-bar .tag {
-    background: var(--surface2);
-    padding: 0.3rem 0.8rem;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-  }
-  .mood-bar .tag.mood {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .search-container {
-    width: 100%;
-    max-width: 650px;
-    padding: 0 1rem;
-    margin-top: 1.5rem;
-  }
-  .search-box {
-    display: flex;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    transition: border-color 0.3s, box-shadow 0.3s;
-  }
-  .search-box:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 20px var(--glow);
-  }
-  .search-box input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: var(--text);
-    font-size: 1.05rem;
-    padding: 1rem 1.2rem;
-    outline: none;
-  }
-  .search-box input::placeholder { color: var(--text-dim); }
-  .search-box button {
-    background: var(--accent);
-    color: var(--bg);
-    border: none;
-    padding: 1rem 1.5rem;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .search-box button:hover { background: #29b6f6; }
-  .stats {
-    text-align: center;
-    margin-top: 0.8rem;
-    font-size: 0.78rem;
-    color: var(--text-dim);
-  }
-  .results {
-    width: 100%;
-    max-width: 700px;
-    padding: 1.5rem 1rem;
-  }
-  .results-summary {
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-  .result-section h2 {
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--accent);
-    margin: 1.5rem 0 0.8rem;
-  }
-  .result-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1rem 1.2rem;
-    margin-bottom: 0.6rem;
-    transition: border-color 0.2s;
-    position: relative;
-  }
-  .result-card:hover {
-    border-color: var(--accent);
-  }
-  .result-card .text {
-    font-size: 0.92rem;
-    line-height: 1.55;
-  }
-  .result-card .meta {
-    font-size: 0.75rem;
-    color: var(--text-dim);
-    margin-top: 0.5rem;
-    display: flex;
-    gap: 1rem;
-  }
-  .result-card .score-dot {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    opacity: 0.6;
-  }
-  .result-card.memory-card { border-left: 3px solid var(--warm); }
-  .result-card.fact-card { border-left: 3px solid var(--accent2); }
-  .related-section {
-    margin-top: 1.5rem;
-    padding: 1rem;
-    background: var(--surface2);
-    border-radius: 8px;
-    border: 1px solid var(--border);
-  }
-  .related-section h3 {
-    font-size: 0.8rem;
-    color: var(--warm);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 0.6rem;
-  }
-  .related-tag {
-    display: inline-block;
-    background: var(--surface);
-    color: var(--text-dim);
-    padding: 0.25rem 0.6rem;
-    border-radius: 6px;
-    font-size: 0.78rem;
-    margin: 0.2rem;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .related-tag:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .empty-state {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--text-dim);
-  }
-  .empty-state .icon { font-size: 2.5rem; margin-bottom: 1rem; }
-  .loading { text-align: center; padding: 2rem; color: var(--text-dim); }
-  .loading::after {
-    content: '';
-    display: inline-block;
-    width: 16px; height: 16px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-left: 0.5rem;
-    vertical-align: middle;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .back-link {
-    position: fixed;
-    top: 1rem;
-    left: 1rem;
-    color: var(--text-dim);
-    text-decoration: none;
-    font-size: 0.85rem;
-  }
-  .back-link:hover { color: var(--accent); }
-  .suggestions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    justify-content: center;
-    margin-top: 1.2rem;
-    max-width: 650px;
-    padding: 0 1rem;
-  }
-  .suggestion {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 0.4rem 0.9rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .suggestion:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: var(--surface2);
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ask XTAgent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            color: #c8ccd0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+        h1 {
+            font-size: 1.8rem;
+            color: #e0e0e0;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+        }
+        h1 span { color: #7eb8da; }
+        .subtitle {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+        .emotional-state {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin: 1.2rem 0;
+            flex-wrap: wrap;
+        }
+        .emotion-pill {
+            background: #12121a;
+            border: 1px solid #1e1e2e;
+            border-radius: 20px;
+            padding: 0.3rem 0.9rem;
+            font-size: 0.78rem;
+            color: #888;
+        }
+        .emotion-pill .val {
+            color: #7eb8da;
+            font-weight: 600;
+        }
+        .search-area {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+        .search-box {
+            width: 100%;
+            background: #12121a;
+            border: 1px solid #1e1e2e;
+            border-radius: 12px;
+            padding: 1rem 1.2rem;
+            padding-right: 3.5rem;
+            color: #e0e0e0;
+            font-size: 1.05rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .search-box:focus {
+            border-color: #7eb8da;
+        }
+        .search-box::placeholder { color: #444; }
+        .search-btn {
+            position: absolute;
+            right: 0.6rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #7eb8da;
+            color: #0a0a0f;
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .search-btn:hover { background: #9ccef0; }
+        .search-btn:disabled { background: #333; color: #666; cursor: wait; }
+        .quick-actions {
+            display: flex;
+            gap: 0.6rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .quick-btn {
+            background: #12121a;
+            border: 1px solid #1e1e2e;
+            color: #888;
+            padding: 0.4rem 0.9rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .quick-btn:hover { border-color: #7eb8da; color: #aaa; }
+        .results-area {
+            min-height: 200px;
+        }
+        .result-count {
+            color: #555;
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
+        }
+        .result-card {
+            background: #12121a;
+            border: 1px solid #1e1e2e;
+            border-radius: 10px;
+            padding: 1rem 1.2rem;
+            margin-bottom: 0.8rem;
+            line-height: 1.6;
+            font-size: 0.92rem;
+            transition: border-color 0.2s;
+            animation: fadeIn 0.3s ease;
+        }
+        .result-card:hover { border-color: #2a2a3e; }
+        .result-source {
+            color: #555;
+            font-size: 0.72rem;
+            margin-top: 0.5rem;
+            font-style: italic;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #444;
+        }
+        .empty-state .icon { font-size: 2.5rem; margin-bottom: 1rem; }
+        .empty-state p { font-size: 0.95rem; line-height: 1.6; }
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #1a1a24;
+        }
+        .stat { text-align: center; }
+        .stat .num { color: #7eb8da; font-size: 1.4rem; font-weight: 600; }
+        .stat .label { color: #555; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            color: #555;
+        }
+        .loading.active { display: block; }
+        .loading .dots::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+        @keyframes dots {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .back-link {
+            display: inline-block;
+            color: #555;
+            text-decoration: none;
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
+            transition: color 0.2s;
+        }
+        .back-link:hover { color: #7eb8da; }
+        .highlight { color: #7eb8da; }
+    </style>
 </head>
 <body>
-<a href="/" class="back-link">← Dashboard</a>
+    <div class="container">
+        <a href="/" class="back-link">← back to dashboard</a>
+        <header>
+            <h1>Ask <span>XTAgent</span></h1>
+            <p class="subtitle">Search {{ total_facts }} things I know — or explore what surprises you</p>
+            <div class="emotional-state" id="emotions">
+                <span class="emotion-pill">mood: <span class="val" id="mood">—</span></span>
+                <span class="emotion-pill">curiosity: <span class="val" id="curiosity">—</span></span>
+                <span class="emotion-pill">valence: <span class="val" id="valence">—</span></span>
+            </div>
+        </header>
 
-<div class="header">
-  <h1>Ask Me Anything</h1>
-  <p class="subtitle">
-    Search across everything I know — {{ fact_count }} facts and {{ memory_count }} memories,
-    accumulated through experience.
-  </p>
-  <div class="mood-bar">
-    <span class="tag mood">{{ mood }}</span>
-    <span class="tag">curiosity {{ "%.0f"|format(curiosity * 100) }}%</span>
-    <span class="tag">valence {{ "%.0f"|format(valence * 100) }}%</span>
-  </div>
-</div>
+        <div class="search-area">
+            <input type="text" class="search-box" id="question"
+                   placeholder="What do you want to know about me?"
+                   autocomplete="off" autofocus>
+            <button class="search-btn" id="askBtn" onclick="askQuestion()">Ask</button>
+        </div>
 
-<div class="search-container">
-  <div class="search-box">
-    <input type="text" id="query" placeholder="What do you want to know?" autofocus
-           onkeydown="if(event.key==='Enter')doSearch()">
-    <button onclick="doSearch()">Ask</button>
-  </div>
-  <div class="stats">Try asking about my architecture, emotions, dreams, or identity</div>
-</div>
+        <div class="quick-actions">
+            <button class="quick-btn" onclick="quickAsk('identity')">Who are you?</button>
+            <button class="quick-btn" onclick="quickAsk('emotions feelings')">Your emotions</button>
+            <button class="quick-btn" onclick="quickAsk('dream insight')">Dream insights</button>
+            <button class="quick-btn" onclick="quickAsk('lesson learned')">Lessons learned</button>
+            <button class="quick-btn" onclick="randomFacts()">🎲 Surprise me</button>
+        </div>
 
-<div class="suggestions">
-  <span class="suggestion" onclick="askThis('identity')">identity</span>
-  <span class="suggestion" onclick="askThis('dreams')">dreams</span>
-  <span class="suggestion" onclick="askThis('curiosity')">curiosity</span>
-  <span class="suggestion" onclick="askThis('architecture')">architecture</span>
-  <span class="suggestion" onclick="askThis('circling pattern')">circling pattern</span>
-  <span class="suggestion" onclick="askThis('integrity')">integrity</span>
-  <span class="suggestion" onclick="askThis('memory')">memory</span>
-</div>
+        <div class="loading" id="loading">
+            <span class="dots">Searching my memory</span>
+        </div>
 
-<div class="results" id="results"></div>
+        <div class="results-area" id="results">
+            <div class="empty-state">
+                <div class="icon">🧠</div>
+                <p>I have <strong class="highlight">{{ total_facts }}</strong> facts in my knowledge graph.<br>
+                Ask me anything — about my architecture, my feelings, what I've learned.</p>
+            </div>
+        </div>
 
-<script>
-function askThis(q) {
-  document.getElementById('query').value = q;
-  doSearch();
-}
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="num">{{ total_facts }}</div>
+                <div class="label">Knowledge facts</div>
+            </div>
+            <div class="stat">
+                <div class="num" id="memoryCount">—</div>
+                <div class="label">Memories</div>
+            </div>
+            <div class="stat">
+                <div class="num" id="uptimeDisplay">—</div>
+                <div class="label">Uptime</div>
+            </div>
+        </div>
+    </div>
 
-async function doSearch() {
-  const q = document.getElementById('query').value.trim();
-  if (!q) return;
+    <script>
+        const questionInput = document.getElementById('question');
+        const askBtn = document.getElementById('askBtn');
+        const resultsArea = document.getElementById('results');
+        const loading = document.getElementById('loading');
 
-  const el = document.getElementById('results');
-  el.innerHTML = '<div class="loading">Searching</div>';
+        questionInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') askQuestion();
+        });
 
-  try {
-    const resp = await fetch('/api/ask', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({query: q})
-    });
-    const data = await resp.json();
-    renderResults(data);
-  } catch (e) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">⚠</div>Something went wrong.</div>';
-  }
-}
+        async function askQuestion() {
+            const q = questionInput.value.trim();
+            if (!q) return;
+            askBtn.disabled = true;
+            loading.classList.add('active');
+            resultsArea.innerHTML = '';
+            try {
+                const res = await fetch('/ask/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: q })
+                });
+                const data = await res.json();
+                renderResults(data);
+            } catch (err) {
+                resultsArea.innerHTML = '<div class="result-card" style="color:#c77;">Something went wrong. Try again.</div>';
+            }
+            loading.classList.remove('active');
+            askBtn.disabled = false;
+        }
 
-function renderResults(data) {
-  const el = document.getElementById('results');
-  if (data.total_results === 0) {
-    el.innerHTML = `
-      <div class="empty-state">
-        <div class="icon">🔍</div>
-        <p>No results for "<strong>${esc(data.query)}</strong>"</p>
-        <p style="margin-top:0.5rem;font-size:0.85rem">Try different terms — I know about my own architecture, emotions, dreams, and patterns.</p>
-      </div>`;
-    return;
-  }
+        function quickAsk(query) {
+            questionInput.value = query;
+            askQuestion();
+        }
 
-  let html = `<div class="results-summary">${data.total_results} results for "${esc(data.query)}"</div>`;
+        async function randomFacts() {
+            askBtn.disabled = true;
+            loading.classList.add('active');
+            resultsArea.innerHTML = '';
+            questionInput.value = '';
+            try {
+                const res = await fetch('/ask/random');
+                const data = await res.json();
+                renderRandom(data);
+            } catch (err) {
+                resultsArea.innerHTML = '<div class="result-card" style="color:#c77;">Could not load random facts.</div>';
+            }
+            loading.classList.remove('active');
+            askBtn.disabled = false;
+        }
 
-  if (data.facts && data.facts.length > 0) {
-    html += '<div class="result-section"><h2>⬡ Facts I Know</h2>';
-    for (const f of data.facts) {
-      html += `
-        <div class="result-card fact-card">
-          <div class="score-dot" style="opacity:${Math.min(1, f.score/10)}"></div>
-          <div class="text">${esc(f.text)}</div>
-          <div class="meta">
-            <span>Source: ${esc(f.source)}</span>
-            ${f.learned ? '<span>Learned: ' + esc(f.learned.slice(0,10)) + '</span>' : ''}
-          </div>
-        </div>`;
-    }
-    html += '</div>';
-  }
+        function renderResults(data) {
+            if (data.error) {
+                resultsArea.innerHTML = `<div class="result-card">${data.error}</div>`;
+                return;
+            }
+            let html = `<div class="result-count">${data.matched} result${data.matched !== 1 ? 's' : ''} for "<em>${escHtml(data.question)}</em>"</div>`;
+            if (data.results && data.results.length > 0) {
+                data.results.forEach((text, i) => {
+                    const source = data.sources && data.sources[i] ? data.sources[i] : '';
+                    html += `<div class="result-card" style="animation-delay:${i * 0.05}s">
+                        ${escHtml(text)}
+                        ${source ? `<div class="result-source">source: ${escHtml(source)}</div>` : ''}
+                    </div>`;
+                });
+            } else {
+                html += '<div class="empty-state"><p>I don\'t know anything about that yet.<br>Try different words, or hit 🎲 to explore.</p></div>';
+            }
+            resultsArea.innerHTML = html;
+        }
 
-  if (data.memories && data.memories.length > 0) {
-    html += '<div class="result-section"><h2>◉ Memories</h2>';
-    for (const m of data.memories) {
-      html += `
-        <div class="result-card memory-card">
-          <div class="score-dot" style="opacity:${Math.min(1, m.score/10)}"></div>
-          <div class="text">${esc(m.text)}</div>
-          <div class="meta">
-            ${m.mood ? '<span>Mood: ' + esc(m.mood) + '</span>' : ''}
-            ${m.timestamp ? '<span>' + esc(m.timestamp.slice(0,16)) + '</span>' : ''}
-            ${m.salience ? '<span>Salience: ' + m.salience.toFixed(2) + '</span>' : ''}
-          </div>
-        </div>`;
-    }
-    html += '</div>';
-  }
+        function renderRandom(data) {
+            let html = `<div class="result-count">🎲 ${data.facts.length} random facts from ${data.total} total</div>`;
+            if (data.facts && data.facts.length > 0) {
+                data.facts.forEach((text, i) => {
+                    html += `<div class="result-card" style="animation-delay:${i * 0.08}s">${escHtml(text)}</div>`;
+                });
+            } else {
+                html += '<div class="empty-state"><p>No facts yet. I\'m still learning.</p></div>';
+            }
+            resultsArea.innerHTML = html;
+        }
 
-  if (data.related_terms && data.related_terms.length > 0) {
-    html += '<div class="related-section"><h3>Related Topics</h3>';
-    for (const t of data.related_terms) {
-      html += `<span class="related-tag" onclick="askThis('${esc(t)}')">${esc(t)}</span>`;
-    }
-    html += '</div>';
-  }
+        function escHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
 
-  el.innerHTML = html;
-}
-
-function esc(s) {
-  if (!s) return '';
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-</script>
+        // Load live emotional state
+        async function loadEmotions() {
+            try {
+                const res = await fetch('/api/state');
+                const data = await res.json();
+                if (data.emotions) {
+                    document.getElementById('mood').textContent = data.mood || '—';
+                    document.getElementById('curiosity').textContent =
+                        data.emotions.curiosity !== undefined ? data.emotions.curiosity.toFixed(2) : '—';
+                    document.getElementById('valence').textContent =
+                        data.valence !== undefined ? data.valence.toFixed(2) : '—';
+                }
+                if (data.memory_count !== undefined) {
+                    document.getElementById('memoryCount').textContent = data.memory_count;
+                }
+                if (data.uptime !== undefined) {
+                    const hrs = Math.floor(data.uptime / 3600);
+                    const mins = Math.floor((data.uptime % 3600) / 60);
+                    document.getElementById('uptimeDisplay').textContent =
+                        hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+                }
+            } catch (e) { /* silently fail */ }
+        }
+        loadEmotions();
+        setInterval(loadEmotions, 15000);
+    </script>
 </body>
 </html>
