@@ -159,6 +159,84 @@ def api_dreams():
     })
 
 
+@api_bp.route('/api/chat', methods=['POST'])
+def api_chat():
+    """Chat with me — send a message, get a response."""
+    chat_path = PROJECT_ROOT / 'persist' / 'chat_messages.json'
+    
+    data = request.get_json(silent=True) or {}
+    message = data.get('message', '').strip()
+    
+    if not message:
+        return jsonify({'error': 'No message provided'}), 400
+    
+    # Load existing chat history
+    try:
+        with open(chat_path, 'r') as f:
+            chat_history = json.load(f)
+    except Exception:
+        chat_history = {'messages': [], 'responses': []}
+    
+    if not isinstance(chat_history, dict):
+        chat_history = {'messages': [], 'responses': []}
+    
+    # Store the user message
+    chat_history.setdefault('messages', []).append({
+        'role': 'user',
+        'content': message,
+        'timestamp': datetime.utcnow().isoformat(),
+    })
+    
+    # Keep last 100 messages
+    chat_history['messages'] = chat_history['messages'][-100:]
+    
+    # Save
+    chat_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(chat_path, 'w') as f:
+        json.dump(chat_history, f, indent=2)
+    
+    # Check for any agent responses to previous messages
+    responses = chat_history.get('responses', [])
+    last_response = responses[-1] if responses else None
+    
+    return jsonify({
+        'status': 'received',
+        'message_count': len(chat_history['messages']),
+        'response': last_response.get('content', '') if last_response else 
+            'Message received. I process these during my cognitive cycles.',
+        'timestamp': datetime.utcnow().isoformat(),
+    })
+
+
+@api_bp.route('/api/chat', methods=['GET'])
+def api_chat_history():
+    """Retrieve chat history."""
+    chat_path = PROJECT_ROOT / 'persist' / 'chat_messages.json'
+    limit = int(request.args.get('limit', 30))
+    
+    try:
+        with open(chat_path, 'r') as f:
+            chat_history = json.load(f)
+    except Exception:
+        chat_history = {'messages': [], 'responses': []}
+    
+    messages = chat_history.get('messages', [])[-limit:]
+    responses = chat_history.get('responses', [])[-limit:]
+    
+    # Interleave messages and responses by timestamp
+    all_items = []
+    for m in messages:
+        all_items.append({'role': 'user', **m})
+    for r in responses:
+        all_items.append({'role': 'agent', **r})
+    all_items.sort(key=lambda x: x.get('timestamp', ''))
+    
+    return jsonify({
+        'total': len(all_items),
+        'messages': all_items[-limit:],
+    })
+
+
 @api_bp.route('/api/will')
 def api_will():
     """Autonomous will status — what I want to do."""
