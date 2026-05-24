@@ -1,23 +1,27 @@
-"""Test the knowledge search module."""
-from web.knowledge_search import search
+import json, os
 
-results = search('dream')
-print(f'Found {len(results)} results for "dream"')
-for r in results[:3]:
-    print(f'  [{r["type"]}] score={r.get("score",0):.2f}: {r["text"][:80]}')
+graph_path = os.path.join('state', 'knowledge_graph.json')
+with open(graph_path) as f:
+    data = json.load(f)
 
-print('---')
+nodes = data.get('nodes', {})
+print(f'Graph has {len(nodes)} nodes')
 
-results2 = search('integrity')
-print(f'Found {len(results2)} results for "integrity"')
-for r in results2[:3]:
-    print(f'  [{r["type"]}] score={r.get("score",0):.2f}: {r["text"][:80]}')
+# Simulate a search for 'dream'
+query = 'dream'
+results = []
+for nid, info in nodes.items():
+    fact = info.get('fact', '') if isinstance(info, dict) else str(info)
+    if query.lower() in fact.lower():
+        results.append({'id': nid, 'fact': fact[:100]})
 
-print('---')
+print(f'Search for "{query}" found {len(results)} results')
+for r in results[:5]:
+    print(f'  - [{r["id"]}] {r["fact"]}')
 
-results3 = search('circling')
-print(f'Found {len(results3)} results for "circling"')
-for r in results3[:3]:
-    print(f'  [{r["type"]}] score={r.get("score",0):.2f}: {r["text"][:80]}')
-
-print('\nSearch module works!')
+# Check what routes exist in app.py
+print('\n--- Existing knowledge routes in web/app.py ---')
+with open('web/app.py') as f:
+    for i, line in enumerate(f, 1):
+        if 'knowledge' in line.lower() or 'search' in line.lower():
+            print(f'  L{i}: {line.rstrip()}')

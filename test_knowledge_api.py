@@ -1,27 +1,60 @@
-"""Quick smoke test for knowledge API endpoints."""
-from web.knowledge_api import knowledge_api
-from flask import Flask
+from web.app import create_app
 
-app = Flask(__name__)
-app.register_blueprint(knowledge_api)
+app = create_app()
 client = app.test_client()
 
-# Test search
-resp = client.get('/api/knowledge/search?q=dream')
-print(f'Search status: {resp.status_code}')
-data = resp.get_json()
-if data:
-    print(f'Results: {len(data.get("results", []))} hits')
-    for r in data.get("results", [])[:3]:
-        print(f'  - {r.get("fact", r)[:80]}')
+# Test 1: Does the knowledge hub page render?
+print("=== Test 1: Knowledge Hub page ===")
+resp = client.get('/knowledge-hub')
+print(f"  Status: {resp.status_code}")
+if resp.status_code == 200:
+    html = resp.data.decode()
+    print(f"  Length: {len(html)} chars")
+    # Check key elements rendered
+    has_facts = 'facts' in html
+    has_search = 'Search' in html
+    print(f"  Has 'facts' stat: {has_facts}")
+    print(f"  Has search UI: {has_search}")
 else:
-    print(f'Raw response: {resp.data[:200]}')
+    print(f"  Error: {resp.data.decode()[:300]}")
 
-# Test stats
-resp2 = client.get('/api/knowledge/stats')
-print(f'Stats status: {resp2.status_code}')
-stats = resp2.get_json()
-if stats:
-    print(f'Total facts: {stats.get("total_facts", "?")}')
+# Test 2: Does the search API work?
+print("\n=== Test 2: Search API ===")
+resp = client.get('/api/knowledge/search?q=identity')
+print(f"  Status: {resp.status_code}")
+if resp.status_code == 200:
+    import json
+    data = json.loads(resp.data)
+    print(f"  Results: {len(data.get('results', []))}")
+    for r in data.get('results', [])[:3]:
+        print(f"    [{r.get('score',0):.2f}] {r.get('fact','')[:80]}")
+else:
+    print(f"  Error: {resp.data.decode()[:300]}")
 
-print('\nAll tests passed.')
+# Test 3: Clusters API
+print("\n=== Test 3: Clusters API ===")
+resp = client.get('/api/knowledge/clusters')
+print(f"  Status: {resp.status_code}")
+if resp.status_code == 200:
+    data = json.loads(resp.data)
+    clusters = data.get('clusters', [])
+    print(f"  Clusters: {len(clusters)}")
+    for c in clusters[:3]:
+        print(f"    {c.get('label','?')}: {len(c.get('facts',[]))} facts")
+else:
+    print(f"  Error: {resp.data.decode()[:300]}")
+
+# Test 4: Questions API
+print("\n=== Test 4: Questions API ===")
+resp = client.get('/api/knowledge/questions')
+print(f"  Status: {resp.status_code}")
+if resp.status_code == 200:
+    data = json.loads(resp.data)
+    questions = data.get('questions', [])
+    print(f"  Questions: {len(questions)}")
+    for q in questions[:3]:
+        print(f"    ? {q[:80]}")
+else:
+    print(f"  Error: {resp.data.decode()[:300]}")
+
+print("\n=== Done ===")

@@ -61,6 +61,7 @@ def create_app():
     from web.status_api import status_bp
     # knowledge_search_bp removed — duplicate of knowledge_bp
     from web.reflect import reflect_bp
+    from web.user_api import user_api
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
@@ -98,6 +99,7 @@ def create_app():
     app.register_blueprint(query_bp)
     # knowledge_search_bp removed — duplicate of knowledge_bp
     app.register_blueprint(reflect_bp)
+    app.register_blueprint(user_api)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — the living portal
@@ -193,7 +195,7 @@ def create_app():
     @app.route('/api/knowledge/search')
     def knowledge_search():
         query = request.args.get('q', '').strip().lower()
-        graph_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+        graph_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'knowledge_graph.json')
         results = []
         try:
             with open(graph_path, 'r') as f:
@@ -221,7 +223,7 @@ def create_app():
         query = request.args.get('q', '').strip().lower()
         results = []
         if query:
-            kg_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+            kg_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'knowledge_graph.json')
             try:
                 with open(kg_path) as f:
                     kg = json.load(f)

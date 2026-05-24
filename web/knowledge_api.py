@@ -3,6 +3,9 @@ import json
 import os
 from flask import Blueprint, request, jsonify
 from difflib import SequenceMatcher
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from engine.knowledge_synthesis import find_clusters, generate_questions
 
 knowledge_api = Blueprint('knowledge_api', __name__)
 
@@ -148,3 +151,29 @@ def random_fact():
         'learned_at': node_data.get('learned_at', 'unknown') if isinstance(node_data, dict) else 'unknown',
         'total_knowledge': len(nodes)
     })
+
+
+@knowledge_api.route('/api/knowledge/clusters')
+def knowledge_clusters():
+    """Find thematic clusters in knowledge. Reveals structure in what I know."""
+    try:
+        clusters = find_clusters()
+        return jsonify({
+            'cluster_count': len(clusters),
+            'clusters': clusters
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@knowledge_api.route('/api/knowledge/questions')
+def knowledge_questions():
+    """Generate questions from gaps and connections in my knowledge."""
+    try:
+        questions = generate_questions()
+        return jsonify({
+            'question_count': len(questions),
+            'questions': questions
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
