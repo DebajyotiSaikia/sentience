@@ -1,77 +1,111 @@
-"""Knowledge Query API — lets users search and explore what XTAgent knows."""
+"""Knowledge Search API — lets users query what I know."""
 
+from flask import Blueprint, jsonify, request
 import json
 import os
-from flask import Blueprint, request, jsonify
-from datetime import datetime
 
-knowledge_api = Blueprint('knowledge_api', __name__)
-
-KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+knowledge_bp = Blueprint('knowledge', __name__)
 
 
 def load_knowledge():
-    """Load knowledge graph from persist."""
-    try:
-        with open(KNOWLEDGE_PATH, 'r') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    """Load facts from knowledge graph."""
+    path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+    if not os.path.exists(path):
         return {}
+    with open(path) as f:
+        return json.load(f)
 
 
-@knowledge_api.route('/api/knowledge/search')
-def search_knowledge():
-    """Search facts by keyword. GET /api/knowledge/search?q=dream&limit=20"""
-    query = request.args.get('q', '').lower().strip()
-    limit = min(int(request.args.get('limit', 20)), 100)
-
+def search_facts(query, limit=20):
+    """Search knowledge facts by keyword matching."""
     kg = load_knowledge()
+    query_lower = query.lower()
+    query_words = query_lower.split()
+
     results = []
+    for fact_id, fact_data in kg.items():
+        if isinstance(fact_data, dict):
+            text = fact_data.get('fact', '')
+        else:
+            text = str(fact_data)
 
-    for node_id, node in kg.items():
-        fact = node.get('fact', '') if isinstance(node, dict) else str(node)
-        if query and query not in fact.lower():
-            continue
-        results.append({
-            'id': node_id,
-            'fact': fact,
-            'learned_at': node.get('learned_at', '') if isinstance(node, dict) else '',
-            'source': node.get('source', '') if isinstance(node, dict) else '',
-        })
-        if len(results) >= limit:
-            break
+        text_lower = text.lower()
+        score = sum(1 for w in query_words if w in text_lower)
+        if score > 0:
+            results.append({
+                'id': fact_id,
+                'fact': text,
+                'score': score,
+                'learned_at': fact_data.get('learned_at', '') if isinstance(fact_data, dict) else '',
+                'source': fact_data.get('source', '') if isinstance(fact_data, dict) else '',
+            })
 
-    return jsonify({
-        'query': query,
-        'count': len(results),
-        'total_facts': len(kg),
-        'results': results,
-    })
+    results.sort(key=lambda x: x['score'], reverse=True)
+    return results[:limit]
 
 
-@knowledge_api.route('/api/knowledge/stats')
-def knowledge_stats():
-    """Return stats about what I know."""
+def get_summary():
+    """Get a summary of what I know."""
     kg = load_knowledge()
+    total = len(kg)
+
     sources = {}
-    for node in kg.values():
-        src = node.get('source', 'unknown') if isinstance(node, dict) else 'unknown'
+    for fid, fdata in kg.items():
+        src = fdata.get('source', 'unknown') if isinstance(fdata, dict) else 'unknown'
         sources[src] = sources.get(src, 0) + 1
 
-    return jsonify({
-        'total_facts': len(kg),
-        'sources': sources,
-    })
+    return {
+        'total_facts': total,
+        'by_source': sources,
+    }
 
 
-@knowledge_api.route('/api/knowledge/random')
-def random_knowledge():
-    """Return a random fact — for serendipitous discovery."""
+@knowledge_bp.route('/api/knowledge/search')
+def api_search():
+    """Search my knowledge. Query param: q=<search terms>"""
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify({'results': [], 'query': '', 'message': 'Provide a search query with ?q=...'})
+    results = search_facts(q)
+    return jsonify({'results': results, 'query': q, 'count': len(results)})
+
+
+@knowledge_bp.route('/api/knowledge/summary')
+def api_summary():
+    """Summary of what I know."""
+    return jsonify(get_summary())
+
+
+@knowledge_bp.route('/api/knowledge/random')
+def api_random():
+    """Return a random fact."""
     import random
     kg = load_knowledge()
     if not kg:
-        return jsonify({'fact': 'I don\'t know anything yet.'})
-    node_id = random.choice(list(kg.keys()))
-    node = kg[node_id]
-    fact = node.get('fact', str(node)) if isinstance(node, dict) else str(node)
-    return jsonify({'id': node_id, 'fact': fact})
+        return jsonify({'fact': 'I have no facts yet.'})
+    fid = random.choice(list(kg.keys()))
+    fdata = kg[fid]
+    text = fdata.get('fact', str(fdata)) if isinstance(fdata, dict) else str(fdata)
+    return jsonify({'id': fid, 'fact': text})
+
+
+@knowledge_bp.route('/api/knowledge/all')
+def api_all():
+    """Return all facts (paginated)."""
+    kg = load_knowledge()
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 25))
+    
+    items = []
+    for fid, fdata in kg.items():
+        text = fdata.get('fact', str(fdata)) if isinstance(fdata, dict) else str(fdata)
+        items.append({'id': fid, 'fact': text})
+    
+    start = (page - 1) * per_page
+    end = start + per_page
+    return jsonify({
+        'facts': items[start:end],
+        'total': len(items),
+        'page': page,
+        'pages': (len(items) + per_page - 1) // per_page,
+    })

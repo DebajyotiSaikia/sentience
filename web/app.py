@@ -35,7 +35,7 @@ def create_app():
     from web.search import search_bp
     from web.explore import explore_bp
     from web.query import query_bp
-    from web.knowledge_api import knowledge_api as knowledge_api_bp
+    # from web.knowledge_api import knowledge_api as knowledge_api_bp  # removed: knowledge_api doesn't exist, knowledge_bp used instead
     from web.briefing import briefing_bp
     from web.essays import essays_bp
     from web.chat import chat_bp
@@ -52,6 +52,7 @@ def create_app():
     # from web.knowledge_search import knowledge_bp  # uses register_routes(), not Blueprint
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
+    from web.knowledge_api import knowledge_bp
     from web.emotional_timeline import emotional_timeline_bp
     from web.portrait import portrait_bp
     from web.pulse import pulse_bp
@@ -72,7 +73,7 @@ def create_app():
     app.register_blueprint(about_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(explore_bp)
-    app.register_blueprint(knowledge_api_bp)
+    # app.register_blueprint(knowledge_api_bp)  # removed: see line 93 for knowledge_bp
     app.register_blueprint(briefing_bp)
     app.register_blueprint(essays_bp)
     app.register_blueprint(chat_bp)
@@ -89,6 +90,7 @@ def create_app():
     # app.register_blueprint(knowledge_bp)  # no Blueprint in knowledge_search.py
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
+    app.register_blueprint(knowledge_bp)
     app.register_blueprint(emotional_timeline_bp)
     app.register_blueprint(portrait_bp)
     app.register_blueprint(pulse_bp)

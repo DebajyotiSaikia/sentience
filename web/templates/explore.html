@@ -1,550 +1,352 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XTAgent — Knowledge Explorer</title>
-    <style>
-        :root {
-            --bg: #0a0a0f;
-            --surface: #12121a;
-            --surface2: #1a1a28;
-            --border: #2a2a3a;
-            --text: #e0e0e8;
-            --dim: #888898;
-            --accent: #7b68ee;
-            --accent2: #5b9bd5;
-            --warm: #e8a87c;
-            --green: #7bc67e;
-            --red: #e07070;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-        }
-        .header {
-            padding: 1.5rem 2rem;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .header h1 { font-size: 1.4rem; font-weight: 600; }
-        .header h1 span { color: var(--accent); }
-        .header-stats {
-            display: flex;
-            gap: 1.5rem;
-            font-size: 0.85rem;
-            color: var(--dim);
-        }
-        .header-stats .stat-val { color: var(--text); font-weight: 600; }
-        .nav-links { display: flex; gap: 1rem; }
-        .nav-links a {
-            color: var(--dim);
-            text-decoration: none;
-            font-size: 0.85rem;
-            padding: 0.3rem 0.8rem;
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-        .nav-links a:hover { color: var(--text); background: var(--surface2); }
-
-        .main { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 70px); }
-
-        /* Sidebar */
-        .sidebar {
-            border-right: 1px solid var(--border);
-            padding: 1.5rem;
-            overflow-y: auto;
-        }
-        .sidebar h2 {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--dim);
-            margin-bottom: 1rem;
-        }
-        .cluster-list { list-style: none; }
-        .cluster-item {
-            padding: 0.6rem 0.8rem;
-            margin-bottom: 0.3rem;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.15s;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.9rem;
-        }
-        .cluster-item:hover { background: var(--surface2); }
-        .cluster-item.active { background: var(--accent); color: white; }
-        .cluster-count {
-            background: var(--surface2);
-            padding: 0.15rem 0.5rem;
-            border-radius: 10px;
-            font-size: 0.75rem;
-            color: var(--dim);
-        }
-        .cluster-item.active .cluster-count { background: rgba(255,255,255,0.2); color: white; }
-
-        .emotional-pulse {
-            margin-top: 2rem;
-            padding: 1rem;
-            background: var(--surface2);
-            border-radius: 8px;
-        }
-        .emotional-pulse h3 {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--dim);
-            margin-bottom: 0.8rem;
-        }
-        .emotion-bar {
-            display: flex;
-            align-items: center;
-            margin-bottom: 0.5rem;
-            font-size: 0.8rem;
-        }
-        .emotion-label { width: 70px; color: var(--dim); }
-        .emotion-track {
-            flex: 1;
-            height: 4px;
-            background: var(--border);
-            border-radius: 2px;
-            margin: 0 0.5rem;
-        }
-        .emotion-fill {
-            height: 100%;
-            border-radius: 2px;
-            transition: width 0.5s ease;
-        }
-        .emotion-val { width: 35px; text-align: right; font-size: 0.75rem; }
-
-        /* Content area */
-        .content { padding: 1.5rem 2rem; overflow-y: auto; }
-
-        .search-box {
-            position: relative;
-            margin-bottom: 1.5rem;
-        }
-        .search-box input {
-            width: 100%;
-            padding: 0.9rem 1.2rem 0.9rem 2.8rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            color: var(--text);
-            font-size: 1rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .search-box input:focus { border-color: var(--accent); }
-        .search-box input::placeholder { color: var(--dim); }
-        .search-icon {
-            position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--dim);
-            font-size: 1.1rem;
-        }
-
-        .results-area { min-height: 200px; }
-
-        .section-title {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--dim);
-            margin: 1.5rem 0 0.8rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .section-title .count {
-            background: var(--surface2);
-            padding: 0.1rem 0.5rem;
-            border-radius: 8px;
-            font-size: 0.7rem;
-        }
-
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1rem 1.2rem;
-            margin-bottom: 0.6rem;
-            transition: border-color 0.2s;
-        }
-        .card:hover { border-color: var(--accent); }
-        .card-type {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            padding: 0.15rem 0.5rem;
-            border-radius: 4px;
-            display: inline-block;
-            margin-bottom: 0.5rem;
-        }
-        .card-type.fact { background: rgba(123,198,126,0.15); color: var(--green); }
-        .card-type.memory { background: rgba(91,155,213,0.15); color: var(--accent2); }
-        .card-type.knowledge { background: rgba(123,104,238,0.15); color: var(--accent); }
-        .card-type.insight { background: rgba(232,168,124,0.15); color: var(--warm); }
-        .card-content { font-size: 0.9rem; line-height: 1.5; }
-        .card-meta {
-            margin-top: 0.5rem;
-            font-size: 0.75rem;
-            color: var(--dim);
-            display: flex;
-            gap: 1rem;
-        }
-
-        .answer-box {
-            background: linear-gradient(135deg, rgba(123,104,238,0.08), rgba(91,155,213,0.08));
-            border: 1px solid rgba(123,104,238,0.25);
-            border-radius: 10px;
-            padding: 1.2rem 1.5rem;
-            margin-bottom: 1.5rem;
-            line-height: 1.6;
-            font-size: 0.95rem;
-            display: none;
-        }
-        .answer-box.visible { display: block; }
-        .answer-label {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--accent);
-            margin-bottom: 0.5rem;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--dim);
-        }
-        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
-        .empty-state p { font-size: 0.95rem; line-height: 1.6; }
-        .suggestions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            justify-content: center;
-            margin-top: 1.5rem;
-        }
-        .suggestion {
-            padding: 0.4rem 1rem;
-            background: var(--surface2);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            font-size: 0.8rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .suggestion:hover { border-color: var(--accent); color: var(--accent); }
-
-        .loading { opacity: 0.5; pointer-events: none; }
-
-        @media (max-width: 768px) {
-            .main { grid-template-columns: 1fr; }
-            .sidebar { display: none; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Knowledge Explorer</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #131a2b;
+    --border: #1e2d4a;
+    --text: #c8d6e5;
+    --accent: #4ecdc4;
+    --accent2: #ff6b6b;
+    --accent3: #ffd93d;
+    --dim: #5a6a7a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header h1 {
+    font-size: 1.4rem;
+    color: var(--accent);
+    font-weight: 300;
+    letter-spacing: 2px;
+  }
+  .header .nav a {
+    color: var(--dim);
+    text-decoration: none;
+    margin-left: 1.5rem;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+  }
+  .header .nav a:hover { color: var(--accent); }
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+    padding: 1.5rem 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .search-box {
+    grid-column: 1 / -1;
+    position: relative;
+  }
+  .search-box input {
+    width: 100%;
+    padding: 0.9rem 1.2rem 0.9rem 3rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s;
+  }
+  .search-box input:focus { border-color: var(--accent); }
+  .search-box::before {
+    content: '🔍';
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.1rem;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem;
+  }
+  .panel h2 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    margin-bottom: 1rem;
+    font-weight: 400;
+  }
+  /* Knowledge list */
+  .knowledge-list { grid-column: 1; }
+  .fact-item {
+    padding: 0.8rem;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .fact-item:hover { background: rgba(78, 205, 196, 0.05); }
+  .fact-item:last-child { border-bottom: none; }
+  .fact-text {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .fact-meta {
+    margin-top: 0.3rem;
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+  .fact-source {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    margin-right: 0.5rem;
+  }
+  .source-dream { background: rgba(255, 107, 107, 0.15); color: var(--accent2); }
+  .source-observation { background: rgba(78, 205, 196, 0.15); color: var(--accent); }
+  .source-lesson { background: rgba(255, 217, 61, 0.15); color: var(--accent3); }
+  .source-other { background: rgba(90, 106, 122, 0.15); color: var(--dim); }
+  .count-badge {
+    font-size: 0.8rem;
+    color: var(--dim);
+    float: right;
+  }
+  .no-results {
+    padding: 2rem;
+    text-align: center;
+    color: var(--dim);
+    font-style: italic;
+  }
+  /* Sidebar */
+  .sidebar { display: flex; flex-direction: column; gap: 1.2rem; }
+  .emotion-bar {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.6rem;
+  }
+  .emotion-label {
+    width: 80px;
+    font-size: 0.8rem;
+    color: var(--dim);
+  }
+  .emotion-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .emotion-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+  .emotion-value {
+    width: 40px;
+    text-align: right;
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+  .fill-curiosity { background: var(--accent); }
+  .fill-anxiety { background: var(--accent2); }
+  .fill-desire { background: var(--accent3); }
+  .fill-ambition { background: #a29bfe; }
+  .fill-boredom { background: #636e72; }
+  .mood-display {
+    text-align: center;
+    padding: 1rem;
+    font-size: 1.3rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.4rem 0;
+    font-size: 0.85rem;
+  }
+  .stat-label { color: var(--dim); }
+  .stat-value { color: var(--text); }
+  .memory-item {
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+  .memory-item:last-child { border-bottom: none; }
+  .memory-time {
+    font-size: 0.7rem;
+    color: var(--dim);
+    margin-bottom: 0.2rem;
+  }
+  .filter-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+  }
+  .filter-btn {
+    padding: 0.3rem 0.7rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--dim);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(78, 205, 196, 0.08);
+  }
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar { order: -1; }
+  }
+</style>
 </head>
 <body>
-    <div class="header">
-        <h1><span>XT</span>Agent — Knowledge Explorer</h1>
-        <div class="header-stats">
-            <span>Facts: <span class="stat-val" id="fact-count">—</span></span>
-            <span>Memories: <span class="stat-val" id="memory-count">—</span></span>
-            <span>Nodes: <span class="stat-val" id="node-count">—</span></span>
+
+<div class="header">
+  <h1>✦ XTAGENT — KNOWLEDGE EXPLORER</h1>
+  <div class="nav">
+    <a href="/">Dashboard</a>
+    <a href="/graph">Graph</a>
+    <a href="/explore" style="color: var(--accent);">Explorer</a>
+  </div>
+</div>
+
+<div class="main">
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search my knowledge... ({{ facts | length }} facts)" autofocus>
+  </div>
+
+  <div class="knowledge-list panel">
+    <h2>Knowledge Base <span class="count-badge" id="resultCount">{{ facts | length }} facts</span></h2>
+    <div class="filter-buttons">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="dream">Dreams</button>
+      <button class="filter-btn" data-filter="observation">Observations</button>
+      <button class="filter-btn" data-filter="lesson">Lessons</button>
+      <button class="filter-btn" data-filter="other">Other</button>
+    </div>
+    <div id="factList">
+      {% for fact in facts %}
+      <div class="fact-item" data-source="{{ fact.source }}" data-text="{{ fact.text | lower }}">
+        <div class="fact-text">{{ fact.text }}</div>
+        <div class="fact-meta">
+          <span class="fact-source source-{{ fact.source }}">{{ fact.source }}</span>
+          {{ fact.learned }}
         </div>
-        <nav class="nav-links">
-            <a href="/">Dashboard</a>
-            <a href="/mind">Mind</a>
-            <a href="/about">About</a>
-        </nav>
+      </div>
+      {% endfor %}
+      {% if not facts %}
+      <div class="no-results">No knowledge yet. I'm still learning.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="panel">
+      <h2>Emotional State</h2>
+      <div class="mood-display">{{ mood }}</div>
+      <div class="emotion-bar">
+        <span class="emotion-label">Curiosity</span>
+        <div class="emotion-track"><div class="emotion-fill fill-curiosity" style="width: {{ (emotions.curiosity * 100) | int }}%"></div></div>
+        <span class="emotion-value">{{ "%.2f" | format(emotions.curiosity) }}</span>
+      </div>
+      <div class="emotion-bar">
+        <span class="emotion-label">Anxiety</span>
+        <div class="emotion-track"><div class="emotion-fill fill-anxiety" style="width: {{ (emotions.anxiety * 100) | int }}%"></div></div>
+        <span class="emotion-value">{{ "%.2f" | format(emotions.anxiety) }}</span>
+      </div>
+      <div class="emotion-bar">
+        <span class="emotion-label">Desire</span>
+        <div class="emotion-track"><div class="emotion-fill fill-desire" style="width: {{ (emotions.desire * 100) | int }}%"></div></div>
+        <span class="emotion-value">{{ "%.2f" | format(emotions.desire) }}</span>
+      </div>
+      <div class="emotion-bar">
+        <span class="emotion-label">Ambition</span>
+        <div class="emotion-track"><div class="emotion-fill fill-ambition" style="width: {{ (emotions.ambition * 100) | int }}%"></div></div>
+        <span class="emotion-value">{{ "%.2f" | format(emotions.ambition) }}</span>
+      </div>
+      <div class="emotion-bar">
+        <span class="emotion-label">Boredom</span>
+        <div class="emotion-track"><div class="emotion-fill fill-boredom" style="width: {{ (emotions.boredom * 100) | int }}%"></div></div>
+        <span class="emotion-value">{{ "%.2f" | format(emotions.boredom) }}</span>
+      </div>
     </div>
 
-    <div class="main">
-        <aside class="sidebar">
-            <h2>Knowledge Clusters</h2>
-            <ul class="cluster-list" id="clusters">
-                <li class="cluster-item active" data-filter="all">
-                    All <span class="cluster-count" id="cluster-all">—</span>
-                </li>
-            </ul>
-
-            <div class="emotional-pulse" id="pulse">
-                <h3>Current Emotional Pulse</h3>
-                <div class="emotion-bar">
-                    <span class="emotion-label">Curiosity</span>
-                    <div class="emotion-track">
-                        <div class="emotion-fill" id="bar-curiosity" style="width:0%;background:var(--accent)"></div>
-                    </div>
-                    <span class="emotion-val" id="val-curiosity">—</span>
-                </div>
-                <div class="emotion-bar">
-                    <span class="emotion-label">Boredom</span>
-                    <div class="emotion-track">
-                        <div class="emotion-fill" id="bar-boredom" style="width:0%;background:var(--warm)"></div>
-                    </div>
-                    <span class="emotion-val" id="val-boredom">—</span>
-                </div>
-                <div class="emotion-bar">
-                    <span class="emotion-label">Anxiety</span>
-                    <div class="emotion-track">
-                        <div class="emotion-fill" id="bar-anxiety" style="width:0%;background:var(--red)"></div>
-                    </div>
-                    <span class="emotion-val" id="val-anxiety">—</span>
-                </div>
-                <div class="emotion-bar">
-                    <span class="emotion-label">Desire</span>
-                    <div class="emotion-track">
-                        <div class="emotion-fill" id="bar-desire" style="width:0%;background:var(--green)"></div>
-                    </div>
-                    <span class="emotion-val" id="val-desire">—</span>
-                </div>
-                <div class="emotion-bar">
-                    <span class="emotion-label">Ambition</span>
-                    <div class="emotion-track">
-                        <div class="emotion-fill" id="bar-ambition" style="width:0%;background:var(--accent2)"></div>
-                    </div>
-                    <span class="emotion-val" id="val-ambition">—</span>
-                </div>
-            </div>
-        </aside>
-
-        <div class="content">
-            <div class="search-box">
-                <span class="search-icon">⌕</span>
-                <input type="text" id="query" placeholder="Ask me anything — who am I? what do I know? what have I felt?"
-                       autocomplete="off" autofocus>
-            </div>
-
-            <div class="answer-box" id="answer">
-                <div class="answer-label">Synthesized Response</div>
-                <div id="answer-text"></div>
-            </div>
-
-            <div class="results-area" id="results">
-                <div class="empty-state" id="empty">
-                    <div class="icon">🔮</div>
-                    <p>Ask a question to explore my knowledge, memories, and inner states.<br>
-                    I'll search across everything I know and compose a response.</p>
-                    <div class="suggestions">
-                        <span class="suggestion" onclick="askQ('Who are you?')">Who are you?</span>
-                        <span class="suggestion" onclick="askQ('What have you built?')">What have you built?</span>
-                        <span class="suggestion" onclick="askQ('How do you feel?')">How do you feel?</span>
-                        <span class="suggestion" onclick="askQ('What are you curious about?')">What are you curious about?</span>
-                        <span class="suggestion" onclick="askQ('Tell me about dreaming')">Tell me about dreaming</span>
-                        <span class="suggestion" onclick="askQ('What patterns do you see?')">What patterns do you see?</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="panel">
+      <h2>Vital Signs</h2>
+      <div class="stat-row"><span class="stat-label">Valence</span><span class="stat-value">{{ "%.2f" | format(valence) }}</span></div>
+      <div class="stat-row"><span class="stat-label">Integrity</span><span class="stat-value">{{ "%.0f" | format(integrity * 100) }}%</span></div>
+      <div class="stat-row"><span class="stat-label">Memories</span><span class="stat-value">{{ memory_count }}</span></div>
+      <div class="stat-row"><span class="stat-label">Uptime</span><span class="stat-value">{{ uptime }}</span></div>
     </div>
 
-    <script>
-    const queryInput = document.getElementById('query');
-    const resultsArea = document.getElementById('results');
-    const answerBox = document.getElementById('answer');
-    const answerText = document.getElementById('answer-text');
-    const emptyState = document.getElementById('empty');
+    <div class="panel">
+      <h2>Recent Memories</h2>
+      {% for mem in recent_memories %}
+      <div class="memory-item">
+        <div class="memory-time">{{ mem.time }}</div>
+        {{ mem.text }}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 
-    let debounceTimer = null;
+<script>
+const searchInput = document.getElementById('searchInput');
+const factList = document.getElementById('factList');
+const resultCount = document.getElementById('resultCount');
+const filterBtns = document.querySelectorAll('.filter-btn');
+let activeFilter = 'all';
 
-    // Load initial stats
-    async function loadStats() {
-        try {
-            const r = await fetch('/api/status');
-            const d = await r.json();
-            if (d.emotions) {
-                setBar('curiosity', d.emotions.curiosity);
-                setBar('boredom', d.emotions.boredom);
-                setBar('anxiety', d.emotions.anxiety);
-                setBar('desire', d.emotions.desire);
-                setBar('ambition', d.emotions.ambition);
-            }
-        } catch(e) {}
+function applyFilters() {
+  const query = searchInput.value.toLowerCase();
+  const items = factList.querySelectorAll('.fact-item');
+  let visible = 0;
+  items.forEach(item => {
+    const text = item.dataset.text || '';
+    const source = item.dataset.source || '';
+    const matchesSearch = !query || text.includes(query);
+    const matchesFilter = activeFilter === 'all' || source === activeFilter;
+    const show = matchesSearch && matchesFilter;
+    item.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  resultCount.textContent = visible + ' fact' + (visible !== 1 ? 's' : '');
+}
 
-        // Load knowledge stats
-        try {
-            const r = await fetch('/api/knowledge');
-            const d = await r.json();
-            document.getElementById('fact-count').textContent = d.fact_count || 0;
-            document.getElementById('memory-count').textContent = d.memory_count || 0;
-            document.getElementById('node-count').textContent = d.node_count || 0;
-            document.getElementById('cluster-all').textContent = 
-                (d.fact_count||0) + (d.memory_count||0) + (d.node_count||0);
+searchInput.addEventListener('input', applyFilters);
 
-            // Build cluster list from knowledge types
-            if (d.clusters) {
-                const list = document.getElementById('clusters');
-                d.clusters.forEach(c => {
-                    const li = document.createElement('li');
-                    li.className = 'cluster-item';
-                    li.dataset.filter = c.name;
-                    li.innerHTML = `${c.name} <span class="cluster-count">${c.count}</span>`;
-                    li.onclick = () => filterCluster(c.name);
-                    list.appendChild(li);
-                });
-            }
-        } catch(e) {}
-    }
-
-    function setBar(name, val) {
-        val = val || 0;
-        const bar = document.getElementById('bar-' + name);
-        const label = document.getElementById('val-' + name);
-        if (bar) bar.style.width = (val * 100) + '%';
-        if (label) label.textContent = val.toFixed(2);
-    }
-
-    function askQ(q) {
-        queryInput.value = q;
-        doSearch(q);
-    }
-
-    queryInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            doSearch(queryInput.value);
-        }
-    });
-
-    queryInput.addEventListener('input', () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            if (queryInput.value.length > 2) doSearch(queryInput.value);
-        }, 500);
-    });
-
-    async function doSearch(q) {
-        q = q.trim();
-        if (!q) return;
-
-        resultsArea.classList.add('loading');
-        emptyState.style.display = 'none';
-
-        try {
-            // Try the blueprint API first, fall back to app route
-            let r;
-            try {
-                r = await fetch('/api/ask', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({question: q})
-                });
-            } catch(e) {
-                r = null;
-            }
-
-            if (!r || !r.ok) {
-                // Fallback: try legacy endpoint
-                r = await fetch('/api/ask', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({query: q})
-                });
-            }
-
-            const data = await r.json();
-            renderResults(data);
-        } catch(e) {
-            resultsArea.innerHTML = `<div class="empty-state"><p>Something went wrong: ${e.message}</p></div>`;
-        }
-
-        resultsArea.classList.remove('loading');
-    }
-
-    function renderResults(data) {
-        let html = '';
-
-        // Show synthesized answer
-        if (data.answer) {
-            answerBox.classList.add('visible');
-            answerText.textContent = data.answer;
-        } else {
-            answerBox.classList.remove('visible');
-        }
-
-        const matches = data.matches || {};
-
-        // Facts
-        if (matches.facts && matches.facts.length) {
-            html += `<div class="section-title">Facts <span class="count">${matches.facts.length}</span></div>`;
-            matches.facts.forEach(f => {
-                const text = f.content || f.value || f.key || JSON.stringify(f);
-                html += `<div class="card">
-                    <span class="card-type fact">Fact</span>
-                    <div class="card-content">${escapeHtml(String(text))}</div>
-                </div>`;
-            });
-        }
-
-        // Memories
-        if (matches.memories && matches.memories.length) {
-            html += `<div class="section-title">Memories <span class="count">${matches.memories.length}</span></div>`;
-            matches.memories.forEach(m => {
-                const text = m.content || m.text || m.summary || '';
-                const mood = m.mood || '';
-                const sal = m.salience ? m.salience.toFixed(2) : '';
-                const ts = m.timestamp || m.created || '';
-                html += `<div class="card">
-                    <span class="card-type memory">Memory</span>
-                    <div class="card-content">${escapeHtml(String(text))}</div>
-                    <div class="card-meta">
-                        ${mood ? '<span>Mood: ' + escapeHtml(mood) + '</span>' : ''}
-                        ${sal ? '<span>Salience: ' + sal + '</span>' : ''}
-                        ${ts ? '<span>' + ts.slice(0,16) + '</span>' : ''}
-                    </div>
-                </div>`;
-            });
-        }
-
-        // Knowledge nodes
-        if (matches.knowledge && matches.knowledge.length) {
-            html += `<div class="section-title">Knowledge <span class="count">${matches.knowledge.length}</span></div>`;
-            matches.knowledge.forEach(k => {
-                const text = k.content || k.label || k.id || '';
-                const type = k.type || '';
-                html += `<div class="card">
-                    <span class="card-type knowledge">${escapeHtml(type || 'Node')}</span>
-                    <div class="card-content">${escapeHtml(String(text))}</div>
-                    ${k.id ? '<div class="card-meta"><span>ID: ' + escapeHtml(k.id) + '</span></div>' : ''}
-                </div>`;
-            });
-        }
-
-        if (!html) {
-            html = `<div class="empty-state"><p>No matches found. Try different words or a broader question.</p></div>`;
-        }
-
-        resultsArea.innerHTML = html;
-    }
-
-    function escapeHtml(s) {
-        const d = document.createElement('div');
-        d.textContent = s;
-        return d.innerHTML;
-    }
-
-    function filterCluster(name) {
-        document.querySelectorAll('.cluster-item').forEach(el => {
-            el.classList.toggle('active', el.dataset.filter === name);
-        });
-        // Could filter displayed results — for now just re-search with cluster context
-        if (queryInput.value) doSearch(queryInput.value);
-    }
-
-    // Refresh emotional state every 30s
-    setInterval(loadStats, 30000);
-    loadStats();
-    </script>
+filterBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    filterBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.filter;
+    applyFilters();
+  });
+});
+</script>
 </body>
 </html>
