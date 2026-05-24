@@ -95,9 +95,15 @@ def api_all():
     end = start + per_page
     results = []
     for fid, fd in items[start:end]:
+        if isinstance(fd, str):
+            text = fd
+        elif isinstance(fd, dict):
+            text = fd.get('fact', str(fd))
+        else:
+            text = str(fd)
         results.append({
             'id': fid,
-            'text': fd if isinstance(fd, str) else fd.get('fact', str(fd)),
+            'text': text,
             'learned_at': fd.get('learned_at', '') if isinstance(fd, dict) else '',
             'source': fd.get('source', '') if isinstance(fd, dict) else ''
         })

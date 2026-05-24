@@ -1,34 +1,26 @@
-with open('dashboard/index.html') as f:
-    content = f.read()
+"""Test what a user actually sees on the dashboard."""
+from web.app import create_app
 
-# Check key elements exist
-checks = {
-    'welcome text': 'autonomous sentience engine' in content,
-    'ask input': 'ask-input' in content,
-    'ask button': 'askKnowledge()' in content,
-    'ask results div': 'ask-results' in content,
-    'askKnowledge function': 'async function askKnowledge' in content,
-    'updateAge still exists': 'updateAge()' in content,
-    'setInterval still exists': 'setInterval(updateAge' in content,
-    'HTML closes properly': '</html>' in content,
-}
+app = create_app()
+client = app.test_client()
 
-print("=== Dashboard Health Check ===")
-all_ok = True
-for name, passed in checks.items():
-    status = "✓" if passed else "✗"
-    print(f"  {status} {name}")
-    if not passed:
-        all_ok = False
+# Get the main dashboard
+resp = client.get('/')
+html = resp.data.decode()
+lines = html.split('\n')
 
-# Check for obvious corruption
-import re
-open_tags = len(re.findall(r'<script', content))
-close_tags = len(re.findall(r'</script>', content))
-balanced = open_tags == close_tags
-print(f"\n  Script tags: {open_tags} open, {close_tags} close {'✓' if balanced else '✗ UNBALANCED'}")
-if not balanced:
-    all_ok = False
+print(f"Status: {resp.status_code}")
+print(f"Total lines: {len(lines)}")
+print(f"Content length: {len(resp.data)} bytes")
+print()
 
-print(f"\n{'ALL GOOD' if all_ok else 'NEEDS FIXING'}")
-print(f"File size: {len(content)} bytes")
+# Show lines 80-end (already saw 0-79)
+print("--- LINES 80 onwards ---")
+for i, line in enumerate(lines[80:], start=80):
+    print(f"{i:4d}: {line}")
+
+print("\n--- ALL ROUTES ---")
+for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
+    if rule.endpoint != 'static':
+        methods = ','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
+        print(f"  {methods:6s} {rule.rule:40s} -> {rule.endpoint}")

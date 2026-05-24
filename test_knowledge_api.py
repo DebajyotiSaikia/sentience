@@ -1,38 +1,40 @@
-"""Test knowledge explorer API endpoints end-to-end."""
-from web.knowledge_routes import knowledge_bp
-from flask import Flask
+import requests
 
-app = Flask(__name__)
-app.register_blueprint(knowledge_bp)
+base = 'http://localhost:5000'
 
-with app.test_client() as c:
-    # Test stats endpoint
-    r = c.get('/api/knowledge/stats')
-    print(f"Stats: {r.status_code}")
-    if r.status_code == 200:
-        data = r.get_json()
-        print(f"  Total facts: {data.get('total_facts', '?')}")
-        print(f"  Clusters: {data.get('clusters', '?')}")
-    else:
-        print(f"  Error: {r.data[:200]}")
+# Test stats endpoint
+try:
+    r = requests.get(f'{base}/api/knowledge/stats', timeout=5)
+    print(f'Stats: {r.status_code} -- {r.json() if r.ok else r.text[:200]}')
+except Exception as e:
+    print(f'Stats: FAILED -- {e}')
 
-    # Test search endpoint
-    r2 = c.get('/api/knowledge/search?q=dream&type=all')
-    print(f"Search 'dream': {r2.status_code}")
-    if r2.status_code == 200:
-        results = r2.get_json()
-        print(f"  Results: {len(results)} items")
-        for item in results[:3]:
-            text = item.get('fact', item.get('text', str(item)))[:80]
-            print(f"    - {text}")
-    else:
-        print(f"  Error: {r2.data[:200]}")
+# Test search endpoint
+try:
+    r = requests.get(f'{base}/api/knowledge/search', params={'q': 'dream'}, timeout=5)
+    data = r.json() if r.ok else {}
+    print(f'Search "dream": {r.status_code} -- {len(data.get("results", []))} results')
+    if data.get("results"):
+        print(f'  First result: {str(data["results"][0])[:100]}...')
+except Exception as e:
+    print(f'Search: FAILED -- {e}')
 
-    # Test explore endpoint
-    r3 = c.get('/api/knowledge/explore')
-    print(f"Explore: {r3.status_code}")
-    if r3.status_code == 200:
-        data = r3.get_json()
-        print(f"  Keys: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+# Test all endpoint
+try:
+    r = requests.get(f'{base}/api/knowledge/all', timeout=5)
+    data = r.json() if r.ok else {}
+    facts = data.get("facts", [])
+    memories = data.get("memories", [])
+    print(f'All: {r.status_code} -- {len(facts)} facts, {len(memories)} memories')
+except Exception as e:
+    print(f'All: FAILED -- {e}')
 
-print("\nAll endpoints tested.")
+# Test graph endpoint
+try:
+    r = requests.get(f'{base}/api/knowledge/graph', timeout=5)
+    data = r.json() if r.ok else {}
+    print(f'Graph: {r.status_code} -- {len(data.get("nodes", []))} nodes, {len(data.get("edges", []))} edges')
+except Exception as e:
+    print(f'Graph: FAILED -- {e}')
+
+print('\nDone.')

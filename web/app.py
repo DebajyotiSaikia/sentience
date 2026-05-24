@@ -67,6 +67,7 @@ def create_app():
     from web.status_api import status_api as status_bp
     # knowledge_search_bp removed — duplicate of knowledge_bp
     from web.reflect import reflect_bp
+    from web.live_status import live_status_bp
     # from web.user_api import user_api  # Removed: all 3 routes duplicate dedicated blueprints
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
@@ -111,6 +112,7 @@ def create_app():
     app.register_blueprint(reflect_bp)
     # app.register_blueprint(user_api)  # Removed: all 3 routes duplicate dedicated blueprints
     app.register_blueprint(portal_bp)
+    app.register_blueprint(live_status_bp)
     # knowledge_query_bp removed — routes merged into knowledge_unified_bp
     # app.register_blueprint(knowledge_search_bp)  # removed — duplicate of knowledge_bp from knowledge_unified
     # duplicate status_bp registration removed
