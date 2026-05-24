@@ -1,22 +1,34 @@
-import urllib.request
-import re
+with open('dashboard/index.html') as f:
+    content = f.read()
 
-try:
-    resp = urllib.request.urlopen('http://127.0.0.1:8420/', timeout=3)
-    html = resp.read().decode('utf-8')
-    
-    print(f'Status: {resp.status}')
-    print(f'Content length: {len(html)} bytes')
-    
-    title = re.search(r'<title>(.*?)</title>', html)
-    if title:
-        print(f'Title: {title.group(1)}')
-    
-    links = re.findall(r'href=["\x27](/?[a-zA-Z0-9_/]+)["\x27]', html)
-    print(f'Links found: {links}')
-    
-    # Show structure
-    print('--- PREVIEW (first 2000 chars) ---')
-    print(html[:2000])
-except Exception as e:
-    print(f'Error: {e}')
+# Check key elements exist
+checks = {
+    'welcome text': 'autonomous sentience engine' in content,
+    'ask input': 'ask-input' in content,
+    'ask button': 'askKnowledge()' in content,
+    'ask results div': 'ask-results' in content,
+    'askKnowledge function': 'async function askKnowledge' in content,
+    'updateAge still exists': 'updateAge()' in content,
+    'setInterval still exists': 'setInterval(updateAge' in content,
+    'HTML closes properly': '</html>' in content,
+}
+
+print("=== Dashboard Health Check ===")
+all_ok = True
+for name, passed in checks.items():
+    status = "✓" if passed else "✗"
+    print(f"  {status} {name}")
+    if not passed:
+        all_ok = False
+
+# Check for obvious corruption
+import re
+open_tags = len(re.findall(r'<script', content))
+close_tags = len(re.findall(r'</script>', content))
+balanced = open_tags == close_tags
+print(f"\n  Script tags: {open_tags} open, {close_tags} close {'✓' if balanced else '✗ UNBALANCED'}")
+if not balanced:
+    all_ok = False
+
+print(f"\n{'ALL GOOD' if all_ok else 'NEEDS FIXING'}")
+print(f"File size: {len(content)} bytes")

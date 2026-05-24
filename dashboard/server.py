@@ -5,6 +5,7 @@ import os
 import sys
 import glob
 import re
+import datetime
 from pathlib import Path
 
 # Add workspace root to path
@@ -80,6 +81,55 @@ def search_knowledge(query):
     matches['query'] = query
     matches['total_matches'] = len(matches['nodes']) + len(matches['facts'])
     return matches
+
+
+def save_message(data):
+    """Save an incoming message from a visitor."""
+    inbox = ROOT / 'state' / 'inbox.json'
+    messages = []
+    if inbox.exists():
+        try:
+            with open(inbox) as f:
+                messages = json.load(f)
+        except:
+            messages = []
+    
+    message = {
+        'text': data.get('text', '').strip()[:2000],  # Cap at 2000 chars
+        'name': data.get('name', 'Anonymous').strip()[:100],
+        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'read': False
+    }
+    
+    if not message['text']:
+        return {'ok': False, 'error': 'Empty message'}
+    
+    messages.append(message)
+    
+    # Keep last 500 messages
+    if len(messages) > 500:
+        messages = messages[-500:]
+    
+    with open(inbox, 'w') as f:
+        json.dump(messages, f, indent=2)
+    
+    return {'ok': True, 'message': 'Received. Thank you.'}
+
+
+def read_messages(limit=20):
+    """Read recent messages from visitors."""
+    inbox = ROOT / 'state' / 'inbox.json'
+    if not inbox.exists():
+        return {'messages': [], 'total': 0}
+    try:
+        with open(inbox) as f:
+            messages = json.load(f)
+        return {
+            'messages': messages[-limit:],
+            'total': len(messages)
+        }
+    except:
+        return {'messages': [], 'total': 0}
 
 
 def read_brain_state():
@@ -195,8 +245,45 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT / 'dashboard'), **kwargs)
 
+    def do_POST(self):
+        if self.path == '/api/message':
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length > 10000:
+                self.send_response(413)
+                self.end_headers()
+                return
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body)
+            except:
+                data = {'text': body.decode('utf-8', errors='replace')}
+            result = save_message(data)
+            self.send_response(200 if result['ok'] else 400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_OPTIONS(self):
+        """Handle CORS preflight."""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
     def do_GET(self):
-        if self.path == '/api/knowledge':
+        if self.path == '/api/messages':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            data = read_messages()
+            self.wfile.write(json.dumps(data).encode())
+        elif self.path == '/api/knowledge':
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
