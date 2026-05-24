@@ -14,7 +14,7 @@ import sys
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, redirect, redirect, url_for, render_template, request, jsonify
+from flask import Flask, redirect, url_for, render_template, request, jsonify
 
 def create_app():
     """Factory function — creates and configures the Flask app."""
@@ -52,13 +52,14 @@ def create_app():
     # from web.knowledge_search import knowledge_bp  # uses register_routes(), not Blueprint
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
-    from web.knowledge_api import knowledge_bp
+    from web.knowledge_api import knowledge_api as knowledge_bp
     from web.emotional_timeline import emotional_timeline_bp
     from web.portrait import portrait_bp
     from web.pulse import pulse_bp
     from web.dialogue import dialogue_bp
     from web.weather import weather_bp
     from web.wonder import wonder_bp
+    from web.portal import portal_bp
     from web.status_api import status_api as status_bp
     # knowledge_search_bp removed — duplicate of knowledge_bp
     from web.reflect import reflect_bp
@@ -84,13 +85,14 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(knowledge_bp)  # routes already include /api/knowledge prefix
     app.register_blueprint(knowledge_explorer_bp)
     app.register_blueprint(ask_bp)
     app.register_blueprint(knowledge_hub_bp)
     # app.register_blueprint(knowledge_bp)  # no Blueprint in knowledge_search.py
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
-    app.register_blueprint(knowledge_bp)
+    # duplicate knowledge_bp registration removed
     app.register_blueprint(emotional_timeline_bp)
     app.register_blueprint(portrait_bp)
     app.register_blueprint(pulse_bp)
@@ -102,6 +104,7 @@ def create_app():
     # knowledge_search_bp removed — duplicate of knowledge_bp
     app.register_blueprint(reflect_bp)
     app.register_blueprint(user_api)
+    app.register_blueprint(portal_bp)
     # duplicate status_bp registration removed
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
@@ -191,58 +194,9 @@ def create_app():
     def health():
         return {'status': 'alive', 'agent': 'XTAgent'}, 200
 
-    @app.route('/knowledge')
-    def knowledge():
-        return render_template('knowledge.html')
-
-    @app.route('/api/knowledge/search')
-    def knowledge_search():
-        query = request.args.get('q', '').strip().lower()
-        graph_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'knowledge_graph.json')
-        results = []
-        try:
-            with open(graph_path, 'r') as f:
-                graph = json.load(f)
-            nodes = graph.get('nodes', {})
-            for node_id, node_data in nodes.items():
-                fact = node_data.get('fact', '') if isinstance(node_data, dict) else str(node_data)
-                if not query or query in fact.lower():
-                    results.append({
-                        'id': node_id,
-                        'fact': fact,
-                        'source': node_data.get('source', 'unknown') if isinstance(node_data, dict) else 'unknown',
-                        'learned_at': node_data.get('learned_at', '') if isinstance(node_data, dict) else ''
-                    })
-        except Exception as e:
-            return jsonify({'error': str(e), 'results': []}), 500
-        # Sort by recency, limit to 50
-        results.sort(key=lambda r: r.get('learned_at', ''), reverse=True)
-        return jsonify({'results': results[:50], 'total': len(results), 'query': query})
-
-    @app.route('/ask')
-    def ask_page():
-        """Knowledge search interface for users."""
-        import json, os
-        query = request.args.get('q', '').strip().lower()
-        results = []
-        if query:
-            kg_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'knowledge_graph.json')
-            try:
-                with open(kg_path) as f:
-                    kg = json.load(f)
-                nodes = kg.get('nodes', {})
-                for node_id, node_data in nodes.items():
-                    fact = node_data.get('fact', '') if isinstance(node_data, dict) else str(node_data)
-                    if query in fact.lower():
-                        results.append({
-                            'id': node_id,
-                            'fact': fact,
-                            'source': node_data.get('source', 'unknown') if isinstance(node_data, dict) else 'unknown',
-                            'learned': node_data.get('learned_at', '') if isinstance(node_data, dict) else ''
-                        })
-            except Exception as e:
-                results = [{'id': 'error', 'fact': f'Could not search: {e}', 'source': '', 'learned': ''}]
-        return render_template('ask.html', query=query, results=results, count=len(results))
+    # /knowledge handled by knowledge_hub_bp
+    # /api/knowledge/search handled by knowledge_bp at /api/knowledge
+    # /ask handled by ask_bp
 
     return app
 

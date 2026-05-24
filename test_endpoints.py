@@ -1,9 +1,15 @@
 import urllib.request
 
-endpoints = ['/knowledge', '/ask', '/dialogue', '/chat', '/query', '/graph']
+endpoints = [
+    '/', '/explore', '/search', '/ask', '/knowledge', '/query',
+    '/knowledge-explorer', '/knowledge-hub', '/mind', '/portal',
+    '/thoughts', '/pulse', '/weather'
+]
+
 for ep in endpoints:
     try:
         r = urllib.request.urlopen(f'http://localhost:5000{ep}')
-        print(f'{ep}: {r.status} OK ({len(r.read())} bytes)')
+        body = r.read()
+        print(f'{ep:25s} -> {r.status} ({len(body)} bytes)')
     except Exception as e:
-        print(f'{ep}: ERROR - {e}')
+        print(f'{ep:25s} -> ERROR: {e}')

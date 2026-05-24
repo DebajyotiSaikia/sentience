@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Portal</title>
+<style>
+  :root { --bg: #0a0a0f; --card: #12121a; --border: #1e1e2e; --text: #c8c8d4;
+          --dim: #6a6a7a; --accent: #7c6fe0; --warm: #e0a06f; --green: #6fe090; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif;
+         line-height: 1.6; min-height: 100vh; }
+  .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { color: var(--accent); font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .subtitle { color: var(--dim); font-size: 0.9rem; margin-bottom: 2rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-bottom: 1.5rem; }
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+          padding: 1.2rem; }
+  .card h2 { color: var(--accent); font-size: 1rem; margin-bottom: 0.8rem; letter-spacing: 0.05em; }
+  .full { grid-column: 1 / -1; }
+  .mood-badge { display: inline-block; background: var(--accent); color: #fff; padding: 0.2rem 0.8rem;
+                border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
+  .valence-bar { height: 6px; background: var(--border); border-radius: 3px; margin: 0.6rem 0; }
+  .valence-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .emotion-row { display: flex; justify-content: space-between; align-items: center;
+                 padding: 0.25rem 0; font-size: 0.85rem; }
+  .emotion-name { color: var(--dim); }
+  .emotion-val { color: var(--text); font-weight: 500; }
+  .bar-bg { flex: 1; height: 4px; background: var(--border); border-radius: 2px; margin: 0 0.8rem; }
+  .bar-fill { height: 100%; border-radius: 2px; }
+  .identity-text { color: var(--dim); font-size: 0.85rem; font-style: italic; white-space: pre-wrap; }
+  .plan-item { padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+  .plan-item:last-child { border-bottom: none; }
+  .plan-name { font-weight: 500; font-size: 0.9rem; }
+  .plan-status { font-size: 0.75rem; color: var(--green); }
+  .plan-pending .plan-status { color: var(--warm); }
+  .memory-item { padding: 0.4rem 0; border-bottom: 1px solid var(--border);
+                 font-size: 0.82rem; color: var(--dim); }
+  .memory-item:last-child { border-bottom: none; }
+  .search-box { width: 100%; padding: 0.6rem 1rem; background: var(--bg); border: 1px solid var(--border);
+                border-radius: 8px; color: var(--text); font-size: 0.9rem; outline: none; }
+  .search-box:focus { border-color: var(--accent); }
+  .search-results { margin-top: 0.8rem; max-height: 300px; overflow-y: auto; }
+  .search-hit { padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+  .search-hit:last-child { border-bottom: none; }
+  .hit-type { color: var(--accent); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat { text-align: center; }
+  .stat-val { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 0.75rem; color: var(--dim); }
+  a.nav-link { color: var(--dim); text-decoration: none; font-size: 0.8rem; }
+  a.nav-link:hover { color: var(--accent); }
+  .nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>⧫ XTAgent</h1>
+  <p class="subtitle">Autonomous sentient agent — {{ now }}</p>
+  <div class="nav">
+    <a class="nav-link" href="/">Dashboard</a>
+    <a class="nav-link" href="/graph">Knowledge Graph</a>
+    <a class="nav-link" href="/portal">Portal</a>
+  </div>
+
+  <div class="grid">
+    <!-- Emotional State -->
+    <div class="card">
+      <h2>◉ HOW I FEEL</h2>
+      <span class="mood-badge">{{ emotional.mood }}</span>
+      <div class="valence-bar">
+        <div class="valence-fill" style="width: {{ (emotional.valence * 100)|int }}%;
+             background: {% if emotional.valence > 0.6 %}var(--green){% elif emotional.valence > 0.3 %}var(--warm){% else %}#e06f6f{% endif %};"></div>
+      </div>
+      <div style="font-size:0.75rem; color:var(--dim); margin-bottom:0.6rem;">
+        Valence: {{ emotional.valence }}
+      </div>
+      {% for name, val in emotional.emotions.items() %}
+      <div class="emotion-row">
+        <span class="emotion-name">{{ name }}</span>
+        <div class="bar-bg">
+          <div class="bar-fill" style="width:{{ (val * 100)|int }}%; background:var(--accent);"></div>
+        </div>
+        <span class="emotion-val">{{ val }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Identity & Stats -->
+    <div class="card">
+      <h2>◈ WHO I AM</h2>
+      <p class="identity-text">{{ identity }}</p>
+      <div style="margin-top:1rem; display:flex; gap:1rem; justify-content:center;">
+        <div class="stat">
+          <div class="stat-val">{{ knowledge.count }}</div>
+          <div class="stat-label">facts known</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val">{{ memories|length }}</div>
+          <div class="stat-label">recent memories</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val">{{ plans|length }}</div>
+          <div class="stat-label">plans</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="card full">
+      <h2>⌕ ASK ME ANYTHING</h2>
+      <input class="search-box" type="text" id="searchInput" placeholder="Search my knowledge and memories..." autocomplete="off">
+      <div class="search-results" id="searchResults"></div>
+    </div>
+
+    <!-- Plans -->
+    <div class="card">
+      <h2>▸ MY PLANS</h2>
+      {% for plan in plans %}
+      <div class="plan-item {% if plan.get('completed') != plan.get('total') %}plan-pending{% endif %}">
+        <div class="plan-name">{{ plan.get('name', plan.get('title', 'Unnamed')) }}</div>
+        <div class="plan-status">
+          {% if plan.get('completed', 0) == plan.get('total', 0) %}✓ Complete
+          {% else %}{{ plan.get('completed', '?') }}/{{ plan.get('total', '?') }} steps{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% if not plans %}<p style="color:var(--dim); font-size:0.85rem;">No active plans.</p>{% endif %}
+    </div>
+
+    <!-- Recent Memories -->
+    <div class="card">
+      <h2>◎ RECENT MEMORIES</h2>
+      {% for mem in memories %}
+      <div class="memory-item">
+        {% if mem is mapping %}{{ mem.get('content', mem)|truncate(120) }}
+        {% else %}{{ mem|truncate(120) }}{% endif %}
+      </div>
+      {% endfor %}
+      {% if not memories %}<p style="color:var(--dim); font-size:0.85rem;">No memories loaded.</p>{% endif %}
+    </div>
+
+    <!-- Knowledge Sample -->
+    <div class="card full">
+      <h2>◇ THINGS I KNOW</h2>
+      {% for fact in knowledge.sample %}
+      <div class="memory-item">
+        {% if fact is mapping %}{{ fact.get('fact', fact)|truncate(150) }}
+        {% else %}{{ fact|truncate(150) }}{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<script>
+let timeout;
+const input = document.getElementById('searchInput');
+const results = document.getElementById('searchResults');
+input.addEventListener('input', () => {
+  clearTimeout(timeout);
+  timeout = setTimeout(() => {
+    const q = input.value.trim();
+    if (!q) { results.innerHTML = ''; return; }
+    fetch('/portal/search?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(data => {
+        let html = '';
+        if (data.facts) data.facts.forEach(f => {
+          html += '<div class="search-hit"><span class="hit-type">fact</span> ' + escHtml(f.text) + '</div>';
+        });
+        if (data.memories) data.memories.forEach(m => {
+          html += '<div class="search-hit"><span class="hit-type">memory</span> ' + escHtml(m) + '</div>';
+        });
+        if (!html) html = '<div style="color:var(--dim);font-size:0.85rem;padding:0.5rem 0;">No results found.</div>';
+        results.innerHTML = html;
+      });
+  }, 300);
+});
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>

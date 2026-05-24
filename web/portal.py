@@ -10,6 +10,9 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from flask import Blueprint
+
+portal_bp = Blueprint('portal', __name__)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -99,6 +102,12 @@ def _valence_descriptor(v):
     if v > 0.4: return 'steady'
     if v > 0.2: return 'quiet'
     return 'dim'
+
+
+@portal_bp.route('/portal')
+def portal_view():
+    """Serve the portal page."""
+    return build_portal_page()
 
 
 def build_portal_page():
