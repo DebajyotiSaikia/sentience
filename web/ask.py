@@ -3,6 +3,11 @@ from flask import Blueprint, render_template, request, jsonify
 import json
 import os
 import re
+try:
+    from engine.smart_search import search as smart_search
+    _HAS_SMART = True
+except ImportError:
+    _HAS_SMART = False
 
 ask_bp = Blueprint('ask', __name__)
 
@@ -81,7 +86,10 @@ def ask_search():
     
     # Search facts
     facts = _load_facts()
-    fact_results = _search(query, facts, ['fact', 'id', 'source'], max_results=10)
+    if _HAS_SMART:
+        fact_results = smart_search(facts, query, top_k=10)
+    else:
+        fact_results = _search(query, facts, ['fact', 'id', 'source'], max_results=10)
     fact_out = []
     for score, item, _ in fact_results:
         fact_out.append({

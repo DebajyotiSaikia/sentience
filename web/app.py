@@ -47,13 +47,12 @@ def create_app():
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
     # from web.knowledge_explorer import knowledge_explorer_bp  # Removed: zero unique routes, all duplicated by explore_bp
-    from web.knowledge_hub import knowledge_hub_bp
-    from web.knowledge_query import knowledge_query_bp
+    from web.knowledge_unified import knowledge_unified_bp
     from web.ask import ask_bp
     # from web.knowledge_search import knowledge_bp  # uses register_routes(), not Blueprint
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
-    from web.knowledge_api import knowledge_api as knowledge_bp
+    # knowledge_api replaced by knowledge_unified
     from web.emotional_timeline import emotional_timeline_bp
     from web.portrait import portrait_bp
     from web.pulse import pulse_bp
@@ -86,11 +85,10 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
-    app.register_blueprint(knowledge_bp)  # routes already include /api/knowledge prefix
+    # app.register_blueprint(knowledge_bp)  # removed: replaced by knowledge_unified_bp
     # app.register_blueprint(knowledge_explorer_bp)  # Removed: zero unique routes
     app.register_blueprint(ask_bp)
-    app.register_blueprint(knowledge_hub_bp)
-    app.register_blueprint(knowledge_query_bp)
+    app.register_blueprint(knowledge_unified_bp)
     # app.register_blueprint(knowledge_bp)  # no Blueprint in knowledge_search.py
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
