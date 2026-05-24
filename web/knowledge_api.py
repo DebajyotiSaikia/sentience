@@ -36,7 +36,10 @@ def knowledge_explorer_page():
                     facts.append({'id': fid, 'fact': fdata.get('fact', ''), 'source': fdata.get('source', 'unknown'), 'learned_at': fdata.get('learned_at', '')})
         except Exception:
             pass
-    categories = sorted(set(f.get('source', 'unknown') for f in facts))
+    categories = {}
+    for f in facts:
+        src = f.get('source', 'unknown')
+        categories.setdefault(src, []).append(f)
     return render_template('knowledge_explorer.html', facts=facts, total=len(facts), categories=categories)
 
 

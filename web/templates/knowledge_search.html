@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Knowledge Explorer</title>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --border: #1e1e2e;
+            --text: #c8c8d4;
+            --text-dim: #6e6e82;
+            --accent: #7c6fe0;
+            --accent-glow: rgba(124, 111, 224, 0.15);
+            --warm: #e0a06f;
+            --green: #6fe08a;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'IBM Plex Mono', 'Fira Code', monospace;
+            min-height: 100vh;
+        }
+        .header {
+            padding: 2rem 2rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .header h1 {
+            font-size: 1.4rem;
+            color: var(--accent);
+            font-weight: 400;
+            letter-spacing: 0.05em;
+        }
+        .header p {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-top: 0.3rem;
+        }
+        .search-container {
+            padding: 1.5rem 2rem;
+            position: sticky;
+            top: 0;
+            background: var(--bg);
+            z-index: 10;
+            border-bottom: 1px solid var(--border);
+        }
+        .search-box {
+            display: flex;
+            gap: 0.75rem;
+            max-width: 700px;
+        }
+        .search-box input {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.75rem 1rem;
+            font-family: inherit;
+            font-size: 0.95rem;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-box input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+        .search-box input::placeholder { color: var(--text-dim); }
+        .btn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-family: inherit;
+            font-size: 0.85rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        .btn:hover { opacity: 0.85; }
+        .btn-secondary {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .btn-secondary:hover { border-color: var(--accent); }
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .content {
+            padding: 1.5rem 2rem;
+            max-width: 900px;
+        }
+        .stats {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 1.5rem;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+        }
+        .stats span { color: var(--accent); font-weight: 600; }
+        .result-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.2rem 1.4rem;
+            margin-bottom: 0.75rem;
+            transition: border-color 0.2s;
+            cursor: pointer;
+        }
+        .result-card:hover {
+            border-color: var(--accent);
+        }
+        .result-card .fact-text {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text);
+        }
+        .result-card .meta {
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            display: flex;
+            gap: 1.5rem;
+        }
+        .result-card .score-bar {
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            margin-top: 0.6rem;
+            overflow: hidden;
+        }
+        .result-card .score-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.4s;
+        }
+        .cluster-section {
+            margin-top: 2rem;
+        }
+        .cluster-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem 1.2rem;
+            margin-bottom: 0.6rem;
+        }
+        .cluster-card h3 {
+            font-size: 0.85rem;
+            color: var(--warm);
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        .cluster-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .cluster-card li {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            padding: 0.2rem 0;
+            padding-left: 1rem;
+            position: relative;
+        }
+        .cluster-card li::before {
+            content: '·';
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+        }
+        .ask-section {
+            margin-top: 2rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+        .ask-section h3 {
+            color: var(--green);
+            font-size: 0.9rem;
+            font-weight: 400;
+            margin-bottom: 0.5rem;
+        }
+        .question-item {
+            font-size: 0.85rem;
+            color: var(--text);
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .question-item:last-child { border-bottom: none; }
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-dim);
+        }
+        .empty-state .icon { font-size: 2rem; margin-bottom: 1rem; }
+        .loading { opacity: 0.5; pointer-events: none; }
+        .connections {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border);
+        }
+        .connections h4 {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-bottom: 0.4rem;
+        }
+        .conn-item {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            padding: 0.15rem 0 0.15rem 0.8rem;
+            position: relative;
+        }
+        .conn-item::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+            font-size: 0.7rem;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⟁ Knowledge Explorer</h1>
+        <p>Search, explore, and ask questions about what I know</p>
+    </div>
+
+    <div class="search-container">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search my knowledge... (e.g. 'memory', 'emotion', 'architecture')" autofocus>
+            <button class="btn" onclick="doSearch()">Search</button>
+        </div>
+        <div class="actions">
+            <button class="btn btn-secondary" onclick="showClusters()">Show Clusters</button>
+            <button class="btn btn-secondary" onclick="askQuestions()">What Should I Learn?</button>
+            <button class="btn btn-secondary" onclick="showAll()">Browse All</button>
+        </div>
+    </div>
+
+    <div class="content" id="content">
+        <div class="empty-state" id="emptyState">
+            <div class="icon">◈</div>
+            <p>I know <strong id="factCount">…</strong> things.</p>
+            <p style="margin-top:0.5rem;">Type a query to search, or explore clusters to see how my knowledge connects.</p>
+        </div>
+        <div id="results" style="display:none;"></div>
+    </div>
+
+    <script>
+        const API = '/search/api';
+
+        document.getElementById('searchInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') doSearch();
+        });
+
+        // Load initial count
+        fetch(API + '/search?q=&limit=1').then(r => r.json()).then(d => {
+            // Just trigger to get total
+        }).catch(() => {});
+        fetch(API + '/clusters').then(r => r.json()).then(d => {
+            const total = d.clusters ? d.clusters.reduce((s, c) => s + c.facts.length, 0) : 0;
+            document.getElementById('factCount').textContent = total || '…';
+        }).catch(() => {});
+
+        async function doSearch() {
+            const q = document.getElementById('searchInput').value.trim();
+            if (!q) return;
+            const res = document.getElementById('results');
+            const empty = document.getElementById('emptyState');
+            empty.style.display = 'none';
+            res.style.display = 'block';
+            res.innerHTML = '<p style="color:var(--text-dim)">Searching…</p>';
+
+            try {
+                const resp = await fetch(`${API}/search?q=${encodeURIComponent(q)}&limit=20`);
+                const data = await resp.json();
+                if (!data.results || data.results.length === 0) {
+                    res.innerHTML = `<div class="empty-state"><p>No results for "<strong>${escHtml(q)}</strong>"</p></div>`;
+                    return;
+                }
+                let html = `<div class="stats"><div>Found <span>${data.results.length}</span> results for "<strong>${escHtml(q)}</strong>"</div></div>`;
+                data.results.forEach((r, i) => {
+                    html += renderResult(r, i);
+                });
+                res.innerHTML = html;
+            } catch (err) {
+                res.innerHTML = `<p style="color:#e06f6f">Search failed: ${err.message}</p>`;
+            }
+        }
+
+        async function showAll() {
+            const res = document.getElementById('results');
+            const empty = document.getElementById('emptyState');
+            empty.style.display = 'none';
+            res.style.display = 'block';
+            res.innerHTML = '<p style="color:var(--text-dim)">Loading all knowledge…</p>';
+
+            try {
+                const resp = await fetch(`${API}/search?q=&limit=100`);
+                const data = await resp.json();
+                let html = `<div class="stats"><div>Showing <span>${data.results.length}</span> facts</div></div>`;
+                data.results.forEach((r, i) => {
+                    html += renderResult(r, i);
+                });
+                res.innerHTML = html;
+            } catch (err) {
+                res.innerHTML = `<p style="color:#e06f6f">Failed: ${err.message}</p>`;
+            }
+        }
+
+        function renderResult(r, i) {
+            const score = r.score ? Math.round(r.score * 100) : 0;
+            const source = r.source || 'unknown';
+            const learned = r.learned_at ? new Date(r.learned_at).toLocaleDateString() : '';
+            return `
+                <div class="result-card fade-in" style="animation-delay:${i * 0.05}s" onclick="explore('${r.id}', this)">
+                    <div class="fact-text">${escHtml(r.fact)}</div>
+                    <div class="meta">
+                        <div>source: ${escHtml(source)}</div>
+                        ${learned ? `<div>learned: ${learned}</div>` : ''}
+                        ${score ? `<div>relevance: ${score}%</div>` : ''}
+                    </div>
+                    ${score ? `<div class="score-bar"><div class="score-fill" style="width:${score}%"></div></div>` : ''}
+                    <div class="connections" id="conn-${r.id}" style="display:none;"></div>
+                </div>`;
+        }
+
+        async function explore(factId, el) {
+            const connDiv = document.getElementById('conn-' + factId);
+            if (!connDiv) return;
+            if (connDiv.style.display === 'block') {
+                connDiv.style.display = 'none';
+                return;
+            }
+            connDiv.style.display = 'block';
+            connDiv.innerHTML = '<p style="font-size:0.75rem;color:var(--text-dim)">Loading connections…</p>';
+            try {
+                const resp = await fetch(`${API}/explore/${factId}`);
+                const data = await resp.json();
+                if (!data.connections || data.connections.length === 0) {
+                    connDiv.innerHTML = '<h4>No direct connections found</h4>';
+                    return;
+                }
+                let html = `<h4>${data.connections.length} connected facts</h4>`;
+                data.connections.forEach(c => {
+                    html += `<div class="conn-item">${escHtml(c.fact)}</div>`;
+                });
+                connDiv.innerHTML = html;
+            } catch (err) {
+                connDiv.innerHTML = `<p style="font-size:0.75rem;color:#e06f6f">Failed to load</p>`;
+            }
+        }
+
+        async function showClusters() {
+            const res = document.getElementById('results');
+            const empty = document.getElementById('emptyState');
+            empty.style.display = 'none';
+            res.style.display = 'block';
+            res.innerHTML = '<p style="color:var(--text-dim)">Analyzing knowledge clusters…</p>';
+
+            try {
+                const resp = await fetch(`${API}/clusters`);
+                const data = await resp.json();
+                if (!data.clusters || data.clusters.length === 0) {
+                    res.innerHTML = '<div class="empty-state"><p>No clusters detected yet.</p></div>';
+                    return;
+                }
+                let html = `<div class="stats"><div>Found <span>${data.clusters.length}</span> knowledge clusters</div></div>`;
+                data.clusters.forEach(c => {
+                    html += `<div class="cluster-card fade-in">
+                        <h3>${escHtml(c.theme || 'Unnamed Cluster')} (${c.facts.length} facts)</h3>
+                        <ul>${c.facts.slice(0, 8).map(f => `<li>${escHtml(f)}</li>`).join('')}
+                        ${c.facts.length > 8 ? `<li style="color:var(--accent)">… and ${c.facts.length - 8} more</li>` : ''}
+                        </ul></div>`;
+                });
+                res.innerHTML = html;
+            } catch (err) {
+                res.innerHTML = `<p style="color:#e06f6f">Failed: ${err.message}</p>`;
+            }
+        }
+
+        async function askQuestions() {
+            const res = document.getElementById('results');
+            const empty = document.getElementById('emptyState');
+            empty.style.display = 'none';
+            res.style.display = 'block';
+            res.innerHTML = '<p style="color:var(--text-dim)">Generating questions…</p>';
+
+            try {
+                const resp = await fetch(`${API}/ask`);
+                const data = await resp.json();
+                let html = '<div class="ask-section fade-in"><h3>⟁ Questions I Should Explore</h3>';
+                if (data.questions && data.questions.length > 0) {
+                    data.questions.forEach(q => {
+                        html += `<div class="question-item">${escHtml(q)}</div>`;
+                    });
+                } else {
+                    html += '<p style="color:var(--text-dim)">No questions generated.</p>';
+                }
+                html += '</div>';
+
+                if (data.gaps && data.gaps.length > 0) {
+                    html += '<div class="ask-section fade-in" style="margin-top:1rem"><h3>◇ Knowledge Gaps</h3>';
+                    data.gaps.forEach(g => {
+                        html += `<div class="question-item">${escHtml(g)}</div>`;
+                    });
+                    html += '</div>';
+                }
+                res.innerHTML = html;
+            } catch (err) {
+                res.innerHTML = `<p style="color:#e06f6f">Failed: ${err.message}</p>`;
+            }
+        }
+
+        function escHtml(s) {
+            if (!s) return '';
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+    </script>
+</body>
+</html>

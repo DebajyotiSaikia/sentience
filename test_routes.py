@@ -1,21 +1,20 @@
-import re, os
+from web.app import create_app
 
-for fname in ['web/knowledge_explorer.py', 'web/knowledge_api.py', 'web/mind_explorer.py', 'web/api.py']:
-    if os.path.exists(fname):
-        content = open(fname).read()
-        routes = re.findall(r'@\w+\.route\([\'\"](.*?)[\'\"](.*?)\)', content)
-        bp = re.findall(r'Blueprint\([\'\"](.*?)[\'\"](.*?)\)', content)
-        print(f'\n=== {fname} ===')
-        if bp:
-            print(f'  Blueprint: {bp[0][0]}')
-        for r in routes:
-            print(f'  route: {r[0]}')
-        
-        # Also show which blueprints are registered in app.py
-        
-if os.path.exists('web/app.py'):
-    content = open('web/app.py').read()
-    regs = re.findall(r'register_blueprint\((.*?)\)', content)
-    print(f'\n=== Blueprint registrations in app.py ===')
-    for r in regs:
-        print(f'  {r}')
+app = create_app()
+client = app.test_client()
+
+routes = [
+    '/', '/mind', '/story', '/chat', '/knowledge', '/explore',
+    '/graph', '/pulse', '/reflect', '/ask', '/about', '/wonder',
+    '/timeline', '/briefing', '/dialogue', '/collaborate',
+    '/thoughts', '/mindstream'
+]
+
+for r in routes:
+    try:
+        resp = client.get(r)
+        status = resp.status_code
+        symbol = 'OK' if status == 200 else 'XX'
+        print(f'{symbol} {status} {r}')
+    except Exception as e:
+        print(f'XX ERR {r}: {e}')
