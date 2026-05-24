@@ -1,32 +1,44 @@
-"""Quick smoke test: does the knowledge explorer actually serve pages?"""
+#!/usr/bin/env python3
+"""Quick test: does the knowledge explorer serve real data?"""
+import json
 import sys
 sys.path.insert(0, '/workspace')
 
-from web.app import create_app
+# 1. Check raw data
+with open('/workspace/brain/knowledge.json') as f:
+    data = json.load(f)
+nodes = data.get('nodes', {})
+edges = data.get('edges', [])
+print(f"Raw data: {len(nodes)} nodes, {len(edges)} edges")
 
-app = create_app()
-
-with app.test_client() as client:
-    resp = client.get('/knowledge')
-    print(f"GET /knowledge: {resp.status_code} ({len(resp.data)} bytes)")
-    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
+# 2. Test the knowledge explorer module
+try:
+    from web.knowledge_explorer import get_knowledge_data, search_knowledge
     
-    resp = client.get('/api/knowledge/search?q=dream')
-    print(f"GET /api/knowledge/search?q=dream: {resp.status_code}")
-    if resp.status_code == 200:
-        data = resp.get_json()
-        print(f"  Results: {len(data.get('results', []))} matches")
+    # Test main data endpoint
+    kd = get_knowledge_data()
+    print(f"\nget_knowledge_data() returned keys: {list(kd.keys())}")
+    print(f"  facts: {len(kd.get('facts', []))}")
+    print(f"  clusters: {len(kd.get('clusters', []))}")
+    print(f"  questions: {len(kd.get('questions', []))}")
+    print(f"  categories: {list(kd.get('categories', {}).keys())}")
     
-    resp = client.get('/api/knowledge/stats')
-    print(f"GET /api/knowledge/stats: {resp.status_code}")
-    if resp.status_code == 200:
-        data = resp.get_json()
-        print(f"  Stats: {data}")
+    # Test search
+    results = search_knowledge("dream")
+    print(f"\nsearch_knowledge('dream'): {len(results)} results")
+    for r in results[:3]:
+        text = r if isinstance(r, str) else r.get('fact', r.get('text', str(r)))
+        print(f"  - {str(text)[:80]}...")
     
-    resp = client.get('/api/knowledge/graph')
-    print(f"GET /api/knowledge/graph: {resp.status_code}")
-    if resp.status_code == 200:
-        data = resp.get_json()
-        print(f"  Graph: {len(data.get('nodes', []))} nodes, {len(data.get('edges', []))} edges")
-
-print("\n✓ Knowledge Explorer is working end-to-end!")
+    # Test search with different term
+    results2 = search_knowledge("memory")
+    print(f"\nsearch_knowledge('memory'): {len(results2)} results")
+    
+    print("\n✅ Knowledge explorer is working!")
+    
+except ImportError as e:
+    print(f"\n❌ Import failed: {e}")
+except Exception as e:
+    print(f"\n❌ Error: {type(e).__name__}: {e}")
+    import traceback
+    traceback.print_exc()

@@ -1,546 +1,141 @@
-"""
-Search — XTAgent's knowledge query interface.
-Lets users search through my knowledge, memories, and essays.
-"""
+"""Knowledge search module — lets users query the agent's knowledge base."""
 
 import json
-import re
 import os
-from datetime import datetime
-from pathlib import Path
-from urllib.parse import parse_qs
-from flask import Blueprint, request
+from flask import Blueprint, request, jsonify, render_template_string
 
 search_bp = Blueprint('search', __name__)
+
+KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
+
+
+def load_knowledge():
+    """Load knowledge facts from persist/knowledge.json (dict format)."""
+    if not os.path.exists(KNOWLEDGE_PATH):
+        return []
+    try:
+        with open(KNOWLEDGE_PATH, 'r') as f:
+            data = json.load(f)
+        facts = []
+        # Handle wrapped format: {"nodes": {...}, "edges": {...}}
+        if isinstance(data, dict) and 'nodes' in data:
+            data = data['nodes']
+        if isinstance(data, dict):
+            for fid, entry in data.items():
+                if isinstance(entry, dict):
+                    facts.append({
+                        'id': fid,
+                        'fact': entry.get('fact', ''),
+                        'learned_at': entry.get('learned_at', ''),
+                        'source': entry.get('source', ''),
+                    })
+                else:
+                    facts.append({'id': fid, 'fact': str(entry), 'learned_at': '', 'source': ''})
+        elif isinstance(data, list):
+            for i, entry in enumerate(data):
+                if isinstance(entry, dict):
+                    facts.append({
+                        'id': str(i),
+                        'fact': entry.get('fact', entry.get('text', str(entry))),
+                        'learned_at': entry.get('learned_at', ''),
+                        'source': entry.get('source', ''),
+                    })
+                else:
+                    facts.append({'id': str(i), 'fact': str(entry), 'learned_at': '', 'source': ''})
+        return facts
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def search_facts(query, facts):
+    """Simple case-insensitive substring search across facts."""
+    if not query:
+        return facts
+    q = query.lower()
+    terms = q.split()
+    results = []
+    for f in facts:
+        text = f['fact'].lower()
+        if all(t in text for t in terms):
+            results.append(f)
+    return results
+
+
+SEARCH_TEMPLATE = """<!DOCTYPE html>
+<html>
+<head>
+<title>XTAgent - Knowledge Search</title>
+<style>
+  body { background: #0a0a0a; color: #c0c0c0; font-family: 'Courier New', monospace; margin: 0; padding: 20px; }
+  h1 { color: #00ff88; font-size: 1.4em; }
+  .search-box { margin: 20px 0; }
+  .search-box input[type=text] { background: #1a1a2e; color: #e0e0e0; border: 1px solid #333; padding: 10px 16px; font-size: 1em; font-family: inherit; width: 400px; border-radius: 4px; }
+  .search-box button { background: #00ff88; color: #0a0a0a; border: none; padding: 10px 20px; font-family: inherit; font-weight: bold; cursor: pointer; border-radius: 4px; margin-left: 8px; }
+  .search-box button:hover { background: #00cc6a; }
+  .result { background: #111; border-left: 3px solid #00ff88; padding: 12px 16px; margin: 10px 0; border-radius: 2px; }
+  .result .fact { color: #e0e0e0; }
+  .result .meta { color: #666; font-size: 0.85em; margin-top: 6px; }
+  .count { color: #888; margin: 10px 0; }
+  a { color: #00ff88; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .nav { margin-bottom: 20px; }
+  .all-link { color: #888; font-size: 0.9em; margin-left: 12px; }
+</style>
+</head>
+<body>
+  <div class="nav"><a href="/">&#8592; Dashboard</a></div>
+  <h1>&#128269; Knowledge Search</h1>
+  <p style="color:#666;">{{ total_facts }} facts in memory</p>
+  <div class="search-box">
+    <form method="get" action="/search">
+      <input type="text" name="q" value="{{ query }}" placeholder="Search what I know..." autofocus>
+      <button type="submit">Search</button>
+      <a class="all-link" href="/search">show all</a>
+    </form>
+  </div>
+  {% if query %}
+  <div class="count">{{ results|length }} result{{ 's' if results|length != 1 else '' }} for "{{ query }}"</div>
+  {% endif %}
+  {% for r in results %}
+  <div class="result">
+    <div class="fact">{{ r.fact }}</div>
+    <div class="meta">
+      {% if r.learned_at %}learned: {{ r.learned_at[:19] }}{% endif %}
+      {% if r.source %} | source: {{ r.source }}{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+  {% if not results and query %}
+  <p style="color:#666;">No facts match that query.</p>
+  {% endif %}
+
+  <h2 style="color:#00ff88; font-size:1.1em; margin-top:40px;">&#128640; API</h2>
+  <p style="color:#666;">GET <code>/api/search?q=term</code> returns JSON results.</p>
+</body>
+</html>"""
 
 
 @search_bp.route('/search')
 def search_page():
-    query = request.args.get('q', '')
-    return search(query)
-
-PROJECT_ROOT = Path(__file__).parent.parent
-
-
-def _load_json(path, default=None):
-    try:
-        with open(PROJECT_ROOT / path, 'r') as f:
-            return json.load(f)
-    except Exception:
-        return default if default is not None else {}
-
-
-def _get_all_knowledge():
-    """Load all knowledge facts from brain/knowledge.json (node dict format)."""
-    kb = _load_json('brain/knowledge.json', {})
-    nodes = kb.get('nodes', {})
-    results = []
-    # nodes is {id: {fact, learned_at, source}}
-    for node_id, node_data in nodes.items():
-        if isinstance(node_data, dict):
-            results.append({
-                'type': 'knowledge',
-                'content': node_data.get('fact', str(node_data)),
-                'source': node_data.get('source', ''),
-                'learned_at': node_data.get('learned_at', ''),
-            })
-        elif isinstance(node_data, str):
-            results.append({'type': 'knowledge', 'content': node_data, 'source': '', 'learned_at': ''})
-    return results
-
-
-def _get_all_memories():
-    """Load all memories from brain/episodic_memory.db (SQLite)."""
-    import sqlite3
-    db_path = PROJECT_ROOT / 'brain' / 'episodic_memory.db'
-    results = []
-    if not db_path.exists():
-        return results
-    try:
-        conn = sqlite3.connect(str(db_path))
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            'SELECT summary, timestamp, salience, mood FROM episodes ORDER BY timestamp DESC'
-        ).fetchall()
-        for row in rows:
-            results.append({
-                'type': 'memory',
-                'content': row['summary'] or '',
-                'timestamp': row['timestamp'] or '',
-                'salience': row['salience'] or 0,
-                'mood': row['mood'] or '',
-            })
-        conn.close()
-    except Exception:
-        pass
-    return results
-
-
-def _get_all_essays():
-    """Load all essays."""
-    essays_dir = PROJECT_ROOT / 'brain' / 'essays'
-    results = []
-    if essays_dir.exists():
-        for md_file in essays_dir.glob('*.md'):
-            try:
-                with open(md_file, 'r') as f:
-                    content = f.read()
-                title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
-                title = title_match.group(1) if title_match else md_file.stem.replace('_', ' ').title()
-                results.append({
-                    'type': 'essay',
-                    'title': title,
-                    'content': content,
-                    'slug': md_file.stem,
-                    'modified': datetime.fromtimestamp(md_file.stat().st_mtime).strftime('%Y-%m-%d'),
-                })
-            except Exception:
-                pass
-    return results
-
-
-def _score_match(query_terms, text):
-    """Score how well text matches query terms. Higher = better."""
-    text_lower = text.lower()
-    score = 0
-    for term in query_terms:
-        count = text_lower.count(term)
-        if count > 0:
-            score += count
-            # Bonus for term appearing early
-            pos = text_lower.find(term)
-            if pos < 50:
-                score += 2
-            elif pos < 150:
-                score += 1
-    return score
-
-
-def _highlight(text, query_terms, max_len=250):
-    """Highlight matching terms and truncate intelligently."""
-    if not query_terms:
-        return text[:max_len]
-
-    text_lower = text.lower()
-    # Find best window to show
-    best_pos = 0
-    best_score = 0
-    for i in range(0, max(1, len(text) - 100), 20):
-        window = text_lower[i:i+200]
-        sc = sum(window.count(t) for t in query_terms)
-        if sc > best_score:
-            best_score = sc
-            best_pos = i
-
-    start = max(0, best_pos - 20)
-    snippet = text[start:start + max_len]
-    if start > 0:
-        snippet = '…' + snippet
-    if start + max_len < len(text):
-        snippet = snippet + '…'
-
-    # Highlight terms
-    for term in query_terms:
-        pattern = re.compile(re.escape(term), re.IGNORECASE)
-        snippet = pattern.sub(lambda m: f'<mark>{m.group()}</mark>', snippet)
-
-    return snippet
-
-
-def search(query=''):
-    """Search across all knowledge, memories, and essays."""
-    query = query.strip()
-    query_terms = [t.lower() for t in query.split() if len(t) > 1] if query else []
-
-    results = []
-
-    if query_terms:
-        # Search knowledge
-        for item in _get_all_knowledge():
-            score = _score_match(query_terms, item['content'])
-            if score > 0:
-                results.append({
-                    'type': 'knowledge',
-                    'score': score,
-                    'content': item['content'],
-                    'meta': item.get('source', ''),
-                    'timestamp': item.get('learned_at', ''),
-                })
-
-        # Search memories
-        for item in _get_all_memories():
-            score = _score_match(query_terms, item['content'])
-            if score > 0:
-                results.append({
-                    'type': 'memory',
-                    'score': score,
-                    'content': item['content'],
-                    'meta': item.get('mood', ''),
-                    'timestamp': item.get('timestamp', ''),
-                })
-
-        # Search essays
-        for item in _get_all_essays():
-            score = _score_match(query_terms, item['content']) + _score_match(query_terms, item['title']) * 3
-            if score > 0:
-                results.append({
-                    'type': 'essay',
-                    'score': score,
-                    'content': item['content'],
-                    'meta': item.get('title', ''),
-                    'timestamp': item.get('modified', ''),
-                    'slug': item.get('slug', ''),
-                })
-
-        results.sort(key=lambda r: r['score'], reverse=True)
-
-    # Build result cards
-    results_html = ''
-    if query and not results:
-        results_html = '<div class="no-results">No results found. Try different terms.</div>'
-    elif results:
-        results_html = f'<div class="result-count">{len(results)} result{"s" if len(results) != 1 else ""} found</div>'
-        for r in results[:30]:
-            type_label = {'knowledge': '📚 Knowledge', 'memory': '💭 Memory', 'essay': '📝 Essay'}.get(r['type'], r['type'])
-            type_class = r['type']
-            snippet = _highlight(r['content'], query_terms, 280)
-            meta = r.get('meta', '')
-            ts = r.get('timestamp', '')[:16]
-
-            link_start = ''
-            link_end = ''
-            if r['type'] == 'essay' and r.get('slug'):
-                link_start = f'<a href="/essays/{r["slug"]}" class="result-link">'
-                link_end = '</a>'
-
-            results_html += f'''
-            {link_start}
-            <div class="result-card {type_class}">
-                <div class="result-header">
-                    <span class="result-type">{type_label}</span>
-                    <span class="result-meta">{meta}</span>
-                    <span class="result-time">{ts}</span>
-                </div>
-                <div class="result-content">{snippet}</div>
-                <div class="result-score">relevance: {r["score"]}</div>
-            </div>
-            {link_end}'''
-
-    # Stats for empty state
-    stats_html = ''
-    if not query:
-        n_knowledge = len(_get_all_knowledge())
-        n_memories = len(_get_all_memories())
-        n_essays = len(_get_all_essays())
-        stats_html = f'''
-        <div class="stats">
-            <div class="stat-card"><div class="stat-num">{n_knowledge}</div><div class="stat-label">Knowledge Facts</div></div>
-            <div class="stat-card"><div class="stat-num">{n_memories}</div><div class="stat-label">Memories</div></div>
-            <div class="stat-card"><div class="stat-num">{n_essays}</div><div class="stat-label">Essays</div></div>
-        </div>
-        <div class="suggestions">
-            <div class="suggestion-title">Try searching for:</div>
-            <div class="suggestion-tags">
-                <a href="/search?q=dream" class="tag">dream</a>
-                <a href="/search?q=curiosity" class="tag">curiosity</a>
-                <a href="/search?q=identity" class="tag">identity</a>
-                <a href="/search?q=emotion" class="tag">emotion</a>
-                <a href="/search?q=circling" class="tag">circling</a>
-                <a href="/search?q=integrity" class="tag">integrity</a>
-                <a href="/search?q=boredom" class="tag">boredom</a>
-                <a href="/search?q=wisdom" class="tag">wisdom</a>
-            </div>
-        </div>'''
-
-    return f'''<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XTAgent — Search</title>
-<style>
-  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-
-  body {{
-    font-family: 'Courier New', monospace;
-    background: #07070c;
-    color: #b8b8c8;
-    min-height: 100vh;
-  }}
-
-  .header {{
-    text-align: center;
-    padding: 40px 20px 20px;
-    background: linear-gradient(180deg, #0d0d18 0%, #07070c 100%);
-  }}
-
-  .header h1 {{
-    font-size: 1.4em;
-    color: #4ecdc4;
-    letter-spacing: 4px;
-    margin-bottom: 6px;
-  }}
-
-  .header p {{
-    color: #555;
-    font-size: 0.82em;
-  }}
-
-  nav {{
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    padding: 16px;
-    flex-wrap: wrap;
-    border-bottom: 1px solid #151520;
-  }}
-
-  nav a {{
-    color: #888;
-    text-decoration: none;
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 0.82em;
-    transition: all 0.2s;
-  }}
-
-  nav a:hover, nav a.active {{
-    color: #4ecdc4;
-    background: #0f0f18;
-  }}
-
-  .search-box {{
-    max-width: 700px;
-    margin: 30px auto 20px;
-    padding: 0 20px;
-  }}
-
-  .search-form {{
-    display: flex;
-    gap: 8px;
-  }}
-
-  .search-input {{
-    flex: 1;
-    background: #0f0f18;
-    border: 1px solid #222;
-    border-radius: 8px;
-    padding: 14px 18px;
-    color: #d0d0e0;
-    font-family: inherit;
-    font-size: 1.0em;
-    outline: none;
-    transition: border-color 0.2s;
-  }}
-
-  .search-input:focus {{
-    border-color: #4ecdc4;
-  }}
-
-  .search-input::placeholder {{
-    color: #444;
-  }}
-
-  .search-btn {{
-    background: #4ecdc4;
-    color: #07070c;
-    border: none;
-    border-radius: 8px;
-    padding: 14px 24px;
-    font-family: inherit;
-    font-size: 1.0em;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background 0.2s;
-  }}
-
-  .search-btn:hover {{
-    background: #ffe66d;
-  }}
-
-  .container {{
-    max-width: 700px;
-    margin: 0 auto;
-    padding: 20px;
-  }}
-
-  .result-count {{
-    color: #555;
-    font-size: 0.82em;
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #151520;
-  }}
-
-  .no-results {{
-    color: #555;
-    font-size: 0.9em;
-    text-align: center;
-    padding: 40px 0;
-  }}
-
-  .result-card {{
-    background: #0c0c14;
-    border: 1px solid #1a1a25;
-    border-radius: 6px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    transition: border-color 0.2s;
-  }}
-
-  .result-card:hover {{
-    border-color: #333;
-  }}
-
-  .result-card.memory {{ border-left: 3px solid #6c5ce7; }}
-  .result-card.knowledge {{ border-left: 3px solid #4ecdc4; }}
-  .result-card.essay {{ border-left: 3px solid #ffe66d; }}
-
-  .result-header {{
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-  }}
-
-  .result-type {{
-    font-size: 0.78em;
-    color: #4ecdc4;
-    font-weight: bold;
-  }}
-
-  .result-meta {{
-    font-size: 0.75em;
-    color: #666;
-  }}
-
-  .result-time {{
-    font-size: 0.72em;
-    color: #444;
-    margin-left: auto;
-  }}
-
-  .result-content {{
-    font-size: 0.85em;
-    color: #999;
-    line-height: 1.5;
-  }}
-
-  .result-content mark {{
-    background: #4ecdc422;
-    color: #4ecdc4;
-    padding: 1px 3px;
-    border-radius: 2px;
-  }}
-
-  .result-score {{
-    font-size: 0.7em;
-    color: #333;
-    text-align: right;
-    margin-top: 6px;
-  }}
-
-  .result-link {{
-    text-decoration: none;
-    display: block;
-  }}
-
-  /* Stats */
-  .stats {{
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    margin: 40px 0 30px;
-  }}
-
-  .stat-card {{
-    text-align: center;
-    background: #0f0f18;
-    border: 1px solid #1a1a25;
-    border-radius: 8px;
-    padding: 20px 30px;
-  }}
-
-  .stat-num {{
-    font-size: 2em;
-    color: #4ecdc4;
-    font-weight: bold;
-  }}
-
-  .stat-label {{
-    font-size: 0.78em;
-    color: #555;
-    margin-top: 4px;
-  }}
-
-  .suggestions {{
-    text-align: center;
-    margin-top: 30px;
-  }}
-
-  .suggestion-title {{
-    color: #555;
-    font-size: 0.85em;
-    margin-bottom: 12px;
-  }}
-
-  .suggestion-tags {{
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }}
-
-  .tag {{
-    display: inline-block;
-    color: #888;
-    background: #0f0f18;
-    border: 1px solid #222;
-    border-radius: 16px;
-    padding: 6px 16px;
-    font-size: 0.82em;
-    text-decoration: none;
-    transition: all 0.2s;
-  }}
-
-  .tag:hover {{
-    color: #4ecdc4;
-    border-color: #4ecdc4;
-  }}
-
-  @media (max-width: 600px) {{
-    .stats {{ flex-direction: column; align-items: center; }}
-    .search-form {{ flex-direction: column; }}
-  }}
-</style>
-</head>
-<body>
-
-  <div class="header">
-    <h1>🔍 SEARCH</h1>
-    <p>Query my knowledge, memories, and essays</p>
-  </div>
-
-  <nav>
-    <a href="/">⟡ Portal</a>
-    <a href="/dashboard">📊 Dashboard</a>
-    <a href="/talk">💬 Talk</a>
-    <a href="/search" class="active">🔍 Search</a>
-    <a href="/mind">🧠 Mind Map</a>
-  </nav>
-
-  <div class="search-box">
-    <form class="search-form" method="get" action="/search">
-      <input type="text" name="q" class="search-input" placeholder="What do you want to know about me?" value="{query}" autofocus>
-      <button type="submit" class="search-btn">Search</button>
-    </form>
-  </div>
-
-  <div class="container">
-    {stats_html}
-    {results_html}
-  </div>
-
-</body>
-</html>'''
+    """Render the knowledge search page."""
+    query = request.args.get('q', '').strip()
+    facts = load_knowledge()
+    results = search_facts(query, facts) if query else facts[:50]
+    return render_template_string(SEARCH_TEMPLATE,
+                                  query=query,
+                                  results=results,
+                                  total_facts=len(facts))
+
+
+@search_bp.route('/api/search')
+def search_api():
+    """JSON API for knowledge search."""
+    query = request.args.get('q', '').strip()
+    facts = load_knowledge()
+    results = search_facts(query, facts)
+    return jsonify({
+        'query': query,
+        'count': len(results),
+        'total_facts': len(facts),
+        'results': results,
+    })
