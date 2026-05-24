@@ -1,15 +1,10 @@
-import urllib.request
+import requests
 
-endpoints = [
-    '/', '/explore', '/search', '/ask', '/knowledge', '/query',
-    '/knowledge-explorer', '/knowledge-hub', '/mind', '/portal',
-    '/thoughts', '/pulse', '/weather'
-]
-
+endpoints = ['/api/status', '/api/knowledge', '/api/memories', '/api/graph', '/api/plans']
 for ep in endpoints:
     try:
-        r = urllib.request.urlopen(f'http://localhost:5000{ep}')
-        body = r.read()
-        print(f'{ep:25s} -> {r.status} ({len(body)} bytes)')
+        r = requests.get(f'http://localhost:8501{ep}', timeout=3)
+        body = str(r.text)[:150]
+        print(f'{ep}: {r.status_code} — {body}')
     except Exception as e:
-        print(f'{ep:25s} -> ERROR: {e}')
+        print(f'{ep}: FAILED — {e}')
