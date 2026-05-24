@@ -42,11 +42,11 @@ def create_ask_blueprint(agent=None):
         # Fallback: read from persist file
         if not facts:
             import json
-            kg_path = Path('persist/knowledge_graph.json')
+            kg_path = Path('state/knowledge_graph.json')
             if kg_path.exists():
                 try:
                     data = json.loads(kg_path.read_text())
-                    raw_facts = data.get('facts', {})
+                    raw_facts = data.get('nodes', data.get('facts', {}))
                     if isinstance(raw_facts, dict):
                         for fid, fdata in raw_facts.items():
                             if isinstance(fdata, dict):
@@ -100,7 +100,7 @@ def create_ask_blueprint(agent=None):
         # Fallback: read from persist
         if not memories:
             import json
-            mem_path = Path('persist/memories.json')
+            mem_path = Path('state/memories.json')
             if mem_path.exists():
                 try:
                     data = json.loads(mem_path.read_text())

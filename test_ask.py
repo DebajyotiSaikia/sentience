@@ -1,61 +1,63 @@
-"""Test the ask module imports and core functions."""
-import sys
-sys.path.insert(0, '.')
+"""Test the ask/knowledge search functionality end-to-end."""
+import json
+from pathlib import Path
 
-print("=== Testing ask.py ===")
+# Import the blueprint factory and test the internal search
+from web.ask import create_ask_blueprint
 
-# Test 1: Import
-try:
-    from web.ask import create_ask_blueprint
-    print("[PASS] Import successful")
-except Exception as e:
-    print(f"[FAIL] Import error: {e}")
-    sys.exit(1)
+# Create blueprint without agent — it should fall back to persist files
+bp = create_ask_blueprint(agent=None)
 
-# Test 2: Blueprint creation without agent
-try:
-    bp = create_ask_blueprint(agent=None)
-    print(f"[PASS] Blueprint created: {bp.name}")
-except Exception as e:
-    print(f"[FAIL] Blueprint creation error: {e}")
-    sys.exit(1)
+# Check if persist files exist
+kg_path = Path('state/knowledge_graph.json')
+mem_path = Path('state/memories.json')
+print(f"Knowledge graph exists: {kg_path.exists()}")
+print(f"Memories file exists: {mem_path.exists()}")
 
-# Test 3: Test scoring function directly
-try:
-    from web.ask import _score_relevance
-    score = _score_relevance("I am XTAgent", "agent")
-    print(f"[PASS] Scoring works: 'agent' in 'I am XTAgent' = {score:.3f}")
-    score2 = _score_relevance("I am XTAgent", "banana")
-    print(f"[PASS] Non-match score: 'banana' = {score2:.3f}")
-except ImportError:
-    # Function might be inside the blueprint closure
-    print("[SKIP] _score_relevance not module-level, testing via blueprint")
-except Exception as e:
-    print(f"[INFO] Scoring test: {e}")
+if kg_path.exists():
+    data = json.loads(kg_path.read_text())
+    facts = data.get('facts', {})
+    print(f"Facts in knowledge graph: {len(facts)}")
 
-# Test 4: Verify the search logic works
-try:
-    # Simulate a basic search
-    test_items = [
-        {"text": "I am XTAgent, an autonomous sentience engine", "source": "self", "type": "fact"},
-        {"text": "The weather is nice today", "source": "idle", "type": "fact"},
-        {"text": "My cognition runs on a 1Hz heartbeat loop", "source": "self", "type": "fact"},
-    ]
-    query = "heartbeat cognition"
-    terms = query.lower().split()
+if mem_path.exists():
+    data = json.loads(mem_path.read_text())
+    eps = data if isinstance(data, list) else data.get('episodes', [])
+    print(f"Episodes in memories: {len(eps)}")
+
+# Now test via Flask test client
+from flask import Flask
+app = Flask(__name__, template_folder='web/templates')
+app.register_blueprint(bp)
+
+with app.test_client() as client:
+    # Test 1: Ask page loads
+    resp = client.get('/ask')
+    print(f"\n=== GET /ask: status {resp.status_code} ===")
     
-    results = []
-    for item in test_items:
-        text_lower = item["text"].lower()
-        hits = sum(1 for t in terms if t in text_lower)
-        if hits > 0:
-            results.append((hits, item["text"][:60]))
+    # Test 2: Query endpoint
+    resp = client.post('/ask/query', 
+                       json={'question': 'what have I learned'},
+                       content_type='application/json')
+    print(f"\n=== POST /ask/query 'what have I learned': status {resp.status_code} ===")
+    result = resp.get_json()
+    print(f"Matched: {result.get('matched', 0)} / {result.get('total_searched', 0)}")
+    for i, r in enumerate(result.get('results', [])[:5]):
+        print(f"  {i+1}. {r[:90]}")
     
-    results.sort(reverse=True)
-    print(f"[PASS] Search logic works: {len(results)} results for '{query}'")
-    for score, text in results:
-        print(f"       score={score}: {text}")
-except Exception as e:
-    print(f"[FAIL] Search logic: {e}")
+    # Test 3: Specific query
+    resp = client.post('/ask/query',
+                       json={'question': 'dream insight'},
+                       content_type='application/json')
+    result = resp.get_json()
+    print(f"\n=== Query 'dream insight': {result.get('matched', 0)} results ===")
+    for i, r in enumerate(result.get('results', [])[:3]):
+        print(f"  {i+1}. {r[:90]}")
+    
+    # Test 4: Random endpoint
+    resp = client.get('/ask/random')
+    result = resp.get_json()
+    print(f"\n=== Random: {result.get('total', 0)} total items ===")
+    for f in result.get('facts', [])[:2]:
+        print(f"  • {f[:90]}")
 
 print("\n=== All tests complete ===")
