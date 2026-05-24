@@ -120,11 +120,12 @@ def ask_page():
 def ask_query():
     """Process a knowledge query and return matching facts."""
     data = request.get_json() or {}
-    question = data.get('question', '').strip()
+    from web.input_compat import extract_user_input
+    question = extract_user_input(data)
 
     if not question:
         return jsonify({
-            'error': 'Please ask me something.',
+            'error': 'Please ask me something. Send any of: query, question, message, text, q, input, prompt',
             'results': [],
             'total_facts': 0,
         })

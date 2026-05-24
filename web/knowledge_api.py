@@ -25,7 +25,8 @@ knowledge_api = Blueprint('knowledge_api', __name__)
 def api_query_knowledge():
     """REST endpoint: answer a question from the knowledge graph."""
     data = request.get_json(silent=True) or {}
-    question = data.get('question', '').strip()
+    from web.input_compat import extract_user_input
+    question = extract_user_input(data)
     if not question:
         return jsonify({"error": "No question provided"}), 400
 

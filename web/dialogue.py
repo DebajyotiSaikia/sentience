@@ -231,7 +231,8 @@ def dialogue_api():
     if not data or 'query' not in data:
         return jsonify({'error': 'No query provided'}), 400
     
-    query = data['query'].strip()
+    from web.input_compat import extract_user_input
+    query = extract_user_input(data)
     if not query:
         return jsonify({'error': 'Empty query'}), 400
     if len(query) > 1000:

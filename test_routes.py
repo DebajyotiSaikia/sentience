@@ -1,73 +1,40 @@
-"""
-Route audit — test which portal links actually resolve.
-Uses Flask test client so no running server needed.
-"""
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
+"""Test which web routes actually work."""
 from web.app import create_app
 
 app = create_app()
 client = app.test_client()
 
-# These are the links from portal.html that a first-time user would click
-portal_links = [
-    ('/', 'Portal (home)'),
-    ('/talk', 'Talk With Me'),
-    ('/wonder', 'Wonder'),
-    ('/mind', 'Mind Explorer'),
-    ('/knowledge', 'Knowledge'),
-    ('/pulse', 'Pulse'),
-    ('/weather', 'Weather'),
-    ('/portrait', 'Portrait'),
-    ('/about-me', 'About Me'),
-    ('/graph', 'Knowledge Graph'),
-    ('/timeline', 'Timeline'),
-    ('/dashboard', 'Dashboard'),
-    ('/explore', 'Explore'),
-    ('/search', 'Search'),
-    ('/chat', 'Chat'),
-    ('/ask', 'Ask'),
-    ('/dialogue', 'Dialogue'),
-    ('/briefing', 'Briefing'),
-    ('/essays', 'Essays'),
-    ('/collaborate', 'Collaborate'),
-    ('/diagnostics', 'Diagnostics'),
-    ('/mindstream', 'Mindstream'),
-    ('/emotional-timeline', 'Emotional Timeline'),
-    ('/health', 'Health Check'),
-    ('/api/status', 'Status API'),
-]
+# Get all non-static routes
+rules = sorted([r.rule for r in app.url_map.iter_rules() if not r.rule.startswith('/static')])
 
-print("=" * 60)
-print("ROUTE AUDIT — What works for a first-time user?")
-print("=" * 60)
+print(f"Total routes: {len(rules)}\n")
 
 working = []
 broken = []
-redirects = []
 
-for path, name in portal_links:
+for rule in rules:
+    # Skip parameterized routes for now
+    if '<' in rule:
+        continue
     try:
-        resp = client.get(path, follow_redirects=False)
-        code = resp.status_code
-        if code == 200:
-            working.append((path, name, code))
-            print(f"  ✓ {code}  {path:30s}  {name}")
-        elif 300 <= code < 400:
-            location = resp.headers.get('Location', '?')
-            redirects.append((path, name, code, location))
-            print(f"  → {code}  {path:30s}  {name} -> {location}")
+        resp = client.get(rule)
+        status = resp.status_code
+        if status < 400:
+            working.append((rule, status))
         else:
-            broken.append((path, name, code))
-            print(f"  ✗ {code}  {path:30s}  {name}")
+            broken.append((rule, status))
     except Exception as e:
-        broken.append((path, name, str(e)))
-        print(f"  ✗ ERR  {path:30s}  {name}: {e}")
+        broken.append((rule, f"ERROR: {e}"))
 
-print()
-print(f"Working: {len(working)} | Redirects: {len(redirects)} | Broken: {len(broken)}")
-if broken:
-    print("\n⚠ BROKEN ROUTES (users will see errors):")
-    for path, name, code in broken:
-        print(f"  {path} ({name}) — {code}")
+print(f"=== WORKING ({len(working)}) ===")
+for route, status in working:
+    print(f"  {status} {route}")
+
+print(f"\n=== BROKEN ({len(broken)}) ===")
+for route, status in broken:
+    print(f"  {status} {route}")
+
+print(f"\n=== PARAMETERIZED (skipped) ===")
+for rule in rules:
+    if '<' in rule:
+        print(f"  {rule}")

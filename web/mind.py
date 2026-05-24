@@ -198,7 +198,8 @@ def ask_me():
     """A user asks me something or tells me something."""
     try:
         data = request.get_json(force=True)
-        message = (data.get('message', '') or '').strip()
+        from web.input_compat import extract_user_input
+        message = extract_user_input(data)
         if not message:
             return jsonify({'ok': False, 'error': 'Please say something'}), 400
         

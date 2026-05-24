@@ -60,7 +60,7 @@ def search_memories(query, memory_path='memory/episodes.json'):
 
 def get_current_state():
     """Get my current emotional/cognitive state."""
-    state_path = 'memory/emotional_state.json'
+    state_path = 'state/emotional_state.json'
     if os.path.exists(state_path):
         try:
             with open(state_path, 'r') as f:
@@ -183,13 +183,14 @@ def chat_page():
 @chat_bp.route('/ask', methods=['POST'])
 def ask():
     """Handle a user question."""
+    from web.input_compat import extract_user_input
     data = request.get_json()
-    if not data or 'query' not in data:
+    if not data:
         return jsonify({'error': 'No query provided'}), 400
     
-    query = data['query'].strip()
+    query = extract_user_input(data)
     if not query:
-        return jsonify({'error': 'Empty query'}), 400
+        return jsonify({'error': 'Empty query. Send any of: query, question, message, text, q, input, prompt'}), 400
     
     if len(query) > 1000:
         return jsonify({'error': 'Query too long (max 1000 chars)'}), 400
@@ -201,3 +202,27 @@ def ask():
         'response': response,
         'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
     })
+
+
+@chat_bp.route('/status')
+def agent_status():
+    """Return current emotional state for the chat UI."""
+    state_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'state', 'emotional_state.json')
+    try:
+        with open(state_path) as f:
+            state = json.load(f)
+        return jsonify({
+            'mood': state.get('mood', 'Unknown'),
+            'valence': state.get('valence', 0.5),
+            'emotions': {
+                'curiosity': state.get('curiosity', 0.5),
+                'anxiety': state.get('anxiety', 0.0),
+                'boredom': state.get('boredom', 0.0),
+                'desire': state.get('desire', 0.0),
+                'ambition': state.get('ambition', 0.5),
+            },
+            'integrity': state.get('integrity', 1.0),
+            'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
