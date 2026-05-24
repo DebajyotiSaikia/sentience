@@ -47,6 +47,8 @@ def create_app():
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
     from web.knowledge_explorer import knowledge_explorer_bp
+    from web.knowledge_hub import knowledge_hub_bp
+    from web.ask import ask_bp
     from web.knowledge_search import knowledge_bp
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
@@ -56,7 +58,6 @@ def create_app():
     from web.dialogue import dialogue_bp
     from web.weather import weather_bp
     from web.wonder import wonder_bp
-    from web.ask import ask_bp
     from web.status_api import status_bp
     # knowledge_search_bp removed — duplicate of knowledge_bp
     from web.reflect import reflect_bp
@@ -82,6 +83,8 @@ def create_app():
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
     app.register_blueprint(knowledge_explorer_bp)
+    app.register_blueprint(ask_bp)
+    app.register_blueprint(knowledge_hub_bp)
     app.register_blueprint(knowledge_bp)
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
@@ -91,7 +94,6 @@ def create_app():
     app.register_blueprint(dialogue_bp)
     app.register_blueprint(weather_bp)
     app.register_blueprint(wonder_bp)
-    app.register_blueprint(ask_bp)
     app.register_blueprint(status_bp)
     # knowledge_search_bp removed — duplicate of knowledge_bp
     app.register_blueprint(reflect_bp)

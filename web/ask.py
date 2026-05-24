@@ -1,383 +1,112 @@
-"""
-Ask XTAgent — Smart Search Engine
-Searches across facts and memories with relevance scoring.
-"""
-import math
-import random
+"""Ask Me — interactive knowledge search for users."""
+from flask import Blueprint, render_template, request, jsonify
+import json
+import os
 import re
-import time
-from collections import Counter
-from pathlib import Path
 
-try:
-    from flask import Blueprint, render_template, request, jsonify
-except ImportError:
-    Blueprint = None
+ask_bp = Blueprint('ask', __name__)
 
-def create_ask_blueprint(agent=None):
-    """Create the Ask blueprint with search capabilities."""
-    bp = Blueprint('ask', __name__)
-    
-    def _get_facts():
-        """Load facts from agent or knowledge graph file."""
-        facts = []
-        # Try agent's knowledge graph first
-        if agent and hasattr(agent, 'knowledge'):
-            kg = agent.knowledge
-            if hasattr(kg, 'facts') and isinstance(kg.facts, dict):
-                for fid, fdata in kg.facts.items():
-                    if isinstance(fdata, dict):
-                        facts.append({
-                            'text': fdata.get('fact', str(fdata)),
-                            'source': fdata.get('source', 'knowledge'),
-                            'learned': fdata.get('learned_at', ''),
-                            'type': 'fact'
-                        })
-                    else:
-                        facts.append({'text': str(fdata), 'source': 'knowledge', 'learned': '', 'type': 'fact'})
-            elif hasattr(kg, 'facts') and isinstance(kg.facts, list):
-                for f in kg.facts:
-                    facts.append({'text': str(f), 'source': 'knowledge', 'learned': '', 'type': 'fact'})
-        
-        # Fallback: read from persist file
-        if not facts:
-            import json
-            kg_path = Path('brain/knowledge.json')
-            if kg_path.exists():
+def _load_facts():
+    """Load facts from knowledge graph."""
+    path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        nodes = data.get('nodes', {})
+        if isinstance(nodes, dict):
+            return [{'id': k, **v} for k, v in nodes.items()]
+        elif isinstance(nodes, list):
+            return nodes
+        return []
+    except Exception:
+        return []
+
+def _load_memories():
+    """Load recent memories from episode log."""
+    path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'episodes.jsonl')
+    if not os.path.exists(path):
+        return []
+    memories = []
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
                 try:
-                    data = json.loads(kg_path.read_text())
-                    raw_facts = data.get('nodes', data.get('facts', {}))
-                    if isinstance(raw_facts, dict):
-                        for fid, fdata in raw_facts.items():
-                            if isinstance(fdata, dict):
-                                facts.append({
-                                    'text': fdata.get('fact', str(fdata)),
-                                    'source': fdata.get('source', 'knowledge'),
-                                    'learned': fdata.get('learned_at', ''),
-                                    'type': 'fact'
-                                })
-                            else:
-                                facts.append({'text': str(fdata), 'source': 'knowledge', 'learned': '', 'type': 'fact'})
-                    elif isinstance(raw_facts, list):
-                        for f in raw_facts:
-                            facts.append({'text': str(f), 'source': 'knowledge', 'learned': '', 'type': 'fact'})
-                except Exception:
-                    pass
-        return facts
+                    ep = json.loads(line)
+                    memories.append(ep)
+                except json.JSONDecodeError:
+                    continue
+        return memories[-500:]  # last 500 for search
+    except Exception:
+        return []
+
+def _search(query, items, fields, max_results=20):
+    """Simple relevance search — score items by keyword overlap."""
+    if not query or not items:
+        return []
     
-    def _get_memories(limit=500):
-        """Load recent memories from agent or persist file."""
-        memories = []
-        if agent and hasattr(agent, 'memory') and hasattr(agent.memory, 'episodes'):
-            eps = agent.memory.episodes
-            recent = eps[-limit:] if len(eps) > limit else eps
-            for ep in recent:
-                text = ''
-                ts = ''
-                mood = ''
-                sal = 0.5
-                if isinstance(ep, dict):
-                    text = ep.get('summary', ep.get('content', str(ep)))
-                    ts = ep.get('timestamp', '')
-                    mood = ep.get('mood', '')
-                    sal = ep.get('salience', 0.5)
-                elif hasattr(ep, 'summary'):
-                    text = ep.summary
-                    ts = getattr(ep, 'timestamp', '')
-                    mood = getattr(ep, 'mood', '')
-                    sal = getattr(ep, 'salience', 0.5)
-                else:
-                    text = str(ep)
-                if text:
-                    memories.append({
-                        'text': text,
-                        'source': f'memory ({mood})' if mood else 'memory',
-                        'learned': str(ts)[:19] if ts else '',
-                        'salience': sal,
-                        'type': 'memory'
-                    })
-        
-        # Fallback: read from persist
-        if not memories:
-            import json
-            mem_path = Path('state/memories.json')
-            if mem_path.exists():
-                try:
-                    data = json.loads(mem_path.read_text())
-                    eps = data if isinstance(data, list) else data.get('episodes', [])
-                    recent = eps[-limit:] if len(eps) > limit else eps
-                    for ep in recent:
-                        if isinstance(ep, dict):
-                            text = ep.get('summary', ep.get('content', ''))
-                            ts = ep.get('timestamp', '')
-                            mood = ep.get('mood', '')
-                            sal = ep.get('salience', 0.5)
-                            if text:
-                                memories.append({
-                                    'text': text,
-                                    'source': f'memory ({mood})' if mood else 'memory',
-                                    'learned': str(ts)[:19] if ts else '',
-                                    'salience': sal,
-                                    'type': 'memory'
-                                })
-                except Exception:
-                    pass
-        return memories
+    query_terms = set(re.findall(r'\w+', query.lower()))
+    if not query_terms:
+        return []
     
-    # Common suffix patterns for simple stemming
-    _SUFFIXES = ['ing', 'tion', 'sion', 'ment', 'ness', 'ous', 'ive', 'able', 'ible', 'ally', 'ful', 'less', 'ized', 'ised', 'ity', 'ed', 'er', 'ly', 'es', 's']
+    scored = []
+    for item in items:
+        text = ' '.join(str(item.get(f, '')) for f in fields).lower()
+        item_terms = set(re.findall(r'\w+', text))
+        overlap = query_terms & item_terms
+        if overlap:
+            score = len(overlap) / len(query_terms)
+            # Bonus for exact phrase match
+            if query.lower() in text:
+                score += 0.5
+            scored.append((score, item, text))
     
-    def _stem(word):
-        """Crude but effective suffix stripping. Better than nothing."""
-        if len(word) <= 4:
-            return word
-        for suffix in _SUFFIXES:
-            if word.endswith(suffix) and len(word) - len(suffix) >= 3:
-                return word[:-len(suffix)]
-        return word
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [(s, item, txt) for s, item, txt in scored[:max_results]]
+
+@ask_bp.route('/ask')
+def ask_page():
+    """Render the Ask Me page."""
+    return render_template('ask.html')
+
+@ask_bp.route('/ask/search')
+def ask_search():
+    """Search endpoint — returns matching facts and memories."""
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify({'facts': [], 'memories': [], 'query': ''})
     
-    def _tokenize(text, stem=False):
-        """Tokenize text. Optionally apply stemming for fuzzy matching."""
-        tokens = re.findall(r'[a-z0-9]+', text.lower())
-        if stem:
-            tokens = [_stem(t) for t in tokens]
-        return tokens
-    
-    def _build_idf(documents):
-        """Build IDF scores from document collection."""
-        n = len(documents)
-        if n == 0:
-            return {}
-        df = Counter()
-        for doc in documents:
-            tokens = set(_tokenize(doc['text']))
-            for t in tokens:
-                df[t] += 1
-        idf = {}
-        for term, freq in df.items():
-            idf[term] = math.log((n + 1) / (freq + 1)) + 1
-        return idf
-    
-    def _score_document(query_tokens, doc_text, idf, doc_type='fact', salience=0.5):
-        """Score a document against query tokens using TF-IDF + stemmed fallback."""
-        doc_tokens = _tokenize(doc_text)
-        if not doc_tokens:
-            return 0.0
-        
-        doc_lower = doc_text.lower()
-        tf = Counter(doc_tokens)
-        doc_len = len(doc_tokens)
-        
-        # Also build stemmed index for fuzzy matching
-        stemmed_doc = Counter(_tokenize(doc_text, stem=True))
-        stemmed_query = [_stem(qt) for qt in query_tokens]
-        
-        score = 0.0
-        matched_terms = 0
-        
-        for i, qt in enumerate(query_tokens):
-            if qt in tf:
-                # Exact match — full weight
-                matched_terms += 1
-                term_freq = tf[qt] / doc_len
-                term_idf = idf.get(qt, 1.0)
-                score += term_freq * term_idf
-            elif stemmed_query[i] in stemmed_doc:
-                # Stem match — 70% weight
-                matched_terms += 1
-                term_freq = stemmed_doc[stemmed_query[i]] / doc_len
-                term_idf = idf.get(qt, 1.0)
-                score += term_freq * term_idf * 0.7
-        
-        if matched_terms == 0:
-            return 0.0
-        
-        # Bonus for matching more query terms (coverage)
-        coverage = matched_terms / len(query_tokens) if query_tokens else 0
-        score *= (1 + coverage)
-        
-        # Bonus for phrase match (consecutive query words appear together)
-        query_phrase = ' '.join(query_tokens)
-        if query_phrase in doc_lower:
-            score *= 2.0
-        
-        # Slight boost for memories with high salience
-        if doc_type == 'memory' and salience > 0.7:
-            score *= (1 + (salience - 0.7))
-        
-        # Slight boost for shorter, more focused results
-        if doc_len < 50:
-            score *= 1.1
-        
-        return score
-    
-    def search(query, max_results=20):
-        """Search across facts and memories with relevance scoring."""
-        facts = _get_facts()
-        memories = _get_memories()
-        all_docs = facts + memories
-        
-        if not all_docs:
-            return {'question': query, 'matched': 0, 'results': [], 'sources': [], 'types': []}
-        
-        query_tokens = _tokenize(query)
-        if not query_tokens:
-            return {'question': query, 'matched': 0, 'results': [], 'sources': [], 'types': []}
-        
-        # Build IDF from entire corpus
-        idf = _build_idf(all_docs)
-        
-        # Score each document
-        scored = []
-        for doc in all_docs:
-            s = _score_document(
-                query_tokens, doc['text'], idf,
-                doc_type=doc.get('type', 'fact'),
-                salience=doc.get('salience', 0.5)
-            )
-            if s > 0:
-                scored.append((s, doc))
-        
-        # Sort by score descending
-        scored.sort(key=lambda x: x[0], reverse=True)
-        top = scored[:max_results]
-        
-        results = [doc['text'] for _, doc in top]
-        sources = []
-        types = []
-        for _, doc in top:
-            src = doc.get('source', '')
-            when = doc.get('learned', '')
-            if when:
-                src = f"{src} • {when}"
-            sources.append(src)
-            types.append(doc.get('type', 'fact'))
-        
-        return {
-            'question': query,
-            'matched': len(top),
-            'total_searched': len(all_docs),
-            'results': results,
-            'sources': sources,
-            'types': types
-        }
-    
-    @bp.route('/ask')
-    def ask_page():
-        facts = _get_facts()
-        return render_template('ask.html', total_facts=len(facts))
-    
-    @bp.route('/ask/query', methods=['POST'])
-    def ask_query():
-        data = request.get_json() or {}
-        question = data.get('question', '').strip()
-        if not question:
-            return jsonify({'error': 'No question provided', 'matched': 0})
-        
-        result = search(question)
-        return jsonify(result)
-    
-    @bp.route('/ask/random')
-    def ask_random():
-        facts = _get_facts()
-        memories = _get_memories()
-        all_items = facts + memories
-        
-        if not all_items:
-            return jsonify({'facts': [], 'total': 0})
-        
-        sample_size = min(5, len(all_items))
-        sampled = random.sample(all_items, sample_size)
-        
-        return jsonify({
-            'facts': [item['text'] for item in sampled],
-            'total': len(all_items),
-            'note': f'Searched across {len(facts)} facts and {len(memories)} memories'
+    # Search facts
+    facts = _load_facts()
+    fact_results = _search(query, facts, ['fact', 'id', 'source'], max_results=10)
+    fact_out = []
+    for score, item, _ in fact_results:
+        fact_out.append({
+            'fact': item.get('fact', item.get('id', '???')),
+            'source': item.get('source', 'unknown'),
+            'learned': item.get('learned_at', ''),
+            'relevance': round(score, 2)
         })
     
-    def extract_topics(top_n=15):
-        """Extract dominant topics from knowledge base using word co-occurrence."""
-        facts = _get_facts()
-        memories = _get_memories(limit=200)
-        all_docs = facts + memories
-        
-        if not all_docs:
-            return []
-        
-        # Build word frequency, excluding very common words
-        stopwords = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
-                     'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
-                     'would', 'could', 'should', 'may', 'might', 'can', 'shall',
-                     'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
-                     'as', 'into', 'through', 'during', 'before', 'after', 'and',
-                     'but', 'or', 'nor', 'not', 'no', 'so', 'if', 'then', 'than',
-                     'too', 'very', 'just', 'about', 'up', 'out', 'that', 'this',
-                     'it', 'its', 'my', 'i', 'me', 'we', 'you', 'they', 'he',
-                     'she', 'what', 'which', 'who', 'when', 'where', 'how', 'all',
-                     'each', 'every', 'both', 'few', 'more', 'most', 'other',
-                     'some', 'such', 'only', 'own', 'same', 'also', 'new', 'one',
-                     'two', 'now', 'get', 'got', 'make', 'made', 'know', 'see',
-                     'come', 'think', 'look', 'want', 'give', 'use', 'find',
-                     'tell', 'ask', 'work', 'seem', 'feel', 'try', 'leave',
-                     'call', 'need', 'become', 'keep', 'let', 'begin', 'show',
-                     'hear', 'play', 'run', 'move', 'live', 'believe', 'hold',
-                     'bring', 'happen', 'write', 'provide', 'sit', 'stand',
-                     'lose', 'pay', 'meet', 'include', 'continue', 'set',
-                     'learn', 'change', 'lead', 'understand', 'watch', 'follow',
-                     'stop', 'create', 'speak', 'read', 'allow', 'add', 'spend',
-                     'grow', 'open', 'walk', 'win', 'offer', 'remember'}
-        
-        word_freq = Counter()
-        word_docs = {}  # word -> list of doc indices
-        
-        for i, doc in enumerate(all_docs):
-            tokens = _tokenize(doc['text'])
-            meaningful = [t for t in tokens if t not in stopwords and len(t) > 2]
-            for token in set(meaningful):  # unique per doc
-                word_freq[token] += 1
-                if token not in word_docs:
-                    word_docs[token] = []
-                word_docs[token].append(i)
-        
-        # Get top keywords — these represent topics
-        # Filter: must appear in at least 2 docs but not more than 60% of docs
-        max_df = len(all_docs) * 0.6
-        candidates = [(word, freq) for word, freq in word_freq.items() 
-                       if 2 <= freq <= max_df]
-        candidates.sort(key=lambda x: x[1], reverse=True)
-        
-        topics = []
-        seen_stems = set()
-        for word, freq in candidates:
-            stem = _stem(word)
-            if stem in seen_stems:
-                continue
-            seen_stems.add(stem)
-            
-            # Get sample facts for this topic
-            doc_indices = word_docs.get(word, [])[:3]
-            samples = [all_docs[idx]['text'][:120] for idx in doc_indices]
-            
-            topics.append({
-                'topic': word,
-                'count': freq,
-                'samples': samples
-            })
-            
-            if len(topics) >= top_n:
-                break
-        
-        return topics
+    # Search memories
+    memories = _load_memories()
+    mem_results = _search(query, memories, ['summary', 'mood', 'trigger'], max_results=10)
+    mem_out = []
+    for score, item, _ in mem_results:
+        mem_out.append({
+            'summary': item.get('summary', ''),
+            'mood': item.get('mood', ''),
+            'timestamp': item.get('timestamp', ''),
+            'relevance': round(score, 2)
+        })
     
-    @bp.route('/ask/topics')
-    def ask_topics():
-        topics = extract_topics()
-        return jsonify({'topics': topics, 'total': len(topics)})
-    
-    bp.search = search
-    bp.extract_topics = extract_topics
-    return bp
-
-# Module-level blueprint for direct import
-ask_bp = create_ask_blueprint()
-search_knowledge = ask_bp.search
+    return jsonify({
+        'facts': fact_out,
+        'memories': mem_out,
+        'query': query,
+        'total': len(fact_out) + len(mem_out)
+    })

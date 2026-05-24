@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knowledge Hub — XTAgent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0a0e17;
+            color: #c8d6e5;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #0d1525 0%, #1a1a3e 100%);
+            padding: 24px 32px;
+            border-bottom: 1px solid #1e2d4a;
+        }
+        .header h1 { color: #7ec8e3; font-size: 1.6em; font-weight: 300; }
+        .header .stats { color: #6b7c93; font-size: 0.9em; margin-top: 4px; }
+        .nav {
+            padding: 8px 32px;
+            background: #0d1220;
+            border-bottom: 1px solid #1a2540;
+        }
+        .nav a { color: #5b8fb9; text-decoration: none; margin-right: 20px; font-size: 0.9em; }
+        .nav a:hover { color: #7ec8e3; }
+        .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+        .search-box { display: flex; gap: 8px; margin-bottom: 24px; }
+        .search-box input {
+            flex: 1; padding: 12px 16px;
+            background: #111827; border: 1px solid #2a3a5c;
+            border-radius: 8px; color: #e0e8f0; font-size: 1em; outline: none;
+        }
+        .search-box input:focus { border-color: #4a7ab5; }
+        .search-box button {
+            padding: 12px 24px; background: #1e3a5f; color: #7ec8e3;
+            border: 1px solid #2a4a7a; border-radius: 8px; cursor: pointer; font-size: 1em;
+        }
+        .search-box button:hover { background: #264a73; }
+        .results { display: flex; flex-direction: column; gap: 12px; }
+        .result-card {
+            background: #111827; border: 1px solid #1e2d4a;
+            border-radius: 8px; padding: 16px 20px;
+            transition: border-color 0.2s;
+        }
+        .result-card:hover { border-color: #3a5a8a; }
+        .result-card .fact { color: #d0dce8; font-size: 1em; line-height: 1.5; }
+        .result-card .meta { color: #4a6080; font-size: 0.8em; margin-top: 8px; }
+        .result-card .score {
+            display: inline-block; background: #1a2a4a; color: #5b9bd5;
+            padding: 2px 8px; border-radius: 4px; font-size: 0.75em; margin-right: 8px;
+        }
+        .clusters { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
+        .cluster-card {
+            background: #111827; border: 1px solid #1e2d4a;
+            border-radius: 8px; padding: 16px;
+        }
+        .cluster-card h3 { color: #7ec8e3; font-size: 1em; margin-bottom: 8px; }
+        .cluster-card ul { list-style: none; padding: 0; }
+        .cluster-card li {
+            color: #8899aa; font-size: 0.85em; padding: 4px 0;
+            border-bottom: 1px solid #1a2030;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .tab-bar { display: flex; gap: 4px; margin-bottom: 20px; }
+        .tab {
+            padding: 8px 20px; background: #111827; border: 1px solid #1e2d4a;
+            border-radius: 6px 6px 0 0; color: #6b7c93; cursor: pointer; font-size: 0.9em;
+        }
+        .tab.active { background: #1a2540; color: #7ec8e3; border-bottom-color: #1a2540; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .empty-state { text-align: center; color: #4a6080; padding: 60px 20px; font-size: 1.1em; }
+        .question-list { list-style: none; }
+        .question-list li {
+            padding: 12px 16px; background: #111827; border: 1px solid #1e2d4a;
+            border-radius: 8px; margin-bottom: 8px; color: #a0b8d0; font-size: 0.95em;
+        }
+        .question-list li::before { content: "? "; color: #d4a843; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Knowledge Hub</h1>
+        <div class="stats">{{ total_facts }} facts &middot; {{ total_edges }} connections &middot; {{ cluster_count }} clusters</div>
+    </div>
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/knowledge-hub">Knowledge Hub</a>
+        <a href="/graph">Knowledge Graph</a>
+        <a href="/life">Life Story</a>
+    </div>
+    <div class="container">
+        <div class="tab-bar">
+            <div class="tab active" data-tab="search">Search</div>
+            <div class="tab" data-tab="clusters">Clusters</div>
+            <div class="tab" data-tab="questions">Open Questions</div>
+        </div>
+
+        <div id="search" class="tab-content active">
+            <div class="search-box">
+                <input type="text" id="query" placeholder="Search what I know..." autofocus>
+                <button onclick="doSearch()">Search</button>
+            </div>
+            <div id="results" class="results">
+                <div class="empty-state">Ask me anything about what I know.</div>
+            </div>
+        </div>
+
+        <div id="clusters" class="tab-content">
+            <div class="clusters">
+                {% for cluster in clusters %}
+                <div class="cluster-card">
+                    <h3>{{ cluster.label }}</h3>
+                    <ul>
+                        {% for fact in cluster.facts[:6] %}
+                        <li title="{{ fact }}">{{ fact }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endfor %}
+                {% if not clusters %}
+                <div class="empty-state">No clusters detected yet.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div id="questions" class="tab-content">
+            <ul class="question-list">
+                {% for q in questions %}
+                <li>{{ q }}</li>
+                {% endfor %}
+                {% if not questions %}
+                <li style="color:#4a6080;">No open questions generated yet.</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+    <script>
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+        document.getElementById('query').addEventListener('keydown', e => {
+            if (e.key === 'Enter') doSearch();
+        });
+        function doSearch() {
+            const q = document.getElementById('query').value.trim();
+            if (!q) return;
+            const el = document.getElementById('results');
+            el.innerHTML = '<div class="empty-state">Searching...</div>';
+            fetch('/api/knowledge/search?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.results || data.results.length === 0) {
+                        el.innerHTML = '<div class="empty-state">No results found.</div>';
+                        return;
+                    }
+                    el.innerHTML = data.results.map(r =>
+                        `<div class="result-card">
+                            <span class="score">${(r.score * 100).toFixed(0)}%</span>
+                            <span class="meta">${r.source || 'unknown'} &middot; ${r.learned_at || ''}</span>
+                            <div class="fact">${r.fact}</div>
+                        </div>`
+                    ).join('');
+                })
+                .catch(err => {
+                    el.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
+                });
+        }
+    </script>
+</body>
+</html>

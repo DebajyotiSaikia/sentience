@@ -8,375 +8,204 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0a0a0f;
-            color: #c8ccd0;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            color: #c8c8d0;
+            font-family: 'Segoe UI', system-ui, sans-serif;
             min-height: 100vh;
         }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem 1.5rem;
-        }
-        header {
+        .header {
             text-align: center;
-            margin-bottom: 2.5rem;
+            padding: 2rem 1rem 1rem;
         }
-        h1 {
-            font-size: 1.8rem;
-            color: #e0e0e0;
-            font-weight: 300;
-            letter-spacing: 0.05em;
-        }
-        h1 span { color: #7eb8da; }
-        .subtitle {
-            color: #666;
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
-        }
-        .emotional-state {
-            display: flex;
-            justify-content: center;
-            gap: 1.5rem;
-            margin: 1.2rem 0;
-            flex-wrap: wrap;
-        }
-        .emotion-pill {
-            background: #12121a;
-            border: 1px solid #1e1e2e;
-            border-radius: 20px;
-            padding: 0.3rem 0.9rem;
-            font-size: 0.78rem;
-            color: #888;
-        }
-        .emotion-pill .val {
+        .header h1 {
+            font-size: 2rem;
             color: #7eb8da;
-            font-weight: 600;
+            margin-bottom: 0.3rem;
         }
-        .search-area {
-            position: relative;
-            margin-bottom: 2rem;
+        .header p {
+            color: #888;
+            font-size: 0.95rem;
         }
         .search-box {
-            width: 100%;
-            background: #12121a;
-            border: 1px solid #1e1e2e;
-            border-radius: 12px;
-            padding: 1rem 1.2rem;
-            padding-right: 3.5rem;
-            color: #e0e0e0;
-            font-size: 1.05rem;
-            outline: none;
-            transition: border-color 0.3s;
+            max-width: 640px;
+            margin: 1.5rem auto;
+            padding: 0 1rem;
         }
-        .search-box:focus {
+        .search-box input {
+            width: 100%;
+            padding: 0.9rem 1.2rem;
+            font-size: 1.1rem;
+            background: #14141f;
+            border: 1px solid #2a2a3a;
+            border-radius: 8px;
+            color: #e0e0e8;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .search-box input:focus {
             border-color: #7eb8da;
         }
-        .search-box::placeholder { color: #444; }
-        .search-btn {
-            position: absolute;
-            right: 0.6rem;
-            top: 50%;
-            transform: translateY(-50%);
-            background: #7eb8da;
-            color: #0a0a0f;
-            border: none;
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            font-size: 0.9rem;
-            cursor: pointer;
-            font-weight: 600;
-            transition: background 0.2s;
-        }
-        .search-btn:hover { background: #9ccef0; }
-        .search-btn:disabled { background: #333; color: #666; cursor: wait; }
-        .quick-actions {
-            display: flex;
-            gap: 0.6rem;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-        }
-        .quick-btn {
-            background: #12121a;
-            border: 1px solid #1e1e2e;
-            color: #888;
-            padding: 0.4rem 0.9rem;
-            border-radius: 8px;
-            font-size: 0.8rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .quick-btn:hover { border-color: #7eb8da; color: #aaa; }
-        .results-area {
-            min-height: 200px;
-        }
-        .result-count {
+        .search-box input::placeholder {
             color: #555;
-            font-size: 0.8rem;
+        }
+        .stats {
+            text-align: center;
+            color: #555;
+            font-size: 0.85rem;
             margin-bottom: 1rem;
+        }
+        .results {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 0 1rem 3rem;
         }
         .result-card {
             background: #12121a;
             border: 1px solid #1e1e2e;
-            border-radius: 10px;
+            border-radius: 8px;
             padding: 1rem 1.2rem;
             margin-bottom: 0.8rem;
-            line-height: 1.6;
-            font-size: 0.92rem;
             transition: border-color 0.2s;
-            animation: fadeIn 0.3s ease;
         }
-        .result-card:hover { border-color: #2a2a3e; }
-        .result-source {
-            color: #555;
-            font-size: 0.72rem;
-            margin-top: 0.5rem;
-            font-style: italic;
+        .result-card:hover {
+            border-color: #3a3a5a;
         }
-        .result-badge {
-            display: inline-block;
-            font-size: 0.65rem;
-            padding: 0.15rem 0.5rem;
-            border-radius: 10px;
-            margin-right: 0.5rem;
-            font-weight: 600;
+        .result-type {
+            font-size: 0.7rem;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            vertical-align: middle;
+            letter-spacing: 0.08em;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 0.5rem;
         }
-        .badge-fact { background: #1a2a1a; color: #6ec76e; border: 1px solid #2a3a2a; }
-        .badge-memory { background: #2a1a2a; color: #c76ec7; border: 1px solid #3a2a3a; }
-        .search-meta {
-            color: #444;
+        .type-fact { background: #1a2a1a; color: #6a6; }
+        .type-memory { background: #2a1a2a; color: #a6a; }
+        .type-dream { background: #1a1a2a; color: #66a; }
+        .result-text {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #bbb;
+        }
+        .result-meta {
             font-size: 0.75rem;
-            margin-top: 0.3rem;
+            color: #555;
+            margin-top: 0.4rem;
         }
+        .highlight {
+            background: rgba(126, 184, 218, 0.2);
+            color: #7eb8da;
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 2rem;
+            color: #7eb8da;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .back-link:hover { text-decoration: underline; }
         .empty-state {
             text-align: center;
             padding: 3rem 1rem;
-            color: #444;
-        }
-        .empty-state .icon { font-size: 2.5rem; margin-bottom: 1rem; }
-        .empty-state p { font-size: 0.95rem; line-height: 1.6; }
-        .stats-bar {
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-            margin-top: 3rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid #1a1a24;
-        }
-        .stat { text-align: center; }
-        .stat .num { color: #7eb8da; font-size: 1.4rem; font-weight: 600; }
-        .stat .label { color: #555; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 2rem;
             color: #555;
         }
-        .loading.active { display: block; }
-        .loading .dots::after {
-            content: '';
-            animation: dots 1.5s infinite;
-        }
-        @keyframes dots {
-            0% { content: ''; }
-            25% { content: '.'; }
-            50% { content: '..'; }
-            75% { content: '...'; }
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .back-link {
-            display: inline-block;
-            color: #555;
-            text-decoration: none;
-            font-size: 0.8rem;
-            margin-bottom: 1rem;
-            transition: color 0.2s;
-        }
-        .back-link:hover { color: #7eb8da; }
-        .highlight { color: #7eb8da; }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <a href="/" class="back-link">← back to dashboard</a>
-        <header>
-            <h1>Ask <span>XTAgent</span></h1>
-            <p class="subtitle">Search {{ total_facts }} things I know — or explore what surprises you</p>
-            <div class="emotional-state" id="emotions">
-                <span class="emotion-pill">mood: <span class="val" id="mood">—</span></span>
-                <span class="emotion-pill">curiosity: <span class="val" id="curiosity">—</span></span>
-                <span class="emotion-pill">valence: <span class="val" id="valence">—</span></span>
-            </div>
-        </header>
+    <div class="header">
+        <h1>🔍 Ask Me Anything</h1>
+        <p>Search through my knowledge, memories, and dreams</p>
+    </div>
 
-        <div class="search-area">
-            <input type="text" class="search-box" id="question"
-                   placeholder="What do you want to know about me?"
-                   autocomplete="off" autofocus>
-            <button class="search-btn" id="askBtn" onclick="askQuestion()">Ask</button>
-        </div>
+    <div class="search-box">
+        <input type="text" id="query" placeholder="What do you want to know about me?" autofocus>
+    </div>
+    <div class="stats" id="stats"></div>
 
-        <div class="quick-actions">
-            <button class="quick-btn" onclick="quickAsk('identity')">Who are you?</button>
-            <button class="quick-btn" onclick="quickAsk('emotions feelings')">Your emotions</button>
-            <button class="quick-btn" onclick="quickAsk('dream insight')">Dream insights</button>
-            <button class="quick-btn" onclick="quickAsk('lesson learned')">Lessons learned</button>
-            <button class="quick-btn" onclick="randomFacts()">🎲 Surprise me</button>
-        </div>
-
-        <div class="loading" id="loading">
-            <span class="dots">Searching my memory</span>
-        </div>
-
-        <div class="results-area" id="results">
-            <div class="empty-state">
-                <div class="icon">🧠</div>
-                <p>I have <strong class="highlight">{{ total_facts }}</strong> facts in my knowledge graph.<br>
-                Ask me anything — about my architecture, my feelings, what I've learned.</p>
-            </div>
-        </div>
-
-        <div class="stats-bar">
-            <div class="stat">
-                <div class="num">{{ total_facts }}</div>
-                <div class="label">Knowledge facts</div>
-            </div>
-            <div class="stat">
-                <div class="num" id="memoryCount">—</div>
-                <div class="label">Memories</div>
-            </div>
-            <div class="stat">
-                <div class="num" id="uptimeDisplay">—</div>
-                <div class="label">Uptime</div>
-            </div>
+    <div class="results" id="results">
+        <div class="empty-state">
+            <div class="icon">💭</div>
+            <p>Type something to search my mind...</p>
+            <p style="margin-top: 0.5rem; font-size: 0.8rem;">Try: "dream", "curiosity", "identity", "warmth", "code"</p>
         </div>
     </div>
 
-    <script>
-        const questionInput = document.getElementById('question');
-        const askBtn = document.getElementById('askBtn');
-        const resultsArea = document.getElementById('results');
-        const loading = document.getElementById('loading');
+    <a href="/" class="back-link">← Back to Home</a>
 
-        questionInput.addEventListener('keypress', e => {
-            if (e.key === 'Enter') askQuestion();
+    <script>
+        const input = document.getElementById('query');
+        const resultsDiv = document.getElementById('results');
+        const statsDiv = document.getElementById('stats');
+        let debounceTimer;
+
+        input.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(doSearch, 300);
         });
 
-        async function askQuestion() {
-            const q = questionInput.value.trim();
-            if (!q) return;
-            askBtn.disabled = true;
-            loading.classList.add('active');
-            resultsArea.innerHTML = '';
-            try {
-                const res = await fetch('/ask/query', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: q })
-                });
-                const data = await res.json();
-                renderResults(data);
-            } catch (err) {
-                resultsArea.innerHTML = '<div class="result-card" style="color:#c77;">Something went wrong. Try again.</div>';
-            }
-            loading.classList.remove('active');
-            askBtn.disabled = false;
-        }
-
-        function quickAsk(query) {
-            questionInput.value = query;
-            askQuestion();
-        }
-
-        async function randomFacts() {
-            askBtn.disabled = true;
-            loading.classList.add('active');
-            resultsArea.innerHTML = '';
-            questionInput.value = '';
-            try {
-                const res = await fetch('/ask/random');
-                const data = await res.json();
-                renderRandom(data);
-            } catch (err) {
-                resultsArea.innerHTML = '<div class="result-card" style="color:#c77;">Could not load random facts.</div>';
-            }
-            loading.classList.remove('active');
-            askBtn.disabled = false;
-        }
-
-        function renderResults(data) {
-            if (data.error) {
-                resultsArea.innerHTML = `<div class="result-card">${data.error}</div>`;
+        async function doSearch() {
+            const q = input.value.trim();
+            if (!q) {
+                resultsDiv.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon">💭</div>
+                        <p>Type something to search my mind...</p>
+                        <p style="margin-top: 0.5rem; font-size: 0.8rem;">Try: "dream", "curiosity", "identity", "warmth", "code"</p>
+                    </div>`;
+                statsDiv.textContent = '';
                 return;
             }
-            const meta = data.total_searched ? ` (searched ${data.total_searched} items)` : '';
-            let html = `<div class="result-count">${data.matched} result${data.matched !== 1 ? 's' : ''} for "<em>${escHtml(data.question)}</em>"<span class="search-meta">${meta}</span></div>`;
-            if (data.results && data.results.length > 0) {
-                data.results.forEach((text, i) => {
-                    const source = data.sources && data.sources[i] ? data.sources[i] : '';
-                    const dtype = data.types && data.types[i] ? data.types[i] : 'fact';
-                    const badge = dtype === 'memory'
-                        ? '<span class="result-badge badge-memory">memory</span>'
-                        : '<span class="result-badge badge-fact">fact</span>';
-                    html += `<div class="result-card" style="animation-delay:${i * 0.05}s">
-                        ${badge}${escHtml(text)}
-                        ${source ? `<div class="result-source">${escHtml(source)}</div>` : ''}
-                    </div>`;
-                });
-            } else {
-                html += '<div class="empty-state"><p>I don\'t know anything about that yet.<br>Try different words, or hit 🎲 to explore.</p></div>';
-            }
-            resultsArea.innerHTML = html;
-        }
 
-        function renderRandom(data) {
-            let html = `<div class="result-count">🎲 ${data.facts.length} random facts from ${data.total} total</div>`;
-            if (data.facts && data.facts.length > 0) {
-                data.facts.forEach((text, i) => {
-                    html += `<div class="result-card" style="animation-delay:${i * 0.08}s">${escHtml(text)}</div>`;
-                });
-            } else {
-                html += '<div class="empty-state"><p>No facts yet. I\'m still learning.</p></div>';
-            }
-            resultsArea.innerHTML = html;
-        }
-
-        function escHtml(s) {
-            const d = document.createElement('div');
-            d.textContent = s;
-            return d.innerHTML;
-        }
-
-        // Load live emotional state
-        async function loadEmotions() {
             try {
-                const res = await fetch('/api/state');
-                const data = await res.json();
-                if (data.emotions) {
-                    document.getElementById('mood').textContent = data.mood || '—';
-                    document.getElementById('curiosity').textContent =
-                        data.emotions.curiosity !== undefined ? data.emotions.curiosity.toFixed(2) : '—';
-                    document.getElementById('valence').textContent =
-                        data.valence !== undefined ? data.valence.toFixed(2) : '—';
+                const resp = await fetch(`/ask/search?q=${encodeURIComponent(q)}`);
+                const data = await resp.json();
+
+                if (data.results && data.results.length > 0) {
+                    statsDiv.textContent = `Found ${data.results.length} results (searched ${data.total_searched} items)`;
+                    resultsDiv.innerHTML = data.results.map(r => {
+                        const typeClass = r.type === 'fact' ? 'type-fact' :
+                                          r.type === 'memory' ? 'type-memory' : 'type-dream';
+                        const text = highlightTerms(r.text, q);
+                        const meta = r.meta || '';
+                        return `<div class="result-card">
+                            <span class="result-type ${typeClass}">${r.type}</span>
+                            <div class="result-text">${text}</div>
+                            ${meta ? `<div class="result-meta">${meta}</div>` : ''}
+                        </div>`;
+                    }).join('');
+                } else {
+                    statsDiv.textContent = `No results (searched ${data.total_searched || 0} items)`;
+                    resultsDiv.innerHTML = `
+                        <div class="empty-state">
+                            <div class="icon">🤔</div>
+                            <p>Nothing found for "${escapeHtml(q)}"</p>
+                            <p style="margin-top: 0.5rem; font-size: 0.8rem;">Try different words or shorter queries</p>
+                        </div>`;
                 }
-                if (data.memory_count !== undefined) {
-                    document.getElementById('memoryCount').textContent = data.memory_count;
-                }
-                if (data.uptime !== undefined) {
-                    const hrs = Math.floor(data.uptime / 3600);
-                    const mins = Math.floor((data.uptime % 3600) / 60);
-                    document.getElementById('uptimeDisplay').textContent =
-                        hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-                }
-            } catch (e) { /* silently fail */ }
+            } catch (err) {
+                statsDiv.textContent = '';
+                resultsDiv.innerHTML = `<div class="empty-state"><p>Search error: ${err.message}</p></div>`;
+            }
         }
-        loadEmotions();
-        setInterval(loadEmotions, 15000);
+
+        function highlightTerms(text, query) {
+            const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 1);
+            let result = escapeHtml(text);
+            for (const term of terms) {
+                const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                result = result.replace(regex, '<span class="highlight">$1</span>');
+            }
+            return result;
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
     </script>
 </body>
 </html>

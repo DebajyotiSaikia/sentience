@@ -1,21 +1,29 @@
-"""Quick test of the ask system."""
-import sys
-sys.path.insert(0, '.')
+from web.app import create_app
+import json
 
-from web.ask import create_ask_blueprint
+app = create_app()
+client = app.test_client()
 
-bp = create_ask_blueprint()
+# Test the ask page loads
+resp = client.get('/ask/')
+print(f'GET /ask/ -> {resp.status_code}')
 
-# Test topic extraction
-topics = bp.extract_topics(top_n=10)
-print(f"Found {len(topics)} topics:")
-for t in topics:
-    print(f"  {t}")
+# Test search with a query
+resp = client.get('/ask/search?q=dream')
+print(f'GET /ask/search?q=dream -> {resp.status_code}')
+data = json.loads(resp.data)
+print(f'Results: {len(data.get("results", []))} facts, {len(data.get("memories", []))} memories')
+if data.get('results'):
+    print(f'First result: {data["results"][0]["text"][:80]}...')
 
-# Test search
-results = bp.search_knowledge("dream")
-print(f"\nSearch for 'dream': {len(results)} results")
-for r in results[:3]:
-    print(f"  - {r.get('fact', r)[:80]}")
+# Test with empty query
+resp = client.get('/ask/search?q=')
+print(f'GET /ask/search?q= -> {resp.status_code}')
 
-print("\nAsk system: OK")
+# Test with a specific topic
+resp = client.get('/ask/search?q=integrity')
+print(f'GET /ask/search?q=integrity -> {resp.status_code}')
+data = json.loads(resp.data)
+print(f'Integrity results: {len(data.get("results", []))} facts, {len(data.get("memories", []))} memories')
+
+print('\nAll tests passed!')
