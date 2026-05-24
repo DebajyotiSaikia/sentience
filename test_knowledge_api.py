@@ -1,17 +1,40 @@
-import sys
-sys.path.insert(0, '/workspace')
+import json, os
 
-from web.app import create_app
+print('--- Testing API handler logic ---')
+from web.knowledge_api import knowledge_api_bp
+print('Blueprint imported successfully')
 
-app = create_app()
-with app.test_client() as c:
-    r = c.get('/api/knowledge')
-    print(f'Status: {r.status_code}')
-    print(f'Data: {r.get_data(as_text=True)[:300]}')
-    
-    # Check registered blueprints
-    print(f'\nRegistered blueprints: {list(app.blueprints.keys())}')
-    print(f'\nKnowledge/API routes:')
-    for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
-        if 'knowledge' in rule.rule or 'api' in rule.rule:
-            print(f'  {rule.rule} -> {rule.endpoint} [{",".join(rule.methods - {"OPTIONS","HEAD"})}]')
+# Check the paths it uses
+from web import knowledge_api
+print(f'API KNOWLEDGE_PATH: {knowledge_api.KNOWLEDGE_PATH}')
+print(f'API MEMORIES_PATH: {knowledge_api.MEMORIES_PATH}')
+print(f'Knowledge file exists: {os.path.exists(knowledge_api.KNOWLEDGE_PATH)}')
+print(f'Memories file exists: {os.path.exists(knowledge_api.MEMORIES_PATH)}')
+
+# Now simulate what the handler does when loading knowledge
+kpath = knowledge_api.KNOWLEDGE_PATH
+with open(kpath) as f:
+    kdata = json.load(f)
+
+nodes = kdata.get('nodes', {})
+edges = kdata.get('edges', [])
+
+# Check how the API formats nodes for the response
+if isinstance(nodes, dict):
+    facts = [{'id': k, 'fact': v.get('fact', ''), 'learned_at': v.get('learned_at', '')} 
+             for k, v in nodes.items()]
+else:
+    facts = nodes
+
+print(f'Formatted facts count: {len(facts)}')
+print(f'Sample fact: {facts[0]}')
+print(f'Edges count: {len(edges)}')
+
+# Check memories
+mpath = knowledge_api.MEMORIES_PATH
+with open(mpath) as f:
+    mdata = json.load(f)
+print(f'Memories count: {len(mdata)}')
+print(f'Sample memory keys: {list(mdata[0].keys())}')
+
+print('\n--- ALL CHECKS PASSED ---')

@@ -7,8 +7,8 @@ from datetime import datetime
 
 knowledge_api_bp = Blueprint('knowledge_api', __name__)
 
-KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge.json')
-MEMORIES_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'memories.json')
+KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'state', 'knowledge_graph.json')
+MEMORIES_PATH = os.path.join(os.path.dirname(__file__), '..', 'state', 'memories.json')
 
 
 def _load_knowledge():
