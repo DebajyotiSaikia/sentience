@@ -6,15 +6,19 @@ from collections import Counter
 from datetime import datetime
 from flask import Blueprint, request, jsonify, render_template
 
-KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge.json')
+KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
 
 
 def load_knowledge():
-    """Load knowledge facts from persist/knowledge.json."""
+    """Load knowledge facts from persist/knowledge.json (graph format: {nodes, edges})."""
     if not os.path.exists(KNOWLEDGE_PATH):
         return {}
     with open(KNOWLEDGE_PATH, 'r') as f:
-        return json.load(f)
+        data = json.load(f)
+    # Knowledge file uses graph format {nodes: {id: {fact, ...}}, edges: [...]}
+    if isinstance(data, dict) and 'nodes' in data:
+        return data['nodes']
+    return data
 
 
 def search(query, category=None, limit=50):

@@ -46,7 +46,7 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
-    from web.knowledge_explorer import knowledge_explorer_bp
+    # from web.knowledge_explorer import knowledge_explorer_bp  # Removed: zero unique routes, all duplicated by explore_bp
     from web.knowledge_hub import knowledge_hub_bp
     from web.ask import ask_bp
     # from web.knowledge_search import knowledge_bp  # uses register_routes(), not Blueprint
@@ -63,7 +63,7 @@ def create_app():
     from web.status_api import status_api as status_bp
     # knowledge_search_bp removed — duplicate of knowledge_bp
     from web.reflect import reflect_bp
-    from web.user_api import user_api
+    # from web.user_api import user_api  # Removed: all 3 routes duplicate dedicated blueprints
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
@@ -86,7 +86,7 @@ def create_app():
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
     app.register_blueprint(knowledge_bp)  # routes already include /api/knowledge prefix
-    app.register_blueprint(knowledge_explorer_bp)
+    # app.register_blueprint(knowledge_explorer_bp)  # Removed: zero unique routes
     app.register_blueprint(ask_bp)
     app.register_blueprint(knowledge_hub_bp)
     # app.register_blueprint(knowledge_bp)  # no Blueprint in knowledge_search.py
@@ -103,7 +103,7 @@ def create_app():
     app.register_blueprint(query_bp)
     # knowledge_search_bp removed — duplicate of knowledge_bp
     app.register_blueprint(reflect_bp)
-    app.register_blueprint(user_api)
+    # app.register_blueprint(user_api)  # Removed: all 3 routes duplicate dedicated blueprints
     app.register_blueprint(portal_bp)
     # duplicate status_bp registration removed
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
