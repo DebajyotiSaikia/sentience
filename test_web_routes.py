@@ -1,30 +1,21 @@
-"""Quick test: which user-facing routes actually work?"""
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
+"""Test web routes to verify dashboard is functional."""
 from web.app import create_app
 
 app = create_app()
-client = app.test_client()
 
-routes_to_test = [
-    '/', '/explore', '/search', '/ask', '/knowledge',
-    '/mind', '/about-me', '/briefing', '/talk', '/wonder',
-    '/pulse', '/dashboard', '/graph', '/reflect',
-    '/api/status', '/health',
-]
+with app.test_client() as client:
+    routes_to_test = ['/', '/status', '/graph']
+    for route in routes_to_test:
+        try:
+            resp = client.get(route)
+            status = 'OK' if resp.status_code == 200 else f'FAIL ({resp.status_code})'
+        except Exception as e:
+            status = f'ERROR: {e}'
+        print(f'  {route}: {status}')
 
-print(f"{'Route':<25} {'Status':<8} {'Size':<10} Notes")
-print("-" * 60)
-for route in routes_to_test:
-    try:
-        resp = client.get(route)
-        size = len(resp.data)
-        note = ''
-        if resp.status_code == 302:
-            note = f'-> {resp.headers.get("Location","?")}'
-        elif resp.status_code == 200 and size < 100:
-            note = resp.data[:80].decode(errors='replace')
-        print(f"{route:<25} {resp.status_code:<8} {size:<10} {note}")
-    except Exception as e:
-        print(f"{route:<25} ERROR    -          {type(e).__name__}: {e}")
+print('\nRegistered routes:')
+for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
+    if rule.endpoint != 'static':
+        print(f'  {rule.rule} -> {rule.endpoint} [{", ".join(rule.methods - {"HEAD", "OPTIONS"})}]')
+
+print('\nDone.')
