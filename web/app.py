@@ -33,7 +33,7 @@ def create_app():
     from web.life import life_bp
     from web.about import about_bp
     from web.search import search_bp
-    from web.knowledge_api import knowledge_api as knowledge_api_bp
+    # from web.knowledge_api import knowledge_api as knowledge_api_bp  # removed: routes now in knowledge_unified_bp
     from web.explore import explore_bp
     from web.query import query_bp
     # from web.knowledge_api import knowledge_api as knowledge_api_bp  # removed: knowledge_api doesn't exist, knowledge_bp used instead
@@ -77,7 +77,7 @@ def create_app():
     app.register_blueprint(life_bp)
     app.register_blueprint(about_bp)
     app.register_blueprint(search_bp)
-    app.register_blueprint(knowledge_api_bp)
+    # app.register_blueprint(knowledge_api_bp)  # removed: routes now in knowledge_unified_bp
     app.register_blueprint(explore_bp)
     # app.register_blueprint(knowledge_api_bp)  # removed: see line 93 for knowledge_bp
     app.register_blueprint(briefing_bp)

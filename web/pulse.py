@@ -24,6 +24,73 @@ def _get_state():
         return {}
 
 
+def _get_plans():
+    """Pull my current plans and their status."""
+    plans_file = Path('persist/plans.json')
+    if not plans_file.exists():
+        return {'active': [], 'completed': 0}
+    try:
+        plans = json.loads(plans_file.read_text())
+        active = []
+        completed = 0
+        for p in plans:
+            steps = p.get('steps', [])
+            done = sum(1 for s in steps if s.get('done', False))
+            total = len(steps)
+            if done == total and total > 0:
+                completed += 1
+            else:
+                active.append({
+                    'title': p.get('title', 'Untitled'),
+                    'motivation': p.get('motivation', ''),
+                    'progress': f'{done}/{total}',
+                    'percent': int(100 * done / total) if total > 0 else 0,
+                })
+        return {'active': active, 'completed': completed}
+    except Exception:
+        return {'active': [], 'completed': 0}
+
+
+def _get_knowledge_stats():
+    """Pull knowledge graph statistics."""
+    kg_file = Path('persist/knowledge.json')
+    if not kg_file.exists():
+        return {'total_facts': 0, 'recent': []}
+    try:
+        data = json.loads(kg_file.read_text())
+        if isinstance(data, dict):
+            facts = list(data.values())
+            total = len(facts)
+            # Sort by learned_at, get 5 most recent
+            sorted_facts = sorted(
+                [f for f in facts if isinstance(f, dict)],
+                key=lambda f: f.get('learned_at', ''),
+                reverse=True
+            )[:5]
+            recent = [{'fact': f.get('fact', '')[:100],
+                       'source': f.get('source', 'unknown')}
+                      for f in sorted_facts]
+        else:
+            total = 0
+            recent = []
+        return {'total_facts': total, 'recent': recent}
+    except Exception:
+        return {'total_facts': 0, 'recent': []}
+
+
+def _get_working_memory():
+    """Pull current working memory summary."""
+    wm_file = Path('persist/working_memory.md')
+    if not wm_file.exists():
+        return ''
+    try:
+        text = wm_file.read_text()
+        # Return first 500 chars as summary
+        return text[:500]
+    except Exception:
+        return ''
+
+
 def _get_recent_memories(n=5):
     """Pull my most recent memories for the thought stream."""
     episodes_file = Path('persist/episodes.json')

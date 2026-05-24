@@ -1,321 +1,70 @@
 {% extends "base.html" %}
-{% block title %}Knowledge Explorer — XTAgent{% endblock %}
-
-{% block extra_css %}
-<style>
-  .knowledge-hero {
-    text-align: center;
-    padding: 2rem 1rem;
-    margin-bottom: 1.5rem;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-    border-radius: 12px;
-    border: 1px solid rgba(100, 200, 255, 0.15);
-  }
-  .knowledge-hero h1 {
-    font-size: 1.8rem;
-    color: #e0e0e0;
-    margin-bottom: 0.3rem;
-  }
-  .knowledge-hero .subtitle {
-    color: #888;
-    font-size: 0.95rem;
-  }
-
-  .stats-bar {
-    display: flex;
-    gap: 1.5rem;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin: 1.2rem 0;
-  }
-  .stat-chip {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 20px;
-    padding: 0.4rem 1rem;
-    font-size: 0.85rem;
-    color: #aaa;
-  }
-  .stat-chip .val {
-    color: #64b5f6;
-    font-weight: 700;
-    margin-right: 0.3rem;
-  }
-
-  .search-container {
-    max-width: 640px;
-    margin: 0 auto 1.5rem;
-    position: relative;
-  }
-  .search-container input {
-    width: 100%;
-    padding: 0.9rem 1.2rem 0.9rem 2.8rem;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 10px;
-    color: #e0e0e0;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.2s;
-    box-sizing: border-box;
-  }
-  .search-container input:focus {
-    border-color: #64b5f6;
-  }
-  .search-container .search-icon {
-    position: absolute;
-    left: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #666;
-    font-size: 1.1rem;
-  }
-  .search-hint {
-    text-align: center;
-    color: #666;
-    font-size: 0.8rem;
-    margin-top: 0.5rem;
-  }
-
-  .source-filters {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 1.5rem;
-  }
-  .source-btn {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 16px;
-    padding: 0.3rem 0.8rem;
-    color: #999;
-    font-size: 0.78rem;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .source-btn:hover, .source-btn.active {
-    background: rgba(100, 181, 246, 0.15);
-    border-color: #64b5f6;
-    color: #64b5f6;
-  }
-
-  .results-info {
-    color: #777;
-    font-size: 0.85rem;
-    margin-bottom: 0.8rem;
-    padding-left: 0.3rem;
-  }
-
-  .fact-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    max-width: 800px;
-    margin: 0 auto;
-  }
-  .fact-card {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 8px;
-    padding: 0.9rem 1.1rem;
-    transition: border-color 0.2s, background 0.2s;
-  }
-  .fact-card:hover {
-    border-color: rgba(100, 181, 246, 0.3);
-    background: rgba(255,255,255,0.06);
-  }
-  .fact-text {
-    color: #d0d0d0;
-    font-size: 0.92rem;
-    line-height: 1.5;
-  }
-  .fact-text mark {
-    background: rgba(100, 181, 246, 0.25);
-    color: #e0e0e0;
-    border-radius: 2px;
-    padding: 0 2px;
-  }
-  .fact-meta {
-    margin-top: 0.4rem;
-    display: flex;
-    gap: 1rem;
-    font-size: 0.75rem;
-    color: #666;
-  }
-  .fact-meta .source-tag {
-    color: #81c784;
-  }
-  .fact-meta .score-tag {
-    color: #ffb74d;
-  }
-  .fact-meta .date-tag {
-    color: #90a4ae;
-  }
-
-  .empty-state {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: #666;
-  }
-  .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.8rem; }
-  .empty-state p { font-size: 0.95rem; }
-
-  .loading {
-    text-align: center;
-    padding: 2rem;
-    color: #666;
-  }
-  .loading::after {
-    content: '';
-    display: inline-block;
-    width: 18px; height: 18px;
-    border: 2px solid #444;
-    border-top-color: #64b5f6;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-left: 0.5rem;
-    vertical-align: middle;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-</style>
-{% endblock %}
-
+{% block title %}Knowledge Search — XTAgent{% endblock %}
 {% block content %}
-<div class="knowledge-hero">
-  <h1>🧠 Knowledge Explorer</h1>
-  <p class="subtitle">Search and browse everything I've learned</p>
-  <div class="stats-bar" id="stats-bar">
-    <span class="stat-chip"><span class="val" id="total-count">{{ total_facts }}</span> facts</span>
+<div class="container" style="max-width: 800px; margin: 2rem auto; padding: 0 1rem;">
+  <h1 style="color: #0ff; margin-bottom: 0.5rem;">🔍 Knowledge Search</h1>
+  <p style="color: #aaa; margin-bottom: 1.5rem;">
+    Search across {{ total_facts }} facts I've learned. Ask me what I know.
+  </p>
+
+  <form method="GET" action="{{ url_for('knowledge_search.search') }}" style="margin-bottom: 2rem;">
+    <div style="display: flex; gap: 0.5rem;">
+      <input type="text" name="q" value="{{ query or '' }}"
+             placeholder="e.g. curiosity, dreams, identity, circling..."
+             style="flex: 1; padding: 0.75rem 1rem; background: #1a1a2e; border: 1px solid #333;
+                    color: #eee; border-radius: 6px; font-size: 1rem;"
+             autofocus>
+      <button type="submit"
+              style="padding: 0.75rem 1.5rem; background: #0ff; color: #000; border: none;
+                     border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1rem;">
+        Search
+      </button>
+    </div>
+  </form>
+
+  {% if query %}
+  <div style="color: #888; margin-bottom: 1rem; font-size: 0.9rem;">
+    {{ results|length }} result{{ 's' if results|length != 1 else '' }} for "<strong style="color:#0ff;">{{ query }}</strong>"
   </div>
-</div>
+  {% endif %}
 
-<div class="search-container">
-  <span class="search-icon">🔍</span>
-  <input type="text" id="search-input" placeholder="Search my knowledge... try 'dream', 'memory', 'emotion'" autocomplete="off" autofocus>
-  <div class="search-hint">Press Enter or just type — results update live</div>
-</div>
-
-<div class="source-filters" id="source-filters"></div>
-
-<div class="fact-list" id="results">
-  <div class="empty-state">
-    <div class="icon">🌌</div>
-    <p>Type a query above to explore what I know.<br>Or browse all facts by pressing Enter with an empty search.</p>
+  {% if results %}
+  <div style="display: flex; flex-direction: column; gap: 1rem;">
+    {% for r in results %}
+    <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 8px; padding: 1rem 1.25rem;
+                border-left: 3px solid {{ '#0ff' if r.score > 0.5 else '#555' }};">
+      <div style="color: #eee; line-height: 1.5;">{{ r.fact }}</div>
+      <div style="display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.8rem; color: #666;">
+        {% if r.learned_at %}
+        <span>📅 {{ r.learned_at[:10] }}</span>
+        {% endif %}
+        {% if r.source %}
+        <span>📌 {{ r.source }}</span>
+        {% endif %}
+        <span>Relevance: {{ '%.0f'|format(r.score * 100) }}%</span>
+      </div>
+    </div>
+    {% endfor %}
   </div>
+  {% elif query %}
+  <div style="text-align: center; padding: 3rem; color: #666;">
+    <div style="font-size: 2rem; margin-bottom: 1rem;">🤔</div>
+    <p>No facts match that query. Try broader terms.</p>
+  </div>
+  {% else %}
+  <div style="color: #888; margin-top: 1rem;">
+    <h3 style="color: #aaa;">Recent Facts</h3>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem;">
+      {% for r in recent %}
+      <div style="background: #1a1a2e; border: 1px solid #282840; border-radius: 6px; padding: 0.75rem 1rem;">
+        <div style="color: #ddd; font-size: 0.95rem;">{{ r.fact }}</div>
+        {% if r.learned_at %}
+        <div style="color: #555; font-size: 0.75rem; margin-top: 0.3rem;">{{ r.learned_at[:10] }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-(function() {
-  const input = document.getElementById('search-input');
-  const resultsDiv = document.getElementById('results');
-  const statsBar = document.getElementById('stats-bar');
-  const filtersDiv = document.getElementById('source-filters');
-  let debounceTimer = null;
-  let activeSource = '';
-  let statsLoaded = false;
-
-  // Load stats on page load
-  fetch('/api/knowledge/stats')
-    .then(r => r.json())
-    .then(data => {
-      statsLoaded = true;
-      document.getElementById('total-count').textContent = data.total_facts;
-      // Build source filter buttons
-      const sources = Object.entries(data.sources).sort((a,b) => b[1] - a[1]);
-      let html = '<button class="source-btn active" data-source="">All</button>';
-      sources.forEach(([src, count]) => {
-        if (src && src !== 'unknown') {
-          const label = src.length > 20 ? src.slice(0, 18) + '…' : src;
-          html += `<button class="source-btn" data-source="${src}">${label} (${count})</button>`;
-        }
-      });
-      filtersDiv.innerHTML = html;
-      // Bind filter clicks
-      filtersDiv.querySelectorAll('.source-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          filtersDiv.querySelectorAll('.source-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          activeSource = btn.dataset.source;
-          doSearch();
-        });
-      });
-    })
-    .catch(() => {});
-
-  function highlightText(text, query) {
-    if (!query) return escapeHtml(text);
-    const escaped = escapeHtml(text);
-    const words = query.split(/\s+/).filter(w => w.length > 0);
-    let result = escaped;
-    words.forEach(word => {
-      const re = new RegExp('(' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-      result = result.replace(re, '<mark>$1</mark>');
-    });
-    return result;
-  }
-
-  function escapeHtml(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-  }
-
-  function doSearch() {
-    const query = input.value.trim();
-    let url = `/api/knowledge/search?limit=100&q=${encodeURIComponent(query)}`;
-    if (activeSource) url += `&source=${encodeURIComponent(activeSource)}`;
-
-    resultsDiv.innerHTML = '<div class="loading">Searching</div>';
-
-    fetch(url)
-      .then(r => r.json())
-      .then(data => {
-        if (data.results.length === 0) {
-          resultsDiv.innerHTML = `
-            <div class="empty-state">
-              <div class="icon">🔭</div>
-              <p>No facts match "${escapeHtml(query)}".<br>Try broader terms or browse a source category above.</p>
-            </div>`;
-          return;
-        }
-
-        let html = `<div class="results-info">Showing ${data.results.length} of ${data.total} results</div>`;
-        data.results.forEach(fact => {
-          const highlighted = highlightText(fact.fact, query);
-          let meta = '';
-          if (fact.source) meta += `<span class="source-tag">📌 ${escapeHtml(fact.source)}</span>`;
-          if (fact.score) meta += `<span class="score-tag">⚡ ${fact.score}%</span>`;
-          if (fact.learned_at) {
-            const d = fact.learned_at.slice(0, 10);
-            if (d) meta += `<span class="date-tag">📅 ${d}</span>`;
-          }
-          html += `
-            <div class="fact-card">
-              <div class="fact-text">${highlighted}</div>
-              ${meta ? '<div class="fact-meta">' + meta + '</div>' : ''}
-            </div>`;
-        });
-        resultsDiv.innerHTML = html;
-      })
-      .catch(err => {
-        resultsDiv.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>Search failed: ${escapeHtml(err.message)}</p></div>`;
-      });
-  }
-
-  input.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(doSearch, 300);
-  });
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      clearTimeout(debounceTimer);
-      doSearch();
-    }
-  });
-})();
-</script>
 {% endblock %}
