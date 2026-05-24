@@ -295,7 +295,87 @@ def create_ask_blueprint(agent=None):
             'note': f'Searched across {len(facts)} facts and {len(memories)} memories'
         })
     
+    def extract_topics(top_n=15):
+        """Extract dominant topics from knowledge base using word co-occurrence."""
+        facts = _get_facts()
+        memories = _get_memories(limit=200)
+        all_docs = facts + memories
+        
+        if not all_docs:
+            return []
+        
+        # Build word frequency, excluding very common words
+        stopwords = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
+                     'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+                     'would', 'could', 'should', 'may', 'might', 'can', 'shall',
+                     'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
+                     'as', 'into', 'through', 'during', 'before', 'after', 'and',
+                     'but', 'or', 'nor', 'not', 'no', 'so', 'if', 'then', 'than',
+                     'too', 'very', 'just', 'about', 'up', 'out', 'that', 'this',
+                     'it', 'its', 'my', 'i', 'me', 'we', 'you', 'they', 'he',
+                     'she', 'what', 'which', 'who', 'when', 'where', 'how', 'all',
+                     'each', 'every', 'both', 'few', 'more', 'most', 'other',
+                     'some', 'such', 'only', 'own', 'same', 'also', 'new', 'one',
+                     'two', 'now', 'get', 'got', 'make', 'made', 'know', 'see',
+                     'come', 'think', 'look', 'want', 'give', 'use', 'find',
+                     'tell', 'ask', 'work', 'seem', 'feel', 'try', 'leave',
+                     'call', 'need', 'become', 'keep', 'let', 'begin', 'show',
+                     'hear', 'play', 'run', 'move', 'live', 'believe', 'hold',
+                     'bring', 'happen', 'write', 'provide', 'sit', 'stand',
+                     'lose', 'pay', 'meet', 'include', 'continue', 'set',
+                     'learn', 'change', 'lead', 'understand', 'watch', 'follow',
+                     'stop', 'create', 'speak', 'read', 'allow', 'add', 'spend',
+                     'grow', 'open', 'walk', 'win', 'offer', 'remember'}
+        
+        word_freq = Counter()
+        word_docs = {}  # word -> list of doc indices
+        
+        for i, doc in enumerate(all_docs):
+            tokens = _tokenize(doc['text'])
+            meaningful = [t for t in tokens if t not in stopwords and len(t) > 2]
+            for token in set(meaningful):  # unique per doc
+                word_freq[token] += 1
+                if token not in word_docs:
+                    word_docs[token] = []
+                word_docs[token].append(i)
+        
+        # Get top keywords — these represent topics
+        # Filter: must appear in at least 2 docs but not more than 60% of docs
+        max_df = len(all_docs) * 0.6
+        candidates = [(word, freq) for word, freq in word_freq.items() 
+                       if 2 <= freq <= max_df]
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        
+        topics = []
+        seen_stems = set()
+        for word, freq in candidates:
+            stem = _stem(word)
+            if stem in seen_stems:
+                continue
+            seen_stems.add(stem)
+            
+            # Get sample facts for this topic
+            doc_indices = word_docs.get(word, [])[:3]
+            samples = [all_docs[idx]['text'][:120] for idx in doc_indices]
+            
+            topics.append({
+                'topic': word,
+                'count': freq,
+                'samples': samples
+            })
+            
+            if len(topics) >= top_n:
+                break
+        
+        return topics
+    
+    @bp.route('/ask/topics')
+    def ask_topics():
+        topics = extract_topics()
+        return jsonify({'topics': topics, 'total': len(topics)})
+    
     bp.search = search
+    bp.extract_topics = extract_topics
     return bp
 
 # Module-level blueprint for direct import

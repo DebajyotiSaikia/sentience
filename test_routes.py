@@ -1,20 +1,12 @@
-from web.app import create_app
+import urllib.request
+import urllib.error
 
-app = create_app()
-client = app.test_client()
-
-routes = [
-    '/', '/mind', '/story', '/chat', '/knowledge', '/explore',
-    '/graph', '/pulse', '/reflect', '/ask', '/about', '/wonder',
-    '/timeline', '/briefing', '/dialogue', '/collaborate',
-    '/thoughts', '/mindstream'
-]
-
+routes = ['/', '/chat', '/knowledge', '/dashboard', '/life', '/explore', '/about-me', '/mindstream', '/timeline']
 for r in routes:
     try:
-        resp = client.get(r)
-        status = resp.status_code
-        symbol = 'OK' if status == 200 else 'XX'
-        print(f'{symbol} {status} {r}')
+        resp = urllib.request.urlopen(f'http://localhost:5000{r}')
+        print(f'{r} -> {resp.status}')
+    except urllib.error.HTTPError as e:
+        print(f'{r} -> {e.code}')
     except Exception as e:
-        print(f'XX ERR {r}: {e}')
+        print(f'{r} -> ERROR: {e}')

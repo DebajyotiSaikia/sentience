@@ -62,12 +62,17 @@ def sync_memories():
 
 
 def sync_plans():
-    """soul.json plans → state/plans.json"""
-    soul = _load(SOUL_FILE)
-    if not soul or 'plans' not in soul:
-        return 0
-    _save(os.path.join(STATE_DIR, 'plans.json'), soul['plans'])
-    return len(soul['plans'])
+    """brain/plans.json → state/plans.json"""
+    plans = _load(os.path.join(BRAIN_DIR, 'plans.json'))
+    if not plans:
+        # Fallback: try soul.json for backwards compatibility
+        soul = _load(SOUL_FILE)
+        if soul and 'plans' in soul:
+            plans = soul['plans']
+        else:
+            return 0
+    _save(os.path.join(STATE_DIR, 'plans.json'), plans)
+    return len(plans) if isinstance(plans, list) else len(plans)
 
 
 def sync_emotional_history():

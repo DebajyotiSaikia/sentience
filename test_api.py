@@ -1,25 +1,26 @@
-import requests
-
-base = 'http://localhost:8501'
+import urllib.request, json
 
 endpoints = [
-    ('GET', '/api/state', None),
-    ('GET', '/api/memories', None),
-    ('POST', '/api/chat', {'message': 'hello'}),
+    '/api/knowledge',
+    '/api/knowledge/search?q=dream',
+    '/api/knowledge/clusters',
+    '/api/knowledge/categories',
+    '/api/knowledge/questions',
 ]
 
-for method, path, data in endpoints:
-    url = f'{base}{path}'
+for ep in endpoints:
+    url = f'http://localhost:8501{ep}'
     try:
-        if method == 'GET':
-            r = requests.get(url, timeout=5)
-        else:
-            r = requests.post(url, json=data, timeout=5)
-        print(f'{method} {path}: {r.status_code}')
-        if r.status_code == 200:
-            text = r.text[:200]
-            print(f'  -> {text}')
-        else:
-            print(f'  -> {r.text[:200]}')
+        resp = urllib.request.urlopen(url)
+        data = json.loads(resp.read())
+        print(f'✓ {ep}')
+        for k, v in data.items():
+            if isinstance(v, list):
+                print(f'    {k}: list[{len(v)}]')
+            elif isinstance(v, dict):
+                print(f'    {k}: dict with {len(v)} keys')
+            else:
+                print(f'    {k}: {str(v)[:80]}')
     except Exception as e:
-        print(f'{method} {path}: FAILED - {e}')
+        print(f'✗ {ep} — {e}')
+    print()

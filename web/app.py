@@ -173,8 +173,8 @@ def create_app():
 
     # Health check endpoint
     @app.route('/knowledge')
-    def knowledge_redirect():
-        return redirect('/explore')
+    def knowledge_page():
+        return render_template('knowledge.html')
 
     @app.route('/health')
     def health():
