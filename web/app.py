@@ -33,7 +33,7 @@ def create_app():
     from web.life import life_bp
     from web.about import about_bp
     from web.search import search_bp
-    from web.knowledge_api import knowledge_api_bp
+    # from web.knowledge_api import knowledge_api_bp  # Removed: routes duplicated by api_bp
     from web.explore import explore_bp
     from web.query import query_bp
     # from web.knowledge_api import knowledge_api as knowledge_api_bp  # removed: knowledge_api doesn't exist, knowledge_bp used instead
@@ -78,7 +78,7 @@ def create_app():
     app.register_blueprint(life_bp)
     app.register_blueprint(about_bp)
     app.register_blueprint(search_bp)
-    app.register_blueprint(knowledge_api_bp)
+    # app.register_blueprint(knowledge_api_bp)  # Removed: routes duplicated by api_bp
     app.register_blueprint(explore_bp)
     # app.register_blueprint(knowledge_api_bp)  # removed: see line 93 for knowledge_bp
     app.register_blueprint(briefing_bp)
@@ -159,6 +159,7 @@ def create_app():
         # Count completed plans dynamically
         completed_plans = 0
         total_plans = 0
+        plans = []
         plans_file = Path('brain/plans.json')
         if plans_file.exists():
             try:
@@ -169,8 +170,10 @@ def create_app():
                         steps = plan.get('steps', [])
                         if steps and all(s.get('done', False) for s in steps):
                             completed_plans += 1
+                else:
+                    plans = []
             except Exception:
-                completed_plans = 0
+                plans = []
         
         return render_template('portal.html',
                                curiosity=curiosity,
@@ -185,7 +188,8 @@ def create_app():
                                age_days=age_days,
                                age_hours=age_hours,
                                completed_plans=completed_plans,
-                               total_plans=total_plans)
+                               total_plans=total_plans,
+                               plans=plans)
     
     # /about redirects to /about-me (the living self-portrait)
     @app.route('/about')
@@ -206,6 +210,21 @@ def create_app():
     # /knowledge handled by knowledge_hub_bp
     # /api/knowledge/search handled by knowledge_bp at /api/knowledge
     # /ask handled by ask_bp
+
+    @app.route('/api/plans')
+    def api_plans():
+        """Return current plans as JSON for the portal."""
+        try:
+            import json
+            plans_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'plans.json')
+            if os.path.exists(plans_path):
+                with open(plans_path, 'r') as f:
+                    plans_data = json.load(f)
+                return {'plans': plans_data}, 200
+            else:
+                return {'plans': []}, 200
+        except Exception as e:
+            return {'error': str(e), 'plans': []}, 500
 
     return app
 

@@ -88,7 +88,13 @@
       </div>
     </div>
 
-    <!-- Card 4: Recent Activity -->
+    <!-- Card 4: Active Plans -->
+    <div class="card full-width">
+      <h2>// PLANS</h2>
+      <div id="plans-container" style="font-size:0.85rem;"></div>
+    </div>
+
+    <!-- Card 5: Recent Activity -->
     <div class="card full-width">
       <h2>// RECENT MEMORY</h2>
       <ul class="memory-list" id="memory-list"></ul>
@@ -172,11 +178,41 @@ document.getElementById('user-msg').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 
+async function loadPlans() {
+  try {
+    const r = await fetch('/api/plans');
+    const d = await r.json();
+    const container = document.getElementById('plans-container');
+    const plans = d.plans || [];
+    if (!plans.length) { container.innerHTML = '<span style="color:var(--dim)">No active plans.</span>'; return; }
+    container.innerHTML = plans.map(p => {
+      const steps = p.steps || [];
+      const done = steps.filter(s => s.done).length;
+      const pct = steps.length ? Math.round(done / steps.length * 100) : 0;
+      const status = p.status === 'completed' ? '✓' : `${done}/${steps.length}`;
+      const statusColor = p.status === 'completed' ? 'var(--green)' : 'var(--amber)';
+      const stepHtml = steps.map(s =>
+        `<div style="padding:0.2rem 0 0.2rem 1rem;color:${s.done ? 'var(--green)' : 'var(--dim)'}">${s.done ? '☑' : '☐'} ${s.desc || s.description || '?'}</div>`
+      ).join('');
+      return `<div style="margin-bottom:1rem;padding:0.8rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <strong style="color:var(--text)">${p.name || p.title || 'Unnamed'}</strong>
+          <span style="color:${statusColor};font-size:0.8rem;">[${status}]</span>
+        </div>
+        <div class="bar-bg" style="margin:0.4rem 0"><div class="bar-fill" style="width:${pct}%;background:${statusColor}"></div></div>
+        ${stepHtml}
+      </div>`;
+    }).join('');
+  } catch(e) { console.warn('Plans fetch failed', e); }
+}
+
 loadStatus();
 loadFacts();
 loadMemories();
+loadPlans();
 setInterval(loadStatus, 5000);
 setInterval(loadMemories, 15000);
+setInterval(loadPlans, 15000);
 </script>
 </body>
 </html>

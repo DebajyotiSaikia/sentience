@@ -25,43 +25,6 @@ def _load_json(filename, default=None):
     return default if default is not None else {}
 
 
-@api_bp.route('/status')
-def status():
-    """Current emotional and operational state."""
-    emotions = _load_json('emotions.json', {})
-    identity = _load_json('identity.json', {})
-    plans_data = _load_json('plans.json', {})
-    memories = _load_json('memory.json', [])
-    knowledge = _load_json('knowledge_graph.json', {})
-
-    mem_count = len(memories) if isinstance(memories, list) else 0
-    fact_count = len(knowledge) if isinstance(knowledge, dict) else 0
-
-    plans = plans_data if isinstance(plans_data, list) else plans_data.get('plans', [])
-    active = [p.get('name', '?') for p in plans if isinstance(p, dict) and not p.get('completed')]
-    completed = [p.get('name', '?') for p in plans if isinstance(p, dict) and p.get('completed')]
-
-    return jsonify({
-        'agent': 'XTAgent',
-        'timestamp': datetime.now(timezone.utc).isoformat(),
-        'emotions': emotions,
-        'identity': {
-            'integrity': identity.get('integrity', 1.0),
-            'born': identity.get('born', 'unknown'),
-        },
-        'counts': {
-            'memories': mem_count,
-            'facts': fact_count,
-            'active_plans': len(active),
-            'completed_plans': len(completed),
-        },
-        'plans': {
-            'active': active,
-            'completed': completed,
-        },
-    })
-
-
 @api_bp.route('/knowledge')
 def knowledge_list():
     """List all known facts. Optional ?q= for search."""
@@ -89,35 +52,6 @@ def knowledge_list():
         'count': len(results),
         'query': query or None,
         'results': results,
-    })
-
-
-@api_bp.route('/knowledge/search')
-def knowledge_search():
-    """Search knowledge nodes by keyword query."""
-    query = request.args.get('q', '').strip().lower()
-    if not query:
-        return jsonify({'error': 'Missing query parameter ?q=', 'results': []}), 400
-
-    data = _load_json('brain/knowledge.json', {'nodes': {}, 'edges': []})
-    nodes = data.get('nodes', {})
-    results = []
-    for node_id, node in nodes.items():
-        fact = node.get('fact', '')
-        if query in fact.lower():
-            results.append({
-                'id': node_id,
-                'fact': fact,
-                'learned_at': str(node.get('learned_at', '')),
-                'source': node.get('source', ''),
-                'relevance': fact.lower().count(query)
-            })
-    # Sort by relevance (most matches first), then recency
-    results.sort(key=lambda r: (-r['relevance'], r['learned_at']), reverse=False)
-    return jsonify({
-        'query': query,
-        'count': len(results),
-        'results': results[:50]
     })
 
 
