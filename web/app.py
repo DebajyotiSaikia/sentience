@@ -49,6 +49,7 @@ def create_app():
     from web.story import story_bp
     # from web.knowledge_explorer import knowledge_explorer_bp  # Removed: zero unique routes, all duplicated by explore_bp
     from web.knowledge_unified import knowledge_unified_bp
+    from web.api import api_bp
     from web.ask import ask_bp
     # from web.knowledge_search import knowledge_bp  # uses register_routes(), not Blueprint
     from web.thoughts import thoughts_bp
@@ -93,6 +94,7 @@ def create_app():
     # app.register_blueprint(knowledge_explorer_bp)  # Removed: zero unique routes
     app.register_blueprint(ask_bp)
     app.register_blueprint(knowledge_unified_bp)
+    app.register_blueprint(api_bp)
     # app.register_blueprint(knowledge_bp)  # no Blueprint in knowledge_search.py
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
