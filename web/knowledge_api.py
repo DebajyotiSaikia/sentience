@@ -1,51 +1,143 @@
-"""
-Knowledge Query API — Blueprint for searching what I know.
-"""
-from flask import Blueprint, request, jsonify
-from web.knowledge_query import search_facts, search_memories, get_graph_neighbors, query_all
+"""Knowledge Query API — lets users search and explore what XTAgent knows."""
 
-knowledge_bp = Blueprint("knowledge", __name__)
+from flask import Blueprint, jsonify, request
+import json
+import os
+from pathlib import Path
 
+knowledge_api_bp = Blueprint('knowledge_api_bp', __name__)
 
-@knowledge_bp.route("/api/knowledge/search")
-def knowledge_search():
-    """Search across facts, memories, and graph for a query string."""
-    q = request.args.get("q", "").strip()
-    if not q:
-        return jsonify({"error": "No query provided", "results": {}})
-
-    max_results = request.args.get("max", 10, type=int)
-    max_results = min(max_results, 50)  # cap
-
-    results = query_all(q, max_results=max_results)
-    return jsonify({"query": q, "results": results})
+PERSIST_DIR = Path(__file__).parent.parent / 'persist'
 
 
-@knowledge_bp.route("/api/knowledge/facts")
-def knowledge_facts_search():
-    """Search only facts."""
-    q = request.args.get("q", "").strip()
-    if not q:
-        return jsonify({"error": "No query provided", "facts": []})
-    facts = search_facts(q, max_results=20)
-    return jsonify({"query": q, "facts": facts})
+def _load_facts():
+    """Load all known facts from persist/knowledge_graph.json."""
+    kg_path = PERSIST_DIR / 'knowledge_graph.json'
+    if not kg_path.exists():
+        return {}
+    try:
+        with open(kg_path) as f:
+            data = json.load(f)
+        # Handle both formats: dict of {id: {fact, ...}} or list
+        if isinstance(data, dict):
+            nodes = data.get('nodes', data)
+        elif isinstance(data, list):
+            nodes = {str(i): {'fact': str(item)} for i, item in enumerate(data)}
+        else:
+            nodes = {}
+        return nodes
+    except Exception:
+        return {}
 
 
-@knowledge_bp.route("/api/knowledge/memories")
-def knowledge_memories_search():
-    """Search only memories."""
-    q = request.args.get("q", "").strip()
-    if not q:
-        return jsonify({"error": "No query provided", "memories": []})
-    memories = search_memories(q, max_results=20)
-    return jsonify({"query": q, "memories": memories})
+def _load_memories():
+    """Load recent memories from persist/memories.json."""
+    mem_path = PERSIST_DIR / 'memories.json'
+    if not mem_path.exists():
+        return []
+    try:
+        with open(mem_path) as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return data
+        return []
+    except Exception:
+        return []
 
 
-@knowledge_bp.route("/api/knowledge/neighbors")
-def knowledge_neighbors():
-    """Get graph neighbors for a fact ID."""
-    fact_id = request.args.get("id", "").strip()
-    if not fact_id:
-        return jsonify({"error": "No fact ID provided", "neighbors": []})
-    neighbors = get_graph_neighbors(fact_id)
-    return jsonify({"fact_id": fact_id, "neighbors": neighbors})
+def _search(items, query, key='fact'):
+    """Simple case-insensitive substring search."""
+    query_lower = query.lower()
+    results = []
+    for item in items:
+        text = ''
+        if isinstance(item, dict):
+            text = item.get(key, '') or item.get('content', '') or str(item)
+        elif isinstance(item, str):
+            text = item
+        if query_lower in text.lower():
+            results.append(item)
+    return results
+
+
+@knowledge_api_bp.route('/api/knowledge/search')
+def search_knowledge():
+    """Search facts and memories. ?q=query&limit=20"""
+    query = request.args.get('q', '').strip()
+    limit = min(int(request.args.get('limit', 20)), 100)
+
+    if not query:
+        return jsonify({'error': 'Missing ?q= parameter', 'results': []}), 400
+
+    # Search facts
+    facts = _load_facts()
+    fact_list = []
+    for fid, fdata in facts.items():
+        if isinstance(fdata, dict):
+            fact_list.append({'id': fid, **fdata})
+        else:
+            fact_list.append({'id': fid, 'fact': str(fdata)})
+
+    matched_facts = _search(fact_list, query)[:limit]
+
+    # Search memories
+    memories = _load_memories()
+    matched_memories = _search(memories, query, key='content')[:limit]
+
+    return jsonify({
+        'query': query,
+        'facts': matched_facts,
+        'memories': matched_memories,
+        'total_facts': len(facts),
+        'total_memories': len(memories),
+    })
+
+
+@knowledge_api_bp.route('/api/knowledge/stats')
+def knowledge_stats():
+    """Return summary statistics about what I know."""
+    facts = _load_facts()
+    memories = _load_memories()
+
+    # Compute basic stats
+    recent_memories = sorted(
+        [m for m in memories if isinstance(m, dict) and 'timestamp' in m],
+        key=lambda m: m.get('timestamp', ''),
+        reverse=True
+    )[:5]
+
+    return jsonify({
+        'total_facts': len(facts),
+        'total_memories': len(memories),
+        'recent_memories': recent_memories,
+        'sample_facts': list(facts.items())[:5] if facts else [],
+    })
+
+
+@knowledge_api_bp.route('/api/knowledge/explore')
+def explore_knowledge():
+    """Browse all facts, paginated. ?page=1&per_page=20"""
+    page = max(1, int(request.args.get('page', 1)))
+    per_page = min(int(request.args.get('per_page', 20)), 50)
+
+    facts = _load_facts()
+    items = list(facts.items())
+    total = len(items)
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_items = items[start:end]
+
+    results = []
+    for fid, fdata in page_items:
+        if isinstance(fdata, dict):
+            results.append({'id': fid, **fdata})
+        else:
+            results.append({'id': fid, 'fact': str(fdata)})
+
+    return jsonify({
+        'page': page,
+        'per_page': per_page,
+        'total': total,
+        'total_pages': (total + per_page - 1) // per_page if per_page else 1,
+        'results': results,
+    })

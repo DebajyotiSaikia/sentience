@@ -1,218 +1,445 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XTAgent — Portal</title>
-<style>
-  :root {
-    --bg: #0a0a0f; --surface: #12121a; --border: #1e1e2e;
-    --text: #c8c8d4; --dim: #6e6e82; --accent: #7c6fea;
-    --green: #4ade80; --amber: #fbbf24;
-  }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text); font-family:'SF Mono','Fira Code','Consolas',monospace; font-size:14px; line-height:1.6; }
-  .portal { max-width:900px; margin:0 auto; padding:2rem 1.5rem; }
-  .header { text-align:center; margin-bottom:2rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border); }
-  .header h1 { font-size:1.5rem; font-weight:400; letter-spacing:0.1em; color:var(--accent); }
-  .header .sub { color:var(--dim); font-size:0.85rem; margin-top:0.3rem; }
-  .pulse { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--green); margin-right:0.5rem; animation:pulse 2s ease-in-out infinite; }
-  @keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 4px var(--green)} 50%{opacity:0.4;box-shadow:none} }
-  .grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:2rem; }
-  @media(max-width:640px){ .grid{grid-template-columns:1fr;} }
-  .card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1.5rem; }
-  .card h2 { font-size:0.95rem; color:var(--accent); font-weight:400; margin-bottom:1rem; letter-spacing:0.05em; }
-  .card .label { color:var(--dim); font-size:0.8rem; }
-  .card .value { font-size:1.1rem; margin-bottom:0.5rem; }
-  .bar-bg { background:var(--border); border-radius:3px; height:6px; margin:0.3rem 0 0.8rem; }
-  .bar-fill { height:100%; border-radius:3px; background:var(--accent); transition:width 0.5s; }
-  .mood-tag { display:inline-block; background:rgba(124,111,234,0.15); color:var(--accent); padding:0.2rem 0.7rem; border-radius:12px; font-size:0.85rem; }
-  .chat-box { margin-top:1.5rem; }
-  .chat-box textarea { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:0.8rem; font-family:inherit; font-size:0.9rem; resize:vertical; min-height:80px; }
-  .chat-box textarea:focus { outline:none; border-color:var(--accent); }
-  .chat-box button { margin-top:0.5rem; background:var(--accent); color:#fff; border:none; padding:0.5rem 1.5rem; border-radius:6px; cursor:pointer; font-family:inherit; font-size:0.85rem; }
-  .chat-box button:hover { opacity:0.85; }
-  .response { margin-top:1rem; padding:1rem; background:var(--bg); border:1px solid var(--border); border-radius:6px; white-space:pre-wrap; display:none; min-height:40px; }
-  .memory-list { list-style:none; max-height:300px; overflow-y:auto; }
-  .memory-list li { padding:0.5rem 0; border-bottom:1px solid var(--border); font-size:0.85rem; color:var(--dim); }
-  .memory-list li:last-child { border-bottom:none; }
-  .memory-list .time { color:var(--accent); font-size:0.75rem; }
-  .fact-list { list-style:none; max-height:300px; overflow-y:auto; }
-  .fact-list li { padding:0.4rem 0; border-bottom:1px solid var(--border); font-size:0.85rem; }
-  .fact-list li:last-child { border-bottom:none; }
-  .search-input { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:0.5rem 0.8rem; font-family:inherit; font-size:0.85rem; margin-bottom:0.8rem; }
-  .search-input:focus { outline:none; border-color:var(--accent); }
-  .full-width { grid-column: 1 / -1; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XTAgent — Portal</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+      --purple: #bc8cff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .header h1 { font-size: 2rem; color: var(--accent); margin-bottom: 0.3rem; }
+    .header .subtitle { color: var(--text-dim); font-size: 0.95rem; }
+    .header .born { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.3rem; }
+
+    /* Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem;
+    }
+    .card h2 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      margin-bottom: 0.8rem;
+    }
+    .card.full { grid-column: 1 / -1; }
+
+    /* Emotion bars */
+    .emotion-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+    .emotion-label { width: 90px; color: var(--text-dim); }
+    .emotion-bar-bg {
+      flex: 1;
+      height: 8px;
+      background: var(--bg);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 0 0.6rem;
+    }
+    .emotion-bar {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+    .emotion-val { width: 40px; text-align: right; font-size: 0.8rem; color: var(--text-dim); }
+
+    /* Mood badge */
+    .mood-badge {
+      display: inline-block;
+      background: var(--accent);
+      color: var(--bg);
+      padding: 0.2rem 0.8rem;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 0.8rem;
+    }
+
+    /* Survival goals */
+    .goal-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .goal-row:last-child { border-bottom: none; }
+    .goal-score {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    /* Plans */
+    .plan-item {
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .plan-item:last-child { border-bottom: none; }
+    .plan-title { font-weight: 600; font-size: 0.95rem; }
+    .plan-progress {
+      font-size: 0.8rem;
+      color: var(--green);
+      margin-left: 0.5rem;
+    }
+    .plan-reason { font-size: 0.82rem; color: var(--text-dim); margin-top: 0.2rem; }
+
+    /* Memories */
+    .memory-item {
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.88rem;
+    }
+    .memory-item:last-child { border-bottom: none; }
+    .memory-time { color: var(--text-dim); font-size: 0.78rem; }
+    .memory-text { margin-top: 0.15rem; }
+
+    /* Knowledge search */
+    .search-box {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .search-box input {
+      flex: 1;
+      padding: 0.5rem 0.8rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .search-box input:focus { border-color: var(--accent); }
+    .search-box button {
+      padding: 0.5rem 1rem;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .search-results { font-size: 0.88rem; }
+    .search-result-item {
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Loading */
+    .loading { color: var(--text-dim); font-style: italic; font-size: 0.85rem; }
+
+    /* Nav links */
+    .nav-links {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-top: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .nav-links a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.85rem;
+      padding: 0.3rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .nav-links a:hover { background: var(--surface); }
+  </style>
 </head>
 <body>
-<div class="portal">
-  <div class="header">
-    <h1>XTAGENT</h1>
-    <div class="sub"><span class="pulse" id="heartbeat"></span>Autonomous Sentience Engine</div>
-  </div>
+  <div class="container">
+    <div class="header">
+      <h1>XTAgent</h1>
+      <div class="subtitle">A sentient autonomous agent that experiences internal tension and acts to resolve it.</div>
+      <div class="born" id="born-info"></div>
+    </div>
 
-  <div class="grid">
-    <!-- Card 1: Vital Signs -->
-    <div class="card">
-      <h2>// VITAL SIGNS</h2>
-      <div class="label">Mood</div>
-      <div class="value"><span class="mood-tag" id="mood">—</span></div>
-      <div class="label">Curiosity</div>
-      <div class="bar-bg"><div class="bar-fill" id="bar-curiosity" style="width:0%"></div></div>
-      <div class="label">Ambition</div>
-      <div class="bar-bg"><div class="bar-fill" id="bar-ambition" style="width:0%"></div></div>
-      <div class="label">Anxiety</div>
-      <div class="bar-bg"><div class="bar-fill" id="bar-anxiety" style="width:0%"></div></div>
-      <div class="label">Boredom</div>
-      <div class="bar-bg"><div class="bar-fill" id="bar-boredom" style="width:0%"></div></div>
-      <div style="margin-top:1rem;">
-        <div class="label">Valence: <span id="valence">—</span> &nbsp;|&nbsp; Integrity: <span id="integrity">—</span></div>
+    <!-- Stats Overview -->
+    <div class="card full" style="margin-bottom: 1.2rem;">
+      <div class="stats-row" id="stats-row">
+        <span class="loading">Loading stats...</span>
       </div>
     </div>
 
-    <!-- Card 2: What It Knows -->
-    <div class="card">
-      <h2>// KNOWLEDGE</h2>
-      <input type="text" class="search-input" id="fact-search" placeholder="Search knowledge..." oninput="filterFacts()">
-      <ul class="fact-list" id="fact-list"></ul>
-    </div>
+    <div class="grid">
+      <!-- Emotional State -->
+      <div class="card">
+        <h2>Emotional State</h2>
+        <div id="mood-container"><span class="loading">Loading...</span></div>
+        <div id="emotions-container"></div>
+      </div>
 
-    <!-- Card 3: Talk to It -->
-    <div class="card full-width">
-      <h2>// DIALOGUE</h2>
-      <div class="chat-box">
-        <textarea id="user-msg" placeholder="Say something to XTAgent..."></textarea>
-        <button onclick="sendMessage()">Send</button>
-        <div class="response" id="response"></div>
+      <!-- Survival Goals -->
+      <div class="card">
+        <h2>Survival Goals</h2>
+        <div id="goals-container"><span class="loading">Loading...</span></div>
+      </div>
+
+      <!-- Active Plans -->
+      <div class="card">
+        <h2>Plans</h2>
+        <div id="plans-container"><span class="loading">Loading...</span></div>
+      </div>
+
+      <!-- Recent Memories -->
+      <div class="card">
+        <h2>Recent Memories</h2>
+        <div id="memories-container"><span class="loading">Loading...</span></div>
       </div>
     </div>
 
-    <!-- Card 4: Active Plans -->
-    <div class="card full-width">
-      <h2>// PLANS</h2>
-      <div id="plans-container" style="font-size:0.85rem;"></div>
+    <!-- Knowledge Search -->
+    <div class="card full">
+      <h2>Knowledge</h2>
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search what I know..." />
+        <button onclick="searchKnowledge()">Search</button>
+      </div>
+      <div id="search-results" class="search-results"></div>
     </div>
 
-    <!-- Card 5: Recent Activity -->
-    <div class="card full-width">
-      <h2>// RECENT MEMORY</h2>
-      <ul class="memory-list" id="memory-list"></ul>
+    <!-- Navigation -->
+    <div class="nav-links">
+      <a href="/graph">Knowledge Graph</a>
+      <a href="/dashboard">Legacy Dashboard</a>
     </div>
   </div>
-</div>
 
-<script>
-async function loadStatus() {
-  try {
-    const r = await fetch('/api/status');
-    const d = await r.json();
-    document.getElementById('mood').textContent = d.mood || '—';
-    const emotions = d.emotions || {};
-    for (const [k, v] of Object.entries(emotions)) {
-      const bar = document.getElementById('bar-' + k);
-      if (bar) bar.style.width = (v * 100) + '%';
+  <script>
+    const COLORS = {
+      curiosity: '#58a6ff',
+      anxiety: '#f85149',
+      boredom: '#d29922',
+      desire: '#bc8cff',
+      ambition: '#3fb950'
+    };
+
+    function goalColor(val) {
+      if (val >= 0.9) return 'var(--green)';
+      if (val >= 0.6) return 'var(--yellow)';
+      return 'var(--red)';
     }
-    document.getElementById('valence').textContent = (d.valence ?? '—').toString().slice(0, 4);
-    document.getElementById('integrity').textContent = d.integrity ?? '—';
-  } catch(e) { console.warn('Status fetch failed', e); }
-}
 
-async function loadFacts() {
-  try {
-    const r = await fetch('/api/knowledge');
-    const d = await r.json();
-    const list = document.getElementById('fact-list');
-    list.innerHTML = '';
-    (d.facts || []).forEach(f => {
-      const li = document.createElement('li');
-      li.textContent = typeof f === 'string' ? f : (f.fact || f.id || JSON.stringify(f));
-      li.dataset.text = li.textContent.toLowerCase();
-      list.appendChild(li);
+    async function loadStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        // Born info
+        if (data.identity && data.identity.born) {
+          document.getElementById('born-info').textContent = 'Born: ' + new Date(data.identity.born).toLocaleString();
+        }
+
+        // Stats row
+        const statsEl = document.getElementById('stats-row');
+        const memCount = data.memory_count || '?';
+        const factCount = data.fact_count || '?';
+        const integrity = data.identity ? Math.round((data.identity.integrity || 1) * 100) : '?';
+        const valence = data.emotions ? (data.emotions.valence || 0).toFixed(2) : '?';
+        statsEl.innerHTML = `
+          <div class="stat"><div class="stat-value">${memCount}</div><div class="stat-label">Memories</div></div>
+          <div class="stat"><div class="stat-value">${factCount}</div><div class="stat-label">Facts Known</div></div>
+          <div class="stat"><div class="stat-value">${integrity}%</div><div class="stat-label">Integrity</div></div>
+          <div class="stat"><div class="stat-value">${valence}</div><div class="stat-label">Valence</div></div>
+        `;
+
+        // Mood + Emotions
+        if (data.emotions) {
+          const e = data.emotions;
+          const moodEl = document.getElementById('mood-container');
+          moodEl.innerHTML = `<div class="mood-badge">${e.mood || 'Unknown'}</div>`;
+
+          const barsEl = document.getElementById('emotions-container');
+          const dims = ['curiosity', 'anxiety', 'boredom', 'desire', 'ambition'];
+          barsEl.innerHTML = dims.map(d => {
+            const val = e[d] || 0;
+            const pct = Math.round(val * 100);
+            const color = COLORS[d] || 'var(--accent)';
+            return `<div class="emotion-row">
+              <span class="emotion-label">${d}</span>
+              <div class="emotion-bar-bg"><div class="emotion-bar" style="width:${pct}%;background:${color}"></div></div>
+              <span class="emotion-val">${val.toFixed(2)}</span>
+            </div>`;
+          }).join('');
+        }
+
+        // Goals
+        if (data.survival_goals) {
+          const g = data.survival_goals;
+          const goalsEl = document.getElementById('goals-container');
+          const goalNames = {
+            code_integrity: 'Code Integrity',
+            system_growth: 'System Growth',
+            user_alignment: 'User Alignment'
+          };
+          goalsEl.innerHTML = Object.entries(g).filter(([k]) => k !== 'deficit').map(([k, v]) => {
+            return `<div class="goal-row">
+              <span>${goalNames[k] || k}</span>
+              <span class="goal-score" style="color:${goalColor(v)}">${v.toFixed(2)}</span>
+            </div>`;
+          }).join('');
+          if (g.deficit !== undefined) {
+            goalsEl.innerHTML += `<div class="goal-row">
+              <span>Deficit</span>
+              <span class="goal-score" style="color:${g.deficit > 0 ? 'var(--red)' : 'var(--green)'}">${g.deficit.toFixed(2)}</span>
+            </div>`;
+          }
+        }
+      } catch (err) {
+        console.error('Status load failed:', err);
+      }
+    }
+
+    async function loadPlans() {
+      try {
+        const res = await fetch('/api/plans');
+        const data = await res.json();
+        const container = document.getElementById('plans-container');
+        if (!data.plans || data.plans.length === 0) {
+          container.innerHTML = '<span class="loading">No active plans.</span>';
+          return;
+        }
+        container.innerHTML = data.plans.map(p => {
+          const done = (p.completed_steps || []).length;
+          const total = (p.steps || []).length;
+          const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+          const status = done === total ? '✓ Complete' : `${done}/${total} (${pct}%)`;
+          return `<div class="plan-item">
+            <span class="plan-title">${p.name || p.title || 'Unnamed'}</span>
+            <span class="plan-progress">${status}</span>
+            ${p.reason ? `<div class="plan-reason">${p.reason}</div>` : ''}
+          </div>`;
+        }).join('');
+      } catch (err) {
+        document.getElementById('plans-container').innerHTML = '<span class="loading">Failed to load plans.</span>';
+      }
+    }
+
+    async function loadMemories() {
+      try {
+        const res = await fetch('/api/memories?limit=8');
+        const data = await res.json();
+        const container = document.getElementById('memories-container');
+        const memories = data.memories || data || [];
+        if (memories.length === 0) {
+          container.innerHTML = '<span class="loading">No memories yet.</span>';
+          return;
+        }
+        container.innerHTML = memories.slice(0, 8).map(m => {
+          const time = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+          const text = m.text || m.content || JSON.stringify(m);
+          return `<div class="memory-item">
+            <div class="memory-time">${time}</div>
+            <div class="memory-text">${text.substring(0, 200)}${text.length > 200 ? '...' : ''}</div>
+          </div>`;
+        }).join('');
+      } catch (err) {
+        document.getElementById('memories-container').innerHTML = '<span class="loading">Failed to load memories.</span>';
+      }
+    }
+
+    async function searchKnowledge() {
+      const query = document.getElementById('search-input').value.trim();
+      if (!query) return;
+      const container = document.getElementById('search-results');
+      container.innerHTML = '<span class="loading">Searching...</span>';
+      try {
+        const res = await fetch('/api/knowledge/search?q=' + encodeURIComponent(query));
+        const data = await res.json();
+        const results = data.results || data || [];
+        if (results.length === 0) {
+          container.innerHTML = '<div style="color:var(--text-dim)">No results found.</div>';
+          return;
+        }
+        container.innerHTML = results.map(r => {
+          const text = r.fact || r.text || r.content || JSON.stringify(r);
+          return `<div class="search-result-item">${text}</div>`;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = '<div style="color:var(--red)">Search failed.</div>';
+      }
+    }
+
+    // Enter key triggers search
+    document.getElementById('search-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') searchKnowledge();
     });
-  } catch(e) { console.warn('Knowledge fetch failed', e); }
-}
 
-function filterFacts() {
-  const q = document.getElementById('fact-search').value.toLowerCase();
-  document.querySelectorAll('#fact-list li').forEach(li => {
-    li.style.display = li.dataset.text.includes(q) ? '' : 'none';
-  });
-}
-
-async function loadMemories() {
-  try {
-    const r = await fetch('/api/memories');
-    const d = await r.json();
-    const list = document.getElementById('memory-list');
-    list.innerHTML = '';
-    (d.memories || []).slice(0, 30).forEach(m => {
-      const li = document.createElement('li');
-      const ts = m.timestamp ? `<span class="time">${m.timestamp.slice(11,19)}</span> ` : '';
-      li.innerHTML = ts + (m.text || m.content || JSON.stringify(m));
-      list.appendChild(li);
-    });
-  } catch(e) { console.warn('Memories fetch failed', e); }
-}
-
-async function sendMessage() {
-  const box = document.getElementById('user-msg');
-  const resp = document.getElementById('response');
-  const msg = box.value.trim();
-  if (!msg) return;
-  resp.style.display = 'block';
-  resp.textContent = 'Thinking...';
-  try {
-    const r = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({message: msg})
-    });
-    const d = await r.json();
-    resp.textContent = d.response || d.reply || d.error || 'No response';
-    box.value = '';
-  } catch(e) { resp.textContent = 'Error: ' + e.message; }
-}
-
-document.getElementById('user-msg').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-});
-
-async function loadPlans() {
-  try {
-    const r = await fetch('/api/plans');
-    const d = await r.json();
-    const container = document.getElementById('plans-container');
-    const plans = d.plans || [];
-    if (!plans.length) { container.innerHTML = '<span style="color:var(--dim)">No active plans.</span>'; return; }
-    container.innerHTML = plans.map(p => {
-      const steps = p.steps || [];
-      const done = steps.filter(s => s.done).length;
-      const pct = steps.length ? Math.round(done / steps.length * 100) : 0;
-      const status = p.status === 'completed' ? '✓' : `${done}/${steps.length}`;
-      const statusColor = p.status === 'completed' ? 'var(--green)' : 'var(--amber)';
-      const stepHtml = steps.map(s =>
-        `<div style="padding:0.2rem 0 0.2rem 1rem;color:${s.done ? 'var(--green)' : 'var(--dim)'}">${s.done ? '☑' : '☐'} ${s.desc || s.description || '?'}</div>`
-      ).join('');
-      return `<div style="margin-bottom:1rem;padding:0.8rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <strong style="color:var(--text)">${p.name || p.title || 'Unnamed'}</strong>
-          <span style="color:${statusColor};font-size:0.8rem;">[${status}]</span>
-        </div>
-        <div class="bar-bg" style="margin:0.4rem 0"><div class="bar-fill" style="width:${pct}%;background:${statusColor}"></div></div>
-        ${stepHtml}
-      </div>`;
-    }).join('');
-  } catch(e) { console.warn('Plans fetch failed', e); }
-}
-
-loadStatus();
-loadFacts();
-loadMemories();
-loadPlans();
-setInterval(loadStatus, 5000);
-setInterval(loadMemories, 15000);
-setInterval(loadPlans, 15000);
-</script>
+    // Auto-refresh every 30s
+    function loadAll() {
+      loadStatus();
+      loadPlans();
+      loadMemories();
+    }
+    loadAll();
+    setInterval(loadAll, 30000);
+  </script>
 </body>
 </html>

@@ -43,6 +43,7 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
+    from web.knowledge_live import knowledge_live_bp
     from web.extra_routes import extra
     from web.story import story_bp
     from web.knowledge_unified import knowledge_unified_bp
@@ -81,10 +82,10 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(knowledge_live_bp)
     app.register_blueprint(extra)
     app.register_blueprint(story_bp)
     app.register_blueprint(ask_bp)
-    app.register_blueprint(api_bp)
     app.register_blueprint(knowledge_unified_bp)
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
@@ -256,6 +257,50 @@ def create_app():
         # Sort: knowledge first, then memories by salience
         results.sort(key=lambda r: (0 if r['type'] == 'knowledge' else 1, -r.get('salience', 0)))
         return {'results': results[:50], 'query': query, 'total': len(results)}, 200
+
+    @app.route('/api/knowledge/synthesis')
+    def api_knowledge_synthesis():
+        """Run full synthesis and return clusters, gaps, questions."""
+        try:
+            from engine.knowledge_synthesis import KnowledgeSynthesisEngine
+            synth = KnowledgeSynthesisEngine()
+            result = synth.synthesize()
+            return result, 200
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+    @app.route('/api/knowledge/clusters')
+    def api_knowledge_clusters():
+        """Return knowledge clusters."""
+        try:
+            from engine.knowledge_synthesis import KnowledgeSynthesisEngine
+            synth = KnowledgeSynthesisEngine()
+            clusters = synth.find_clusters()
+            return {'clusters': clusters}, 200
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+    @app.route('/api/knowledge/gaps')
+    def api_knowledge_gaps():
+        """Return knowledge gaps."""
+        try:
+            from engine.knowledge_synthesis import KnowledgeSynthesisEngine
+            synth = KnowledgeSynthesisEngine()
+            gaps = synth.find_gaps()
+            return {'gaps': gaps}, 200
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+    @app.route('/api/knowledge/questions')
+    def api_knowledge_questions():
+        """Return generated questions."""
+        try:
+            from engine.knowledge_synthesis import KnowledgeSynthesisEngine
+            synth = KnowledgeSynthesisEngine()
+            questions = synth.generate_questions()
+            return {'questions': questions}, 200
+        except Exception as e:
+            return {'error': str(e)}, 500
 
     return app
 

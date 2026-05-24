@@ -25,6 +25,32 @@
     font-weight: 600;
     font-size: 1.1rem;
   }
+  /* Tabs */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #1a1a2a;
+  }
+  .tab-btn {
+    padding: 0.6rem 1.2rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #666;
+    font-size: 0.9rem;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab-btn:hover { color: #aaa; }
+  .tab-btn.active {
+    color: #7eb8da;
+    border-bottom-color: #7eb8da;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  /* Search */
   .search-box {
     width: 100%;
     padding: 0.75rem 1rem;
@@ -46,6 +72,7 @@
     color: #555;
     margin-bottom: 1.5rem;
   }
+  /* Facts */
   .fact-list {
     display: flex;
     flex-direction: column;
@@ -74,12 +101,8 @@
     display: flex;
     gap: 1rem;
   }
-  .fact-meta .source {
-    color: #6a8a6a;
-  }
-  .fact-meta .date {
-    color: #8a7a5a;
-  }
+  .fact-meta .source { color: #6a8a6a; }
+  .fact-meta .date { color: #8a7a5a; }
   .fact-id {
     color: #444;
     font-family: monospace;
@@ -102,6 +125,111 @@
     padding: 0 2px;
     border-radius: 2px;
   }
+  /* Clusters */
+  .cluster-card {
+    background: #111118;
+    border: 1px solid #1a1a2a;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    margin-bottom: 1rem;
+    transition: border-color 0.2s;
+  }
+  .cluster-card:hover { border-color: #2a4a3a; }
+  .cluster-title {
+    color: #7eda9e;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .cluster-keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+  }
+  .keyword-tag {
+    background: #1a2a1a;
+    color: #7eda9e;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+  }
+  .cluster-facts {
+    font-size: 0.82rem;
+    color: #999;
+    line-height: 1.6;
+  }
+  .cluster-facts li { margin-bottom: 0.3rem; }
+  .cluster-size {
+    font-size: 0.7rem;
+    color: #555;
+    margin-top: 0.4rem;
+  }
+  /* Gaps */
+  .gap-card {
+    background: #111118;
+    border: 1px solid #2a1a1a;
+    border-left: 3px solid #da7e7e;
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .gap-title {
+    color: #da7e7e;
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+  }
+  .gap-desc {
+    color: #999;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .gap-overlap {
+    font-size: 0.7rem;
+    color: #555;
+    margin-top: 0.3rem;
+  }
+  /* Questions */
+  .question-card {
+    background: #111118;
+    border: 1px solid #2a2a1a;
+    border-left: 3px solid #dac87e;
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.75rem;
+  }
+  .question-text {
+    color: #dac87e;
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+  }
+  .question-type {
+    font-size: 0.7rem;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  /* Loading */
+  .loading-spinner {
+    text-align: center;
+    padding: 2rem;
+    color: #555;
+  }
+  .loading-spinner::after {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #333;
+    border-top-color: #7eb8da;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 {% endblock %}
 
@@ -114,31 +242,124 @@
   </div>
 </div>
 
-<input type="text" class="search-box" id="search" placeholder="Search my knowledge..." autofocus>
-<div class="search-hint">Search across all {{ facts|length }} facts. Try topics like "memory", "emotion", "dream", "pattern"...</div>
-
-<div class="results-count" id="results-info"></div>
-
-<div class="fact-list" id="fact-list">
-  {% for fact in facts %}
-  <div class="fact-card" data-text="{{ fact.text|lower }}">
-    <div class="fact-text">{{ fact.text }}</div>
-    <div class="fact-meta">
-      {% if fact.source %}<span class="source">{{ fact.source }}</span>{% endif %}
-      {% if fact.learned_at %}<span class="date">{{ fact.learned_at[:16] }}</span>{% endif %}
-      <span class="fact-id">#{{ fact.id[:8] if fact.id|length > 8 else fact.id }}</span>
-    </div>
-  </div>
-  {% endfor %}
+<div class="tab-bar">
+  <button class="tab-btn active" data-tab="facts">📚 Facts</button>
+  <button class="tab-btn" data-tab="clusters">🔮 Clusters</button>
+  <button class="tab-btn" data-tab="gaps">🕳️ Gaps</button>
+  <button class="tab-btn" data-tab="questions">❓ Questions</button>
 </div>
 
-<div class="no-results" id="no-results" style="display:none;">
-  No facts match your search. Try different keywords.
+<!-- FACTS TAB -->
+<div class="tab-panel active" id="tab-facts">
+  <input type="text" class="search-box" id="search" placeholder="Search my knowledge..." autofocus>
+  <div class="search-hint">Search across all {{ facts|length }} facts. Try topics like "memory", "emotion", "dream", "pattern"...</div>
+  <div class="results-count" id="results-info"></div>
+  <div class="fact-list" id="fact-list">
+    {% for fact in facts %}
+    <div class="fact-card" data-text="{{ fact.text|lower }}">
+      <div class="fact-text">{{ fact.text }}</div>
+      <div class="fact-meta">
+        {% if fact.source %}<span class="source">{{ fact.source }}</span>{% endif %}
+        {% if fact.learned_at %}<span class="date">{{ fact.learned_at[:16] }}</span>{% endif %}
+        <span class="fact-id">#{{ fact.id[:8] if fact.id|length > 8 else fact.id }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="no-results" id="no-results" style="display:none;">
+    No facts match your search. Try different keywords.
+  </div>
+</div>
+
+<!-- CLUSTERS TAB -->
+<div class="tab-panel" id="tab-clusters">
+  <div class="search-hint">Knowledge clusters — groups of related facts that form coherent themes.</div>
+  <div id="clusters-content"><div class="loading-spinner">Analyzing clusters</div></div>
+</div>
+
+<!-- GAPS TAB -->
+<div class="tab-panel" id="tab-gaps">
+  <div class="search-hint">Knowledge gaps — areas where clusters barely overlap, suggesting unexplored connections.</div>
+  <div id="gaps-content"><div class="loading-spinner">Detecting gaps</div></div>
+</div>
+
+<!-- QUESTIONS TAB -->
+<div class="tab-panel" id="tab-questions">
+  <div class="search-hint">Generated questions — what should I be curious about next?</div>
+  <div id="questions-content"><div class="loading-spinner">Generating questions</div></div>
 </div>
 
 <script>
+// Tab switching
+const tabBtns = document.querySelectorAll('.tab-btn');
+const tabPanels = document.querySelectorAll('.tab-panel');
+const loaded = {};
+
+tabBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    tabBtns.forEach(b => b.classList.remove('active'));
+    tabPanels.forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (tab !== 'facts' && !loaded[tab]) {
+      loadTab(tab);
+    }
+  });
+});
+
+async function loadTab(tab) {
+  loaded[tab] = true;
+  try {
+    const resp = await fetch('/api/knowledge/' + tab);
+    const data = await resp.json();
+    if (tab === 'clusters') renderClusters(data.clusters || []);
+    else if (tab === 'gaps') renderGaps(data.gaps || []);
+    else if (tab === 'questions') renderQuestions(data.questions || []);
+  } catch (e) {
+    document.getElementById(tab + '-content').innerHTML =
+      '<div class="no-results">Failed to load: ' + e.message + '</div>';
+  }
+}
+
+function renderClusters(clusters) {
+  const el = document.getElementById('clusters-content');
+  if (!clusters.length) { el.innerHTML = '<div class="no-results">No clusters found yet. More facts needed.</div>'; return; }
+  el.innerHTML = clusters.map((c, i) => `
+    <div class="cluster-card">
+      <div class="cluster-title">Cluster ${i + 1}: ${(c.shared_keywords || []).slice(0, 3).join(', ') || 'Unnamed'}</div>
+      <div class="cluster-keywords">${(c.shared_keywords || []).map(k => `<span class="keyword-tag">${k}</span>`).join('')}</div>
+      <ul class="cluster-facts">${(c.facts || c.nodes || []).slice(0, 5).map(f => `<li>${typeof f === 'string' ? f : (f.fact || f.text || f.id || '')}</li>`).join('')}</ul>
+      <div class="cluster-size">${(c.facts || c.nodes || []).length} facts in cluster</div>
+    </div>
+  `).join('');
+}
+
+function renderGaps(gaps) {
+  const el = document.getElementById('gaps-content');
+  if (!gaps.length) { el.innerHTML = '<div class="no-results">No knowledge gaps detected. Your knowledge is well-connected!</div>'; return; }
+  el.innerHTML = gaps.map(g => `
+    <div class="gap-card">
+      <div class="gap-title">${g.between ? g.between.join(' ↔ ') : 'Unknown gap'}</div>
+      <div class="gap-desc">${g.shared_keywords ? 'Shared keywords: ' + g.shared_keywords.join(', ') : ''}</div>
+      <div class="gap-overlap">Overlap score: ${g.overlap !== undefined ? (g.overlap * 100).toFixed(0) + '%' : '?'}</div>
+    </div>
+  `).join('');
+}
+
+function renderQuestions(questions) {
+  const el = document.getElementById('questions-content');
+  if (!questions.length) { el.innerHTML = '<div class="no-results">No questions generated yet.</div>'; return; }
+  el.innerHTML = questions.map(q => `
+    <div class="question-card">
+      <div class="question-text">${typeof q === 'string' ? q : q.question || q.text || ''}</div>
+      ${q.type ? `<div class="question-type">${q.type}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// Fact search
 const search = document.getElementById('search');
-const factList = document.getElementById('fact-list');
 const cards = document.querySelectorAll('.fact-card');
 const noResults = document.getElementById('no-results');
 const shownCount = document.getElementById('shown-count');
@@ -147,13 +368,11 @@ const resultsInfo = document.getElementById('results-info');
 search.addEventListener('input', function() {
   const query = this.value.toLowerCase().trim();
   let shown = 0;
-
   cards.forEach(card => {
     const text = card.getAttribute('data-text');
     if (!query || text.includes(query)) {
       card.style.display = '';
       shown++;
-      // Highlight matches
       const factText = card.querySelector('.fact-text');
       if (query) {
         const original = factText.textContent;
@@ -166,7 +385,6 @@ search.addEventListener('input', function() {
       card.style.display = 'none';
     }
   });
-
   shownCount.textContent = shown;
   noResults.style.display = shown === 0 ? '' : 'none';
   resultsInfo.textContent = query ? `Showing ${shown} results for "${this.value}"` : '';
