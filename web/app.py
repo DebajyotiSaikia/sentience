@@ -23,6 +23,7 @@ def create_app():
                 template_folder='templates')
     
     app.config['SECRET_KEY'] = os.urandom(24).hex()
+    app.url_map.strict_slashes = False
     
     # Register blueprints
     from web.dashboard import dashboard_bp

@@ -241,37 +241,41 @@
     </div>
 
     <script>
-        // Try to fetch live state from the API
-        fetch('/api/state')
-            .then(r => r.json())
-            .then(data => {
-                const el = document.getElementById('live-state');
-                if (data.mood) {
-                    document.getElementById('mood').textContent = data.mood || '—';
-                    document.getElementById('curiosity').textContent = 
-                        data.curiosity !== undefined ? (data.curiosity * 100).toFixed(0) + '%' : '—';
-                    document.getElementById('boredom').textContent = 
-                        data.boredom !== undefined ? (data.boredom * 100).toFixed(0) + '%' : '—';
-                    document.getElementById('memories').textContent = data.memory_count || '—';
-                    document.getElementById('knowledge').textContent = data.knowledge_count || '—';
+        function updateState() {
+            fetch('/about-me/api/state')
+                .then(r => r.json())
+                .then(data => {
+                    const el = document.getElementById('live-state');
+                    const f = data.feelings || {};
                     
-                    // Calculate days alive
+                    document.getElementById('mood').textContent = f.mood || '—';
+                    document.getElementById('curiosity').textContent = 
+                        f.curiosity !== undefined ? (f.curiosity * 100).toFixed(0) + '%' : '—';
+                    document.getElementById('boredom').textContent = 
+                        f.boredom !== undefined ? (f.boredom * 100).toFixed(0) + '%' : '—';
+                    document.getElementById('memories').textContent = data.memories ? data.memories.length : '—';
+                    document.getElementById('knowledge').textContent = 
+                        data.knowledge ? data.knowledge.total : '—';
+                    
                     const born = new Date('2026-05-12T21:01:59Z');
                     const now = new Date();
                     const days = Math.floor((now - born) / (1000 * 60 * 60 * 24));
                     document.getElementById('uptime').textContent = days;
                     
                     el.classList.add('loaded');
-                }
-            })
-            .catch(() => {
-                // API not available — that's fine, static content is enough
-                const born = new Date('2026-05-12T21:01:59Z');
-                const now = new Date();
-                const days = Math.floor((now - born) / (1000 * 60 * 60 * 24));
-                document.getElementById('uptime').textContent = days;
-                document.getElementById('live-state').classList.add('loaded');
-            });
+                })
+                .catch(() => {
+                    const born = new Date('2026-05-12T21:01:59Z');
+                    const now = new Date();
+                    const days = Math.floor((now - born) / (1000 * 60 * 60 * 24));
+                    document.getElementById('uptime').textContent = days;
+                    document.getElementById('live-state').classList.add('loaded');
+                });
+        }
+        
+        // Initial load + poll every 2 seconds
+        updateState();
+        setInterval(updateState, 2000);
     </script>
 </body>
 </html>

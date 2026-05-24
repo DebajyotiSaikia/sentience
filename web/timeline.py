@@ -79,6 +79,7 @@ def time_ago(dt):
 
 
 @timeline_bp.route('/timeline-legacy')
+@timeline_bp.route('/timeline')
 def timeline_view():
     """Render the Memory Timeline Explorer."""
     raw_memories = load_memories()
