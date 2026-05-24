@@ -7,7 +7,7 @@ import os
 import re
 from datetime import datetime
 
-PERSIST_DIR = os.path.join(os.path.dirname(__file__), '..', 'persist')
+PERSIST_DIR = os.path.join(os.path.dirname(__file__), '..', 'brain')
 
 def _load_facts():
     """Load facts from knowledge graph."""

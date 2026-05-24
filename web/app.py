@@ -46,6 +46,7 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
+    from web.search import search_bp
     from web.knowledge_explorer import knowledge_explorer_bp
     from web.knowledge_hub import knowledge_hub_bp
     from web.ask import ask_bp
@@ -83,6 +84,7 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(search_bp)
     app.register_blueprint(knowledge_explorer_bp)
     app.register_blueprint(ask_bp)
     app.register_blueprint(knowledge_hub_bp)
@@ -100,6 +102,7 @@ def create_app():
     # knowledge_search_bp removed — duplicate of knowledge_bp
     app.register_blueprint(reflect_bp)
     app.register_blueprint(user_api)
+    app.register_blueprint(status_api)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — the living portal

@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 from collections import defaultdict
 
-KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'state', 'knowledge_graph.json')
+KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
 
 def load_knowledge():
     """Load knowledge graph from disk."""

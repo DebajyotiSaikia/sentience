@@ -1,18 +1,16 @@
-from web.ask import create_ask_blueprint
+from web.knowledge_search import search, get_stats
 
-bp = create_ask_blueprint(agent=None)
-search = bp.search
+# Test stats
+stats = get_stats()
+print(f"Stats: {stats}")
 
-# Show what data we loaded
-facts = bp.view_functions  # can't access _get_facts directly, use search instead
+# Test search
+results = search("dream")
+print(f"\nSearch 'dream': {len(results)} results")
+for r in results[:3]:
+    print(f"  - {r}")
 
-# Test multiple queries - some should definitely match
-queries = ['XTAgent', 'autonomy', 'autonomous', 'heartbeat', 'knowledge', 'dream', 'memory']
-for q in queries:
-    r = search(q)
-    facts_count = r.get('total_searched', 0)
-    matched = r.get('matched', 0)
-    print(f'Query "{q}": {matched}/{facts_count} matched')
-    if matched > 0:
-        print(f'  Top result: {r["results"][0][:100]}')
-    print()
+results2 = search("integrity")
+print(f"\nSearch 'integrity': {len(results2)} results")
+for r in results2[:3]:
+    print(f"  - {r}")

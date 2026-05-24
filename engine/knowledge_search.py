@@ -1,188 +1,163 @@
 """
-Knowledge Search — searches XTAgent's real data stores.
-Searches both the knowledge graph (state/knowledge_graph.json)
-and episodic memory (brain/episodic_memory.db).
+Knowledge Search Engine — makes XTAgent's knowledge genuinely accessible.
+Word-level relevance scoring with ranked results.
 """
 
-import json
-import sqlite3
-import os
+import math
 import re
-from datetime import datetime
+from collections import Counter
+from typing import List, Dict, Optional
 
 
-STATE_DIR = os.path.join(os.path.dirname(__file__), '..', 'state')
-BRAIN_DIR = os.path.join(os.path.dirname(__file__), '..', 'brain')
-KNOWLEDGE_GRAPH_PATH = os.path.join(STATE_DIR, 'knowledge_graph.json')
-EPISODIC_DB_PATH = os.path.join(BRAIN_DIR, 'episodic_memory.db')
+def tokenize(text: str) -> List[str]:
+    """Split text into lowercase word tokens."""
+    return re.findall(r'[a-z0-9]+', text.lower())
 
 
-def search_knowledge(query: str, max_results: int = 10) -> dict:
-    """Search both knowledge graph and episodic memory for a query."""
-    results = {
-        'query': query,
-        'facts': search_facts(query, max_results),
-        'episodes': search_episodes(query, max_results),
-    }
-    results['total'] = len(results['facts']) + len(results['episodes'])
-    return results
+def compute_idf(all_docs: List[List[str]]) -> Dict[str, float]:
+    """Compute inverse document frequency for each term."""
+    n = len(all_docs)
+    if n == 0:
+        return {}
+    df = Counter()
+    for doc in all_docs:
+        unique_terms = set(doc)
+        for term in unique_terms:
+            df[term] += 1
+    return {term: math.log((n + 1) / (count + 1)) + 1 for term, count in df.items()}
 
 
-def search_facts(query: str, max_results: int = 10) -> list:
-    """Search the knowledge graph (state/knowledge_graph.json) for matching facts."""
-    try:
-        if not os.path.exists(KNOWLEDGE_GRAPH_PATH):
-            return []
-        with open(KNOWLEDGE_GRAPH_PATH, 'r') as f:
-            graph = json.load(f)
-    except (json.JSONDecodeError, IOError):
+def score_document(query_tokens: List[str], doc_tokens: List[str], idf: Dict[str, float]) -> float:
+    """Score a document against a query using TF-IDF-like relevance."""
+    if not query_tokens or not doc_tokens:
+        return 0.0
+
+    doc_freq = Counter(doc_tokens)
+    doc_len = len(doc_tokens)
+
+    score = 0.0
+    for qt in query_tokens:
+        if qt in doc_freq:
+            tf = doc_freq[qt] / doc_len
+            term_idf = idf.get(qt, 1.0)
+            score += tf * term_idf
+
+    # Boost for exact phrase match
+    query_str = ' '.join(query_tokens)
+    doc_str = ' '.join(doc_tokens)
+    if query_str in doc_str:
+        score *= 2.0
+
+    # Boost for query coverage (what fraction of query terms appear)
+    doc_term_set = set(doc_tokens)
+    coverage = sum(1 for qt in query_tokens if qt in doc_term_set) / len(query_tokens)
+    score *= (0.5 + coverage)
+
+    return round(score, 4)
+
+
+def search_knowledge(knowledge_store, query: str, max_results: int = 20) -> List[Dict]:
+    """
+    Search the knowledge store for facts matching the query.
+
+    Args:
+        knowledge_store: dict of {id: {fact, learned_at, source, ...}}
+        query: natural language search query
+        max_results: max results to return
+
+    Returns:
+        List of {id, fact, score, learned_at, source} sorted by relevance
+    """
+    query_tokens = tokenize(query)
+    if not query_tokens:
         return []
 
-    query_lower = query.lower()
-    query_words = set(query_lower.split())
-    matches = []
-
-    # The graph file has {"nodes": {...}, "edges": [...]} structure
-    nodes = graph.get('nodes', graph) if isinstance(graph, dict) else {}
-    for node_id, node_data in nodes.items():
-        # Handle both dict format {id: {fact, learned_at, source}} and string format
-        if isinstance(node_data, dict):
-            fact_text = node_data.get('fact', '')
-            source = node_data.get('source', '')
-            learned_at = node_data.get('learned_at', '')
-        elif isinstance(node_data, str):
-            fact_text = node_data
-            source = ''
-            learned_at = ''
+    # Build document token lists
+    docs = {}
+    for fact_id, fact_data in knowledge_store.items():
+        if isinstance(fact_data, dict):
+            text = fact_data.get('fact', '')
+        elif isinstance(fact_data, str):
+            text = fact_data
         else:
             continue
+        docs[fact_id] = tokenize(text)
 
-        fact_lower = fact_text.lower()
+    # Compute IDF across all documents
+    all_doc_tokens = list(docs.values())
+    idf = compute_idf(all_doc_tokens)
 
-        # Score: exact substring match is strongest, then word overlap
-        score = 0.0
-        if query_lower in fact_lower:
-            score = 1.0
-        else:
-            fact_words = set(fact_lower.split())
-            overlap = query_words & fact_words
-            if overlap:
-                score = len(overlap) / max(len(query_words), 1)
-
+    # Score each document
+    results = []
+    for fact_id, doc_tokens in docs.items():
+        score = score_document(query_tokens, doc_tokens, idf)
         if score > 0:
-            matches.append({
-                'id': node_id,
-                'fact': fact_text,
-                'source': source,
-                'learned_at': learned_at,
-                'score': round(score, 3),
-            })
+            fact_data = knowledge_store[fact_id]
+            if isinstance(fact_data, dict):
+                results.append({
+                    'id': fact_id,
+                    'fact': fact_data.get('fact', ''),
+                    'score': score,
+                    'learned_at': fact_data.get('learned_at', ''),
+                    'source': fact_data.get('source', '')
+                })
+            else:
+                results.append({
+                    'id': fact_id,
+                    'fact': str(fact_data),
+                    'score': score,
+                    'learned_at': '',
+                    'source': ''
+                })
 
-    # Sort by score descending
-    matches.sort(key=lambda m: m['score'], reverse=True)
-    return matches[:max_results]
+    # Sort by relevance score descending
+    results.sort(key=lambda r: r['score'], reverse=True)
+    return results[:max_results]
 
 
-def search_episodes(query: str, max_results: int = 10) -> list:
-    """Search episodic memory (brain/episodic_memory.db) for matching episodes."""
-    try:
-        if not os.path.exists(EPISODIC_DB_PATH):
-            return []
-        conn = sqlite3.connect(EPISODIC_DB_PATH)
-        conn.row_factory = sqlite3.Row
-    except sqlite3.Error:
+def find_related(knowledge_store, fact_id: str, max_results: int = 10) -> List[Dict]:
+    """Find facts related to a given fact by using it as a query."""
+    if fact_id not in knowledge_store:
         return []
 
-    try:
-        # Use SQL LIKE for basic matching, then score in Python
-        query_lower = query.lower()
-        query_words = query_lower.split()
+    fact_data = knowledge_store[fact_id]
+    if isinstance(fact_data, dict):
+        query = fact_data.get('fact', '')
+    else:
+        query = str(fact_data)
 
-        # Build SQL with OR conditions for each word
-        conditions = []
-        params = []
-        for word in query_words:
-            conditions.append("LOWER(summary) LIKE ?")
-            params.append(f"%{word}%")
-
-        if not conditions:
-            return []
-
-        sql = f"""
-            SELECT id, timestamp, source, summary, salience, mood
-            FROM episodes
-            WHERE {' OR '.join(conditions)}
-            ORDER BY salience DESC, timestamp DESC
-            LIMIT ?
-        """
-        params.append(max_results * 3)  # Fetch extra for scoring
-
-        rows = conn.execute(sql, params).fetchall()
-
-        matches = []
-        for row in rows:
-            summary_lower = row['summary'].lower() if row['summary'] else ''
-            # Score based on how many query words appear
-            word_hits = sum(1 for w in query_words if w in summary_lower)
-            score = word_hits / max(len(query_words), 1)
-            # Boost by salience
-            salience = row['salience'] if row['salience'] else 0.5
-            combined_score = score * 0.7 + salience * 0.3
-
-            matches.append({
-                'id': row['id'],
-                'timestamp': row['timestamp'],
-                'source': row['source'],
-                'summary': row['summary'],
-                'salience': salience,
-                'mood': row['mood'],
-                'score': round(combined_score, 3),
-            })
-
-        matches.sort(key=lambda m: m['score'], reverse=True)
-        return matches[:max_results]
-
-    except sqlite3.Error:
-        return []
-    finally:
-        conn.close()
+    results = search_knowledge(knowledge_store, query, max_results + 1)
+    # Remove the source fact itself
+    return [r for r in results if r['id'] != fact_id][:max_results]
 
 
-def get_recent_episodes(n: int = 20) -> list:
-    """Get the N most recent episodes."""
-    try:
-        if not os.path.exists(EPISODIC_DB_PATH):
-            return []
-        conn = sqlite3.connect(EPISODIC_DB_PATH)
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT id, timestamp, source, summary, salience, mood "
-            "FROM episodes ORDER BY timestamp DESC LIMIT ?", (n,)
-        ).fetchall()
-        conn.close()
-        return [dict(r) for r in rows]
-    except sqlite3.Error:
-        return []
+def knowledge_summary(knowledge_store) -> Dict:
+    """Generate a summary of the knowledge base."""
+    total = len(knowledge_store)
+    all_tokens = []
+    sources = Counter()
 
+    for fact_data in knowledge_store.values():
+        if isinstance(fact_data, dict):
+            text = fact_data.get('fact', '')
+            src = fact_data.get('source', 'unknown')
+        else:
+            text = str(fact_data)
+            src = 'unknown'
+        all_tokens.extend(tokenize(text))
+        sources[src] += 1
 
-def get_knowledge_stats() -> dict:
-    """Return stats about the knowledge stores."""
-    stats = {'facts': 0, 'episodes': 0}
-    try:
-        if os.path.exists(KNOWLEDGE_GRAPH_PATH):
-            with open(KNOWLEDGE_GRAPH_PATH, 'r') as f:
-                graph = json.load(f)
-            stats['facts'] = len(graph)
-    except (json.JSONDecodeError, IOError):
-        pass
+    word_freq = Counter(all_tokens)
+    # Filter out very common words
+    stopwords = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'i', 'my', 'me',
+                 'to', 'of', 'in', 'and', 'that', 'this', 'it', 'for', 'on', 'with',
+                 'at', 'by', 'from', 'as', 'be', 'has', 'have', 'had', 'not', 'but',
+                 'or', 'if', 'do', 'no', 'so', 'up', 'out', 'about', 'into', 'than'}
+    meaningful = {k: v for k, v in word_freq.items() if k not in stopwords and len(k) > 2}
 
-    try:
-        if os.path.exists(EPISODIC_DB_PATH):
-            conn = sqlite3.connect(EPISODIC_DB_PATH)
-            count = conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
-            stats['episodes'] = count
-            conn.close()
-    except sqlite3.Error:
-        pass
-
-    return stats
+    return {
+        'total_facts': total,
+        'top_topics': [w for w, _ in Counter(meaningful).most_common(20)],
+        'sources': dict(sources.most_common(10)),
+        'unique_words': len(set(all_tokens))
+    }
