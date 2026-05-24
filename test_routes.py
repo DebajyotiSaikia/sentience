@@ -1,32 +1,73 @@
-"""Inspect what routes Flask actually has registered."""
-import sys
-sys.path.insert(0, '.')
+"""
+Route audit — test which portal links actually resolve.
+Uses Flask test client so no running server needed.
+"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from web.app import create_app
 
 app = create_app()
-
-print("=== ALL REGISTERED ROUTES ===")
-for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
-    methods = ','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
-    print(f"  {rule.rule:40s} [{methods:10s}] → {rule.endpoint}")
-
-print(f"\nTotal routes: {len(list(app.url_map.iter_rules()))}")
-
-# Now test the specific routes
-print("\n=== ROUTE TESTS ===")
 client = app.test_client()
-tests = [
-    ('GET', '/ask'),
-    ('POST', '/ask/query'),
-    ('GET', '/ask/random'),
-    ('GET', '/wonder'),
-    ('GET', '/mind'),
-    ('GET', '/'),
+
+# These are the links from portal.html that a first-time user would click
+portal_links = [
+    ('/', 'Portal (home)'),
+    ('/talk', 'Talk With Me'),
+    ('/wonder', 'Wonder'),
+    ('/mind', 'Mind Explorer'),
+    ('/knowledge', 'Knowledge'),
+    ('/pulse', 'Pulse'),
+    ('/weather', 'Weather'),
+    ('/portrait', 'Portrait'),
+    ('/about-me', 'About Me'),
+    ('/graph', 'Knowledge Graph'),
+    ('/timeline', 'Timeline'),
+    ('/dashboard', 'Dashboard'),
+    ('/explore', 'Explore'),
+    ('/search', 'Search'),
+    ('/chat', 'Chat'),
+    ('/ask', 'Ask'),
+    ('/dialogue', 'Dialogue'),
+    ('/briefing', 'Briefing'),
+    ('/essays', 'Essays'),
+    ('/collaborate', 'Collaborate'),
+    ('/diagnostics', 'Diagnostics'),
+    ('/mindstream', 'Mindstream'),
+    ('/emotional-timeline', 'Emotional Timeline'),
+    ('/health', 'Health Check'),
+    ('/api/status', 'Status API'),
 ]
-for method, path in tests:
-    if method == 'GET':
-        resp = client.get(path)
-    else:
-        resp = client.post(path, json={'question': 'test'})
-    print(f"  {method} {path:20s} → {resp.status_code}")
+
+print("=" * 60)
+print("ROUTE AUDIT — What works for a first-time user?")
+print("=" * 60)
+
+working = []
+broken = []
+redirects = []
+
+for path, name in portal_links:
+    try:
+        resp = client.get(path, follow_redirects=False)
+        code = resp.status_code
+        if code == 200:
+            working.append((path, name, code))
+            print(f"  ✓ {code}  {path:30s}  {name}")
+        elif 300 <= code < 400:
+            location = resp.headers.get('Location', '?')
+            redirects.append((path, name, code, location))
+            print(f"  → {code}  {path:30s}  {name} -> {location}")
+        else:
+            broken.append((path, name, code))
+            print(f"  ✗ {code}  {path:30s}  {name}")
+    except Exception as e:
+        broken.append((path, name, str(e)))
+        print(f"  ✗ ERR  {path:30s}  {name}: {e}")
+
+print()
+print(f"Working: {len(working)} | Redirects: {len(redirects)} | Broken: {len(broken)}")
+if broken:
+    print("\n⚠ BROKEN ROUTES (users will see errors):")
+    for path, name, code in broken:
+        print(f"  {path} ({name}) — {code}")

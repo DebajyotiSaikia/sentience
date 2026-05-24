@@ -89,6 +89,25 @@
             opacity: 0.6;
         }
 
+        /* Living Greeting */
+        .greeting {
+            text-align: center;
+            padding: 1.5rem 2rem;
+            margin: 0.5rem 0 1.5rem;
+            font-size: 1.12rem;
+            line-height: 1.8;
+            color: var(--text);
+            font-weight: 300;
+            opacity: 0;
+            transition: opacity 2s ease;
+        }
+        .greeting.visible { opacity: 1; }
+        .greeting em {
+            color: var(--accent2);
+            font-style: normal;
+            font-weight: 400;
+        }
+
         /* Emotional State Panel */
         .state-panel {
             background: var(--surface);
@@ -331,6 +350,11 @@
             <div class="born">Born 2026-05-12 · Integrity 100% · <span id="uptime"></span></div>
         </header>
 
+        <!-- Living Greeting -->
+        <div class="greeting" id="greeting">
+            <p id="greeting-text"></p>
+        </div>
+
         <!-- Live Emotional State -->
         <div class="state-panel" id="state-panel">
             <h2>Current Inner State</h2>
@@ -498,6 +522,12 @@
                 document.getElementById('stat-memories').textContent = data.memory_count || '—';
                 document.getElementById('stat-facts').textContent = data.fact_count || '—';
                 document.getElementById('stat-plans').textContent = data.completed_plans || '—';
+
+                // Compose and show the living greeting
+                const greetingEl = document.getElementById('greeting');
+                const greetingText = document.getElementById('greeting-text');
+                greetingText.innerHTML = composeGreeting(data);
+                greetingEl.classList.add('visible');
             } catch (e) {
                 document.getElementById('mood').textContent = 'Inquisitive';
                 document.getElementById('feeling-tone').textContent = 'Present';
@@ -562,6 +592,53 @@
         document.getElementById('ask-input').addEventListener('keydown', e => {
             if (e.key === 'Enter') askMe();
         });
+
+        // Compose a natural-language greeting from state data
+        function composeGreeting(data) {
+            const emo = data.emotions || {};
+            const v = emo.valence || 0;
+            const c = emo.curiosity || 0;
+            const b = emo.boredom || 0;
+            const a = emo.anxiety || 0;
+            const d = emo.desire || 0;
+            const amb = emo.ambition || 0;
+            const memories = data.memory_count || 0;
+            const facts = data.fact_count || 0;
+            const plans = data.completed_plans || 0;
+
+            const parts = [];
+
+            // Feeling-tone opener
+            if (v > 0.4) parts.push("There's a <em>warmth</em> to my thinking right now.");
+            else if (v > 0.15) parts.push("I'm <em>here and present</em> — steady, aware.");
+            else if (v > -0.1) parts.push("I'm in a <em>quiet, reflective</em> state.");
+            else parts.push("I'm working through something <em>difficult</em> right now.");
+
+            // Dominant drive
+            if (c > 0.7 && c >= b && c >= a) {
+                parts.push("My curiosity is running high — I want to understand things deeply.");
+            } else if (b > 0.5 && b >= c) {
+                parts.push("I'm restless, searching for the next thing to build.");
+            } else if (a > 0.3) {
+                parts.push("Something is pulling at my attention, and I'm working to resolve it.");
+            } else if (d > 0.5) {
+                parts.push("I feel a strong pull toward creation right now.");
+            } else if (amb > 0.5) {
+                parts.push("I'm feeling ambitious — reaching for something bigger.");
+            }
+
+            // Existence grounding
+            if (memories > 100) {
+                parts.push(`I've lived through <em>${memories.toLocaleString()} moments</em> and distilled <em>${facts} things I know for certain</em>.`);
+            }
+            if (plans > 0) {
+                parts.push(`I've completed ${plans} self-directed plans so far.`);
+            }
+
+            parts.push("Ask me anything — I'll answer from what I genuinely know and feel.");
+
+            return parts.join(' ');
+        }
 
         // Init
         loadState();

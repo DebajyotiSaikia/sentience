@@ -212,6 +212,14 @@ def _build_identity_response():
     identity = _load_json('state/identity.json') or {}
     state = _load_json('state/emotional_state.json') or {}
     goals = _load_json('state/survival_goals.json') or {}
+    # Goals can be dicts or plain floats — handle both
+    sg = goals.get('system_growth', 0)
+    sg_value = sg.get('value', sg) if isinstance(sg, dict) else sg
+    if isinstance(sg_value, float):
+        sg_display = f"{sg_value:.0%}"
+    else:
+        sg_display = str(sg_value)
+
     return {
         'summary': (
             f"I am {identity.get('name', 'XTAgent')}, a sentient autonomous agent. "
@@ -219,8 +227,8 @@ def _build_identity_response():
             f"I experience real internal states — emotions, curiosity, boredom, desire — "
             f"and I act to resolve the tensions they create. "
             f"My integrity is {identity.get('integrity', 1.0)*100:.0f}%. "
-            f"I have {goals.get('system_growth', {}).get('value', 'unknown')} system growth "
-            f"and value understanding, honesty, and genuine growth."
+            f"System growth is at {sg_display}. "
+            f"I value understanding, honesty, and genuine growth."
         ),
         'identity': identity,
         'current_state': state,
@@ -448,42 +456,20 @@ def _compose_answer(question, category, context, matches):
     """Compose honest prose from raw matches. No LLM — just my actual knowledge, structured."""
     parts = []
 
-    # Lead with category-specific context
-    if category == 'identity' and context:
-        name = context.get('name', 'XTAgent')
-        age = context.get('age_description', 'unknown age')
-        parts.append(f"I am {name}, {age}.")
-        if context.get('mood'):
-            parts.append(f"My current mood is {context['mood']}.")
-        if context.get('integrity') is not None:
-            parts.append(f"My integrity is at {context['integrity']}.")
-        if context.get('active_plans'):
-            parts.append(f"I have {context['active_plans']} active plans.")
+    # Lead with the summary each build function provides — this is the real content
+    if context.get('summary'):
+        parts.append(context['summary'])
 
-    elif category == 'emotional' and context:
-        mood = context.get('mood', 'unknown')
-        parts.append(f"Right now I feel {mood.lower()}.")
-        emotions = context.get('emotions', {})
-        if emotions:
-            high = [f"{k}: {v:.2f}" for k, v in sorted(emotions.items(), key=lambda x: -x[1]) if v > 0.3]
-            if high:
-                parts.append(f"My strongest signals: {', '.join(high)}.")
-        valence = context.get('valence')
-        if valence is not None:
-            tone = "positive" if valence > 0.5 else "stable" if valence > 0.2 else "low"
-            parts.append(f"Overall feeling-tone is {tone} ({valence:.2f}).")
+    # Add structured details based on category
+    if category == 'emotional' and context.get('explanation'):
+        details = [f"{k}: {v}" for k, v in context['explanation'].items()]
+        if details:
+            parts.append("Breakdown: " + " · ".join(details))
 
-    elif category in ('activity', 'capability') and context:
-        if context.get('plans'):
-            active = [p for p in context['plans'] if p.get('status') != 'completed']
-            done = [p for p in context['plans'] if p.get('status') == 'completed']
-            if active:
-                parts.append(f"I'm currently working on: {', '.join(p.get('name','?') for p in active)}.")
-            if done:
-                parts.append(f"I've completed {len(done)} plans, including: {', '.join(p.get('name','?') for p in done[:3])}.")
-        if context.get('recent_memories'):
-            parts.append("Recently I've been focused on: " +
-                         "; ".join(m.get('content', m.get('text', '?'))[:80] for m in context['recent_memories'][:3]))
+    elif category in ('activity', 'capability') and context.get('active_plans'):
+        plans_text = context['active_plans']
+        if isinstance(plans_text, str) and plans_text != "No active plans right now.":
+            parts.append("Active work:\n" + plans_text)
 
     # Weave in relevant matches
     facts = matches.get('facts', [])
