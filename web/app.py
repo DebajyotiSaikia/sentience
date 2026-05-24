@@ -34,6 +34,7 @@ def create_app():
     from web.about import about_bp
     from web.search import search_bp
     from web.explore import explore_bp
+    from web.query import query_bp
     from web.knowledge_api import knowledge_api
     from web.briefing import briefing_bp
     from web.essays import essays_bp
@@ -45,6 +46,7 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
+    from web.knowledge_explorer import knowledge_explorer_bp
     from web.knowledge_search import knowledge_bp
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
@@ -79,6 +81,7 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(knowledge_explorer_bp)
     app.register_blueprint(knowledge_bp)
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)

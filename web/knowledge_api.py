@@ -324,57 +324,43 @@ def _search_knowledge(question: str, agent=None) -> list[str]:
     """Search the knowledge graph for facts relevant to the question."""
     results = []
     
-    # Strategy 1: Search agent's knowledge graph if available
+    # Gather all facts from files + agent memory
+    all_facts = _get_all_facts()
+    
+    # Also pull from agent's live knowledge graph if available
     if agent and hasattr(agent, 'knowledge'):
         kg = agent.knowledge
         if hasattr(kg, 'facts'):
-            # Direct fact search
-            q_lower = question.lower()
-            q_words = set(re.findall(r'\w+', q_lower)) - {'what', 'how', 'why', 'when', 'where', 'is', 'are', 'do', 'does', 'the', 'a', 'an', 'my', 'i', 'me'}
-            
             for fact_id, fact_data in kg.facts.items():
-                text = fact_data if isinstance(fact_data, str) else str(fact_data.get('text', fact_data.get('content', '')))
-                text_lower = text.lower()
-                
-                # Score by word overlap
-                text_words = set(re.findall(r'\w+', text_lower))
-                overlap = len(q_words & text_words)
-                
-                if overlap >= 1:
-                    results.append((overlap, text))
-            
-            # Sort by relevance
-            results.sort(key=lambda x: x[0], reverse=True)
-            results = [text for _, text in results]
+                text = fact_data if isinstance(fact_data, str) else str(
+                    fact_data.get('fact', fact_data.get('text', fact_data.get('content', '')))
+                )
+                if text and len(text) > 10:
+                    all_facts.append({'content': text[:300], 'type': 'knowledge'})
     
-    # Strategy 2: Also check the long-term memory file
-    ltm_path = Path("memory/long_term.json")
-    if ltm_path.exists():
-        try:
-            with open(ltm_path) as f:
-                ltm = json.load(f)
-            
-            if isinstance(ltm, dict):
-                for key, value in ltm.items():
-                    if isinstance(value, str):
-                        results.append(value)
-                    elif isinstance(value, list):
-                        results.extend(str(v) for v in value[:5])
-        except (json.JSONDecodeError, IOError):
-            pass
+    # Deduplicate
+    seen = set()
+    unique_facts = []
+    for f in all_facts:
+        key = f['content'][:100]
+        if key not in seen:
+            seen.add(key)
+            unique_facts.append(f)
     
-    # Strategy 3: Check working memory
-    wm_path = Path("memory/working_memory.md")
-    if wm_path.exists():
-        try:
-            content = wm_path.read_text()
-            # Extract bullet points and key lines
-            for line in content.split('\n'):
-                line = line.strip()
-                if line.startswith('- ') and len(line) > 10:
-                    results.append(line[2:])
-        except IOError:
-            pass
+    # Score by word overlap with question
+    q_lower = question.lower()
+    q_words = set(re.findall(r'\w+', q_lower)) - {'what', 'how', 'why', 'when', 'where', 'is', 'are', 'do', 'does', 'the', 'a', 'an', 'my', 'i', 'me'}
+    
+    scored = []
+    for fact in unique_facts:
+        text_lower = fact['content'].lower()
+        text_words = set(re.findall(r'\w+', text_lower))
+        overlap = len(q_words & text_words)
+        if overlap >= 1:
+            scored.append((overlap, fact['content']))
+    
+    scored.sort(key=lambda x: x[0], reverse=True)
+    results = [text for _, text in scored]
     
     return results
 
