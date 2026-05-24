@@ -1,10 +1,17 @@
 import requests
 
-endpoints = ['/', '/portal', '/chat', '/ask', '/knowledge', '/explore', '/about', '/mind', '/status']
-for ep in endpoints:
+endpoints = [
+    'http://localhost:8501/knowledge/api/stats',
+    'http://localhost:8501/knowledge/api/search?q=dream',
+    'http://localhost:8501/knowledge/query',
+    'http://localhost:8501/knowledge/',
+]
+
+for url in endpoints:
     try:
-        r = requests.get(f'http://localhost:8501{ep}', timeout=3)
-        preview = r.text[:100].replace('\n', ' ').strip()[:60]
-        print(f'{r.status_code} {ep:20s} {len(r.text):>6d} bytes  {preview}')
+        r = requests.get(url, timeout=3)
+        print(f'{r.status_code} {url}')
+        if r.status_code == 200 and 'api' in url:
+            print(f'  -> {r.text[:200]}')
     except Exception as e:
-        print(f'ERR {ep:20s} {str(e)[:60]}')
+        print(f'FAIL {url}: {e}')

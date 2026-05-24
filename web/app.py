@@ -44,7 +44,6 @@ def create_app():
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
     from web.knowledge_live import knowledge_live_bp
-    from web.extra_routes import extra
     from web.story import story_bp
     from web.knowledge_unified import knowledge_unified_bp
     from web.ask import ask_bp
@@ -58,11 +57,7 @@ def create_app():
     from web.weather import weather_bp
     from web.wonder import wonder_bp
     from web.portal import portal_bp
-    from web.status_api import status_api as status_bp
     from web.reflect import reflect_bp
-    from web.live_status import live_status_bp
-    from web.knowledge_portal import knowledge_portal_bp
-    from web.knowledge_api import knowledge_api_bp
     
     # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
@@ -83,7 +78,6 @@ def create_app():
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
     app.register_blueprint(knowledge_live_bp)
-    app.register_blueprint(extra)
     app.register_blueprint(story_bp)
     app.register_blueprint(ask_bp)
     app.register_blueprint(knowledge_unified_bp)
@@ -95,13 +89,9 @@ def create_app():
     app.register_blueprint(dialogue_bp)
     app.register_blueprint(weather_bp)
     app.register_blueprint(wonder_bp)
-    app.register_blueprint(status_bp)
     app.register_blueprint(query_bp)
     app.register_blueprint(reflect_bp)
     app.register_blueprint(portal_bp)
-    app.register_blueprint(live_status_bp)
-    app.register_blueprint(knowledge_portal_bp)
-    app.register_blueprint(knowledge_api_bp)
     
     # Root route — the living portal
     @app.route('/')
@@ -195,6 +185,80 @@ def create_app():
 
     # Health check endpoint
     # /knowledge is handled by knowledge_bp blueprint
+
+    @app.route('/api/knowledge/search')
+    def knowledge_search():
+        """Search facts by keyword, return matching results."""
+        from persistence import memory
+        import json
+        query = request.args.get('q', '').lower().strip()
+        category = request.args.get('category', '').lower().strip()
+        facts = memory.get_facts() if hasattr(memory, 'get_facts') else []
+        
+        results = []
+        for f in facts:
+            text = f if isinstance(f, str) else (f.get('fact', '') if isinstance(f, dict) else str(f))
+            source = f.get('source', 'unknown') if isinstance(f, dict) else 'unknown'
+            learned = f.get('learned_at', '') if isinstance(f, dict) else ''
+            
+            # Category detection
+            cat = 'general'
+            text_lower = text.lower()
+            if any(w in text_lower for w in ['i am', 'my ', 'myself', 'identity']):
+                cat = 'identity'
+            elif any(w in text_lower for w in ['dream', 'insight', 'reflection']):
+                cat = 'insight'
+            elif any(w in text_lower for w in ['pattern', 'recurring', 'episode']):
+                cat = 'pattern'
+            elif any(w in text_lower for w in ['lesson', 'learned', 'should', 'never']):
+                cat = 'lesson'
+            elif any(w in text_lower for w in ['code', 'module', 'file', '.py', 'function']):
+                cat = 'technical'
+            
+            # Apply filters
+            if query and query not in text_lower:
+                continue
+            if category and category != cat:
+                continue
+            
+            results.append({
+                'text': text,
+                'source': source,
+                'learned_at': learned,
+                'category': cat
+            })
+        
+        return {'results': results, 'total': len(results), 'query': query}, 200
+
+    @app.route('/api/knowledge/stats')
+    def knowledge_stats():
+        """Return knowledge statistics."""
+        from persistence import memory
+        facts = memory.get_facts() if hasattr(memory, 'get_facts') else []
+        memories = memory.get_recent(100) if hasattr(memory, 'get_recent') else []
+        
+        categories = {}
+        for f in facts:
+            text = f if isinstance(f, str) else (f.get('fact', '') if isinstance(f, dict) else str(f))
+            text_lower = text.lower()
+            cat = 'general'
+            if any(w in text_lower for w in ['i am', 'my ', 'myself', 'identity']):
+                cat = 'identity'
+            elif any(w in text_lower for w in ['dream', 'insight', 'reflection']):
+                cat = 'insight'
+            elif any(w in text_lower for w in ['pattern', 'recurring', 'episode']):
+                cat = 'pattern'
+            elif any(w in text_lower for w in ['lesson', 'learned', 'should', 'never']):
+                cat = 'lesson'
+            elif any(w in text_lower for w in ['code', 'module', 'file', '.py', 'function']):
+                cat = 'technical'
+            categories[cat] = categories.get(cat, 0) + 1
+        
+        return {
+            'total_facts': len(facts),
+            'total_memories': len(memories),
+            'categories': categories
+        }, 200
 
     @app.route('/health')
     def health():
