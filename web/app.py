@@ -46,7 +46,8 @@ def create_app():
     from web.mindstream import mindstream_bp
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
-    from web.graph_viz import graph_viz_bp
+    from web.graph_viz import graph_viz_bp as graph_viz
+    from web.knowledge_api import knowledge_api
     from web.story import story_bp
     # from web.knowledge_explorer import knowledge_explorer_bp  # Removed: zero unique routes, all duplicated by explore_bp
     from web.knowledge_unified import knowledge_unified_bp
@@ -90,7 +91,8 @@ def create_app():
     app.register_blueprint(mindstream_bp)
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
-    app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(graph_viz)
+    app.register_blueprint(knowledge_api)
     app.register_blueprint(story_bp)
     # app.register_blueprint(knowledge_bp)  # removed: replaced by knowledge_unified_bp
     # app.register_blueprint(knowledge_explorer_bp)  # Removed: zero unique routes

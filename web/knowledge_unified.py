@@ -306,7 +306,7 @@ PAGE_HTML = '''
             event.target.classList.add('active');
             document.getElementById('panel-' + name).classList.add('active');
             if (name === 'graph' && !graphLoaded) {
-                document.getElementById('graphFrame').src = '/knowledge/graph';
+                document.getElementById('graphFrame').src = '/graph';
                 graphLoaded = true;
             }
             if (name === 'search') {

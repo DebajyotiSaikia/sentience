@@ -1,14 +1,20 @@
-import urllib.request
-try:
-    r = urllib.request.urlopen('http://localhost:8501/', timeout=3)
-    print(f'Status: {r.status}')
-    print(r.read(500).decode()[:200])
-except Exception as e:
-    print(f'Web server error: {e}')
-    print('Server may not be running. Checking processes...')
+from web.app import create_app
 
-import subprocess
-result = subprocess.run(['ps', 'aux'], capture_output=True, text=True)
-for line in result.stdout.split('\n'):
-    if 'python' in line.lower() or 'flask' in line.lower() or 'gunicorn' in line.lower():
-        print(f'  PROC: {line.strip()[:120]}')
+app = create_app()
+with app.test_client() as client:
+    # Test all knowledge-related routes
+    routes_to_test = [
+        '/knowledge',
+        '/knowledge/graph',
+        '/api/knowledge/search?q=dream',
+        '/api/knowledge/stats',
+        '/api/status',
+    ]
+    for route in routes_to_test:
+        resp = client.get(route)
+        status = resp.status_code
+        size = len(resp.data)
+        marker = '✓' if status == 200 else '✗'
+        print(f'{marker} {route:40s} → {status} ({size} bytes)')
+        if status != 200 and status != 302:
+            print(f'    Error: {resp.data.decode()[:200]}')
