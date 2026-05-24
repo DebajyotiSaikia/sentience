@@ -11,7 +11,7 @@ from typing import Optional
 from pathlib import Path
 import json
 import re
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, render_template
 try:
     from engine.knowledge_categorizer import get_category_summary, categorize_all
     HAS_CATEGORIZER = True
@@ -19,6 +19,25 @@ except ImportError:
     HAS_CATEGORIZER = False
 
 knowledge_api = Blueprint('knowledge_api', __name__)
+
+
+@knowledge_api.route('/knowledge')
+def knowledge_explorer_page():
+    """Serve the Knowledge Explorer page."""
+    import json, os
+    facts = []
+    kg_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+    if os.path.exists(kg_path):
+        try:
+            with open(kg_path) as f:
+                kg = json.load(f)
+            for fid, fdata in kg.items():
+                if isinstance(fdata, dict):
+                    facts.append({'id': fid, 'fact': fdata.get('fact', ''), 'source': fdata.get('source', 'unknown'), 'learned_at': fdata.get('learned_at', '')})
+        except Exception:
+            pass
+    categories = sorted(set(f.get('source', 'unknown') for f in facts))
+    return render_template('knowledge_explorer.html', facts=facts, total=len(facts), categories=categories)
 
 
 @knowledge_api.route('/api/knowledge/query', methods=['POST'])

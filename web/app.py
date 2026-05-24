@@ -45,6 +45,7 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
+    from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
     from web.emotional_timeline import emotional_timeline_bp
     from web.portrait import portrait_bp
@@ -77,6 +78,7 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(emotional_timeline_bp)
     app.register_blueprint(portrait_bp)
