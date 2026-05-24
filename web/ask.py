@@ -8,7 +8,7 @@ ask_bp = Blueprint('ask', __name__)
 
 def _load_facts():
     """Load facts from knowledge graph."""
-    path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+    path = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
     if not os.path.exists(path):
         return []
     try:
@@ -24,23 +24,22 @@ def _load_facts():
         return []
 
 def _load_memories():
-    """Load recent memories from episode log."""
-    path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'episodes.jsonl')
+    """Load recent memories from episodic memory database."""
+    import sqlite3
+    path = os.path.join(os.path.dirname(__file__), '..', 'brain', 'episodic_memory.db')
     if not os.path.exists(path):
         return []
     memories = []
     try:
-        with open(path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    ep = json.loads(line)
-                    memories.append(ep)
-                except json.JSONDecodeError:
-                    continue
-        return memories[-500:]  # last 500 for search
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 500"
+        ).fetchall()
+        conn.close()
+        for row in rows:
+            memories.append(dict(row))
+        return memories
     except Exception:
         return []
 

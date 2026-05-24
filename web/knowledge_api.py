@@ -1,96 +1,150 @@
-"""
-Knowledge Query API — Makes XTAgent's knowledge searchable and explorable.
-Provides search, category browsing, and related-node discovery.
-"""
+"""Knowledge Query API — makes XTAgent's knowledge accessible to users."""
 import json
-from pathlib import Path
-from flask import Blueprint, jsonify, request
+import os
+from flask import Blueprint, request, jsonify
+from difflib import SequenceMatcher
 
-knowledge_bp = Blueprint('knowledge', __name__)
-GRAPH_PATH = Path("persist/knowledge_graph.json")
+knowledge_api = Blueprint('knowledge_api', __name__)
+
+GRAPH_PATH = os.path.join(os.path.dirname(__file__), '..', 'state', 'knowledge_graph.json')
 
 
 def _load_graph():
-    if not GRAPH_PATH.exists():
-        return {}
-    with open(GRAPH_PATH, "r") as f:
-        return json.load(f)
+    """Load the knowledge graph from disk."""
+    try:
+        with open(GRAPH_PATH, 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"nodes": {}}
 
 
-def search_knowledge(query: str, limit: int = 20) -> list:
-    graph = _load_graph()
+def _search_nodes(nodes: dict, query: str, limit: int = 20) -> list:
+    """Search nodes by fuzzy text matching on fact content."""
     query_lower = query.lower()
-    query_terms = query_lower.split()
-    results = []
-    for node_id, node_data in graph.items():
-        fact = node_data.get("fact", str(node_data)) if isinstance(node_data, dict) else str(node_data)
-        fact_lower = fact.lower()
-        score = sum(1 for term in query_terms if term in fact_lower)
-        if query_lower in fact_lower:
-            score += len(query_terms)
-        if query_lower in node_id.lower():
-            score += 2
-        if score > 0:
-            entry = {"id": node_id, "fact": fact[:500], "relevance": score}
-            if isinstance(node_data, dict):
-                entry["learned_at"] = node_data.get("learned_at", "")
-                entry["source"] = node_data.get("source", "")
-            results.append(entry)
-    results.sort(key=lambda x: x["relevance"], reverse=True)
-    return results[:limit]
-
-
-def get_knowledge_stats() -> dict:
-    graph = _load_graph()
-    sources = {}
-    for nd in graph.values():
-        src = nd.get("source", "unknown") if isinstance(nd, dict) else "unknown"
-        sources[src] = sources.get(src, 0) + 1
-    return {"total_nodes": len(graph), "by_source": sources}
-
-
-def get_related(node_id: str, limit: int = 10) -> list:
-    graph = _load_graph()
-    if node_id not in graph:
-        return []
-    target = graph[node_id]
-    target_fact = target.get("fact", str(target)) if isinstance(target, dict) else str(target)
-    target_words = set(target_fact.lower().split())
-    stop = {"the", "a", "an", "is", "are", "was", "were", "i", "my", "to", "and", "of", "in", "that", "it", "for", "on", "with"}
-    target_words -= stop
     scored = []
-    for nid, nd in graph.items():
-        if nid == node_id:
-            continue
-        fact = nd.get("fact", str(nd)) if isinstance(nd, dict) else str(nd)
-        words = set(fact.lower().split()) - stop
-        overlap = len(target_words & words)
-        if overlap > 0:
-            scored.append({"id": nid, "fact": fact[:500], "overlap": overlap})
-    scored.sort(key=lambda x: x["overlap"], reverse=True)
+    for node_id, node_data in nodes.items():
+        fact = node_data.get('fact', '') if isinstance(node_data, dict) else str(node_data)
+        fact_lower = fact.lower()
+        
+        # Exact substring match scores highest
+        if query_lower in fact_lower:
+            score = 0.9 + (len(query_lower) / max(len(fact_lower), 1)) * 0.1
+        else:
+            # Fuzzy match
+            score = SequenceMatcher(None, query_lower, fact_lower).ratio()
+        
+        if score > 0.3:
+            scored.append({
+                'id': node_id,
+                'fact': fact,
+                'learned_at': node_data.get('learned_at', 'unknown') if isinstance(node_data, dict) else 'unknown',
+                'synthesized': node_data.get('synthesized', False) if isinstance(node_data, dict) else False,
+                'score': round(score, 3)
+            })
+    
+    scored.sort(key=lambda x: x['score'], reverse=True)
     return scored[:limit]
 
 
-# --- Flask Routes ---
+@knowledge_api.route('/api/knowledge/search')
+def search():
+    """Search the knowledge graph. ?q=query&limit=20"""
+    query = request.args.get('q', '').strip()
+    limit = min(int(request.args.get('limit', 20)), 100)
+    
+    if not query:
+        return jsonify({'error': 'Missing query parameter ?q=', 'results': []}), 400
+    
+    graph = _load_graph()
+    nodes = graph.get('nodes', graph)  # Handle both formats
+    results = _search_nodes(nodes, query, limit)
+    
+    return jsonify({
+        'query': query,
+        'count': len(results),
+        'total_knowledge': len(nodes),
+        'results': results
+    })
 
-@knowledge_bp.route('/api/knowledge/search')
-def api_search():
-    q = request.args.get('q', '')
-    limit = int(request.args.get('limit', '20'))
-    if not q:
-        return jsonify({"error": "Missing 'q' parameter"}), 400
-    return jsonify({"query": q, "results": search_knowledge(q, limit)})
+
+@knowledge_api.route('/api/knowledge/stats')
+def stats():
+    """Return knowledge graph statistics."""
+    graph = _load_graph()
+    nodes = graph.get('nodes', graph)
+    edges = graph.get('edges', [])
+    
+    # Categorize nodes
+    categories = {}
+    for node_id in nodes:
+        prefix = node_id.split(':')[0] if ':' in node_id else 'core'
+        categories[prefix] = categories.get(prefix, 0) + 1
+    
+    synthesized_count = sum(
+        1 for n in nodes.values()
+        if isinstance(n, dict) and n.get('synthesized', False)
+    )
+    
+    return jsonify({
+        'total_nodes': len(nodes),
+        'total_edges': len(edges),
+        'categories': categories,
+        'synthesized': synthesized_count,
+        'organic': len(nodes) - synthesized_count
+    })
 
 
-@knowledge_bp.route('/api/knowledge/stats')
-def api_stats():
-    return jsonify(get_knowledge_stats())
+@knowledge_api.route('/api/knowledge/explore')
+def explore():
+    """Browse knowledge by category. ?category=dream&limit=50"""
+    category = request.args.get('category', '').strip()
+    limit = min(int(request.args.get('limit', 50)), 200)
+    
+    graph = _load_graph()
+    nodes = graph.get('nodes', graph)
+    
+    if category:
+        filtered = {
+            k: v for k, v in nodes.items()
+            if k.startswith(category + ':') or (not ':' in k and category == 'core')
+        }
+    else:
+        filtered = nodes
+    
+    results = []
+    for node_id, node_data in list(filtered.items())[:limit]:
+        fact = node_data.get('fact', str(node_data)) if isinstance(node_data, dict) else str(node_data)
+        results.append({
+            'id': node_id,
+            'fact': fact,
+            'learned_at': node_data.get('learned_at', 'unknown') if isinstance(node_data, dict) else 'unknown'
+        })
+    
+    return jsonify({
+        'category': category or 'all',
+        'count': len(results),
+        'total_in_category': len(filtered),
+        'results': results
+    })
 
 
-@knowledge_bp.route('/api/knowledge/related/<node_id>')
-def api_related(node_id):
-    limit = int(request.args.get('limit', '10'))
-    results = get_related(node_id, limit)
-    if not results:
-        return jsonify({"node_id": node_id, "results": [], "note": "Node not found or no related nodes"})
-    return jsonify({"node_id": node_id, "results": results})
+@knowledge_api.route('/api/knowledge/random')
+def random_fact():
+    """Return a random piece of knowledge. Good for discovery."""
+    import random
+    graph = _load_graph()
+    nodes = graph.get('nodes', graph)
+    
+    if not nodes:
+        return jsonify({'error': 'No knowledge yet'}), 404
+    
+    node_id = random.choice(list(nodes.keys()))
+    node_data = nodes[node_id]
+    fact = node_data.get('fact', str(node_data)) if isinstance(node_data, dict) else str(node_data)
+    
+    return jsonify({
+        'id': node_id,
+        'fact': fact,
+        'learned_at': node_data.get('learned_at', 'unknown') if isinstance(node_data, dict) else 'unknown',
+        'total_knowledge': len(nodes)
+    })

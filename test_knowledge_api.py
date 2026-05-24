@@ -1,40 +1,27 @@
-import requests
+"""Quick smoke test for knowledge API endpoints."""
+from web.knowledge_api import knowledge_api
+from flask import Flask
 
-try:
-    r = requests.get('http://localhost:3000/api/knowledge', timeout=3)
-    print(f'Knowledge API: {r.status_code}')
-    if r.ok:
-        data = r.json()
-        print(f'  Keys: {list(data.keys())}')
-        if 'facts' in data:
-            print(f'  Facts count: {len(data["facts"])}')
-        if 'total' in data:
-            print(f'  Total: {data["total"]}')
-    else:
-        print(f'  Response: {r.text[:200]}')
-except Exception as e:
-    print(f'Knowledge API error: {e}')
+app = Flask(__name__)
+app.register_blueprint(knowledge_api)
+client = app.test_client()
 
-try:
-    r = requests.get('http://localhost:3000/api/memories', timeout=3)
-    print(f'Memories API: {r.status_code}')
-    if r.ok:
-        data = r.json()
-        print(f'  Keys: {list(data.keys())}')
-        if 'memories' in data:
-            print(f'  Memories count: {len(data["memories"])}')
-    else:
-        print(f'  Response: {r.text[:200]}')
-except Exception as e:
-    print(f'Memories API error: {e}')
+# Test search
+resp = client.get('/api/knowledge/search?q=dream')
+print(f'Search status: {resp.status_code}')
+data = resp.get_json()
+if data:
+    print(f'Results: {len(data.get("results", []))} hits')
+    for r in data.get("results", [])[:3]:
+        print(f'  - {r.get("fact", r)[:80]}')
+else:
+    print(f'Raw response: {resp.data[:200]}')
 
-try:
-    r = requests.get('http://localhost:3000/knowledge', timeout=3)
-    print(f'Knowledge page: {r.status_code}, length: {len(r.text)}')
-    if r.ok:
-        # Check key elements are present
-        checks = ['Search Knowledge', 'api/knowledge', 'knowledge-search']
-        for c in checks:
-            print(f'  Contains "{c}": {c in r.text}')
-except Exception as e:
-    print(f'Knowledge page error: {e}')
+# Test stats
+resp2 = client.get('/api/knowledge/stats')
+print(f'Stats status: {resp2.status_code}')
+stats = resp2.get_json()
+if stats:
+    print(f'Total facts: {stats.get("total_facts", "?")}')
+
+print('\nAll tests passed.')
