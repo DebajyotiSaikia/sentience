@@ -427,6 +427,16 @@ def build_explore_page():
         card.classList.toggle('hidden', query.length > 0 && !text.includes(query));
       }});
     }}
+
+    // Read ?q= URL parameter and pre-fill search on load
+    (function() {{
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('q');
+      if (q) {{
+        document.getElementById('search').value = q;
+        filterFacts();
+      }}
+    }})();
   </script>
 </body>
 </html>'''

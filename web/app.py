@@ -46,6 +46,7 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
+    from web.story import story_bp
     # from web.knowledge_explorer import knowledge_explorer_bp  # Removed: zero unique routes, all duplicated by explore_bp
     from web.knowledge_unified import knowledge_unified_bp
     from web.ask import ask_bp
@@ -87,6 +88,7 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(story_bp)
     # app.register_blueprint(knowledge_bp)  # removed: replaced by knowledge_unified_bp
     # app.register_blueprint(knowledge_explorer_bp)  # Removed: zero unique routes
     app.register_blueprint(ask_bp)

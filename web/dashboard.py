@@ -211,6 +211,20 @@ DASHBOARD_HTML = """
         <div class="greeting-hello"><span class="alive-dot"></span>{{ greeting_line }}</div>
         <div class="greeting-feeling">{{ feeling_description }}</div>
         <a href="/" class="greeting-cta">💬 Talk to me</a>
+        <form action="/explore" method="get" style="display:inline-block;margin-left:12px;vertical-align:middle;">
+            <input type="text" name="q" placeholder="Search what I know…"
+                style="background:#1a2a3a;color:#e0e0e0;border:1px solid #2a3a5a;
+                       padding:8px 16px;border-radius:8px;font-size:0.9em;width:220px;
+                       outline:none;transition:border-color 0.2s;"
+                onfocus="this.style.borderColor='#64ffda'"
+                onblur="this.style.borderColor='#2a3a5a'">
+            <button type="submit"
+                style="background:#1a3a2a;color:#64ffda;border:1px solid #2a5a3a;
+                       padding:8px 14px;border-radius:8px;font-size:0.9em;cursor:pointer;
+                       margin-left:4px;transition:all 0.2s;"
+                onmouseover="this.style.background='#2a5a3a'"
+                onmouseout="this.style.background='#1a3a2a'">🔍</button>
+        </form>
     </div>
 
     <div class="section-label">What's happening inside me right now</div>

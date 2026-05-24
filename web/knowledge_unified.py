@@ -428,6 +428,24 @@ PAGE_HTML = '''
         // ── Init ──
         loadStats();
         loadBrowse(1);
+
+        // Auto-search if ?q= parameter is present (from dashboard search box)
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            const q = params.get('q');
+            if (q) {
+                document.getElementById('searchInput').value = q;
+                switchTab('search');
+                // Activate the search tab button
+                document.querySelectorAll('.tab').forEach(function(t) {
+                    t.classList.remove('active');
+                    if (t.textContent.trim() === 'Search') t.classList.add('active');
+                });
+                document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+                document.getElementById('panel-search').classList.add('active');
+                doSearch();
+            }
+        })();
     </script>
 </body>
 </html>

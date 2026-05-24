@@ -1,13 +1,8 @@
-import sys
-sys.path.insert(0, '.')
-try:
-    from web.app import create_app
-    app = create_app()
-    rules = sorted([r.rule for r in app.url_map.iter_rules()])
-    for r in rules:
-        print(r)
-    print(f"\nTotal routes: {len(rules)}")
-except Exception as e:
-    print(f"Error: {e}")
-    import traceback
-    traceback.print_exc()
+from web.app import create_app
+
+app = create_app()
+client = app.test_client()
+
+for path in ['/portal', '/story', '/', '/dashboard']:
+    resp = client.get(path)
+    print(f'{resp.status_code} {path}')
