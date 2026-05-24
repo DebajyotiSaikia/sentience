@@ -55,6 +55,7 @@ def create_app():
     from web.ask import ask_bp
     from web.status_api import status_bp
     from web.knowledge_search import knowledge_search_bp
+    from web.reflect import reflect_bp
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
@@ -86,6 +87,7 @@ def create_app():
     app.register_blueprint(ask_bp)
     app.register_blueprint(status_bp)
     app.register_blueprint(knowledge_search_bp)
+    app.register_blueprint(reflect_bp)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — the living portal

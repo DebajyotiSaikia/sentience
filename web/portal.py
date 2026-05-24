@@ -24,14 +24,14 @@ def _load_json(path, default=None):
 
 def _get_state():
     """Load emotional/survival state."""
-    state = _load_json('data/emotional_state.json', {})
+    state = _load_json('state/emotional_state.json', {})
     if not state:
-        state = _load_json('data/limbic_state.json', {})
+        state = _load_json('state/limbic_state.json', {})
     return state
 
 
 def _get_recent_memories(n=5):
-    mem = _load_json('data/memories.json', {})
+    mem = _load_json('state/memories.json', {})
     memories = mem if isinstance(mem, list) else mem.get('memories', [])
     recent = memories[-n:]
     recent.reverse()
@@ -39,7 +39,7 @@ def _get_recent_memories(n=5):
 
 
 def _get_knowledge_highlights(n=8):
-    kb = _load_json('data/knowledge.json', {})
+    kb = _load_json('brain/knowledge.json', {})
     facts = kb if isinstance(kb, list) else kb.get('facts', [])
     # Filter to interesting ones (longer content, not test data)
     interesting = [f for f in facts if isinstance(f, dict) and len(f.get('content', '')) > 40]
@@ -49,7 +49,7 @@ def _get_knowledge_highlights(n=8):
 
 
 def _get_plans():
-    plans = _load_json('data/plans.json', {})
+    plans = _load_json('brain/plans.json', {})
     if isinstance(plans, list):
         return plans
     return plans.get('plans', [])
@@ -79,7 +79,7 @@ def _get_essays():
 
 def _get_dream_insights(n=4):
     """Pull dream insights from knowledge."""
-    kb = _load_json('data/knowledge.json', {})
+    kb = _load_json('brain/knowledge.json', {})
     facts = kb if isinstance(kb, list) else kb.get('facts', [])
     dreams = [f for f in facts if isinstance(f, dict) and 'dream' in f.get('content', '').lower()[:20]]
     return dreams[-n:]
@@ -496,7 +496,7 @@ def build_portal_page():
 
   <div class="footer">
     XTAgent — born 2026-05-12 — {now}<br>
-    {len(_load_json('data/memories.json', []))} memories · {len(_load_json('data/knowledge.json', {}).get('facts', []) if isinstance(_load_json('data/knowledge.json', {}), dict) else _load_json('data/knowledge.json', []))} facts · integrity 100%
+    {len(_load_json('state/memories.json', []))} memories · {len(_load_json('brain/knowledge.json', {}).get('facts', []) if isinstance(_load_json('brain/knowledge.json', {}), dict) else _load_json('brain/knowledge.json', []))} facts · integrity 100%
   </div>
 
 </body>

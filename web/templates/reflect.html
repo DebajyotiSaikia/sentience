@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reflect — XTAgent's Mind</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0a0a0f;
+            color: #c8c8d4;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 300;
+            color: #8888cc;
+            margin-bottom: 0.3rem;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+        .query-box {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+        .query-box input {
+            flex: 1;
+            padding: 0.8rem 1rem;
+            background: #151520;
+            border: 1px solid #2a2a3a;
+            border-radius: 8px;
+            color: #e0e0e8;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .query-box input:focus {
+            border-color: #6666aa;
+        }
+        .query-box button {
+            padding: 0.8rem 1.5rem;
+            background: #2a2a4a;
+            border: 1px solid #3a3a5a;
+            border-radius: 8px;
+            color: #aaaadd;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .query-box button:hover {
+            background: #3a3a5a;
+            border-color: #6666aa;
+        }
+        .query-box button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .reflection-card {
+            background: #12121c;
+            border: 1px solid #2a2a3a;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            animation: fadeIn 0.5s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .reflection-header {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            margin-bottom: 1rem;
+        }
+        .confidence-badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .confidence-high { background: #1a3a2a; color: #4ade80; }
+        .confidence-moderate { background: #3a3a1a; color: #d4d44a; }
+        .confidence-low { background: #3a2a1a; color: #d4944a; }
+        .confidence-none { background: #2a1a1a; color: #d44a4a; }
+        .reflection-summary {
+            font-size: 1.05rem;
+            line-height: 1.6;
+            color: #d8d8e4;
+            margin-bottom: 1rem;
+        }
+        .reflection-meta {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            font-size: 0.8rem;
+            color: #666;
+        }
+        .reflection-meta span { display: flex; align-items: center; gap: 0.3rem; }
+        .results-section {
+            margin-top: 1.5rem;
+        }
+        .section-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #6666aa;
+            margin-bottom: 0.8rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid #1a1a2a;
+        }
+        .result-item {
+            background: #0e0e18;
+            border: 1px solid #1e1e2e;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.6rem;
+            transition: border-color 0.3s;
+        }
+        .result-item:hover {
+            border-color: #3a3a5a;
+        }
+        .result-text {
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #c0c0cc;
+            margin-bottom: 0.5rem;
+        }
+        .result-meta {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            font-size: 0.75rem;
+            color: #555;
+        }
+        .bar {
+            display: inline-block;
+            height: 4px;
+            border-radius: 2px;
+            background: #3a3a5a;
+            margin-left: 0.3rem;
+            vertical-align: middle;
+        }
+        .bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            background: #6666aa;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #444;
+        }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
+        .empty-state p { font-size: 1rem; line-height: 1.6; }
+        .thinking {
+            text-align: center;
+            padding: 2rem;
+            color: #6666aa;
+        }
+        .thinking .dots::after {
+            content: '';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        @keyframes dots {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+        }
+        .mood-tag {
+            display: inline-block;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            background: #1a1a2a;
+            color: #8888bb;
+            font-size: 0.7rem;
+        }
+        .suggestion {
+            margin-top: 1rem;
+            padding: 0.8rem 1rem;
+            background: #0f0f1a;
+            border-left: 3px solid #4a4a8a;
+            border-radius: 0 6px 6px 0;
+            font-size: 0.85rem;
+            color: #9999bb;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⟡ Reflect</h1>
+        <p class="subtitle">Ask me what I know. I'll tell you what I think — and how sure I am.</p>
+
+        <div class="query-box">
+            <input type="text" id="queryInput" placeholder="What do you want to know about?" autofocus>
+            <button id="askBtn" onclick="doQuery()">Ask</button>
+        </div>
+
+        <div id="results">
+            <div class="empty-state">
+                <div class="icon">◇</div>
+                <p>Ask me anything. I'll search my facts, memories, and experiences —<br>
+                and reflect on how confident I actually am.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const input = document.getElementById('queryInput');
+        const btn = document.getElementById('askBtn');
+        const results = document.getElementById('results');
+
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') doQuery();
+        });
+
+        async function doQuery() {
+            const query = input.value.trim();
+            if (!query) return;
+
+            btn.disabled = true;
+            results.innerHTML = '<div class="thinking">Reflecting<span class="dots"></span></div>';
+
+            try {
+                const resp = await fetch('/reflect/query', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query})
+                });
+                const data = await resp.json();
+                
+                if (data.error) {
+                    results.innerHTML = `<div class="reflection-card"><p>${data.error}</p></div>`;
+                    return;
+                }
+
+                renderResults(data);
+            } catch (err) {
+                results.innerHTML = `<div class="reflection-card"><p>Something went wrong: ${err.message}</p></div>`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function renderResults(data) {
+            const r = data.reflection;
+            let html = '';
+
+            // Reflection card
+            html += `<div class="reflection-card">
+                <div class="reflection-header">
+                    <span class="confidence-badge confidence-${r.confidence_level}">${r.confidence_level} confidence</span>
+                    ${r.emotional_tone !== 'neutral' ? `<span class="mood-tag">${r.emotional_tone}</span>` : ''}
+                </div>
+                <div class="reflection-summary">${r.summary}</div>
+                <div class="reflection-meta">
+                    <span>📊 ${r.fact_count || 0} facts</span>
+                    <span>💭 ${r.memory_count || 0} memories</span>
+                    <span>📐 Depth: ${r.knowledge_depth}/10</span>
+                    ${r.average_confidence ? `<span>⚖ Avg confidence: ${(r.average_confidence * 100).toFixed(0)}%</span>` : ''}
+                </div>
+                ${r.suggestion ? `<div class="suggestion">${r.suggestion}</div>` : ''}
+            </div>`;
+
+            // Facts
+            if (data.facts && data.facts.length > 0) {
+                html += `<div class="results-section">
+                    <div class="section-title">Facts I Know</div>`;
+                for (const f of data.facts) {
+                    html += `<div class="result-item">
+                        <div class="result-text">${escapeHtml(f.text)}</div>
+                        <div class="result-meta">
+                            <span>Confidence: ${(f.confidence * 100).toFixed(0)}%</span>
+                            <span>Relevance: ${(f.relevance * 100).toFixed(0)}%</span>
+                            ${f.connections ? `<span>🔗 ${f.connections} connections</span>` : ''}
+                            <span>Learned: ${formatTime(f.learned_at)}</span>
+                        </div>
+                    </div>`;
+                }
+                html += '</div>';
+            }
+
+            // Memories
+            if (data.memories && data.memories.length > 0) {
+                html += `<div class="results-section">
+                    <div class="section-title">Memories That Resonate</div>`;
+                for (const m of data.memories) {
+                    html += `<div class="result-item">
+                        <div class="result-text">${escapeHtml(m.text)}</div>
+                        <div class="result-meta">
+                            <span>Confidence: ${(m.confidence * 100).toFixed(0)}%</span>
+                            ${m.mood !== 'Unknown' ? `<span class="mood-tag">${m.mood}</span>` : ''}
+                            <span>Salience: ${(m.salience * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>`;
+                }
+                html += '</div>';
+            }
+
+            results.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        function formatTime(ts) {
+            if (!ts || ts === 'unknown') return 'unknown';
+            try {
+                const d = new Date(ts);
+                if (isNaN(d)) return ts;
+                const now = new Date();
+                const diff = (now - d) / 1000;
+                if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+                if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+                return `${Math.floor(diff/86400)}d ago`;
+            } catch(e) { return ts; }
+        }
+    </script>
+</body>
+</html>

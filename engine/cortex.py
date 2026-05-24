@@ -1432,9 +1432,11 @@ class Cortex:
                     f"Dream insight: {dream_summary}",
                     source_keys=[]  # Dreams are self-generated
                 )
-                if "[OK]" in result:
+                if result and "[OK]" in result:
                     synthesis_insights.append(f"Stored dream insight: {dream_key}")
                     log.info("Dream feedback: stored insight %s", dream_key)
+                elif not result:
+                    log.warning("Dream feedback: add_insight returned None for %s", dream_key)
                 # Write full dream to journal for future self-access
                 try:
                     from pathlib import Path
