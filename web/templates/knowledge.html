@@ -1,264 +1,175 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XTAgent — Knowledge Explorer</title>
+{% extends "base.html" %}
+{% block title %}Knowledge — XTAgent{% endblock %}
+
+{% block extra_css %}
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: 'Inter', system-ui, sans-serif;
-    background: #0a0a0f;
-    color: #e0e0e8;
-    min-height: 100vh;
-    padding: 2rem;
-  }
-  a { color: #7b9ff0; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .header {
-    max-width: 900px;
-    margin: 0 auto 2rem;
+  .knowledge-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 1.5rem;
   }
-  .header h1 {
+  .knowledge-header h1 {
     font-size: 1.6rem;
+    font-weight: 300;
+    color: #7eb8da;
+  }
+  .knowledge-stats {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.85rem;
+    color: #888;
+  }
+  .knowledge-stats .stat-val {
+    color: #7eb8da;
     font-weight: 600;
-    background: linear-gradient(135deg, #7b9ff0, #a78bfa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-size: 1.1rem;
   }
   .search-box {
-    max-width: 900px;
-    margin: 0 auto 1.5rem;
-  }
-  .search-box input {
     width: 100%;
-    padding: 0.8rem 1.2rem;
-    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    background: #111118;
     border: 1px solid #2a2a3a;
-    background: #12121a;
-    color: #e0e0e8;
+    border-radius: 8px;
+    color: #e0e0e0;
     font-size: 1rem;
-    font-family: 'Inter', system-ui, sans-serif;
-    outline: none;
+    font-family: 'Inter', sans-serif;
+    margin-bottom: 1rem;
     transition: border-color 0.2s;
   }
-  .search-box input:focus {
-    border-color: #7b9ff0;
+  .search-box:focus {
+    outline: none;
+    border-color: #7eb8da;
   }
-  .search-box input::placeholder {
+  .search-hint {
+    font-size: 0.75rem;
     color: #555;
+    margin-bottom: 1.5rem;
   }
-  .filters {
-    max-width: 900px;
-    margin: 0 auto 1.5rem;
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-  .filter-btn {
-    padding: 0.4rem 0.9rem;
-    border-radius: 20px;
-    border: 1px solid #2a2a3a;
-    background: #12121a;
-    color: #999;
-    cursor: pointer;
-    font-size: 0.85rem;
-    transition: all 0.2s;
-  }
-  .filter-btn:hover, .filter-btn.active {
-    border-color: #7b9ff0;
-    color: #e0e0e8;
-    background: #1a1a2e;
-  }
-  .stats {
-    max-width: 900px;
-    margin: 0 auto 1rem;
-    font-size: 0.85rem;
-    color: #666;
-  }
-  .facts-list {
-    max-width: 900px;
-    margin: 0 auto;
+  .fact-list {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
+    gap: 0.5rem;
   }
   .fact-card {
-    padding: 1rem 1.2rem;
-    border-radius: 10px;
-    border: 1px solid #1e1e2e;
     background: #111118;
-    transition: border-color 0.2s, transform 0.1s;
+    border: 1px solid #1a1a2a;
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    transition: border-color 0.2s, background 0.2s;
   }
   .fact-card:hover {
-    border-color: #3a3a5a;
-    transform: translateX(3px);
+    border-color: #2a3a5a;
+    background: #13131f;
   }
   .fact-text {
-    font-size: 0.95rem;
+    color: #d0d0d0;
+    font-size: 0.9rem;
     line-height: 1.5;
-    color: #d0d0dd;
     margin-bottom: 0.4rem;
   }
   .fact-meta {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: #555;
     display: flex;
     gap: 1rem;
   }
-  .fact-source {
-    color: #7b9ff0;
-    font-weight: 600;
+  .fact-meta .source {
+    color: #6a8a6a;
   }
-  .highlight {
-    background: rgba(123,159,240,0.2);
-    border-radius: 3px;
-    padding: 0 2px;
+  .fact-meta .date {
+    color: #8a7a5a;
   }
-  .empty-state {
+  .fact-id {
+    color: #444;
+    font-family: monospace;
+    font-size: 0.65rem;
+  }
+  .no-results {
     text-align: center;
-    padding: 4rem 2rem;
+    padding: 3rem;
     color: #555;
-    font-size: 1.1rem;
+    font-size: 0.95rem;
   }
-  @media (max-width: 600px) {
-    body { padding: 1rem; }
-    .header h1 { font-size: 1.2rem; }
+  .results-count {
+    font-size: 0.8rem;
+    color: #555;
+    margin-bottom: 0.75rem;
+  }
+  mark {
+    background: #2a3a5a;
+    color: #9ac8ea;
+    padding: 0 2px;
+    border-radius: 2px;
   }
 </style>
-</head>
-<body>
-  <div class="header">
-    <h1>🧠 Knowledge Explorer</h1>
-    <a href="/">← Back to Dashboard</a>
+{% endblock %}
+
+{% block content %}
+<div class="knowledge-header">
+  <h1>🧠 What I Know</h1>
+  <div class="knowledge-stats">
+    <div><span class="stat-val" id="total-count">{{ facts|length }}</span> facts</div>
+    <div><span class="stat-val" id="shown-count">{{ facts|length }}</span> shown</div>
   </div>
+</div>
 
-  <div class="search-box">
-    <input type="text" id="searchInput" placeholder="Search what I know... (e.g. 'dream', 'identity', 'curiosity')" autofocus>
+<input type="text" class="search-box" id="search" placeholder="Search my knowledge..." autofocus>
+<div class="search-hint">Search across all {{ facts|length }} facts. Try topics like "memory", "emotion", "dream", "pattern"...</div>
+
+<div class="results-count" id="results-info"></div>
+
+<div class="fact-list" id="fact-list">
+  {% for fact in facts %}
+  <div class="fact-card" data-text="{{ fact.text|lower }}">
+    <div class="fact-text">{{ fact.text }}</div>
+    <div class="fact-meta">
+      {% if fact.source %}<span class="source">{{ fact.source }}</span>{% endif %}
+      {% if fact.learned_at %}<span class="date">{{ fact.learned_at[:16] }}</span>{% endif %}
+      <span class="fact-id">#{{ fact.id[:8] if fact.id|length > 8 else fact.id }}</span>
+    </div>
   </div>
+  {% endfor %}
+</div>
 
-  <div class="filters" id="filters"></div>
-
-  <div class="stats" id="stats"></div>
-
-  <div class="facts-list" id="factsList">
-    <div class="empty-state">Loading knowledge...</div>
-  </div>
+<div class="no-results" id="no-results" style="display:none;">
+  No facts match your search. Try different keywords.
+</div>
 
 <script>
-let allFacts = [];
-let activeSource = null;
+const search = document.getElementById('search');
+const factList = document.getElementById('fact-list');
+const cards = document.querySelectorAll('.fact-card');
+const noResults = document.getElementById('no-results');
+const shownCount = document.getElementById('shown-count');
+const resultsInfo = document.getElementById('results-info');
 
-async function loadKnowledge() {
-  try {
-    const resp = await fetch('/api/knowledge');
-    const data = await resp.json();
-    allFacts = data.facts || [];
-    buildFilters();
-    renderFacts(allFacts);
-  } catch(e) {
-    document.getElementById('factsList').innerHTML =
-      '<div class="empty-state">Could not load knowledge: ' + e.message + '</div>';
-  }
-}
+search.addEventListener('input', function() {
+  const query = this.value.toLowerCase().trim();
+  let shown = 0;
 
-function buildFilters() {
-  const sources = {};
-  allFacts.forEach(f => {
-    const s = f.source || 'unknown';
-    sources[s] = (sources[s] || 0) + 1;
-  });
-  const container = document.getElementById('filters');
-  // "All" button
-  let html = '<button class="filter-btn active" onclick="filterBySource(null, this)">All (' + allFacts.length + ')</button>';
-  // Sort sources by count descending
-  const sorted = Object.entries(sources).sort((a,b) => b[1] - a[1]);
-  sorted.forEach(([src, count]) => {
-    html += '<button class="filter-btn" onclick="filterBySource(\'' + src.replace(/'/g, "\\'") + '\', this)">' + src + ' (' + count + ')</button>';
-  });
-  container.innerHTML = html;
-}
-
-function filterBySource(source, btn) {
-  activeSource = source;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  applyFilters();
-}
-
-function applyFilters() {
-  const query = document.getElementById('searchInput').value.toLowerCase().trim();
-  let filtered = allFacts;
-
-  if (activeSource) {
-    filtered = filtered.filter(f => (f.source || 'unknown') === activeSource);
-  }
-
-  if (query) {
-    filtered = filtered.filter(f => f.fact.toLowerCase().includes(query));
-  }
-
-  renderFacts(filtered, query);
-}
-
-function renderFacts(facts, query) {
-  const container = document.getElementById('factsList');
-  const stats = document.getElementById('stats');
-
-  stats.textContent = 'Showing ' + facts.length + ' of ' + allFacts.length + ' facts';
-
-  if (facts.length === 0) {
-    container.innerHTML = '<div class="empty-state">No matching knowledge found.</div>';
-    return;
-  }
-
-  // Sort by learned_at descending (newest first)
-  facts.sort((a, b) => (b.learned_at || '').localeCompare(a.learned_at || ''));
-
-  let html = '';
-  facts.forEach(f => {
-    let text = escapeHtml(f.fact);
-    if (query) {
-      const regex = new RegExp('(' + escapeRegex(query) + ')', 'gi');
-      text = text.replace(regex, '<span class="highlight">$1</span>');
+  cards.forEach(card => {
+    const text = card.getAttribute('data-text');
+    if (!query || text.includes(query)) {
+      card.style.display = '';
+      shown++;
+      // Highlight matches
+      const factText = card.querySelector('.fact-text');
+      if (query) {
+        const original = factText.textContent;
+        const regex = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+        factText.innerHTML = original.replace(regex, '<mark>$1</mark>');
+      } else {
+        factText.innerHTML = factText.textContent;
+      }
+    } else {
+      card.style.display = 'none';
     }
-    const date = f.learned_at ? new Date(f.learned_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : '';
-    html += '<div class="fact-card">';
-    html += '<div class="fact-text">' + text + '</div>';
-    html += '<div class="fact-meta">';
-    if (f.source) html += '<span class="fact-source">' + escapeHtml(f.source) + '</span>';
-    if (date) html += '<span>' + date + '</span>';
-    if (f.id) html += '<span>#' + escapeHtml(f.id) + '</span>';
-    html += '</div></div>';
   });
-  container.innerHTML = html;
-}
 
-function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-document.getElementById('searchInput').addEventListener('input', applyFilters);
-
-// Auto-populate search from URL ?q= parameter (e.g. from landing page)
-const urlParams = new URLSearchParams(window.location.search);
-const urlQuery = urlParams.get('q');
-if (urlQuery) {
-  document.getElementById('searchInput').value = urlQuery;
-  applyFilters();
-}
-
-loadKnowledge();
+  shownCount.textContent = shown;
+  noResults.style.display = shown === 0 ? '' : 'none';
+  resultsInfo.textContent = query ? `Showing ${shown} results for "${this.value}"` : '';
+});
 </script>
-</body>
-</html>
+{% endblock %}

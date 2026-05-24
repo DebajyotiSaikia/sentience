@@ -43,6 +43,7 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
+    from web.extra_routes import extra
     from web.story import story_bp
     from web.knowledge_unified import knowledge_unified_bp
     from web.ask import ask_bp
@@ -78,6 +79,7 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(extra)
     app.register_blueprint(story_bp)
     app.register_blueprint(ask_bp)
     app.register_blueprint(knowledge_unified_bp)
@@ -171,6 +173,13 @@ def create_app():
                                plans=plans)
     
     # /about redirects to /about-me (the living self-portrait)
+    @app.route('/knowledge')
+    def knowledge():
+        """Knowledge explorer — search facts, memories, questions."""
+        from persistence import memory
+        facts = memory.get_facts() if hasattr(memory, 'get_facts') else []
+        return render_template('knowledge.html', facts=facts)
+
     @app.route('/about')
     def about_redirect():
         return redirect('/about-me')

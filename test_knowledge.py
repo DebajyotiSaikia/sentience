@@ -1,17 +1,15 @@
 from web.app import create_app
 app = create_app()
-client = app.test_client()
-
-# Test the search page route
-r1 = client.get('/knowledge')
-print('GET /knowledge:', r1.status_code)
-
-# Test the API endpoints
-r2 = client.get('/api/knowledge/stats')
-print('GET /api/knowledge/stats:', r2.status_code, r2.get_json() if r2.status_code == 200 else r2.data[:200])
-
-r3 = client.get('/api/knowledge/search?q=dream&limit=5')
-print('GET /api/knowledge/search:', r3.status_code, r3.get_json() if r3.status_code == 200 else r3.data[:200])
-
-r4 = client.get('/api/knowledge/graph')
-print('GET /api/knowledge/graph:', r4.status_code)
+with app.test_client() as c:
+    resp = c.get('/knowledge')
+    print(f'Status: {resp.status_code}')
+    if resp.status_code == 200:
+        data = resp.data.decode()
+        print(f'Length: {len(data)} chars')
+        if 'fact-card' in data: print('✓ Fact cards rendering')
+        if 'search-box' in data: print('✓ Search box present')
+        if 'Knowledge' in data: print('✓ Title present')
+        print('First 300 chars:')
+        print(data[:300])
+    else:
+        print(resp.data.decode()[:500])
