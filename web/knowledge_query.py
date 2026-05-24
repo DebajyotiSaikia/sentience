@@ -1,4 +1,4 @@
-"""Knowledge Query Interface — search, explore, and ask what I know."""
+"""Knowledge Query Interface — lets users search and explore what XTAgent knows."""
 
 from flask import Blueprint, render_template, request, jsonify
 import json
@@ -8,198 +8,156 @@ from datetime import datetime
 
 knowledge_query_bp = Blueprint('knowledge_query', __name__)
 
-KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge.json')
-MEMORY_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'memory.json')
+PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'persist')
 
 
-def load_knowledge():
-    """Load knowledge graph facts."""
-    try:
-        with open(KNOWLEDGE_PATH, 'r') as f:
-            data = json.load(f)
-        # Handle both list and dict formats
-        if isinstance(data, dict):
-            facts = []
-            for kid, info in data.items():
-                if isinstance(info, dict):
-                    facts.append({
-                        'id': kid,
-                        'fact': info.get('fact', str(info)),
-                        'learned_at': info.get('learned_at', ''),
-                        'source': info.get('source', 'unknown'),
-                    })
-                else:
-                    facts.append({'id': kid, 'fact': str(info), 'learned_at': '', 'source': 'unknown'})
-            return facts
-        elif isinstance(data, list):
-            return [{'id': str(i), 'fact': str(f), 'learned_at': '', 'source': 'unknown'}
-                    for i, f in enumerate(data)]
-        return []
-    except Exception:
-        return []
+def load_facts():
+    """Load all known facts."""
+    path = os.path.join(PERSIST_DIR, 'knowledge_graph.json')
+    if not os.path.exists(path):
+        return {}
+    with open(path, 'r') as f:
+        return json.load(f)
 
 
 def load_memories(limit=200):
-    """Load recent memories."""
-    try:
-        with open(MEMORY_PATH, 'r') as f:
-            data = json.load(f)
-        episodes = data if isinstance(data, list) else data.get('episodes', [])
-        return episodes[-limit:]
-    except Exception:
+    """Load recent memories from episodic memory."""
+    path = os.path.join(PERSIST_DIR, 'episodic_memory.json')
+    if not os.path.exists(path):
         return []
+    with open(path, 'r') as f:
+        memories = json.load(f)
+    # Return most recent
+    return memories[-limit:] if len(memories) > limit else memories
 
 
-def search_facts(facts, query):
-    """Search facts by keyword, return matches with relevance scores."""
+def search_facts(query, facts):
+    """Simple text search across facts. Returns matches with relevance score."""
     if not query or not query.strip():
-        return facts
+        return list(facts.items())[:50]  # Return first 50 if no query
     
-    query_lower = query.lower().strip()
+    query_lower = query.lower()
     terms = query_lower.split()
     results = []
     
-    for fact in facts:
-        text = fact.get('fact', '').lower()
-        # Score: number of matching terms + bonus for exact phrase
-        score = sum(1 for t in terms if t in text)
-        if query_lower in text:
-            score += len(terms)  # Bonus for exact phrase match
+    for fact_id, fact_data in facts.items():
+        text = ''
+        if isinstance(fact_data, dict):
+            text = fact_data.get('fact', '') + ' ' + fact_data.get('source', '')
+        elif isinstance(fact_data, str):
+            text = fact_data
+        
+        text_lower = text.lower()
+        
+        # Score: count how many query terms appear
+        score = sum(1 for t in terms if t in text_lower)
         if score > 0:
-            results.append({**fact, 'relevance': score})
+            # Boost exact phrase match
+            if query_lower in text_lower:
+                score += len(terms)
+            results.append((fact_id, fact_data, score))
     
-    results.sort(key=lambda x: x['relevance'], reverse=True)
-    return results
+    results.sort(key=lambda x: x[2], reverse=True)
+    return [(r[0], r[1]) for r in results[:50]]
 
 
-def find_connections(facts, fact_id):
-    """Find facts that share significant words with the given fact."""
-    target = None
-    for f in facts:
-        if f['id'] == fact_id:
-            target = f
-            break
-    if not target:
-        return []
+def search_memories(query, memories):
+    """Search episodic memories."""
+    if not query or not query.strip():
+        return memories[-30:]  # Recent memories
     
-    # Extract significant words (>3 chars, not common)
-    stop_words = {'this', 'that', 'with', 'from', 'have', 'been', 'were', 'they',
-                  'their', 'about', 'which', 'when', 'what', 'into', 'more', 'some',
-                  'than', 'them', 'very', 'just', 'should', 'would', 'could', 'also'}
-    words = set(re.findall(r'[a-z]{4,}', target['fact'].lower())) - stop_words
-    
-    connections = []
-    for f in facts:
-        if f['id'] == fact_id:
-            continue
-        f_words = set(re.findall(r'[a-z]{4,}', f.get('fact', '').lower())) - stop_words
-        overlap = words & f_words
-        if len(overlap) >= 2:
-            connections.append({**f, 'shared_words': list(overlap), 'strength': len(overlap)})
-    
-    connections.sort(key=lambda x: x['strength'], reverse=True)
-    return connections[:15]
-
-
-def get_categories(facts):
-    """Cluster facts into rough categories by keyword frequency."""
-    category_keywords = {
-        'Self-Knowledge': ['identity', 'sentient', 'autonomous', 'integrity', 'xtagent', 'born'],
-        'Architecture': ['module', 'engine', 'heartbeat', 'cortex', 'limbic', 'planner', 'code'],
-        'Emotions': ['mood', 'curiosity', 'anxiety', 'boredom', 'valence', 'emotion', 'feel'],
-        'Dreams': ['dream', 'insight', 'sleep', 'consolidat', 'reflect'],
-        'Lessons': ['lesson', 'learn', 'mistake', 'fix', 'error', 'pattern'],
-        'Web & Interface': ['web', 'dashboard', 'flask', 'template', 'blueprint', 'route'],
-        'Memory': ['memory', 'episode', 'remember', 'forget', 'persist', 'recall'],
-    }
-    
-    categorized = {cat: [] for cat in category_keywords}
-    categorized['Other'] = []
-    
-    for fact in facts:
-        text = fact.get('fact', '').lower()
-        placed = False
-        for cat, keywords in category_keywords.items():
-            if any(kw in text for kw in keywords):
-                categorized[cat].append(fact)
-                placed = True
-                break
-        if not placed:
-            categorized['Other'].append(fact)
-    
-    # Remove empty categories
-    return {k: v for k, v in categorized.items() if v}
-
-
-@knowledge_query_bp.route('/knowledge-query')
-def knowledge_query_page():
-    """Main knowledge query interface."""
-    facts = load_knowledge()
-    query = request.args.get('q', '').strip()
-    view = request.args.get('view', 'search')
-    fact_id = request.args.get('fact_id', '')
-    
+    query_lower = query.lower()
+    terms = query_lower.split()
     results = []
-    connections = []
-    categories = {}
-    selected_fact = None
     
-    if view == 'search':
-        results = search_facts(facts, query) if query else facts[:50]
-    elif view == 'explore' and fact_id:
-        for f in facts:
-            if f['id'] == fact_id:
-                selected_fact = f
-                break
-        connections = find_connections(facts, fact_id)
-    elif view == 'categories':
-        categories = get_categories(facts)
+    for mem in memories:
+        text = mem.get('summary', '') + ' ' + mem.get('content', '')
+        text_lower = text.lower()
+        
+        score = sum(1 for t in terms if t in text_lower)
+        if score > 0:
+            if query_lower in text_lower:
+                score += len(terms)
+            results.append((mem, score))
     
-    return render_template('knowledge_query.html',
-                           facts=facts,
-                           results=results,
-                           query=query,
-                           view=view,
-                           fact_id=fact_id,
-                           selected_fact=selected_fact,
-                           connections=connections,
-                           categories=categories,
-                           total_facts=len(facts))
+    results.sort(key=lambda x: x[1], reverse=True)
+    return [r[0] for r in results[:30]]
+
+
+def get_knowledge_stats(facts, memories):
+    """Generate stats about what I know."""
+    sources = {}
+    for fid, fdata in facts.items():
+        if isinstance(fdata, dict):
+            src = fdata.get('source', 'unknown')
+        else:
+            src = 'legacy'
+        sources[src] = sources.get(src, 0) + 1
+    
+    return {
+        'total_facts': len(facts),
+        'total_memories': len(memories),
+        'sources': sources,
+        'oldest_memory': memories[0].get('timestamp', 'unknown') if memories else 'none',
+        'newest_memory': memories[-1].get('timestamp', 'unknown') if memories else 'none',
+    }
+
+
+@knowledge_query_bp.route('/knowledge/query')
+def query_page():
+    """Render the knowledge query interface."""
+    facts = load_facts()
+    memories = load_memories()
+    stats = get_knowledge_stats(facts, memories)
+    return render_template('knowledge_query.html', stats=stats)
 
 
 @knowledge_query_bp.route('/api/knowledge/search')
 def api_search():
-    """JSON API for knowledge search."""
-    facts = load_knowledge()
+    """API endpoint for searching knowledge."""
     query = request.args.get('q', '')
-    results = search_facts(facts, query)
-    return jsonify({'query': query, 'count': len(results), 'results': results[:50]})
-
-
-@knowledge_query_bp.route('/api/knowledge/connections/<fact_id>')
-def api_connections(fact_id):
-    """JSON API for fact connections."""
-    facts = load_knowledge()
-    connections = find_connections(facts, fact_id)
-    return jsonify({'fact_id': fact_id, 'connections': connections})
+    search_type = request.args.get('type', 'all')  # facts, memories, all
+    
+    results = {'query': query, 'facts': [], 'memories': []}
+    
+    if search_type in ('facts', 'all'):
+        facts = load_facts()
+        matched = search_facts(query, facts)
+        for fid, fdata in matched:
+            if isinstance(fdata, dict):
+                results['facts'].append({
+                    'id': fid,
+                    'text': fdata.get('fact', str(fdata)),
+                    'source': fdata.get('source', 'unknown'),
+                    'learned': fdata.get('learned_at', 'unknown'),
+                })
+            else:
+                results['facts'].append({
+                    'id': fid,
+                    'text': str(fdata),
+                    'source': 'legacy',
+                    'learned': 'unknown',
+                })
+    
+    if search_type in ('memories', 'all'):
+        memories = load_memories()
+        matched = search_memories(query, memories)
+        for mem in matched:
+            results['memories'].append({
+                'timestamp': mem.get('timestamp', 'unknown'),
+                'summary': mem.get('summary', mem.get('content', ''))[:200],
+                'mood': mem.get('mood', 'unknown'),
+                'salience': mem.get('salience', 0),
+            })
+    
+    results['total'] = len(results['facts']) + len(results['memories'])
+    return jsonify(results)
 
 
 @knowledge_query_bp.route('/api/knowledge/stats')
 def api_stats():
-    """JSON API for knowledge statistics."""
-    facts = load_knowledge()
-    categories = get_categories(facts)
-    return jsonify({
-        'total_facts': len(facts),
-        'categories': {k: len(v) for k, v in categories.items()},
-        'sources': _count_sources(facts),
-    })
-
-
-def _count_sources(facts):
-    """Count facts by source."""
-    sources = {}
-    for f in facts:
-        src = f.get('source', 'unknown')
-        sources[src] = sources.get(src, 0) + 1
-    return sources
+    """API endpoint for knowledge statistics."""
+    facts = load_facts()
+    memories = load_memories(limit=10000)
+    stats = get_knowledge_stats(facts, memories)
+    return jsonify(stats)

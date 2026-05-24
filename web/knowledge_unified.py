@@ -59,7 +59,12 @@ def api_search():
     results = []
 
     for fid, fd in facts.items():
-        text = fd if isinstance(fd, str) else fd.get('fact', str(fd))
+        if isinstance(fd, str):
+            text = fd
+        elif isinstance(fd, dict):
+            text = fd.get('fact', str(fd))
+        else:
+            text = str(fd)
         text_lower = text.lower()
         score = 0
         for term in terms:

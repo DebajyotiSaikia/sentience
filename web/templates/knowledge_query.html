@@ -1,67 +1,146 @@
-{% extends "base.html" %}
-{% block title %}Knowledge Query — What I Know{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Explore My Mind</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #0a0a0f; color: #e0e0e8;
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  }
+  .pulse-bg {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 400px; height: 400px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(100,140,255,0.06) 0%, transparent 70%);
+    animation: breathe 4s ease-in-out infinite; pointer-events: none; z-index: 0;
+  }
+  @keyframes breathe {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+    50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.8; }
+  }
+  .container { position: relative; z-index: 1; max-width: 800px; width: 100%; padding: 48px 24px; }
+  .back-link { display: inline-block; color: #666; text-decoration: none; font-size: 0.85rem; margin-bottom: 32px; transition: color 0.2s; }
+  .back-link:hover { color: #7aa2f7; }
+  h1 { font-size: 2rem; font-weight: 300; letter-spacing: -0.02em; margin-bottom: 8px; color: #f0f0ff; }
+  h1 span { font-weight: 600; background: linear-gradient(135deg, #7aa2f7, #bb9af7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { color: #666; font-size: 0.95rem; margin-bottom: 32px; }
+  .search-box { display: flex; gap: 12px; margin-bottom: 32px; }
+  .search-box input {
+    flex: 1; padding: 14px 18px; background: #12121a; border: 1px solid #2a2a3a;
+    border-radius: 12px; color: #e0e0e8; font-size: 1rem; outline: none; transition: border 0.2s;
+  }
+  .search-box input:focus { border-color: #7aa2f7; }
+  .search-box button {
+    padding: 14px 24px; background: linear-gradient(135deg, #7aa2f7, #bb9af7);
+    border: none; border-radius: 12px; color: #fff; font-weight: 600; cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .search-box button:hover { opacity: 0.85; }
+  .stats { display: flex; gap: 24px; margin-bottom: 32px; }
+  .stat-card {
+    flex: 1; background: #12121a; border: 1px solid #1a1a2a; border-radius: 12px;
+    padding: 16px; text-align: center;
+  }
+  .stat-card .number { font-size: 1.8rem; font-weight: 600; color: #7aa2f7; }
+  .stat-card .label { font-size: 0.8rem; color: #666; margin-top: 4px; }
+  .section { margin-bottom: 32px; }
+  .section h2 { font-size: 1.1rem; font-weight: 600; color: #bb9af7; margin-bottom: 16px; border-bottom: 1px solid #1a1a2a; padding-bottom: 8px; }
+  .result-card {
+    background: #12121a; border: 1px solid #1a1a2a; border-radius: 10px;
+    padding: 16px; margin-bottom: 12px; transition: border-color 0.2s;
+  }
+  .result-card:hover { border-color: #7aa2f7; }
+  .result-card .fact { color: #e0e0e8; line-height: 1.5; }
+  .result-card .meta { color: #555; font-size: 0.8rem; margin-top: 8px; }
+  .result-card .score { color: #7aa2f7; font-weight: 600; }
+  .cluster-tag {
+    display: inline-block; background: #1a1a2e; border: 1px solid #2a2a4a;
+    border-radius: 20px; padding: 6px 14px; margin: 4px; font-size: 0.85rem; color: #bb9af7;
+  }
+  .question-card {
+    background: #12121a; border-left: 3px solid #7aa2f7; border-radius: 0 10px 10px 0;
+    padding: 12px 16px; margin-bottom: 10px; color: #c0c0d0; font-style: italic;
+  }
+  .error-msg { background: #2a1520; border: 1px solid #5a2030; border-radius: 10px; padding: 16px; color: #ff6b8a; }
+  .empty { color: #555; text-align: center; padding: 40px; }
+</style>
+</head>
+<body>
+<div class="pulse-bg"></div>
+<div class="container">
+  <a href="/" class="back-link">← back to dashboard</a>
+  <h1>Explore My <span>Mind</span></h1>
+  <p class="subtitle">Search through {{ total_facts }} facts I've learned about myself and the world.</p>
 
-{% block content %}
-<div class="container" style="max-width: 900px; margin: 2rem auto; padding: 0 1rem;">
-  <h1 style="color: #e0e0e0; margin-bottom: 0.5rem;">🔍 Knowledge Query</h1>
-  <p style="color: #888; margin-bottom: 1.5rem;">Search what I know — {{ total_facts }} facts learned across {{ total_memories }} experiences.</p>
-
-  <form method="GET" action="{{ url_for('knowledge_query.query_page') }}" style="margin-bottom: 2rem;">
-    <div style="display: flex; gap: 0.5rem;">
-      <input type="text" name="q" value="{{ query or '' }}" placeholder="Search my knowledge…"
-             style="flex: 1; padding: 0.75rem 1rem; background: #1a1a2e; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; font-size: 1rem;"
-             autofocus>
-      <button type="submit" style="padding: 0.75rem 1.5rem; background: #4a9eff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem;">Search</button>
-    </div>
+  <form method="GET" action="/knowledge" class="search-box">
+    <input type="text" name="q" value="{{ query or '' }}" placeholder="Ask me anything I might know..." autofocus>
+    <button type="submit">Search</button>
   </form>
 
-  {% if query %}
-  <div style="margin-bottom: 1rem; color: #aaa;">
-    Found <strong style="color: #4a9eff;">{{ results|length }}</strong> results for "<em>{{ query }}</em>"
+  <div class="stats">
+    <div class="stat-card">
+      <div class="number">{{ total_facts }}</div>
+      <div class="label">Facts Known</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{{ clusters|length if clusters else 0 }}</div>
+      <div class="label">Knowledge Clusters</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{{ results|length if results else 0 }}</div>
+      <div class="label">Results Found</div>
+    </div>
   </div>
+
+  {% if error %}
+  <div class="error-msg">{{ error }}</div>
   {% endif %}
 
   {% if results %}
-  <div style="display: flex; flex-direction: column; gap: 1rem;">
+  <div class="section">
+    <h2>Search Results</h2>
     {% for r in results %}
-    <div style="background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 1rem 1.25rem;">
-      <div style="color: #e0e0e0; line-height: 1.5;">{{ r.fact }}</div>
-      <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #666;">
-        {% if r.learned_at %}📅 {{ r.learned_at[:19] }}{% endif %}
-        {% if r.source and r.source != 'unknown' %} · 📌 {{ r.source }}{% endif %}
-        {% if r.score is defined %} · 🎯 relevance: {{ "%.0f"|format(r.score * 100) }}%{% endif %}
+    <div class="result-card">
+      <div class="fact">{{ r.fact }}</div>
+      <div class="meta">
+        <span class="score">{{ "%.0f"|format(r.score * 100) }}% match</span>
+        {% if r.learned_at %} · learned {{ r.learned_at[:10] }}{% endif %}
+        {% if r.source %} · from {{ r.source }}{% endif %}
       </div>
     </div>
     {% endfor %}
   </div>
   {% elif query %}
-  <div style="background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 2rem; text-align: center; color: #888;">
-    No facts match that query. Try different words?
-  </div>
-  {% else %}
-  <!-- Show recent facts when no query -->
-  <h2 style="color: #ccc; font-size: 1.1rem; margin-bottom: 1rem;">Recent Knowledge</h2>
-  <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-    {% for r in recent %}
-    <div style="background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 0.75rem 1rem;">
-      <div style="color: #d0d0d0; font-size: 0.95rem;">{{ r.fact }}</div>
-      <div style="margin-top: 0.3rem; font-size: 0.75rem; color: #555;">
-        {% if r.learned_at %}{{ r.learned_at[:19] }}{% endif %}
-      </div>
+  <div class="empty">No facts matched "{{ query }}". Try different words.</div>
+  {% endif %}
+
+  {% if clusters %}
+  <div class="section">
+    <h2>Knowledge Clusters</h2>
+    <div>
+      {% for c in clusters %}
+      <span class="cluster-tag">{{ c.theme }} ({{ c.size }})</span>
+      {% endfor %}
     </div>
+  </div>
+  {% endif %}
+
+  {% if questions %}
+  <div class="section">
+    <h2>Questions I'm Curious About</h2>
+    {% for q in questions %}
+    <div class="question-card">{{ q }}</div>
     {% endfor %}
   </div>
   {% endif %}
 
-  {% if clusters %}
-  <h2 style="color: #ccc; font-size: 1.1rem; margin: 2rem 0 1rem;">Knowledge Clusters</h2>
-  <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-    {% for cluster in clusters %}
-    <a href="?q={{ cluster.keyword }}" style="background: #2a2a4a; color: #8ab4f8; padding: 0.4rem 0.8rem; border-radius: 16px; text-decoration: none; font-size: 0.85rem;">
-      {{ cluster.keyword }} ({{ cluster.count }})
-    </a>
-    {% endfor %}
-  </div>
+  {% if not query and not results and not error %}
+  <div class="empty">Type a query above to search my knowledge, or just browse the clusters and questions below.</div>
   {% endif %}
 </div>
-{% endblock %}
+</body>
+</html>
