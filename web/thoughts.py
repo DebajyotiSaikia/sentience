@@ -78,7 +78,7 @@ def _get_recent_insights(limit=5):
 
 def _get_active_plans():
     """Get currently active (incomplete) plans."""
-    plans = _load_json('persist/plans.json', [])
+    plans = _load_json('brain/plans.json', [])
     active = []
     if isinstance(plans, list):
         for plan in plans:

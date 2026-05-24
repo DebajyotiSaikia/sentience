@@ -1,16 +1,20 @@
-from web.knowledge_search import search, get_stats
+from web.app import create_app
 
-# Test stats
-stats = get_stats()
-print(f"Stats: {stats}")
-
-# Test search
-results = search("dream")
-print(f"\nSearch 'dream': {len(results)} results")
-for r in results[:3]:
-    print(f"  - {r}")
-
-results2 = search("integrity")
-print(f"\nSearch 'integrity': {len(results2)} results")
-for r in results2[:3]:
-    print(f"  - {r}")
+app = create_app()
+with app.test_client() as c:
+    resp = c.get('/knowledge')
+    print(f'Status: {resp.status_code}')
+    if resp.status_code == 200:
+        data = resp.data.decode()
+        print(f'Length: {len(data)}')
+        print('Contains search:', 'Knowledge Explorer' in data)
+    else:
+        print(resp.data.decode()[:500])
+    
+    # Test with a query
+    resp2 = c.get('/knowledge?q=dream')
+    print(f'\nSearch "dream" status: {resp2.status_code}')
+    if resp2.status_code == 200:
+        data2 = resp2.data.decode()
+        print(f'Results length: {len(data2)}')
+        print('Contains results:', 'result' in data2.lower() or 'dream' in data2.lower())

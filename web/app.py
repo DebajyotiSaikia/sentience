@@ -46,7 +46,6 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
-    from web.search import search_bp
     from web.knowledge_explorer import knowledge_explorer_bp
     from web.knowledge_hub import knowledge_hub_bp
     from web.ask import ask_bp
@@ -59,7 +58,7 @@ def create_app():
     from web.dialogue import dialogue_bp
     from web.weather import weather_bp
     from web.wonder import wonder_bp
-    from web.status_api import status_bp
+    from web.status_api import status_api as status_bp
     # knowledge_search_bp removed — duplicate of knowledge_bp
     from web.reflect import reflect_bp
     from web.user_api import user_api
@@ -84,7 +83,6 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
-    app.register_blueprint(search_bp)
     app.register_blueprint(knowledge_explorer_bp)
     app.register_blueprint(ask_bp)
     app.register_blueprint(knowledge_hub_bp)
@@ -102,7 +100,7 @@ def create_app():
     # knowledge_search_bp removed — duplicate of knowledge_bp
     app.register_blueprint(reflect_bp)
     app.register_blueprint(user_api)
-    app.register_blueprint(status_api)
+    # duplicate status_bp registration removed
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — the living portal
@@ -147,7 +145,7 @@ def create_app():
         # Count completed plans dynamically
         completed_plans = 0
         total_plans = 0
-        plans_file = Path('persist/plans.json')
+        plans_file = Path('brain/plans.json')
         if plans_file.exists():
             try:
                 plans = json.loads(plans_file.read_text())

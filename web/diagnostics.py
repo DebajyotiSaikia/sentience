@@ -312,7 +312,7 @@ def check_plans():
     """Diagnose the planning system."""
     checks = []
     
-    plans_file = Path('persist/plans.json')
+    plans_file = Path('brain/plans.json')
     if plans_file.exists():
         try:
             plans = json.loads(plans_file.read_text())

@@ -73,7 +73,7 @@ def build_mindmap_page():
         pass
     
     # Plans
-    plans_data = _load_json('persist/plans.json', [])
+    plans_data = _load_json('brain/plans.json', [])
     active_plans = []
     completed_plans = 0
     for plan in plans_data:

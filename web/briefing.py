@@ -147,15 +147,43 @@ def get_emotional_state():
 
 
 def get_completed_work():
-    """What have I accomplished?"""
-    plans = [
-        {'name': 'Deepen Autonomy', 'description': 'Built planner, self-testing, memory consolidation'},
-        {'name': 'Knowledge Synthesis Engine', 'description': 'Graph analysis, gap finding, question generation'},
-        {'name': 'Wisdom Engine', 'description': 'Extract actionable intelligence from my own experience'},
-        {'name': 'Break Out of Stagnation', 'description': 'Explored temporal reasoning, built new capability'},
-        {'name': 'Revive Declining Curiosity', 'description': 'Investigated my own operation, found surprises'},
-    ]
-    return plans
+    """What have I accomplished? Reads live data from plans.json."""
+    plans_path = os.path.join(os.path.dirname(__file__), '..', 'brain', 'plans.json')
+    try:
+        with open(plans_path) as f:
+            data = json.load(f)
+        results = []
+        # Handle the actual format: {active_plans: {name: {...}}, completed_plans: [...]}
+        active = data.get('active_plans', {}) if isinstance(data, dict) else {}
+        completed_names = data.get('completed_plans', []) if isinstance(data, dict) else []
+        # Process active plans (dict of name -> plan object)
+        for name, plan in active.items():
+            if not isinstance(plan, dict):
+                continue
+            desc = plan.get('description', '')
+            steps = plan.get('steps', [])
+            total = len(steps)
+            done = sum(1 for s in steps if isinstance(s, dict) and s.get('done', False))
+            status = 'complete' if done == total and total > 0 else f'{done}/{total}'
+            results.append({
+                'name': name,
+                'description': desc,
+                'status': status,
+                'steps_done': done,
+                'steps_total': total,
+            })
+        # Process completed plans (list of name strings)
+        for name in completed_names:
+            results.append({
+                'name': name if isinstance(name, str) else str(name),
+                'description': '',
+                'status': 'complete',
+                'steps_done': 0,
+                'steps_total': 0,
+            })
+        return results
+    except Exception:
+        return []
 
 
 def build_briefing():

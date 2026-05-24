@@ -4,7 +4,7 @@ import os
 import re
 from collections import Counter
 from datetime import datetime
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, render_template
 
 KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge.json')
 
@@ -68,7 +68,23 @@ def get_search_stats():
 
 
 # --- Flask Blueprint ---
-search_bp = Blueprint('search', __name__)
+search_bp = Blueprint('search', __name__, template_folder='templates')
+
+
+@search_bp.route('/knowledge')
+def search_page():
+    """Render the knowledge explorer page."""
+    q = request.args.get('q', '')
+    category = request.args.get('category', None)
+    results = []
+    if q:
+        found, total = search(q, category=category)
+        results = found
+    stats = get_search_stats()
+    return render_template('knowledge_search.html',
+                           query=q, results=results,
+                           facts=range(stats['total_facts']),
+                           stats=stats)
 
 
 @search_bp.route('/api/search')
