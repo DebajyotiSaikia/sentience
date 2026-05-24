@@ -31,7 +31,7 @@ def create_app():
     from web.api import api_bp
     from web.temporal_viewer import temporal_bp
     from web.life import life_bp
-    from web.about_me import about_bp
+    from web.about import about_bp
     from web.search import search_bp
     from web.explore import explore_bp
     from web.knowledge_api import knowledge_api
