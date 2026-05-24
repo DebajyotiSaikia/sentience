@@ -35,7 +35,7 @@ def create_app():
     from web.search import search_bp
     from web.explore import explore_bp
     from web.query import query_bp
-    from web.knowledge_api import knowledge_api_bp as knowledge_api
+    from web.knowledge_api import knowledge_bp as knowledge_api_bp
     from web.briefing import briefing_bp
     from web.essays import essays_bp
     from web.chat import chat_bp
@@ -71,7 +71,7 @@ def create_app():
     app.register_blueprint(about_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(explore_bp)
-    app.register_blueprint(knowledge_api)
+    app.register_blueprint(knowledge_api_bp)
     app.register_blueprint(briefing_bp)
     app.register_blueprint(essays_bp)
     app.register_blueprint(chat_bp)

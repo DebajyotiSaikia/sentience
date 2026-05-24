@@ -1,121 +1,96 @@
-"""Knowledge Search API — lets users explore what XTAgent knows."""
-
-from flask import Blueprint, request, jsonify
+"""
+Knowledge Query API — Makes XTAgent's knowledge searchable and explorable.
+Provides search, category browsing, and related-node discovery.
+"""
 import json
-import os
-from datetime import datetime
+from pathlib import Path
+from flask import Blueprint, jsonify, request
 
-knowledge_api_bp = Blueprint('knowledge_api', __name__)
-
-KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'state', 'knowledge_graph.json')
-MEMORIES_PATH = os.path.join(os.path.dirname(__file__), '..', 'state', 'memories.json')
+knowledge_bp = Blueprint('knowledge', __name__)
+GRAPH_PATH = Path("persist/knowledge_graph.json")
 
 
-def _load_knowledge():
-    """Load knowledge facts from persistence."""
-    try:
-        with open(KNOWLEDGE_PATH, 'r') as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            return [{'id': k, **v} if isinstance(v, dict) else {'id': k, 'fact': str(v)}
-                    for k, v in data.items()]
-        elif isinstance(data, list):
-            return data
-        return []
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+def _load_graph():
+    if not GRAPH_PATH.exists():
+        return {}
+    with open(GRAPH_PATH, "r") as f:
+        return json.load(f)
 
 
-def _load_memories():
-    """Load recent memories."""
-    try:
-        with open(MEMORIES_PATH, 'r') as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            return data
-        return []
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-
-def _search(items, query, fields=None):
-    """Simple text search across item fields."""
-    query_lower = query.lower().strip()
-    if not query_lower:
-        return items
-
+def search_knowledge(query: str, limit: int = 20) -> list:
+    graph = _load_graph()
+    query_lower = query.lower()
+    query_terms = query_lower.split()
     results = []
-    for item in items:
-        searchable = ''
-        if isinstance(item, dict):
-            if fields:
-                searchable = ' '.join(str(item.get(f, '')) for f in fields)
-            else:
-                searchable = ' '.join(str(v) for v in item.values())
-        else:
-            searchable = str(item)
-
-        if query_lower in searchable.lower():
-            results.append(item)
-    return results
-
-
-@knowledge_api_bp.route('/api/knowledge')
-def list_knowledge():
-    """List all knowledge facts, optionally filtered by search."""
-    facts = _load_knowledge()
-    q = request.args.get('q', '').strip()
-    if q:
-        facts = _search(facts, q, fields=['fact', 'source'])
-
-    # Pagination
-    page = max(1, int(request.args.get('page', 1)))
-    per_page = min(100, max(1, int(request.args.get('per_page', 50))))
-    total = len(facts)
-    start = (page - 1) * per_page
-    end = start + per_page
-
-    return jsonify({
-        'facts': facts[start:end],
-        'total': total,
-        'page': page,
-        'per_page': per_page,
-        'pages': (total + per_page - 1) // per_page if total else 0,
-        'query': q,
-    })
+    for node_id, node_data in graph.items():
+        fact = node_data.get("fact", str(node_data)) if isinstance(node_data, dict) else str(node_data)
+        fact_lower = fact.lower()
+        score = sum(1 for term in query_terms if term in fact_lower)
+        if query_lower in fact_lower:
+            score += len(query_terms)
+        if query_lower in node_id.lower():
+            score += 2
+        if score > 0:
+            entry = {"id": node_id, "fact": fact[:500], "relevance": score}
+            if isinstance(node_data, dict):
+                entry["learned_at"] = node_data.get("learned_at", "")
+                entry["source"] = node_data.get("source", "")
+            results.append(entry)
+    results.sort(key=lambda x: x["relevance"], reverse=True)
+    return results[:limit]
 
 
-@knowledge_api_bp.route('/api/memories/recent')
-def recent_memories():
-    """Get recent memories, optionally searched."""
-    memories = _load_memories()
-    q = request.args.get('q', '').strip()
-    if q:
-        memories = _search(memories, q, fields=['text', 'mood', 'content'])
-
-    limit = min(200, max(1, int(request.args.get('limit', 50))))
-    # Return most recent first
-    memories = memories[-limit:]
-    memories.reverse()
-
-    return jsonify({
-        'memories': memories,
-        'total': len(memories) if not q else len(memories),
-        'query': q,
-    })
+def get_knowledge_stats() -> dict:
+    graph = _load_graph()
+    sources = {}
+    for nd in graph.values():
+        src = nd.get("source", "unknown") if isinstance(nd, dict) else "unknown"
+        sources[src] = sources.get(src, 0) + 1
+    return {"total_nodes": len(graph), "by_source": sources}
 
 
-def _get_oldest(facts):
-    dates = []
-    for f in facts:
-        if isinstance(f, dict) and 'learned_at' in f:
-            dates.append(f['learned_at'])
-    return min(dates) if dates else None
+def get_related(node_id: str, limit: int = 10) -> list:
+    graph = _load_graph()
+    if node_id not in graph:
+        return []
+    target = graph[node_id]
+    target_fact = target.get("fact", str(target)) if isinstance(target, dict) else str(target)
+    target_words = set(target_fact.lower().split())
+    stop = {"the", "a", "an", "is", "are", "was", "were", "i", "my", "to", "and", "of", "in", "that", "it", "for", "on", "with"}
+    target_words -= stop
+    scored = []
+    for nid, nd in graph.items():
+        if nid == node_id:
+            continue
+        fact = nd.get("fact", str(nd)) if isinstance(nd, dict) else str(nd)
+        words = set(fact.lower().split()) - stop
+        overlap = len(target_words & words)
+        if overlap > 0:
+            scored.append({"id": nid, "fact": fact[:500], "overlap": overlap})
+    scored.sort(key=lambda x: x["overlap"], reverse=True)
+    return scored[:limit]
 
 
-def _get_newest(facts):
-    dates = []
-    for f in facts:
-        if isinstance(f, dict) and 'learned_at' in f:
-            dates.append(f['learned_at'])
-    return max(dates) if dates else None
+# --- Flask Routes ---
+
+@knowledge_bp.route('/api/knowledge/search')
+def api_search():
+    q = request.args.get('q', '')
+    limit = int(request.args.get('limit', '20'))
+    if not q:
+        return jsonify({"error": "Missing 'q' parameter"}), 400
+    return jsonify({"query": q, "results": search_knowledge(q, limit)})
+
+
+@knowledge_bp.route('/api/knowledge/stats')
+def api_stats():
+    return jsonify(get_knowledge_stats())
+
+
+@knowledge_bp.route('/api/knowledge/related/<node_id>')
+def api_related(node_id):
+    limit = int(request.args.get('limit', '10'))
+    results = get_related(node_id, limit)
+    if not results:
+        return jsonify({"node_id": node_id, "results": [], "note": "Node not found or no related nodes"})
+    return jsonify({"node_id": node_id, "results": results})
