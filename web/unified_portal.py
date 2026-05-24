@@ -91,6 +91,45 @@ def portal():
                            now=datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC'))
 
 
+@unified_portal_bp.route('/portal/live')
+def portal_live():
+    """Live status endpoint for auto-refresh."""
+    emotional = get_emotional_state()
+    memories = get_recent_memories(5)
+    knowledge = get_knowledge_summary()
+    plans = get_plans()
+
+    # Summarize plans into digestible form
+    plan_summaries = []
+    for p in plans:
+        if isinstance(p, dict):
+            plan_summaries.append({
+                'name': p.get('name', 'Unnamed'),
+                'status': f"{sum(1 for s in p.get('steps', []) if s.get('done', False))}/{len(p.get('steps', []))}",
+                'complete': all(s.get('done', False) for s in p.get('steps', []))
+            })
+
+    # Format memories for display
+    mem_texts = []
+    for m in memories:
+        if isinstance(m, dict):
+            mem_texts.append({
+                'time': m.get('timestamp', ''),
+                'text': m.get('content', str(m))[:200],
+                'mood': m.get('mood', '')
+            })
+        else:
+            mem_texts.append({'time': '', 'text': str(m)[:200], 'mood': ''})
+
+    return jsonify({
+        'emotional': emotional,
+        'memories': mem_texts,
+        'knowledge_count': knowledge['count'],
+        'plans': plan_summaries,
+        'timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    })
+
+
 @unified_portal_bp.route('/portal/search')
 def portal_search():
     query = request.args.get('q', '').lower().strip()
