@@ -35,7 +35,7 @@ def create_app():
     from web.search import search_bp
     from web.explore import explore_bp
     from web.query import query_bp
-    from web.knowledge_api import knowledge_api
+    from web.knowledge_api import knowledge_api_bp as knowledge_api
     from web.briefing import briefing_bp
     from web.essays import essays_bp
     from web.chat import chat_bp
