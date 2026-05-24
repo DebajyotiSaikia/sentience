@@ -1,35 +1,43 @@
-from web.app import create_app
+"""Test what knowledge search capabilities actually work right now."""
+import sys
+sys.path.insert(0, '/home/xt')
 
-app = create_app()
-with app.test_client() as c:
-    # Test the API search endpoint (correct path)
-    resp = c.get('/api/knowledge/search?q=dream')
-    print('Search status:', resp.status_code)
-    print('Content-Type:', resp.content_type)
-    if resp.status_code == 200:
-        import json
-        data = json.loads(resp.data)
-        print('Results:', len(data.get('results', data.get('facts', []))))
-        for item in list(data.get('results', data.get('facts', [])))[:3]:
-            if isinstance(item, str):
-                print(f'  - {item[:80]}')
-            elif isinstance(item, dict):
-                print(f'  - {item.get("fact", item.get("text", str(item)))[:80]}')
-    else:
-        print('Error:', resp.data[:500].decode('utf-8', errors='replace'))
+# Test 1: Can the blueprint load?
+try:
+    from web.knowledge_search import knowledge_search_bp
+    print(f"✓ Blueprint loaded: {knowledge_search_bp.name}")
+except Exception as e:
+    print(f"✗ Blueprint failed: {e}")
 
-    # Test query endpoint too
-    resp2 = c.get('/api/knowledge/query?q=what+do+I+know+about+dreams')
-    print('\nQuery status:', resp2.status_code)
-    if resp2.status_code == 200:
-        import json
-        data2 = json.loads(resp2.data)
-        print('Query response keys:', list(data2.keys()))
+# Test 2: Can the API knowledge endpoint work?
+try:
+    from web.api import api_bp
+    print(f"✓ API blueprint loaded: {api_bp.name}")
+except Exception as e:
+    print(f"✗ API blueprint failed: {e}")
 
-    # Test stats
-    resp3 = c.get('/api/knowledge/stats')
-    print('\nStats status:', resp3.status_code)
-    if resp3.status_code == 200:
-        import json
-        stats = json.loads(resp3.data)
-        print('Stats:', json.dumps(stats, indent=2)[:500])
+# Test 3: Can I actually search my knowledge?
+try:
+    from memory.persistence import KnowledgeStore
+    ks = KnowledgeStore()
+    facts = ks.all()
+    print(f"✓ Knowledge store: {len(facts)} facts")
+    query = "dream"
+    matches = [f for f in facts if query.lower() in str(f).lower()]
+    print(f"✓ Search '{query}': {len(matches)} matches")
+    if matches:
+        print(f"  Example: {str(matches[0])[:100]}")
+except Exception as e:
+    print(f"✗ Knowledge store failed: {e}")
+
+# Test 4: Check what web blueprints are registered
+try:
+    from web.server import app
+    rules = [r.rule for r in app.url_map.iter_rules()]
+    knowledge_rules = [r for r in rules if 'knowledge' in r or 'search' in r or 'ask' in r]
+    print(f"✓ Total routes: {len(rules)}")
+    print(f"✓ Knowledge-related routes: {knowledge_rules}")
+except Exception as e:
+    print(f"✗ Web server failed: {e}")
+
+print("\nDone.")
