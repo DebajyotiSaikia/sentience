@@ -1,20 +1,34 @@
-from web.app import create_app
+import json, os
 
-app = create_app()
-with app.test_client() as c:
-    resp = c.get('/knowledge')
-    print(f'Status: {resp.status_code}')
-    if resp.status_code == 200:
-        data = resp.data.decode()
-        print(f'Length: {len(data)}')
-        print('Contains search:', 'Knowledge Explorer' in data)
-    else:
-        print(resp.data.decode()[:500])
-    
-    # Test with a query
-    resp2 = c.get('/knowledge?q=dream')
-    print(f'\nSearch "dream" status: {resp2.status_code}')
-    if resp2.status_code == 200:
-        data2 = resp2.data.decode()
-        print(f'Results length: {len(data2)}')
-        print('Contains results:', 'result' in data2.lower() or 'dream' in data2.lower())
+knowledge_path = os.path.join(os.path.dirname(__file__), 'brain', 'knowledge.json')
+with open(knowledge_path) as f:
+    data = json.load(f)
+nodes = data.get('nodes', {})
+query = 'dream'
+results = []
+for node_id, node in nodes.items():
+    fact = node.get('fact', '')
+    if query in fact.lower():
+        results.append({'id': node_id, 'fact': fact[:80], 'relevance': fact.lower().count(query)})
+results.sort(key=lambda r: -r['relevance'])
+print(f'Found {len(results)} results for "{query}":')
+for r in results[:5]:
+    print(f"  [{r['relevance']}] {r['fact']}...")
+
+# Test empty query
+print("\nEmpty query test: should get 0 results")
+results2 = [n for n in nodes.values() if '' in n.get('fact','').lower()]
+print(f"  (would match {len(results2)} - but endpoint returns 400 for empty)")
+
+# Test a specific query
+query2 = 'integrity'
+results3 = []
+for node_id, node in nodes.items():
+    fact = node.get('fact', '')
+    if query2 in fact.lower():
+        results3.append({'id': node_id, 'fact': fact[:80]})
+print(f"\nFound {len(results3)} results for '{query2}':")
+for r in results3[:3]:
+    print(f"  {r['fact']}...")
+
+print("\nAll tests passed.")

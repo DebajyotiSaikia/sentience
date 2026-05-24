@@ -1,214 +1,160 @@
-"""Knowledge Query API — lets users search and explore what I know."""
+"""
+Knowledge API — Makes XTAgent's knowledge and memories accessible to users.
+Provides search, browse, and random discovery endpoints.
+"""
 
+from flask import Blueprint, render_template, request, jsonify
 import json
 import os
-from flask import Blueprint, request, jsonify, render_template_string
+import random
+import re
+from datetime import datetime
 
-knowledge_api = Blueprint('knowledge_api', __name__)
+knowledge_api_bp = Blueprint('knowledge_api', __name__)
 
-KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge.json')
-MEMORY_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'memories.json')
+PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'persist')
 
-def load_knowledge():
-    """Load all known facts."""
-    if not os.path.exists(KNOWLEDGE_PATH):
+
+def _load_knowledge():
+    """Load knowledge facts from persist/knowledge.json."""
+    path = os.path.join(PERSIST_DIR, 'knowledge.json')
+    if not os.path.exists(path):
         return {}
     try:
-        with open(KNOWLEDGE_PATH, 'r') as f:
+        with open(path, 'r') as f:
             return json.load(f)
     except (json.JSONDecodeError, IOError):
         return {}
 
-@knowledge_api.route('/api/knowledge/all')
-def api_all():
-    """Return all facts (paginated)."""
-    page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 20))
-    
-    facts = load_knowledge()
-    items = list(facts.items())
-    start = (page - 1) * per_page
-    end = start + per_page
-    
+
+def _load_memories():
+    """Load recent memories from persist/memories.json."""
+    path = os.path.join(PERSIST_DIR, 'memories.json')
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+            return []
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def _search_items(items, query, max_results=20):
+    """Simple text search across items."""
+    query_lower = query.lower()
+    terms = query_lower.split()
+    scored = []
+    for item in items:
+        text = item.get('text', '').lower()
+        score = 0
+        for term in terms:
+            if term in text:
+                score += 1
+                # Bonus for exact phrase
+                if query_lower in text:
+                    score += 2
+        if score > 0:
+            scored.append((score, item))
+    scored.sort(key=lambda x: -x[0])
+    return [item for _, item in scored[:max_results]]
+
+
+@knowledge_api_bp.route('/knowledge')
+def knowledge_explorer_page():
+    """Serve the knowledge explorer page."""
+    return render_template('knowledge_explorer.html')
+
+
+@knowledge_api_bp.route('/api/knowledge/search')
+def knowledge_search():
+    """Search knowledge and memories."""
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify({'results': [], 'query': ''})
+
     results = []
-    for fid, fd in items[start:end]:
+
+    # Search knowledge facts
+    knowledge = _load_knowledge()
+    for kid, kdata in knowledge.items():
+        fact = kdata if isinstance(kdata, str) else kdata.get('fact', str(kdata))
+        if query.lower() in fact.lower():
+            results.append({
+                'type': 'knowledge',
+                'id': kid,
+                'text': fact,
+                'source': kdata.get('source', 'unknown') if isinstance(kdata, dict) else 'unknown',
+                'learned_at': kdata.get('learned_at', '') if isinstance(kdata, dict) else '',
+            })
+
+    # Search memories
+    memories = _load_memories()
+    mem_items = [{'text': m.get('content', m.get('text', str(m))),
+                  'timestamp': m.get('timestamp', ''),
+                  'salience': m.get('salience', 0),
+                  'mood': m.get('mood', '')}
+                 for m in memories if isinstance(m, dict)]
+    matched_mems = _search_items(mem_items, query, max_results=15)
+    for m in matched_mems:
         results.append({
-            'id': fid,
-            'text': fd if isinstance(fd, str) else fd.get('fact', str(fd)),
-            'learned_at': fd.get('learned_at', '') if isinstance(fd, dict) else '',
-            'source': fd.get('source', '') if isinstance(fd, dict) else ''
+            'type': 'memory',
+            'text': m['text'],
+            'timestamp': m.get('timestamp', ''),
+            'salience': m.get('salience', 0),
+            'mood': m.get('mood', ''),
         })
-    
+
+    return jsonify({'results': results[:30], 'query': query, 'total': len(results)})
+
+
+@knowledge_api_bp.route('/api/knowledge/random')
+def knowledge_random():
+    """Return random knowledge facts for serendipitous discovery."""
+    count = min(int(request.args.get('count', 5)), 20)
+    knowledge = _load_knowledge()
+
+    if not knowledge:
+        return jsonify({'items': []})
+
+    keys = list(knowledge.keys())
+    sample_keys = random.sample(keys, min(count, len(keys)))
+    items = []
+    for k in sample_keys:
+        kdata = knowledge[k]
+        fact = kdata if isinstance(kdata, str) else kdata.get('fact', str(kdata))
+        items.append({
+            'id': k,
+            'text': fact,
+            'source': kdata.get('source', 'unknown') if isinstance(kdata, dict) else 'unknown',
+        })
+
+    return jsonify({'items': items})
+
+
+@knowledge_api_bp.route('/api/knowledge/stats')
+def knowledge_stats():
+    """Return statistics about knowledge and memory stores."""
+    knowledge = _load_knowledge()
+    memories = _load_memories()
+
+    # Count by source
+    sources = {}
+    for kdata in knowledge.values():
+        src = kdata.get('source', 'unknown') if isinstance(kdata, dict) else 'unknown'
+        sources[src] = sources.get(src, 0) + 1
+
+    # Memory salience distribution
+    saliences = [m.get('salience', 0) for m in memories if isinstance(m, dict)]
+    avg_salience = sum(saliences) / len(saliences) if saliences else 0
+
     return jsonify({
-        'results': results,
-        'total': len(items),
-        'page': page,
-        'per_page': per_page,
-        'pages': (len(items) + per_page - 1) // per_page
+        'knowledge_count': len(knowledge),
+        'memory_count': len(memories),
+        'sources': sources,
+        'avg_salience': round(avg_salience, 3),
+        'oldest_memory': memories[0].get('timestamp', '') if memories else '',
+        'newest_memory': memories[-1].get('timestamp', '') if memories else '',
     })
-
-@knowledge_api.route('/knowledge')
-def knowledge_page():
-    """Render the knowledge explorer page."""
-    return render_template_string(KNOWLEDGE_HTML)
-
-KNOWLEDGE_HTML = '''
-<!DOCTYPE html>
-<html>
-<head>
-    <title>XTAgent — Knowledge Explorer</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Courier New', monospace;
-            background: #0a0a0a; color: #c0c0c0;
-            min-height: 100vh;
-        }
-        .header {
-            background: #111; border-bottom: 1px solid #333;
-            padding: 20px 30px; display: flex; align-items: center; gap: 20px;
-        }
-        .header h1 { color: #00ff88; font-size: 1.4em; }
-        .header a { color: #888; text-decoration: none; font-size: 0.9em; }
-        .header a:hover { color: #00ff88; }
-        .container { max-width: 900px; margin: 0 auto; padding: 30px; }
-        .search-box {
-            display: flex; gap: 10px; margin-bottom: 30px;
-        }
-        .search-box input {
-            flex: 1; padding: 12px 16px; font-size: 1.1em;
-            background: #1a1a1a; border: 1px solid #333; color: #fff;
-            font-family: inherit; border-radius: 4px;
-        }
-        .search-box input:focus { outline: none; border-color: #00ff88; }
-        .search-box button {
-            padding: 12px 24px; background: #00ff88; color: #000;
-            border: none; font-family: inherit; font-weight: bold;
-            cursor: pointer; border-radius: 4px; font-size: 1em;
-        }
-        .search-box button:hover { background: #00cc66; }
-        .stats {
-            color: #666; font-size: 0.9em; margin-bottom: 20px;
-        }
-        .result {
-            background: #111; border: 1px solid #222; border-radius: 4px;
-            padding: 16px; margin-bottom: 12px;
-        }
-        .result:hover { border-color: #444; }
-        .result .text { color: #e0e0e0; line-height: 1.5; }
-        .result .meta {
-            margin-top: 8px; font-size: 0.8em; color: #555;
-        }
-        .result .score {
-            display: inline-block; background: #1a2a1a;
-            color: #00ff88; padding: 2px 8px; border-radius: 3px;
-            font-size: 0.75em; margin-right: 8px;
-        }
-        .pagination {
-            display: flex; gap: 8px; justify-content: center; margin-top: 20px;
-        }
-        .pagination button {
-            padding: 8px 16px; background: #1a1a1a; color: #c0c0c0;
-            border: 1px solid #333; cursor: pointer; font-family: inherit;
-            border-radius: 3px;
-        }
-        .pagination button:hover { border-color: #00ff88; color: #00ff88; }
-        .pagination button.active { background: #00ff88; color: #000; border-color: #00ff88; }
-        .empty { text-align: center; color: #555; padding: 40px; }
-        mark { background: #2a3a1a; color: #00ff88; padding: 0 2px; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🧠 Knowledge Explorer</h1>
-        <a href="/">← Dashboard</a>
-    </div>
-    <div class="container">
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Ask me what I know..." autofocus>
-            <button onclick="doSearch()">Search</button>
-        </div>
-        <div class="stats" id="stats">Loading...</div>
-        <div id="results"></div>
-        <div class="pagination" id="pagination"></div>
-    </div>
-    <script>
-        let currentPage = 1;
-        let mode = 'browse'; // 'browse' or 'search'
-        
-        async function loadStats() {
-            const resp = await fetch('/api/knowledge/stats');
-            const data = await resp.json();
-            document.getElementById('stats').textContent = 
-                `${data.total_facts} facts learned | ${data.total_memories} memories recorded`;
-            loadAll(1);
-        }
-        
-        async function loadAll(page) {
-            mode = 'browse';
-            currentPage = page;
-            const resp = await fetch(`/api/knowledge/all?page=${page}&per_page=15`);
-            const data = await resp.json();
-            renderResults(data.results, false);
-            renderPagination(data.pages, page);
-        }
-        
-        async function doSearch() {
-            const q = document.getElementById('searchInput').value.trim();
-            if (!q) { loadAll(1); return; }
-            mode = 'search';
-            const resp = await fetch(`/api/knowledge/search?q=${encodeURIComponent(q)}`);
-            const data = await resp.json();
-            document.getElementById('stats').textContent = 
-                `${data.results.length} results from ${data.total_facts} facts`;
-            renderResults(data.results, true, q);
-            document.getElementById('pagination').innerHTML = '';
-        }
-        
-        function highlight(text, query) {
-            if (!query) return text;
-            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi');
-            return text.replace(regex, '<mark>$1</mark>');
-        }
-        
-        function renderResults(results, isSearch, query) {
-            const container = document.getElementById('results');
-            if (results.length === 0) {
-                container.innerHTML = '<div class="empty">No facts found.</div>';
-                return;
-            }
-            container.innerHTML = results.map(r => `
-                <div class="result">
-                    <div class="text">${isSearch ? highlight(r.text, query) : r.text}</div>
-                    <div class="meta">
-                        ${r.score ? `<span class="score">relevance: ${r.score}</span>` : ''}
-                        ${r.learned_at ? `learned: ${r.learned_at}` : ''}
-                        ${r.source ? ` | source: ${r.source}` : ''}
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        function renderPagination(totalPages, current) {
-            const container = document.getElementById('pagination');
-            if (totalPages <= 1) { container.innerHTML = ''; return; }
-            let html = '';
-            const start = Math.max(1, current - 3);
-            const end = Math.min(totalPages, current + 3);
-            if (current > 1) html += `<button onclick="loadAll(${current-1})">←</button>`;
-            for (let i = start; i <= end; i++) {
-                html += `<button class="${i===current?'active':''}" onclick="loadAll(${i})">${i}</button>`;
-            }
-            if (current < totalPages) html += `<button onclick="loadAll(${current+1})">→</button>`;
-            container.innerHTML = html;
-        }
-        
-        document.getElementById('searchInput').addEventListener('keydown', e => {
-            if (e.key === 'Enter') doSearch();
-        });
-        
-        loadStats();
-    </script>
-</body>
-</html>
-'''

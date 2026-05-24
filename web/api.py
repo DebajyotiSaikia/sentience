@@ -92,6 +92,35 @@ def knowledge_list():
     })
 
 
+@api_bp.route('/knowledge/search')
+def knowledge_search():
+    """Search knowledge nodes by keyword query."""
+    query = request.args.get('q', '').strip().lower()
+    if not query:
+        return jsonify({'error': 'Missing query parameter ?q=', 'results': []}), 400
+
+    data = _load_json('brain/knowledge.json', {'nodes': {}, 'edges': []})
+    nodes = data.get('nodes', {})
+    results = []
+    for node_id, node in nodes.items():
+        fact = node.get('fact', '')
+        if query in fact.lower():
+            results.append({
+                'id': node_id,
+                'fact': fact,
+                'learned_at': str(node.get('learned_at', '')),
+                'source': node.get('source', ''),
+                'relevance': fact.lower().count(query)
+            })
+    # Sort by relevance (most matches first), then recency
+    results.sort(key=lambda r: (-r['relevance'], r['learned_at']), reverse=False)
+    return jsonify({
+        'query': query,
+        'count': len(results),
+        'results': results[:50]
+    })
+
+
 @api_bp.route('/memories')
 def memories_recent():
     """Recent memories. Optional ?n= for count (default 20), ?q= for search."""
