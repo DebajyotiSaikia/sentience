@@ -40,6 +40,7 @@ def create_app():
     from web.briefing import briefing_bp
     from web.essays import essays_bp
     from web.chat import chat_bp
+    # from web.knowledge_search import knowledge_search_bp  # removed: replaced by knowledge_unified_bp
     from web.timeline import timeline_bp
     from web.talk import talk_bp
     from web.mind_explorer import mind_explorer_bp
@@ -47,8 +48,8 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
-    from web.knowledge_ui import knowledge_ui_bp as graph_viz
-    from web.knowledge_api import knowledge_api
+    # from web.knowledge_ui import knowledge_ui_bp as graph_viz  # removed: replaced by knowledge_unified_bp
+    # from web.knowledge_api import knowledge_api  # removed: replaced by knowledge_unified_bp
     from web.story import story_bp
     # from web.knowledge_explorer import knowledge_explorer_bp  # Removed: zero unique routes, all duplicated by explore_bp
     from web.knowledge_unified import knowledge_unified_bp
@@ -86,14 +87,15 @@ def create_app():
     app.register_blueprint(briefing_bp)
     app.register_blueprint(essays_bp)
     app.register_blueprint(chat_bp)
+    # app.register_blueprint(knowledge_search_bp)  # removed: replaced by knowledge_unified_bp
     app.register_blueprint(timeline_bp)
     app.register_blueprint(talk_bp)
     app.register_blueprint(mind_explorer_bp)
     app.register_blueprint(mindstream_bp)
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
-    app.register_blueprint(graph_viz)
-    app.register_blueprint(knowledge_api)
+    app.register_blueprint(graph_viz_bp)
+    # app.register_blueprint(knowledge_api)  # removed: replaced by knowledge_unified_bp
     app.register_blueprint(story_bp)
     # app.register_blueprint(knowledge_bp)  # removed: replaced by knowledge_unified_bp
     # app.register_blueprint(knowledge_explorer_bp)  # Removed: zero unique routes

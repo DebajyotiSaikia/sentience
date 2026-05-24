@@ -220,7 +220,7 @@ def compose_response(query):
                 with open(knowledge_path, 'r') as f:
                     kg = json.load(f)
                 insights = []
-                for n in kg.get('nodes', {}).values():
+                for nid, n in kg.get('nodes', {}).items():
                     ntype = n.get('type', n.get('source', nid.split(':')[0] if ':' in nid else ''))
                     if ntype in ('insight', 'lesson', 'dream_insight', 'dream', 'pattern', 'observation'):
                         insights.append(n)
@@ -241,7 +241,7 @@ def compose_response(query):
             try:
                 with open(knowledge_path, 'r') as f:
                     kg = json.load(f)
-                dreams = [n for n in kg.get('nodes', {}).values()
+                dreams = [n for nid, n in kg.get('nodes', {}).items()
                           if n.get('type', n.get('source', nid.split(':')[0] if ':' in nid else '')) in ('dream_insight', 'dream')]
                 dreams.sort(key=lambda x: x.get('learned_at', ''), reverse=True)
                 if dreams:
