@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Query — What I Know{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 900px; margin: 2rem auto; padding: 0 1rem;">
+  <h1 style="color: #e0e0e0; margin-bottom: 0.5rem;">🔍 Knowledge Query</h1>
+  <p style="color: #888; margin-bottom: 1.5rem;">Search what I know — {{ total_facts }} facts learned across {{ total_memories }} experiences.</p>
+
+  <form method="GET" action="{{ url_for('knowledge_query.query_page') }}" style="margin-bottom: 2rem;">
+    <div style="display: flex; gap: 0.5rem;">
+      <input type="text" name="q" value="{{ query or '' }}" placeholder="Search my knowledge…"
+             style="flex: 1; padding: 0.75rem 1rem; background: #1a1a2e; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; font-size: 1rem;"
+             autofocus>
+      <button type="submit" style="padding: 0.75rem 1.5rem; background: #4a9eff; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem;">Search</button>
+    </div>
+  </form>
+
+  {% if query %}
+  <div style="margin-bottom: 1rem; color: #aaa;">
+    Found <strong style="color: #4a9eff;">{{ results|length }}</strong> results for "<em>{{ query }}</em>"
+  </div>
+  {% endif %}
+
+  {% if results %}
+  <div style="display: flex; flex-direction: column; gap: 1rem;">
+    {% for r in results %}
+    <div style="background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 1rem 1.25rem;">
+      <div style="color: #e0e0e0; line-height: 1.5;">{{ r.fact }}</div>
+      <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #666;">
+        {% if r.learned_at %}📅 {{ r.learned_at[:19] }}{% endif %}
+        {% if r.source and r.source != 'unknown' %} · 📌 {{ r.source }}{% endif %}
+        {% if r.score is defined %} · 🎯 relevance: {{ "%.0f"|format(r.score * 100) }}%{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% elif query %}
+  <div style="background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 2rem; text-align: center; color: #888;">
+    No facts match that query. Try different words?
+  </div>
+  {% else %}
+  <!-- Show recent facts when no query -->
+  <h2 style="color: #ccc; font-size: 1.1rem; margin-bottom: 1rem;">Recent Knowledge</h2>
+  <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+    {% for r in recent %}
+    <div style="background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 8px; padding: 0.75rem 1rem;">
+      <div style="color: #d0d0d0; font-size: 0.95rem;">{{ r.fact }}</div>
+      <div style="margin-top: 0.3rem; font-size: 0.75rem; color: #555;">
+        {% if r.learned_at %}{{ r.learned_at[:19] }}{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if clusters %}
+  <h2 style="color: #ccc; font-size: 1.1rem; margin: 2rem 0 1rem;">Knowledge Clusters</h2>
+  <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+    {% for cluster in clusters %}
+    <a href="?q={{ cluster.keyword }}" style="background: #2a2a4a; color: #8ab4f8; padding: 0.4rem 0.8rem; border-radius: 16px; text-decoration: none; font-size: 0.85rem;">
+      {{ cluster.keyword }} ({{ cluster.count }})
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
