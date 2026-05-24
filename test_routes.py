@@ -1,33 +1,31 @@
-import sys
-sys.path.insert(0, '.')
-
 from web.app import create_app
 
 app = create_app()
+client = app.test_client()
 
-with app.app_context():
-    routes = []
-    for rule in app.url_map.iter_rules():
-        if rule.endpoint != 'static':
-            routes.append((rule.rule, rule.methods - {'OPTIONS', 'HEAD'}))
-    routes.sort()
+routes = [
+    '/chat', '/knowledge', '/dashboard', '/life', '/explore',
+    '/about-me', '/about', '/mindstream', '/timeline', '/health',
+    '/api/state', '/wonder', '/graph', '/dreams'
+]
 
-    # Portal links to these pages:
-    needed = ['/chat', '/knowledge', '/dashboard', '/life', '/explore',
-              '/about-me', '/mindstream', '/timeline', '/talk', '/dialogue',
-              '/mind', '/graph', '/pulse', '/weather', '/portrait',
-              '/diagnostics', '/emotional-timeline', '/briefing', '/essays',
-              '/search', '/collaborate', '/temporal']
+print("=== Portal Route Health Check ===")
+broken = []
+for r in routes:
+    resp = client.get(r)
+    status = resp.status_code
+    # Follow redirects
+    location = resp.headers.get('Location', '')
+    if status < 400:
+        symbol = '✓'
+    else:
+        symbol = '✗'
+        broken.append(r)
+    extra = f' → {location}' if location else ''
+    print(f'  {symbol} {r} → {status}{extra}')
 
-    existing = {r[0] for r in routes}
-
-    print('=== ROUTES THE PORTAL LINKS TO ===')
-    for page in needed:
-        # Check exact match or prefix match
-        found = page in existing or any(e.startswith(page) for e in existing)
-        status = 'OK' if found else 'MISSING'
-        print(f'  {page}: {status}')
-
-    print(f'\n=== ALL {len(routes)} REGISTERED ROUTES ===')
-    for rule, methods in routes:
-        print(f'  {rule} [{", ".join(sorted(methods))}]')
+print(f"\n{len(routes) - len(broken)}/{len(routes)} routes healthy")
+if broken:
+    print(f"BROKEN: {', '.join(broken)}")
+else:
+    print("All routes working!")

@@ -152,7 +152,10 @@ def create_app():
                                completed_plans=completed_plans,
                                total_plans=total_plans)
     
-    # /about is handled by about_bp blueprint
+    # /about redirects to /about-me (the living self-portrait)
+    @app.route('/about')
+    def about_redirect():
+        return redirect('/about-me')
     # /ask is handled by ask_bp blueprint  
     # /mind is handled by mind_bp blueprint
     # /api/ask and /api/chat are handled by api_bp and chat_bp blueprints

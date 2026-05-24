@@ -31,37 +31,48 @@ def _load_json(path, default=None):
 
 
 def _get_all_knowledge():
-    """Load all knowledge facts."""
-    kb = _load_json('data/knowledge.json', {})
-    facts = kb if isinstance(kb, list) else kb.get('facts', [])
+    """Load all knowledge facts from brain/knowledge.json (node dict format)."""
+    kb = _load_json('brain/knowledge.json', {})
+    nodes = kb.get('nodes', {})
     results = []
-    for f in facts:
-        if isinstance(f, dict):
+    # nodes is {id: {fact, learned_at, source}}
+    for node_id, node_data in nodes.items():
+        if isinstance(node_data, dict):
             results.append({
                 'type': 'knowledge',
-                'content': f.get('content', str(f)),
-                'source': f.get('source', ''),
-                'learned_at': f.get('learned_at', ''),
+                'content': node_data.get('fact', str(node_data)),
+                'source': node_data.get('source', ''),
+                'learned_at': node_data.get('learned_at', ''),
             })
-        elif isinstance(f, str):
-            results.append({'type': 'knowledge', 'content': f, 'source': '', 'learned_at': ''})
+        elif isinstance(node_data, str):
+            results.append({'type': 'knowledge', 'content': node_data, 'source': '', 'learned_at': ''})
     return results
 
 
 def _get_all_memories():
-    """Load all memories."""
-    mem = _load_json('data/memories.json', {})
-    memories = mem if isinstance(mem, list) else mem.get('memories', [])
+    """Load all memories from brain/episodic_memory.db (SQLite)."""
+    import sqlite3
+    db_path = PROJECT_ROOT / 'brain' / 'episodic_memory.db'
     results = []
-    for m in memories:
-        if isinstance(m, dict):
+    if not db_path.exists():
+        return results
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            'SELECT summary, timestamp, salience, mood FROM episodes ORDER BY timestamp DESC'
+        ).fetchall()
+        for row in rows:
             results.append({
                 'type': 'memory',
-                'content': m.get('content', m.get('text', str(m))),
-                'timestamp': m.get('timestamp', ''),
-                'salience': m.get('salience', 0),
-                'mood': m.get('mood', ''),
+                'content': row['summary'] or '',
+                'timestamp': row['timestamp'] or '',
+                'salience': row['salience'] or 0,
+                'mood': row['mood'] or '',
             })
+        conn.close()
+    except Exception:
+        pass
     return results
 
 
