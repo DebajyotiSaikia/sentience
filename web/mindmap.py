@@ -59,7 +59,7 @@ def build_mindmap_page():
     facts = _load_json('persist/knowledge_facts.json', [])
     
     # Knowledge graph stats
-    kg = _load_json('persist/knowledge_graph.json', {})
+    kg = _load_json('brain/knowledge.json', {})
     kg_nodes = len(kg.get('nodes', []))
     kg_edges = len(kg.get('edges', []))
     

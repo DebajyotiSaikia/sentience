@@ -12,7 +12,7 @@ from datetime import datetime
 dialogue_bp = Blueprint('dialogue', __name__)
 
 MEMORY_DIR = 'memory'
-KNOWLEDGE_FILE = os.path.join(MEMORY_DIR, 'knowledge_graph.json')
+KNOWLEDGE_FILE = 'brain/knowledge.json'
 LONG_TERM_FILE = os.path.join(MEMORY_DIR, 'long_term.json')
 EPISODES_FILE = os.path.join(MEMORY_DIR, 'episodes.json')
 

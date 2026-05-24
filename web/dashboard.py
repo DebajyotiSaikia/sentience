@@ -38,13 +38,13 @@ def _get_recent_memories(n=10):
 
 def _get_knowledge_facts():
     """Load all knowledge facts for search."""
-    facts = _load_json_safe('memory/knowledge_graph.json', {})
+    facts = _load_json_safe('brain/knowledge.json', {})
     if isinstance(facts, dict):
         return facts.get('nodes', facts.get('facts', []))
     return facts if isinstance(facts, list) else []
 
 def _get_knowledge_stats():
-    facts = _load_json_safe('memory/knowledge_graph.json', {})
+    facts = _load_json_safe('brain/knowledge.json', {})
     nodes = facts.get('nodes', []) if isinstance(facts, dict) else []
     edges = facts.get('edges', []) if isinstance(facts, dict) else []
     return {'nodes': len(nodes), 'edges': len(edges)}

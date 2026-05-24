@@ -26,7 +26,7 @@ def get_status():
     emotions = _read_json('emotions.json', {})
     
     # Knowledge stats
-    knowledge = _read_json('knowledge_graph.json', {})
+    knowledge = _read_json('brain/knowledge.json', {})
     if isinstance(knowledge, dict):
         fact_count = len(knowledge)
     elif isinstance(knowledge, list):
@@ -115,7 +115,7 @@ def _plan_progress(plan):
 @status_api.route('/api/status/knowledge')
 def knowledge_detail():
     """Return knowledge facts for browsing."""
-    knowledge = _read_json('knowledge_graph.json', {})
+    knowledge = _read_json('brain/knowledge.json', {})
     
     facts = []
     if isinstance(knowledge, dict):

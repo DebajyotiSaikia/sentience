@@ -9,7 +9,7 @@ BASE = os.path.join(os.path.dirname(__file__), '..')
 SOUL_PATH = os.path.join(BASE, 'soul.json')
 STATE_DIR = os.path.join(BASE, 'state')
 MEMORY_PATH = os.path.join(BASE, 'persist', 'memory.json')
-FACTS_PATH = os.path.join(BASE, 'persist', 'knowledge_graph.json')
+FACTS_PATH = os.path.join(BASE, 'brain', 'knowledge.json')
 
 def _load(path):
     try:

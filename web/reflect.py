@@ -20,7 +20,7 @@ reflect_bp = Blueprint('reflect', __name__)
 
 FACTS_PATH = 'brain/knowledge.json'
 MEMORY_PATH = 'state/memory.json'
-GRAPH_PATH = 'state/knowledge_graph.json'
+GRAPH_PATH = 'brain/knowledge.json'
 
 
 def load_json(path):

@@ -207,7 +207,7 @@ def check_knowledge():
     """Diagnose the knowledge graph."""
     checks = []
     
-    kg_file = Path('persist/knowledge_graph.json')
+    kg_file = Path('brain/knowledge.json')
     if kg_file.exists():
         try:
             kg = json.loads(kg_file.read_text())

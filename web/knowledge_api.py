@@ -11,7 +11,7 @@ PERSIST_DIR = Path(__file__).parent.parent / 'persist'
 
 def load_facts():
     """Load all facts from the knowledge graph."""
-    kg_path = PERSIST_DIR / 'knowledge_graph.json'
+    kg_path = Path('brain/knowledge.json')
     if not kg_path.exists():
         return {}
     try:

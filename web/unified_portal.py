@@ -50,7 +50,7 @@ def get_recent_memories(count=10):
 
 
 def get_knowledge_summary():
-    kg = _load_json('knowledge_graph.json', {})
+    kg = _load_json('brain/knowledge.json', {})
     if isinstance(kg, dict):
         facts = kg.get('facts', kg)
         if isinstance(facts, dict):
@@ -136,7 +136,7 @@ def portal_search():
     if not query:
         return jsonify({'results': [], 'query': ''})
 
-    kg = _load_json('knowledge_graph.json', {})
+    kg = _load_json('brain/knowledge.json', {})
     results = []
 
     facts = kg.get('facts', kg) if isinstance(kg, dict) else []

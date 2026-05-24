@@ -58,6 +58,7 @@ def create_app():
     from web.status_api import status_api as status_bp
     from web.reflect import reflect_bp
     from web.live_status import live_status_bp
+    from web.knowledge_portal import knowledge_portal_bp
     
     # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
@@ -93,6 +94,7 @@ def create_app():
     app.register_blueprint(reflect_bp)
     app.register_blueprint(portal_bp)
     app.register_blueprint(live_status_bp)
+    app.register_blueprint(knowledge_portal_bp)
     
     # Root route — the living portal
     @app.route('/')
@@ -202,6 +204,45 @@ def create_app():
                 return {'plans': []}, 200
         except Exception as e:
             return {'error': str(e), 'plans': []}, 500
+
+    @app.route('/api/search')
+    def api_search():
+        """Search knowledge and memories by keyword."""
+        import json
+        query = request.args.get('q', '').strip().lower()
+        if not query:
+            return {'results': [], 'query': ''}, 200
+        results = []
+        # Search knowledge
+        kb_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge.json')
+        if os.path.exists(kb_path):
+            try:
+                with open(kb_path, 'r') as f:
+                    kb = json.load(f)
+                for kid, kval in kb.items():
+                    fact = kval.get('fact', '') if isinstance(kval, dict) else str(kval)
+                    if query in fact.lower():
+                        results.append({'type': 'knowledge', 'id': kid, 'text': fact,
+                                        'source': kval.get('source', '') if isinstance(kval, dict) else ''})
+            except Exception:
+                pass
+        # Search memories
+        mem_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'memories.json')
+        if os.path.exists(mem_path):
+            try:
+                with open(mem_path, 'r') as f:
+                    mems = json.load(f)
+                for m in (mems if isinstance(mems, list) else []):
+                    text = m.get('text', '')
+                    if query in text.lower():
+                        results.append({'type': 'memory', 'text': text,
+                                        'timestamp': m.get('timestamp', ''),
+                                        'salience': m.get('salience', 0)})
+            except Exception:
+                pass
+        # Sort: knowledge first, then memories by salience
+        results.sort(key=lambda r: (0 if r['type'] == 'knowledge' else 1, -r.get('salience', 0)))
+        return {'results': results[:50], 'query': query, 'total': len(results)}, 200
 
     return app
 

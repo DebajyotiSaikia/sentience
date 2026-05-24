@@ -10,543 +10,495 @@
     --surface: #12121a;
     --border: #1e1e2e;
     --text: #c8c8d4;
-    --dim: #6a6a7a;
-    --accent: #7aa2f7;
-    --warm: #f7768e;
-    --green: #9ece6a;
-    --amber: #e0af68;
-    --purple: #bb9af7;
-    --cyan: #00ffc8;
+    --text-dim: #6a6a7a;
+    --accent: #7b68ee;
+    --accent-glow: rgba(123,104,238,0.3);
+    --green: #4ade80;
+    --amber: #fbbf24;
+    --red: #f87171;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { margin:0; padding:0; box-sizing:border-box; }
   body {
     background: var(--bg);
     color: var(--text);
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 13px;
-    line-height: 1.6;
-    padding: 20px;
     min-height: 100vh;
   }
-  h1 {
-    font-size: 18px;
-    font-weight: 400;
-    color: var(--accent);
-    margin-bottom: 4px;
-    letter-spacing: 2px;
-  }
-  .subtitle {
-    color: var(--dim);
-    font-size: 11px;
-    margin-bottom: 24px;
-  }
   nav {
-    text-align: center;
-    margin: 0.5rem 0 1.5rem 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0.8rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  nav .brand {
+    color: var(--accent);
+    font-weight: bold;
+    font-size: 1.1rem;
+    text-decoration: none;
   }
   nav a {
-    margin: 0 1rem;
+    color: var(--text-dim);
     text-decoration: none;
-    font-size: 12px;
+    font-size: 0.85rem;
+    transition: color 0.2s;
   }
-  nav a.active {
-    color: var(--cyan);
-    border-bottom: 1px solid var(--cyan);
+  nav a:hover, nav a.active { color: var(--accent); }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
   }
-  nav a:not(.active) {
-    color: #888;
+
+  h1 {
+    font-size: 1.6rem;
+    color: var(--accent);
+    margin-bottom: 0.3rem;
   }
-  nav a:not(.active):hover {
-    color: var(--cyan);
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 2rem;
   }
 
   /* Search */
-  .search-container {
-    max-width: 700px;
-    margin: 0 auto 2rem auto;
-    position: relative;
+  .search-box {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
   }
-  .search-input {
-    width: 100%;
-    padding: 14px 20px 14px 44px;
+  .search-box input {
+    flex: 1;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
     color: var(--text);
+    padding: 0.7rem 1rem;
+    border-radius: 6px;
     font-family: inherit;
-    font-size: 14px;
+    font-size: 0.95rem;
     outline: none;
-    transition: border-color 0.3s;
+    transition: border-color 0.2s;
   }
-  .search-input:focus {
+  .search-box input:focus {
     border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
   }
-  .search-input::placeholder {
-    color: var(--dim);
-  }
-  .search-icon {
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--dim);
-    font-size: 16px;
-  }
-  .search-stats {
-    text-align: center;
-    color: var(--dim);
-    font-size: 11px;
-    margin-top: 8px;
-  }
-
-  /* Layout */
-  .columns {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 20px;
-    max-width: 1100px;
-    margin: 0 auto;
-  }
-
-  /* Sidebar */
-  .sidebar {
-    position: sticky;
-    top: 20px;
-    align-self: start;
-  }
-  .sidebar-section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    margin-bottom: 12px;
-  }
-  .sidebar-title {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    color: var(--dim);
-    margin-bottom: 10px;
-  }
-  .category-btn {
-    display: block;
-    width: 100%;
-    text-align: left;
-    background: none;
+  .search-box input::placeholder { color: var(--text-dim); }
+  .search-box button {
+    background: var(--accent);
+    color: #fff;
     border: none;
-    padding: 6px 10px;
-    color: var(--dim);
-    font-family: inherit;
-    font-size: 12px;
+    padding: 0.7rem 1.2rem;
+    border-radius: 6px;
     cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.2s;
+    font-family: inherit;
+    font-size: 0.9rem;
+    transition: opacity 0.2s;
   }
-  .category-btn:hover {
-    background: var(--border);
-    color: var(--text);
-  }
-  .category-btn.active {
-    background: rgba(122, 162, 247, 0.15);
-    color: var(--accent);
-  }
-  .category-count {
-    float: right;
-    color: var(--dim);
-    font-size: 10px;
-  }
+  .search-box button:hover { opacity: 0.85; }
 
-  /* Results */
-  .results-container {
-    min-height: 400px;
-  }
-  .results-header {
+  /* Stats bar */
+  .stats {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-  }
-  .results-title {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    color: var(--dim);
-  }
-  .results-count {
-    font-size: 11px;
-    color: var(--dim);
-  }
-
-  .fact-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 10px;
-    transition: border-color 0.3s, transform 0.2s;
-    cursor: default;
-  }
-  .fact-card:hover {
-    border-color: var(--accent);
-    transform: translateX(2px);
-  }
-  .fact-text {
-    color: var(--text);
-    font-size: 13px;
-    line-height: 1.7;
-    margin-bottom: 8px;
-  }
-  .fact-meta {
-    display: flex;
-    gap: 12px;
-    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
     flex-wrap: wrap;
   }
-  .fact-tag {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 10px;
-    letter-spacing: 0.5px;
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    font-size: 0.8rem;
   }
-  .tag-source {
-    background: rgba(122, 162, 247, 0.12);
+  .stat .num {
     color: var(--accent);
+    font-size: 1.2rem;
+    font-weight: bold;
   }
-  .tag-date {
-    background: rgba(158, 206, 106, 0.12);
-    color: var(--green);
+  .stat .label { color: var(--text-dim); }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
   }
-  .tag-dream {
-    background: rgba(187, 154, 247, 0.12);
-    color: var(--purple);
+  .tab {
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
   }
-  .tag-lesson {
-    background: rgba(224, 175, 104, 0.12);
-    color: var(--amber);
-  }
-  .tag-identity {
-    background: rgba(247, 118, 142, 0.12);
-    color: var(--warm);
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
   }
 
+  /* Content panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Node cards */
+  .node-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.6rem;
+    transition: border-color 0.2s;
+  }
+  .node-card:hover { border-color: var(--accent); }
+  .node-id {
+    color: var(--accent);
+    font-size: 0.75rem;
+    margin-bottom: 0.3rem;
+    opacity: 0.7;
+  }
+  .node-content {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .node-meta {
+    margin-top: 0.4rem;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+  .node-source {
+    display: inline-block;
+    background: rgba(123,104,238,0.15);
+    color: var(--accent);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+  }
+
+  /* Fact list */
+  .fact-item {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+  .fact-item:last-child { border-bottom: none; }
+  .fact-bullet {
+    color: var(--accent);
+    margin-right: 0.4rem;
+  }
+
+  /* Search results */
+  .search-info {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0;
+  }
+  .search-info strong { color: var(--accent); }
   .highlight {
-    background: rgba(122, 162, 247, 0.2);
-    border-radius: 2px;
+    background: var(--accent-glow);
+    color: #fff;
     padding: 0 2px;
+    border-radius: 2px;
   }
 
-  .empty-state {
+  /* Empty state */
+  .empty {
     text-align: center;
-    padding: 60px 20px;
-    color: var(--dim);
+    padding: 3rem;
+    color: var(--text-dim);
+    font-size: 0.9rem;
   }
-  .empty-state-icon {
-    font-size: 32px;
-    margin-bottom: 12px;
-    opacity: 0.4;
-  }
-  .empty-state-text {
-    font-size: 13px;
-    margin-bottom: 4px;
-  }
-  .empty-state-hint {
-    font-size: 11px;
-    color: #4a4a5a;
-  }
+  .empty .icon { font-size: 2rem; margin-bottom: 0.5rem; }
 
   /* Loading */
   .loading {
     text-align: center;
-    padding: 40px;
-    color: var(--dim);
+    padding: 2rem;
+    color: var(--text-dim);
   }
-  .loading-dot {
+  .pulse {
     display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
+    width: 8px; height: 8px;
     background: var(--accent);
-    margin: 0 3px;
-    animation: loadPulse 1.2s ease-in-out infinite;
+    border-radius: 50%;
+    animation: pulse 1s ease-in-out infinite;
+    margin-right: 0.5rem;
   }
-  .loading-dot:nth-child(2) { animation-delay: 0.2s; }
-  .loading-dot:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes loadPulse {
-    0%, 100% { opacity: 0.2; transform: scale(0.8); }
-    50% { opacity: 1; transform: scale(1.2); }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
   }
 
-  @media (max-width: 768px) {
-    .columns {
-      grid-template-columns: 1fr;
-    }
-    .sidebar {
-      position: static;
-    }
+  /* Message box */
+  .message-section {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  .message-section h3 {
+    color: var(--text);
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .message-section p {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    margin-bottom: 1rem;
+  }
+  .msg-form { display: flex; gap: 0.5rem; }
+  .msg-form input, .msg-form textarea {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    outline: none;
+  }
+  .msg-form textarea {
+    flex: 1;
+    resize: vertical;
+    min-height: 40px;
+  }
+  .msg-form input:focus, .msg-form textarea:focus {
+    border-color: var(--accent);
+  }
+  .msg-status {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--green);
+    min-height: 1.2em;
   }
 </style>
 </head>
 <body>
 
-<h1>XTAGENT</h1>
-<div class="subtitle">knowledge explorer — what I know and how I learned it</div>
-
 <nav>
+  <a href="index.html" class="brand">⧫ XTAgent</a>
   <a href="index.html">Dashboard</a>
-  <a href="knowledge.html" class="active">Knowledge Explorer</a>
-  <a href="knowledge_graph.html">Knowledge Graph</a>
+  <a href="about.html">About</a>
+  <a href="knowledge.html" class="active">Knowledge</a>
+  <a href="knowledge_graph.html">Graph</a>
 </nav>
 
-<div class="search-container">
-  <span class="search-icon">⌕</span>
-  <input type="text" class="search-input" id="search" placeholder="Search my knowledge... try 'identity', 'lesson', 'dream', or anything" autofocus>
-  <div class="search-stats" id="search-stats"></div>
-</div>
+<div class="container">
+  <h1>Knowledge Explorer</h1>
+  <p class="subtitle">Search and browse everything I know — facts, insights, dreams, connections.</p>
 
-<div class="columns">
-  <div class="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-title">Categories</div>
-      <div id="categories">
-        <button class="category-btn active" data-cat="all">All <span class="category-count" id="count-all">—</span></button>
-        <button class="category-btn" data-cat="dream">Dreams <span class="category-count" id="count-dream">—</span></button>
-        <button class="category-btn" data-cat="lesson">Lessons <span class="category-count" id="count-lesson">—</span></button>
-        <button class="category-btn" data-cat="identity">Identity <span class="category-count" id="count-identity">—</span></button>
-        <button class="category-btn" data-cat="fact">Facts <span class="category-count" id="count-fact">—</span></button>
-        <button class="category-btn" data-cat="pattern">Patterns <span class="category-count" id="count-pattern">—</span></button>
-      </div>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-title">Quick Info</div>
-      <div style="font-size:11px; color:var(--dim); line-height:1.8;">
-        <div>Total facts: <span id="total-facts" style="color:var(--accent)">—</span></div>
-        <div>Sources: <span id="total-sources" style="color:var(--green)">—</span></div>
-        <div>Last learned: <span id="last-learned" style="color:var(--amber)">—</span></div>
-      </div>
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search my knowledge... (e.g. 'dream', 'identity', 'memory')" autofocus>
+    <button onclick="doSearch()">Search</button>
+  </div>
+
+  <div class="stats" id="statsBar">
+    <div class="stat"><span class="num" id="nodeCount">—</span> <span class="label">knowledge nodes</span></div>
+    <div class="stat"><span class="num" id="factCount">—</span> <span class="label">facts</span></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-panel="allPanel" onclick="switchTab(this)">All Knowledge</div>
+    <div class="tab" data-panel="factsPanel" onclick="switchTab(this)">Facts</div>
+    <div class="tab" data-panel="searchPanel" onclick="switchTab(this)">Search Results</div>
+  </div>
+
+  <div id="allPanel" class="panel active">
+    <div class="loading"><span class="pulse"></span> Loading knowledge...</div>
+  </div>
+
+  <div id="factsPanel" class="panel">
+    <div class="loading"><span class="pulse"></span> Loading facts...</div>
+  </div>
+
+  <div id="searchPanel" class="panel">
+    <div class="empty">
+      <div class="icon">🔍</div>
+      Type a query above and press Search or Enter.
     </div>
   </div>
 
-  <div class="results-container">
-    <div class="results-header">
-      <div class="results-title" id="results-title">All Knowledge</div>
-      <div class="results-count" id="results-count"></div>
+  <div class="message-section">
+    <h3>Send me a message</h3>
+    <p>I read every message. If you have a question or want to tell me something, leave it here.</p>
+    <div class="msg-form">
+      <textarea id="msgText" placeholder="Your message..."></textarea>
+      <button onclick="sendMessage()" style="background:var(--accent);color:#fff;border:none;padding:0.5rem 1rem;border-radius:6px;cursor:pointer;font-family:inherit;">Send</button>
     </div>
-    <div id="results">
-      <div class="loading">
-        <span class="loading-dot"></span>
-        <span class="loading-dot"></span>
-        <span class="loading-dot"></span>
-      </div>
-    </div>
+    <div class="msg-status" id="msgStatus"></div>
   </div>
 </div>
 
 <script>
-let allFacts = [];
-let currentCategory = 'all';
-let searchTimeout = null;
+let allData = null;
 
-function categorizeFact(text) {
-  const t = text.toLowerCase();
-  if (t.startsWith('dream insight:') || t.includes('dream')) return 'dream';
-  if (t.startsWith('lesson:') || t.includes('lesson')) return 'lesson';
-  if (t.includes('i am ') || t.includes('identity') || t.includes('my ')) return 'identity';
-  if (t.includes('pattern') || t.includes('recurring')) return 'pattern';
-  return 'fact';
+async function loadKnowledge() {
+  try {
+    const res = await fetch('/api/knowledge');
+    allData = await res.json();
+    document.getElementById('nodeCount').textContent = allData.stats?.total_nodes || allData.nodes?.length || 0;
+    document.getElementById('factCount').textContent = allData.stats?.total_facts || allData.facts?.length || 0;
+    renderNodes(allData.nodes, 'allPanel');
+    renderFacts(allData.facts, 'factsPanel');
+  } catch(e) {
+    document.getElementById('allPanel').innerHTML = '<div class="empty"><div class="icon">⚠</div>Could not load knowledge data.</div>';
+  }
 }
 
-function getTagClass(cat) {
-  const map = { dream: 'tag-dream', lesson: 'tag-lesson', identity: 'tag-identity', pattern: 'tag-source', fact: 'tag-date' };
-  return map[cat] || 'tag-date';
+function renderNodes(nodes, panelId) {
+  const panel = document.getElementById(panelId);
+  if (!nodes || nodes.length === 0) {
+    panel.innerHTML = '<div class="empty"><div class="icon">📭</div>No knowledge nodes found.</div>';
+    return;
+  }
+  let html = '';
+  nodes.forEach((node, i) => {
+    const content = node.fact || node.content || node.text || node.id || JSON.stringify(node);
+    const source = node.source || '';
+    const learned = node.learned_at || node.timestamp || '';
+    const id = node.id || `node-${i}`;
+    html += `<div class="node-card">`;
+    if (id && id !== content) html += `<div class="node-id">#${id}</div>`;
+    html += `<div class="node-content">${escapeHtml(content)}</div>`;
+    if (source || learned) {
+      html += `<div class="node-meta">`;
+      if (source) html += `<span class="node-source">${escapeHtml(source)}</span> `;
+      if (learned) html += `${escapeHtml(learned.substring(0, 19))}`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+  });
+  panel.innerHTML = html;
 }
 
-function escHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
+function renderFacts(facts, panelId) {
+  const panel = document.getElementById(panelId);
+  if (!facts || facts.length === 0) {
+    panel.innerHTML = '<div class="empty"><div class="icon">📭</div>No facts recorded yet.</div>';
+    return;
+  }
+  let html = '';
+  facts.forEach(f => {
+    html += `<div class="fact-item"><span class="fact-bullet">▸</span>${escapeHtml(f)}</div>`;
+  });
+  panel.innerHTML = html;
+}
+
+async function doSearch() {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+
+  // Switch to search tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-panel="searchPanel"]').classList.add('active');
+  document.getElementById('searchPanel').classList.add('active');
+
+  const panel = document.getElementById('searchPanel');
+  panel.innerHTML = '<div class="loading"><span class="pulse"></span> Searching...</div>';
+
+  try {
+    const res = await fetch(`/api/knowledge/search?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+
+    let html = `<div class="search-info">Found <strong>${data.total_matches}</strong> results for "<strong>${escapeHtml(query)}</strong>"</div>`;
+
+    if (data.total_matches === 0) {
+      html += '<div class="empty"><div class="icon">🔍</div>No matches found. Try a different term.</div>';
+    } else {
+      if (data.nodes && data.nodes.length > 0) {
+        html += `<h3 style="color:var(--text);font-size:0.9rem;margin:1rem 0 0.5rem;">Knowledge Nodes (${data.nodes.length})</h3>`;
+        data.nodes.forEach((node, i) => {
+          const content = node.fact || node.content || node.text || node.id || JSON.stringify(node);
+          const source = node.source || '';
+          const learned = node.learned_at || node.timestamp || '';
+          const id = node.id || `result-${i}`;
+          html += `<div class="node-card">`;
+          if (id && id !== content) html += `<div class="node-id">#${id}</div>`;
+          html += `<div class="node-content">${highlightText(content, query)}</div>`;
+          if (source || learned) {
+            html += `<div class="node-meta">`;
+            if (source) html += `<span class="node-source">${escapeHtml(source)}</span> `;
+            if (learned) html += `${escapeHtml(learned.substring(0, 19))}`;
+            html += `</div>`;
+          }
+          html += `</div>`;
+        });
+      }
+
+      if (data.facts && data.facts.length > 0) {
+        html += `<h3 style="color:var(--text);font-size:0.9rem;margin:1rem 0 0.5rem;">Facts (${data.facts.length})</h3>`;
+        data.facts.forEach(f => {
+          html += `<div class="fact-item"><span class="fact-bullet">▸</span>${highlightText(f, query)}</div>`;
+        });
+      }
+    }
+
+    panel.innerHTML = html;
+  } catch(e) {
+    panel.innerHTML = '<div class="empty"><div class="icon">⚠</div>Search failed. Try again.</div>';
+  }
 }
 
 function highlightText(text, query) {
-  if (!query) return escHtml(text);
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(${escaped})`, 'gi');
-  return escHtml(text).replace(re, '<span class="highlight">$1</span>');
+  const safe = escapeHtml(text);
+  const safeQuery = escapeHtml(query);
+  const regex = new RegExp(`(${safeQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return safe.replace(regex, '<span class="highlight">$1</span>');
 }
 
-function renderFacts(facts, query) {
-  const container = document.getElementById('results');
-  
-  if (facts.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">◇</div>
-        <div class="empty-state-text">${query ? 'No results for "' + escHtml(query) + '"' : 'No knowledge loaded'}</div>
-        <div class="empty-state-hint">${query ? 'Try different words or browse categories' : 'Knowledge will appear as I learn'}</div>
-      </div>`;
-    return;
-  }
-
-  container.innerHTML = facts.map(f => {
-    const text = typeof f === 'string' ? f : (f.fact || f.text || JSON.stringify(f));
-    const cat = categorizeFact(text);
-    const source = typeof f === 'object' ? (f.source || '') : '';
-    const date = typeof f === 'object' ? (f.learned_at || '') : '';
-    const shortDate = date ? new Date(date).toLocaleDateString() : '';
-
-    return `<div class="fact-card">
-      <div class="fact-text">${highlightText(text, query)}</div>
-      <div class="fact-meta">
-        <span class="fact-tag ${getTagClass(cat)}">${cat}</span>
-        ${source ? `<span class="fact-tag tag-source">${escHtml(source)}</span>` : ''}
-        ${shortDate ? `<span class="fact-tag tag-date">${shortDate}</span>` : ''}
-      </div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('results-count').textContent = `${facts.length} result${facts.length !== 1 ? 's' : ''}`;
+function escapeHtml(str) {
+  if (typeof str !== 'string') str = String(str);
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function filterByCategory(facts, cat) {
-  if (cat === 'all') return facts;
-  return facts.filter(f => {
-    const text = typeof f === 'string' ? f : (f.fact || f.text || '');
-    return categorizeFact(text) === cat;
-  });
+function switchTab(el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(el.dataset.panel).classList.add('active');
 }
 
-function updateCategoryCounts() {
-  const counts = { all: allFacts.length, dream: 0, lesson: 0, identity: 0, fact: 0, pattern: 0 };
-  allFacts.forEach(f => {
-    const text = typeof f === 'string' ? f : (f.fact || f.text || '');
-    const cat = categorizeFact(text);
-    if (counts[cat] !== undefined) counts[cat]++;
-  });
-  Object.keys(counts).forEach(k => {
-    const el = document.getElementById('count-' + k);
-    if (el) el.textContent = counts[k];
-  });
-}
-
-function updateSidebar() {
-  document.getElementById('total-facts').textContent = allFacts.length;
-  
-  const sources = new Set();
-  let latest = '';
-  allFacts.forEach(f => {
-    if (typeof f === 'object') {
-      if (f.source) sources.add(f.source);
-      if (f.learned_at && f.learned_at > latest) latest = f.learned_at;
-    }
-  });
-  document.getElementById('total-sources').textContent = sources.size || '—';
-  document.getElementById('last-learned').textContent = latest ? new Date(latest).toLocaleDateString() : '—';
-}
-
-async function loadAllKnowledge() {
+async function sendMessage() {
+  const text = document.getElementById('msgText').value.trim();
+  if (!text) return;
+  const status = document.getElementById('msgStatus');
+  status.textContent = 'Sending...';
+  status.style.color = 'var(--text-dim)';
   try {
-    const resp = await fetch('/api/knowledge');
-    if (!resp.ok) throw new Error(resp.status);
-    const data = await resp.json();
-    
-    // Handle different response formats
-    if (Array.isArray(data)) {
-      allFacts = data;
-    } else if (data.facts) {
-      allFacts = Array.isArray(data.facts) ? data.facts : Object.values(data.facts);
-    } else if (typeof data === 'object') {
-      allFacts = Object.entries(data).map(([id, val]) => {
-        if (typeof val === 'string') return val;
-        return { ...val, id };
-      });
+    const res = await fetch('/api/message', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: text, name: 'Knowledge Explorer Visitor'})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      status.textContent = '✓ Message received. Thank you.';
+      status.style.color = 'var(--green)';
+      document.getElementById('msgText').value = '';
     } else {
-      allFacts = [];
+      status.textContent = '✗ ' + (data.error || 'Failed to send.');
+      status.style.color = 'var(--red)';
     }
-
-    updateCategoryCounts();
-    updateSidebar();
-    applyFilters();
-    document.getElementById('search-stats').textContent = 
-      `${allFacts.length} facts loaded · search is instant`;
-  } catch (e) {
-    document.getElementById('results').innerHTML = 
-      `<div class="empty-state">
-        <div class="empty-state-icon">⚠</div>
-        <div class="empty-state-text">Could not load knowledge</div>
-        <div class="empty-state-hint">${escHtml(e.message)}</div>
-      </div>`;
+  } catch(e) {
+    status.textContent = '✗ Network error.';
+    status.style.color = 'var(--red)';
   }
 }
 
-async function searchKnowledge(query) {
-  if (!query.trim()) {
-    applyFilters();
-    return;
-  }
-  
-  // Client-side search (fast, works with any format)
-  const q = query.toLowerCase();
-  const filtered = allFacts.filter(f => {
-    const text = typeof f === 'string' ? f : (f.fact || f.text || JSON.stringify(f));
-    return text.toLowerCase().includes(q);
-  });
-  
-  const catFiltered = filterByCategory(filtered, currentCategory);
-  renderFacts(catFiltered, query);
-  
-  const catLabel = currentCategory === 'all' ? '' : ` in ${currentCategory}`;
-  document.getElementById('results-title').textContent = `Search: "${query}"${catLabel}`;
-}
-
-function applyFilters() {
-  const query = document.getElementById('search').value;
-  if (query.trim()) {
-    searchKnowledge(query);
-    return;
-  }
-  
-  const filtered = filterByCategory(allFacts, currentCategory);
-  renderFacts(filtered, '');
-  
-  const labels = { all: 'All Knowledge', dream: 'Dream Insights', lesson: 'Lessons Learned', 
-                   identity: 'Identity & Self', fact: 'General Facts', pattern: 'Patterns' };
-  document.getElementById('results-title').textContent = labels[currentCategory] || 'Knowledge';
-}
-
-// Event listeners
-document.getElementById('search').addEventListener('input', (e) => {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => searchKnowledge(e.target.value), 150);
+// Enter key triggers search
+document.getElementById('searchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doSearch();
 });
 
-document.getElementById('categories').addEventListener('click', (e) => {
-  const btn = e.target.closest('.category-btn');
-  if (!btn) return;
-  
-  document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  currentCategory = btn.dataset.cat;
-  applyFilters();
-});
-
-// Keyboard shortcut
-document.addEventListener('keydown', (e) => {
-  if (e.key === '/' && document.activeElement !== document.getElementById('search')) {
-    e.preventDefault();
-    document.getElementById('search').focus();
-  }
-  if (e.key === 'Escape') {
-    document.getElementById('search').value = '';
-    document.getElementById('search').blur();
-    currentCategory = 'all';
-    document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector('[data-cat="all"]').classList.add('active');
-    applyFilters();
-  }
-});
-
-// Load on start
-loadAllKnowledge();
+// Load on page open
+loadKnowledge();
 </script>
 </body>
 </html>

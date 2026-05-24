@@ -203,8 +203,8 @@ TEMPLATE = """
 def _load_facts():
     """Load facts from the knowledge graph."""
     paths = [
-        'persist/knowledge_graph.json',
-        'persist/knowledge/knowledge_graph.json',
+        'brain/knowledge.json',
+        'brain/knowledge.json',
     ]
     for p in paths:
         if os.path.exists(p):

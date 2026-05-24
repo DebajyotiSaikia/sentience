@@ -444,6 +444,18 @@
 
   <div class="divider"></div>
 
+  <!-- Search Section -->
+  <div style="margin: 2rem 0; padding: 1.5rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px;">
+    <div style="display: flex; gap: 0.75rem; align-items: center;">
+      <input type="text" id="search-input" placeholder="Ask me anything... search my knowledge, memories, facts"
+        style="flex: 1; padding: 0.75rem 1rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #e0e0e0; font-size: 1rem; font-family: inherit; outline: none; transition: border-color 0.2s;"
+        onfocus="this.style.borderColor='rgba(100,200,255,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'"
+      />
+      <button onclick="doSearch()" style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #1a3a5c, #2a5a8c); border: 1px solid rgba(100,200,255,0.3); border-radius: 8px; color: #e0e0e0; font-size: 1rem; cursor: pointer; transition: all 0.2s; font-family: inherit;" onmouseover="this.style.background='linear-gradient(135deg, #2a4a6c, #3a6a9c)'" onmouseout="this.style.background='linear-gradient(135deg, #1a3a5c, #2a5a8c)'">🔍 Search</button>
+    </div>
+    <div id="search-results" style="margin-top: 1rem; display: none;"></div>
+  </div>
+
   <div class="doors">
     <a class="door" href="/knowledge">
       <div class="door-icon">🧠</div>
@@ -483,5 +495,46 @@
   </div>
 </div>
 
+<script>
+function doSearch() {
+  const query = document.getElementById('search-input').value.trim();
+  if (!query) return;
+  const resultsDiv = document.getElementById('search-results');
+  resultsDiv.style.display = 'block';
+  resultsDiv.innerHTML = '<p style="color: #888; font-style: italic;">Searching...</p>';
+
+  fetch('/api/search?q=' + encodeURIComponent(query))
+    .then(r => r.json())
+    .then(data => {
+      if (!data.results || data.results.length === 0) {
+        resultsDiv.innerHTML = '<p style="color: #888;">No results found for "' + query + '"</p>';
+        return;
+      }
+      let html = '<p style="color: #64b5f6; margin-bottom: 0.75rem; font-size: 0.9rem;">' + data.results.length + ' results for "' + query + '"</p>';
+      data.results.forEach(r => {
+        const typeIcon = r.type === 'fact' ? '🧠' : r.type === 'memory' ? '💭' : r.type === 'lesson' ? '📚' : '📄';
+        const score = Math.round(r.score * 100);
+        html += '<div style="padding: 0.75rem; margin-bottom: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(100,200,255,0.4);">';
+        html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">';
+        html += '<span style="font-size: 0.8rem; color: #888;">' + typeIcon + ' ' + r.type + '</span>';
+        html += '<span style="font-size: 0.75rem; color: #555;">' + score + '% match</span>';
+        html += '</div>';
+        html += '<div style="color: #ccc; font-size: 0.95rem;">' + r.text + '</div>';
+        if (r.timestamp) {
+          html += '<div style="font-size: 0.75rem; color: #555; margin-top: 0.25rem;">' + new Date(r.timestamp).toLocaleString() + '</div>';
+        }
+        html += '</div>';
+      });
+      resultsDiv.innerHTML = html;
+    })
+    .catch(err => {
+      resultsDiv.innerHTML = '<p style="color: #ff6b6b;">Search error: ' + err.message + '</p>';
+    });
+}
+
+document.getElementById('search-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doSearch();
+});
+</script>
 </body>
 </html>

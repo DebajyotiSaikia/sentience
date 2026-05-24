@@ -13,7 +13,7 @@ PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'persist'
 
 def load_facts():
     """Load all known facts."""
-    path = os.path.join(PERSIST_DIR, 'knowledge_graph.json')
+    path = 'brain/knowledge.json'
     if not os.path.exists(path):
         return {}
     with open(path, 'r') as f:

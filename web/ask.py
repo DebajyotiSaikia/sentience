@@ -4,7 +4,7 @@ from collections import defaultdict
 
 ask_bp = Blueprint('ask', __name__)
 
-FACTS_PATH = 'persist/knowledge_graph.json'
+FACTS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'brain', 'knowledge.json')
 MEMORIES_PATH = 'persist/memories.json'
 
 
