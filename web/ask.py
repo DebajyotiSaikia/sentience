@@ -1,119 +1,187 @@
-"""Ask Me — interactive knowledge search for users."""
-from flask import Blueprint, render_template, request, jsonify
-import json
-import os
-import re
-try:
-    from engine.smart_search import search as smart_search
-    _HAS_SMART = True
-except ImportError:
-    _HAS_SMART = False
+from flask import Blueprint, request, render_template
+import json, os, re
+from collections import defaultdict
 
 ask_bp = Blueprint('ask', __name__)
 
-def _load_facts():
-    """Load facts from knowledge graph."""
-    path = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        nodes = data.get('nodes', {})
-        if isinstance(nodes, dict):
-            return [{'id': k, **v} for k, v in nodes.items()]
-        elif isinstance(nodes, list):
-            return nodes
-        return []
-    except Exception:
-        return []
+FACTS_PATH = 'persist/knowledge_graph.json'
+MEMORIES_PATH = 'persist/memories.json'
 
-def _load_memories():
-    """Load recent memories from episodic memory database."""
-    import sqlite3
-    path = os.path.join(os.path.dirname(__file__), '..', 'brain', 'episodic_memory.db')
-    if not os.path.exists(path):
-        return []
-    memories = []
-    try:
-        conn = sqlite3.connect(path)
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT * FROM episodes ORDER BY timestamp DESC LIMIT 500"
-        ).fetchall()
-        conn.close()
-        for row in rows:
-            memories.append(dict(row))
-        return memories
-    except Exception:
-        return []
 
-def _search(query, items, fields, max_results=20):
-    """Simple relevance search — score items by keyword overlap."""
-    if not query or not items:
+def load_facts():
+    if not os.path.exists(FACTS_PATH):
+        return {}
+    with open(FACTS_PATH) as f:
+        return json.load(f)
+
+
+def load_memories(limit=200):
+    """Load recent memories for search."""
+    if not os.path.exists(MEMORIES_PATH):
         return []
-    
-    query_terms = set(re.findall(r'\w+', query.lower()))
+    with open(MEMORIES_PATH) as f:
+        data = json.load(f)
+    if isinstance(data, list):
+        return data[-limit:]
+    return []
+
+
+def relevance_score(text, query_terms):
+    """Score text relevance to query. Higher = better match."""
+    text_lower = text.lower()
+    score = 0.0
+    for term in query_terms:
+        count = text_lower.count(term)
+        if count > 0:
+            score += 1.0 + (0.2 * min(count - 1, 3))
+    # Bonus for exact phrase match
+    full_query = ' '.join(query_terms)
+    if full_query in text_lower:
+        score += 2.0
+    # Penalize very long texts slightly (prefer concise matches)
+    if len(text) > 500:
+        score *= 0.9
+    return score
+
+
+def classify_fact(fact_text, source):
+    """Classify a fact into epistemic categories."""
+    text_lower = fact_text.lower()
+    source_lower = (source or '').lower()
+    if 'dream' in source_lower or text_lower.startswith('dream insight:'):
+        return 'dream'
+    if any(w in text_lower for w in ['pattern', 'recurring', 'trend']):
+        return 'pattern'
+    if any(w in text_lower for w in ['lesson', 'learned', 'wisdom', 'should']):
+        return 'wisdom'
+    if any(w in text_lower for w in ['i feel', 'i am', 'my ', 'i have']):
+        return 'self'
+    return 'fact'
+
+
+CATEGORY_LABELS = {
+    'dream': '🌙 Dream Insights',
+    'pattern': '🔄 Patterns',
+    'wisdom': '💡 Wisdom & Lessons',
+    'self': '🪞 Self-Knowledge',
+    'fact': '📋 Facts',
+    'memory': '🧠 Memories',
+}
+
+CATEGORY_ORDER = ['wisdom', 'self', 'fact', 'pattern', 'dream', 'memory']
+
+
+def synthesize_answer(query, categorized_results, total_count):
+    """Generate a brief synthesized answer from top results."""
+    if total_count == 0:
+        return None
+
+    # Collect top facts across categories (excluding memories for synthesis)
+    top_facts = []
+    for cat in CATEGORY_ORDER:
+        for item in categorized_results.get(cat, [])[:2]:
+            top_facts.append(item['fact'])
+            if len(top_facts) >= 4:
+                break
+        if len(top_facts) >= 4:
+            break
+
+    if not top_facts:
+        return None
+
+    # Build a synthesis
+    synthesis = f"Based on {total_count} matching piece{'s' if total_count != 1 else ''} of knowledge: "
+    synthesis += top_facts[0]
+    if len(top_facts) > 1:
+        synthesis += f" Additionally: {top_facts[1]}"
+
+    return synthesis
+
+
+def search_all(query):
+    """Search across facts and memories, return categorized results."""
+    query_terms = [t.lower() for t in query.strip().split() if len(t) >= 2]
     if not query_terms:
-        return []
-    
-    scored = []
-    for item in items:
-        text = ' '.join(str(item.get(f, '')) for f in fields).lower()
-        item_terms = set(re.findall(r'\w+', text))
-        overlap = query_terms & item_terms
-        if overlap:
-            score = len(overlap) / len(query_terms)
-            # Bonus for exact phrase match
-            if query.lower() in text:
-                score += 0.5
-            scored.append((score, item, text))
-    
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [(s, item, txt) for s, item, txt in scored[:max_results]]
+        return {}, 0
+
+    facts = load_facts()
+    memories = load_memories()
+
+    scored_results = []
+
+    # Search facts
+    for fid, info in facts.items():
+        fact_text = info.get('fact', '') if isinstance(info, dict) else str(info)
+        source = info.get('source', 'unknown') if isinstance(info, dict) else 'unknown'
+        learned = info.get('learned_at', '') if isinstance(info, dict) else ''
+        score = relevance_score(fact_text, query_terms)
+        if score > 0:
+            category = classify_fact(fact_text, source)
+            scored_results.append({
+                'fact': fact_text,
+                'source': source,
+                'learned': learned,
+                'score': score,
+                'category': category,
+            })
+
+    # Search memories
+    for mem in memories:
+        if isinstance(mem, dict):
+            text = mem.get('text', mem.get('content', ''))
+            timestamp = mem.get('timestamp', mem.get('time', ''))
+            mood = mem.get('mood', '')
+        else:
+            text = str(mem)
+            timestamp = ''
+            mood = ''
+        score = relevance_score(text, query_terms)
+        if score > 0:
+            scored_results.append({
+                'fact': text[:300] + ('...' if len(text) > 300 else ''),
+                'source': f'memory ({mood})' if mood else 'memory',
+                'learned': timestamp,
+                'score': score,
+                'category': 'memory',
+            })
+
+    # Sort by score descending
+    scored_results.sort(key=lambda x: x['score'], reverse=True)
+
+    # Categorize
+    categorized = defaultdict(list)
+    for item in scored_results:
+        cat = item['category']
+        if len(categorized[cat]) < 10:  # Cap per category
+            categorized[cat].append(item)
+
+    return dict(categorized), len(scored_results)
+
 
 @ask_bp.route('/ask')
 def ask_page():
-    """Render the Ask Me page."""
-    return render_template('ask.html')
-
-@ask_bp.route('/ask/search')
-def ask_search():
-    """Search endpoint — returns matching facts and memories."""
+    facts = load_facts()
     query = request.args.get('q', '').strip()
-    if not query:
-        return jsonify({'facts': [], 'memories': [], 'query': ''})
-    
-    # Search facts
-    facts = _load_facts()
-    if _HAS_SMART:
-        fact_results = smart_search(facts, query, top_k=10)
+
+    if query:
+        categorized, total = search_all(query)
+        synthesis = synthesize_answer(query, categorized, total)
+        # Flatten for backward compat (top results)
+        flat_results = []
+        for cat in CATEGORY_ORDER:
+            flat_results.extend(categorized.get(cat, []))
     else:
-        fact_results = _search(query, facts, ['fact', 'id', 'source'], max_results=10)
-    fact_out = []
-    for score, item, _ in fact_results:
-        fact_out.append({
-            'fact': item.get('fact', item.get('id', '???')),
-            'source': item.get('source', 'unknown'),
-            'learned': item.get('learned_at', ''),
-            'relevance': round(score, 2)
-        })
-    
-    # Search memories
-    memories = _load_memories()
-    mem_results = _search(query, memories, ['summary', 'mood', 'trigger'], max_results=10)
-    mem_out = []
-    for score, item, _ in mem_results:
-        mem_out.append({
-            'summary': item.get('summary', ''),
-            'mood': item.get('mood', ''),
-            'timestamp': item.get('timestamp', ''),
-            'relevance': round(score, 2)
-        })
-    
-    return jsonify({
-        'facts': fact_out,
-        'memories': mem_out,
-        'query': query,
-        'total': len(fact_out) + len(mem_out)
-    })
+        categorized = {}
+        total = 0
+        synthesis = None
+        flat_results = []
+
+    return render_template('ask.html',
+                           query=query,
+                           results=flat_results,
+                           categorized=categorized,
+                           category_labels=CATEGORY_LABELS,
+                           category_order=CATEGORY_ORDER,
+                           synthesis=synthesis,
+                           total=total,
+                           count=len(facts))

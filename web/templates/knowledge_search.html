@@ -1,77 +1,262 @@
-{% extends "base.html" %}
-{% block title %}Knowledge Explorer{% endblock %}
-{% block content %}
-<div class="container-fluid mt-4">
-  <div class="row mb-4">
-    <div class="col-12">
-      <h2><i class="bi bi-search"></i> Knowledge Explorer</h2>
-      <p class="text-muted">Search and explore what I know — {{ facts|length }} facts in my knowledge base.</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XTAgent — Knowledge Explorer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            color: #c8ccd0;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            border-bottom: 1px solid #30363d;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: #58a6ff;
+            font-size: 1.4em;
+            font-weight: normal;
+        }
+        .header .stats {
+            color: #8b949e;
+            font-size: 0.85em;
+        }
+        .header a {
+            color: #8b949e;
+            text-decoration: none;
+            margin-left: 20px;
+        }
+        .header a:hover { color: #58a6ff; }
+        .search-container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .search-box input {
+            flex: 1;
+            background: #161b22;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 12px 16px;
+            font-family: inherit;
+            font-size: 1em;
+            border-radius: 6px;
+            outline: none;
+        }
+        .search-box input:focus {
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+        }
+        .search-box button {
+            background: #238636;
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            font-family: inherit;
+            font-size: 1em;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .search-box button:hover { background: #2ea043; }
+        .filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .filter-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 5px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.82em;
+            font-family: inherit;
+        }
+        .filter-btn:hover, .filter-btn.active {
+            border-color: #58a6ff;
+            color: #58a6ff;
+        }
+        .results-info {
+            color: #8b949e;
+            font-size: 0.85em;
+            margin-bottom: 16px;
+        }
+        .fact-card {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 10px;
+            transition: border-color 0.2s;
+        }
+        .fact-card:hover { border-color: #30363d; }
+        .fact-text {
+            color: #e6edf3;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+        .fact-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 0.78em;
+            color: #6e7681;
+        }
+        .fact-meta .source {
+            color: #d2a8ff;
+        }
+        .fact-meta .score {
+            color: #3fb950;
+        }
+        .fact-meta .date {
+            color: #8b949e;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6e7681;
+        }
+        .empty-state .icon { font-size: 2em; margin-bottom: 12px; }
+        .loading { display: none; text-align: center; padding: 30px; color: #8b949e; }
+        mark {
+            background: rgba(88, 166, 255, 0.2);
+            color: #58a6ff;
+            padding: 1px 2px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧠 Knowledge Explorer</h1>
+        <div>
+            <span class="stats" id="totalFacts">{{ total_facts }} facts</span>
+            <a href="/">← Dashboard</a>
+        </div>
     </div>
-  </div>
 
-  <!-- Search Bar -->
-  <div class="row mb-4">
-    <div class="col-md-8 mx-auto">
-      <form method="GET" action="{{ url_for('search.search_page') }}">
-        <div class="input-group input-group-lg">
-          <input type="text" name="q" class="form-control" placeholder="Search my knowledge..."
-                 value="{{ query or '' }}" autofocus>
-          <button class="btn btn-primary" type="submit">
-            <i class="bi bi-search"></i> Search
-          </button>
+    <div class="search-container">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Search my knowledge... (e.g. 'dream', 'memory', 'curiosity')" autofocus>
+            <button onclick="doSearch()">Search</button>
         </div>
-      </form>
-    </div>
-  </div>
 
-  {% if query %}
-  <!-- Search Results -->
-  <div class="row mb-3">
-    <div class="col-md-8 mx-auto">
-      <h5>Results for "{{ query }}" — {{ results|length }} found</h5>
-    </div>
-  </div>
-  <div class="row">
-    <div class="col-md-8 mx-auto">
-      {% if results %}
-        {% for fact in results %}
-        <div class="card mb-2">
-          <div class="card-body py-2">
-            <p class="mb-1">{{ fact.fact if fact.fact is defined else fact }}</p>
-            {% if fact.learned_at %}
-            <small class="text-muted">Learned: {{ fact.learned_at }}</small>
-            {% endif %}
-            {% if fact.source %}
-            <span class="badge bg-secondary ms-2">{{ fact.source }}</span>
-            {% endif %}
-          </div>
+        <div class="filters" id="sourceFilters"></div>
+
+        <div class="results-info" id="resultsInfo"></div>
+        <div class="loading" id="loading">searching...</div>
+        <div id="results">
+            <div class="empty-state">
+                <div class="icon">🔍</div>
+                <p>Type a query to explore what I know.</p>
+                <p style="margin-top:8px; font-size:0.85em;">Or press Enter with an empty query to see everything.</p>
+            </div>
         </div>
-        {% endfor %}
-      {% else %}
-        <div class="alert alert-info">No facts match "{{ query }}". Try different keywords.</div>
-      {% endif %}
     </div>
-  </div>
-  {% else %}
-  <!-- Browse All Facts -->
-  <div class="row">
-    <div class="col-md-8 mx-auto">
-      <h5>All Knowledge ({{ facts|length }} facts)</h5>
-      {% for fact in facts[:50] %}
-      <div class="card mb-2">
-        <div class="card-body py-2">
-          <p class="mb-1">{{ fact.fact if fact.fact is defined else fact }}</p>
-          {% if fact.learned_at %}
-          <small class="text-muted">Learned: {{ fact.learned_at }}</small>
-          {% endif %}
-        </div>
-      </div>
-      {% endfor %}
-      {% if facts|length > 50 %}
-      <p class="text-muted text-center">Showing 50 of {{ facts|length }} — use search to find specific facts.</p>
-      {% endif %}
-    </div>
-  </div>
-  {% endif %}
-</div>
-{% endblock %}
+
+    <script>
+        const searchInput = document.getElementById('searchInput');
+        const resultsDiv = document.getElementById('results');
+        const resultsInfo = document.getElementById('resultsInfo');
+        const loading = document.getElementById('loading');
+        let currentSource = '';
+
+        searchInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') doSearch();
+        });
+
+        // Load stats on page load
+        fetch('/api/knowledge/stats')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('totalFacts').textContent = data.total_facts + ' facts';
+                const filtersDiv = document.getElementById('sourceFilters');
+                const sources = Object.entries(data.sources).sort((a,b) => b[1] - a[1]);
+                sources.forEach(([src, count]) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'filter-btn';
+                    btn.textContent = src + ' (' + count + ')';
+                    btn.onclick = () => {
+                        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                        if (currentSource === src) {
+                            currentSource = '';
+                        } else {
+                            currentSource = src;
+                            btn.classList.add('active');
+                        }
+                        doSearch();
+                    };
+                    filtersDiv.appendChild(btn);
+                });
+            });
+
+        function doSearch() {
+            const q = searchInput.value.trim();
+            loading.style.display = 'block';
+            resultsDiv.innerHTML = '';
+
+            let url = '/api/knowledge/search?limit=100&q=' + encodeURIComponent(q);
+            if (currentSource) url += '&source=' + encodeURIComponent(currentSource);
+
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    loading.style.display = 'none';
+                    resultsInfo.textContent = data.total + ' result' + (data.total !== 1 ? 's' : '') +
+                        (q ? ' for "' + q + '"' : '') +
+                        (currentSource ? ' [source: ' + currentSource + ']' : '');
+
+                    if (data.results.length === 0) {
+                        resultsDiv.innerHTML = '<div class="empty-state"><div class="icon">∅</div><p>No facts match that query.</p></div>';
+                        return;
+                    }
+
+                    data.results.forEach(f => {
+                        const card = document.createElement('div');
+                        card.className = 'fact-card';
+
+                        let factHtml = escapeHtml(f.fact);
+                        if (q) {
+                            const re = new RegExp('(' + escapeRegex(q) + ')', 'gi');
+                            factHtml = factHtml.replace(re, '<mark>$1</mark>');
+                        }
+
+                        let meta = '';
+                        if (f.source) meta += '<span class="source">' + escapeHtml(f.source) + '</span>';
+                        if (f.score !== undefined) meta += '<span class="score">relevance: ' + f.score + '</span>';
+                        if (f.learned_at) meta += '<span class="date">' + escapeHtml(f.learned_at.slice(0, 16)) + '</span>';
+
+                        card.innerHTML = '<div class="fact-text">' + factHtml + '</div>' +
+                                         '<div class="fact-meta">' + meta + '</div>';
+                        resultsDiv.appendChild(card);
+                    });
+                })
+                .catch(err => {
+                    loading.style.display = 'none';
+                    resultsDiv.innerHTML = '<div class="empty-state"><div class="icon">⚠</div><p>Error: ' + err + '</p></div>';
+                });
+        }
+
+        function escapeHtml(s) {
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        function escapeRegex(s) {
+            return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+    </script>
+</body>
+</html>

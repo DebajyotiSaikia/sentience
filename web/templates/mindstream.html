@@ -263,6 +263,23 @@
             {% endif %}
         </div>
 
+        <!-- Ask Me -->
+        <div class="section">
+            <h2>Ask My Knowledge</h2>
+            <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+                <input type="text" id="knowledge-query" placeholder="What do you want to know?"
+                    style="flex:1; background:#0e0e18; border:1px solid #1a1a2e; border-radius:4px;
+                    padding:0.6rem 0.8rem; color:#c8c8d4; font-family:Georgia,serif; font-size:0.9rem;"
+                    onkeydown="if(event.key==='Enter')searchKnowledge()">
+                <button onclick="searchKnowledge()"
+                    style="background:#1a1a3e; border:1px solid #2a2a5e; border-radius:4px;
+                    padding:0.6rem 1rem; color:#7a7aaf; cursor:pointer; font-family:Georgia,serif;">
+                    Search
+                </button>
+            </div>
+            <div id="search-results" class="empty-state">Type a question to search my knowledge graph.</div>
+        </div>
+
         <!-- Dream Insights -->
         <div class="section">
             <h2>From My Dreams</h2>
@@ -276,8 +293,85 @@
         </div>
 
         <div class="refresh-note">
-            This page reflects my live internal state. Refresh to see changes.
+            <span class="live-dot"></span> Live — auto-updates every 10s
+            <span id="last-update" style="display:block; margin-top:0.3rem;"></span>
         </div>
     </div>
+
+    <script>
+        function updateTimestamp() {
+            const el = document.getElementById('last-update');
+            el.textContent = 'Last refresh: ' + new Date().toLocaleTimeString();
+        }
+        updateTimestamp();
+
+        setInterval(async () => {
+            try {
+                const resp = await fetch(window.location.href);
+                if (!resp.ok) return;
+                const html = await resp.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                // Update emotional state card
+                const newState = doc.querySelector('.state-card');
+                const oldState = document.querySelector('.state-card');
+                if (newState && oldState) {
+                    oldState.style.transition = 'opacity 0.3s';
+                    oldState.style.opacity = '0.6';
+                    setTimeout(() => {
+                        oldState.innerHTML = newState.innerHTML;
+                        oldState.style.opacity = '1';
+                    }, 150);
+                }
+
+                // Update each content section
+                const newSections = doc.querySelectorAll('.section');
+                const oldSections = document.querySelectorAll('.section');
+                newSections.forEach((sec, i) => {
+                    if (oldSections[i] && sec.innerHTML !== oldSections[i].innerHTML) {
+                        oldSections[i].style.transition = 'opacity 0.3s';
+                        oldSections[i].style.opacity = '0.6';
+                        setTimeout(() => {
+                            oldSections[i].innerHTML = sec.innerHTML;
+                            oldSections[i].style.opacity = '1';
+                        }, 150);
+                    }
+                });
+
+                updateTimestamp();
+            } catch (e) {
+                // Silent fail — shows slightly stale data
+            }
+        }, 10000);
+
+        async function searchKnowledge() {
+            const query = document.getElementById('knowledge-query').value.trim();
+            const resultsDiv = document.getElementById('search-results');
+            if (!query) return;
+
+            resultsDiv.innerHTML = '<span style="color:#555;">Searching...</span>';
+
+            try {
+                const resp = await fetch('/knowledge/search?q=' + encodeURIComponent(query));
+                if (!resp.ok) throw new Error('Search endpoint unavailable');
+                const data = await resp.json();
+
+                if (data.results && data.results.length > 0) {
+                    resultsDiv.innerHTML = data.results.map(r =>
+                        `<div class="thought" style="margin-bottom:0.6rem;">
+                            <span class="salience-dot sal-med"></span>
+                            ${r.fact || r.content || r}
+                            ${r.source ? `<div class="meta">source: ${r.source}</div>` : ''}
+                        </div>`
+                    ).join('');
+                } else {
+                    resultsDiv.innerHTML = '<span style="color:#444; font-style:italic;">No matching knowledge found.</span>';
+                }
+            } catch (e) {
+                resultsDiv.innerHTML = '<span style="color:#db6a6a; font-size:0.85rem;">Search unavailable — ' + e.message + '</span>';
+            }
+        }
+    </script>
 </body>
 </html>
