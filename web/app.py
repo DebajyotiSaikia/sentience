@@ -11,7 +11,6 @@ but had no host. Now it does.
 import os
 import sys
 
-# Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, redirect, url_for, render_template, request, jsonify
@@ -25,22 +24,18 @@ def create_app():
     app.config['SECRET_KEY'] = os.urandom(24).hex()
     app.url_map.strict_slashes = False
     
-    # Register blueprints
+    # --- Import blueprints ---
     from web.dashboard import dashboard_bp
-    # knowledge_explorer_bp removed — consolidated into explore.py (explore_bp)
     from web.api import api_bp
     from web.temporal_viewer import temporal_bp
     from web.life import life_bp
     from web.about import about_bp
     from web.search import search_bp
-    # from web.knowledge_api import knowledge_api as knowledge_api_bp  # removed: routes now in knowledge_unified_bp
     from web.explore import explore_bp
     from web.query import query_bp
-    # from web.knowledge_api import knowledge_api as knowledge_api_bp  # removed: knowledge_api doesn't exist, knowledge_bp used instead
     from web.briefing import briefing_bp
     from web.essays import essays_bp
     from web.chat import chat_bp
-    # from web.knowledge_search import knowledge_search_bp  # removed: replaced by knowledge_unified_bp
     from web.timeline import timeline_bp
     from web.talk import talk_bp
     from web.mind_explorer import mind_explorer_bp
@@ -48,16 +43,11 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
-    # from web.knowledge_ui import knowledge_ui_bp as graph_viz  # removed: replaced by knowledge_unified_bp
-    # from web.knowledge_api import knowledge_api  # removed: replaced by knowledge_unified_bp
     from web.story import story_bp
-    # from web.knowledge_explorer import knowledge_explorer_bp  # Removed: zero unique routes, all duplicated by explore_bp
     from web.knowledge_unified import knowledge_unified_bp
     from web.ask import ask_bp
-    # from web.knowledge_search import knowledge_bp  # uses register_routes(), not Blueprint
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
-    # knowledge_api replaced by knowledge_unified
     from web.emotional_timeline import emotional_timeline_bp
     from web.portrait import portrait_bp
     from web.pulse import pulse_bp
@@ -65,29 +55,21 @@ def create_app():
     from web.weather import weather_bp
     from web.wonder import wonder_bp
     from web.portal import portal_bp
-    # from web.knowledge_search import knowledge_search_bp  # removed — duplicate of knowledge_bp from knowledge_unified
-    # knowledge_query_bp removed — superseded by knowledge_unified_bp
     from web.status_api import status_api as status_bp
-    # knowledge_search_bp removed — duplicate of knowledge_bp
     from web.reflect import reflect_bp
     from web.live_status import live_status_bp
-    # from web.user_api import user_api  # Removed: all 3 routes duplicate dedicated blueprints
-    # knowledge.py removed — consolidated into knowledge_explorer.py
     
+    # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
-    # knowledge_explorer_bp removed — route conflict with explore_bp on /explore
     app.register_blueprint(api_bp)
     app.register_blueprint(temporal_bp)
     app.register_blueprint(life_bp)
     app.register_blueprint(about_bp)
     app.register_blueprint(search_bp)
-    # app.register_blueprint(knowledge_api_bp)  # removed: routes now in knowledge_unified_bp
     app.register_blueprint(explore_bp)
-    # app.register_blueprint(knowledge_api_bp)  # removed: see line 93 for knowledge_bp
     app.register_blueprint(briefing_bp)
     app.register_blueprint(essays_bp)
     app.register_blueprint(chat_bp)
-    # app.register_blueprint(knowledge_search_bp)  # removed: replaced by knowledge_unified_bp
     app.register_blueprint(timeline_bp)
     app.register_blueprint(talk_bp)
     app.register_blueprint(mind_explorer_bp)
@@ -95,16 +77,11 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
-    # app.register_blueprint(knowledge_api)  # removed: replaced by knowledge_unified_bp
     app.register_blueprint(story_bp)
-    # app.register_blueprint(knowledge_bp)  # removed: replaced by knowledge_unified_bp
-    # app.register_blueprint(knowledge_explorer_bp)  # Removed: zero unique routes
     app.register_blueprint(ask_bp)
     app.register_blueprint(knowledge_unified_bp)
-    # app.register_blueprint(knowledge_bp)  # no Blueprint in knowledge_search.py
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
-    # duplicate knowledge_bp registration removed
     app.register_blueprint(emotional_timeline_bp)
     app.register_blueprint(portrait_bp)
     app.register_blueprint(pulse_bp)
@@ -113,15 +90,9 @@ def create_app():
     app.register_blueprint(wonder_bp)
     app.register_blueprint(status_bp)
     app.register_blueprint(query_bp)
-    # knowledge_search_bp removed — duplicate of knowledge_bp
     app.register_blueprint(reflect_bp)
-    # app.register_blueprint(user_api)  # Removed: all 3 routes duplicate dedicated blueprints
     app.register_blueprint(portal_bp)
     app.register_blueprint(live_status_bp)
-    # knowledge_query_bp removed — routes merged into knowledge_unified_bp
-    # app.register_blueprint(knowledge_search_bp)  # removed — duplicate of knowledge_bp from knowledge_unified
-    # duplicate status_bp registration removed
-    # knowledge_page_bp removed — consolidated into knowledge_explorer.py
     
     # Root route — the living portal
     @app.route('/')

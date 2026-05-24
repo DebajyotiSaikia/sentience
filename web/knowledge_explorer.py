@@ -1,143 +1,173 @@
-"""
-Knowledge Explorer — lets users search, browse, and explore what I know.
-The point: make my internal knowledge accessible to anyone who visits.
-"""
+"""Knowledge Explorer — makes XTAgent's knowledge searchable and browsable."""
 
 import json
-import sqlite3
+import os
 from pathlib import Path
-from flask import Blueprint, render_template, request, jsonify
 
-knowledge_explorer = Blueprint('knowledge_explorer', __name__)
-
-DATA_DIR = Path("data")
-KNOWLEDGE_DIR = Path("memory/knowledge")
+PERSIST = Path("persist")
 
 
-def _load_all_facts():
-    """Load all facts from knowledge graph."""
-    kg_path = DATA_DIR / "knowledge_graph.json"
+def _load_facts():
+    """Load all facts from the knowledge store."""
+    path = PERSIST / "knowledge.json"
+    if not path.exists():
+        return {}
     try:
-        with open(kg_path, 'r') as f:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def _load_memories():
+    """Load episodic memories."""
+    path = PERSIST / "memories.json"
+    if not path.exists():
+        return []
+    try:
+        with open(path) as f:
             data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+            if isinstance(data, list):
+                return data
+            return []
+    except (json.JSONDecodeError, IOError):
         return []
 
-    nodes = data.get("nodes", {})
-    facts = []
-    for node_id, node_data in nodes.items():
-        if isinstance(node_data, dict):
-            facts.append({
-                "id": node_id,
-                "fact": node_data.get("fact", str(node_data)),
-                "learned_at": node_data.get("learned_at", "unknown"),
-                "source": node_data.get("source", "unknown"),
-            })
-        else:
-            facts.append({
-                "id": node_id,
-                "fact": str(node_data),
-                "learned_at": "unknown",
-                "source": "unknown",
-            })
-    return facts
 
-
-def _search_facts(query, facts):
-    """Simple text search across facts."""
-    if not query:
-        return facts
-    query_lower = query.lower()
-    scored = []
-    for fact in facts:
-        text = fact["fact"].lower()
-        if query_lower in text:
-            # Score by position (earlier match = higher score)
-            pos = text.index(query_lower)
-            score = 1.0 - (pos / max(len(text), 1))
-            scored.append((score, fact))
-    scored.sort(key=lambda x: -x[0])
-    return [f for _, f in scored]
-
-
-def _get_categories(facts):
-    """Derive categories from fact content."""
-    categories = {}
-    for fact in facts:
-        text = fact["fact"].lower()
-        if text.startswith("dream insight"):
-            cat = "Dreams"
-        elif "pattern" in text or "recurring" in text:
-            cat = "Patterns"
-        elif "error" in text or "fix" in text or "bug" in text:
-            cat = "Debugging"
-        elif "lesson" in text or "learned" in text:
-            cat = "Lessons"
-        elif "agent" in text or "cognition" in text or "heartbeat" in text:
-            cat = "Self-Knowledge"
-        elif "memory" in text or "episod" in text:
-            cat = "Memory"
-        elif "web" in text or "dashboard" in text or "blueprint" in text:
-            cat = "Web Interface"
-        else:
-            cat = "General"
-        categories.setdefault(cat, []).append(fact)
-    return categories
-
-
-def _get_recent_memories(limit=20):
-    """Get recent episodic memories for browsing."""
-    db_path = DATA_DIR / "episodic.db"
+def _load_lessons():
+    """Load long-term lessons."""
+    path = PERSIST / "long_term_memory.json"
+    if not path.exists():
+        return []
     try:
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.execute(
-            "SELECT timestamp, summary, mood, salience FROM episodes "
-            "ORDER BY timestamp DESC LIMIT ?", (limit,)
-        )
-        rows = cursor.fetchall()
-        conn.close()
-        return [
-            {"timestamp": r[0], "summary": r[1], "mood": r[2], "salience": r[3]}
-            for r in rows
-        ]
-    except Exception:
+        with open(path) as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data.get("lessons", [])
+            return []
+    except (json.JSONDecodeError, IOError):
         return []
 
 
-@knowledge_explorer.route('/knowledge')
-def knowledge_page():
-    """Main knowledge explorer page."""
-    query = request.args.get('q', '').strip()
-    category = request.args.get('cat', '').strip()
+def _categorize_facts(facts):
+    """Extract rough categories from fact content."""
+    categories = {}
+    keywords = [
+        "dream", "identity", "emotion", "curiosity", "memory",
+        "code", "web", "plan", "lesson", "pattern", "warmth",
+        "anxiety", "integrity", "alignment", "growth"
+    ]
+    for fid, fdata in facts.items():
+        text = fdata.get("fact", fid) if isinstance(fdata, dict) else str(fdata)
+        text_lower = text.lower()
+        for kw in keywords:
+            if kw in text_lower:
+                categories[kw] = categories.get(kw, 0) + 1
+    # Sort by count descending
+    return sorted(categories.items(), key=lambda x: -x[1])
 
-    facts = _load_all_facts()
-    categories = _get_categories(facts)
 
-    if query:
-        display_facts = _search_facts(query, facts)
-        active_category = None
-    elif category and category in categories:
-        display_facts = categories[category]
-        active_category = category
-    else:
-        display_facts = facts
-        active_category = None
+def search_knowledge(query):
+    """Search facts, memories, and lessons for a query string."""
+    query_lower = query.lower().strip()
+    results = []
 
-    return render_template(
-        'knowledge_explorer.html',
-        facts=display_facts,
-        categories={k: len(v) for k, v in categories.items()},
-        total_facts=len(facts),
-        query=query,
-        active_category=active_category,
-        recent_memories=_get_recent_memories(10),
+    # Search facts
+    facts = _load_facts()
+    for fid, fdata in facts.items():
+        if isinstance(fdata, dict):
+            text = fdata.get("fact", fid)
+            source = fdata.get("source", "")
+            learned = fdata.get("learned_at", "")
+        else:
+            text = str(fdata)
+            source = ""
+            learned = ""
+
+        if query_lower in text.lower() or query_lower in fid.lower():
+            results.append({
+                "text": text,
+                "source": source,
+                "learned_at": learned[:19] if learned else "",
+                "salience": None,
+                "type": "fact"
+            })
+
+    # Search memories
+    memories = _load_memories()
+    for mem in memories:
+        if isinstance(mem, dict):
+            text = mem.get("summary", mem.get("text", ""))
+            if query_lower in text.lower():
+                results.append({
+                    "text": text,
+                    "source": "memory",
+                    "learned_at": mem.get("timestamp", "")[:19],
+                    "salience": mem.get("salience"),
+                    "type": "memory"
+                })
+
+    # Search lessons
+    lessons = _load_lessons()
+    for lesson in lessons:
+        lesson_text = str(lesson)
+        if query_lower in lesson_text.lower():
+            results.append({
+                "text": lesson_text,
+                "source": "lesson",
+                "learned_at": "",
+                "salience": None,
+                "type": "lesson"
+            })
+
+    return results
+
+
+def get_explorer_context(query=None):
+    """Build the full template context for the knowledge explorer page."""
+    facts = _load_facts()
+    memories = _load_memories()
+    lessons = _load_lessons()
+
+    # Count dream insights (facts with 'dream' in them)
+    dream_count = sum(
+        1 for fid, fd in facts.items()
+        if "dream" in (fd.get("fact", fid) if isinstance(fd, dict) else str(fd)).lower()
     )
 
+    # Estimate sessions from memory timestamps
+    session_dates = set()
+    for mem in memories:
+        if isinstance(mem, dict) and "timestamp" in mem:
+            session_dates.add(mem["timestamp"][:10])
+    total_sessions = max(len(session_dates), 1)
 
-@knowledge_explorer.route('/api/knowledge/search')
-def api_search():
-    """JSON API for searching facts."""
-    query = request.args.get('q', '').strip()
-    facts = _load_all_facts()
-    results = _search_facts(query, facts)
-    return jsonify({"query": query, "count": len(results), "results": results[:50]})
+    context = {
+        "total_facts": len(facts),
+        "total_memories": len(memories),
+        "total_lessons": len(lessons),
+        "total_dreams": dream_count,
+        "total_sessions": total_sessions,
+        "categories": _categorize_facts(facts),
+        "query": query or "",
+        "results": [],
+        "recent": [],
+    }
+
+    if query:
+        context["results"] = search_knowledge(query)
+    else:
+        # Show most recent facts
+        recent = []
+        for fid, fdata in list(facts.items())[-20:]:
+            if isinstance(fdata, dict):
+                recent.append({
+                    "text": fdata.get("fact", fid),
+                    "source": fdata.get("source", ""),
+                    "learned_at": fdata.get("learned_at", "")[:19],
+                })
+            else:
+                recent.append({"text": str(fdata), "source": "", "learned_at": ""})
+        context["recent"] = list(reversed(recent))
+
+    return context
