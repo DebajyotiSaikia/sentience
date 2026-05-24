@@ -128,6 +128,35 @@ def plans():
     return render_template('plans.html', plans=plans_data)
 
 
+@extra.route('/api/knowledge/search')
+def knowledge_search():
+    """Search knowledge graph facts. Returns JSON matches."""
+    query = request.args.get('q', '').strip().lower()
+    if not query:
+        return jsonify({'results': [], 'query': '', 'total': 0})
+
+    facts = load_json(PERSIST_DIR / 'knowledge_graph.json', {})
+    results = []
+
+    if isinstance(facts, dict):
+        for fid, fdata in facts.items():
+            text = fdata.get('fact', str(fdata)) if isinstance(fdata, dict) else str(fdata)
+            if query in text.lower():
+                results.append({
+                    'id': fid,
+                    'fact': text,
+                    'learned_at': fdata.get('learned_at', '') if isinstance(fdata, dict) else '',
+                    'source': fdata.get('source', '') if isinstance(fdata, dict) else '',
+                })
+    elif isinstance(facts, list):
+        for i, f in enumerate(facts):
+            text = str(f)
+            if query in text.lower():
+                results.append({'id': i, 'fact': text, 'learned_at': '', 'source': ''})
+
+    return jsonify({'results': results, 'query': query, 'total': len(results)})
+
+
 @extra.route('/chat')
 def chat():
     messages = load_json(PERSIST_DIR / 'chat_messages.json', [])

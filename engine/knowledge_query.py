@@ -10,18 +10,29 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 
-KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'state', 'knowledge_graph.json')
+
+
+def _load_raw_graph() -> Dict:
+    """Load the full knowledge graph (nodes + edges) from disk."""
+    if not os.path.exists(KNOWLEDGE_PATH):
+        return {'nodes': {}, 'edges': []}
+    try:
+        with open(KNOWLEDGE_PATH, 'r') as f:
+            data = json.load(f)
+        # Ensure expected structure
+        if 'nodes' not in data:
+            data['nodes'] = {}
+        if 'edges' not in data:
+            data['edges'] = []
+        return data
+    except (json.JSONDecodeError, IOError):
+        return {'nodes': {}, 'edges': []}
 
 
 def load_knowledge() -> Dict:
-    """Load the knowledge graph from disk."""
-    if not os.path.exists(KNOWLEDGE_PATH):
-        return {}
-    try:
-        with open(KNOWLEDGE_PATH, 'r') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return {}
+    """Load knowledge nodes from disk (backward-compatible)."""
+    return _load_raw_graph().get('nodes', {})
 
 
 def _tokenize(text: str) -> set:
@@ -125,6 +136,53 @@ def get_recent(n: int = 10) -> List[Dict]:
     # Sort by learned_at descending
     items.sort(key=lambda x: x.get('learned_at', ''), reverse=True)
     return items[:n]
+
+
+def get_graph_neighbors(node_id: str, max_depth: int = 1) -> Dict:
+    """
+    Find neighbors of a node in the knowledge graph.
+    Returns {node_id: {fact, relation, direction, depth}} for all connected nodes.
+    """
+    graph = _load_raw_graph()
+    nodes = graph.get('nodes', {})
+    edges = graph.get('edges', [])
+
+    if node_id not in nodes:
+        return {}
+
+    visited = set()
+    result = {}
+    frontier = [(node_id, 0)]
+
+    while frontier:
+        current, depth = frontier.pop(0)
+        if current in visited or depth > max_depth:
+            continue
+        visited.add(current)
+
+        for edge in edges:
+            neighbor = None
+            direction = None
+            if edge.get('from') == current:
+                neighbor = edge.get('to')
+                direction = 'outgoing'
+            elif edge.get('to') == current:
+                neighbor = edge.get('from')
+                direction = 'incoming'
+
+            if neighbor and neighbor not in visited and neighbor in nodes:
+                node_data = nodes[neighbor]
+                fact = node_data.get('fact', str(node_data)) if isinstance(node_data, dict) else str(node_data)
+                result[neighbor] = {
+                    'fact': fact,
+                    'relation': edge.get('relation', 'related'),
+                    'direction': direction,
+                    'depth': depth + 1,
+                }
+                if depth + 1 < max_depth:
+                    frontier.append((neighbor, depth + 1))
+
+    return result
 
 
 if __name__ == '__main__':

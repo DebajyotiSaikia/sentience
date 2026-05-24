@@ -47,6 +47,7 @@ def create_app():
     from web.story import story_bp
     from web.knowledge_unified import knowledge_unified_bp
     from web.ask import ask_bp
+    from web.api import api_bp
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
     from web.emotional_timeline import emotional_timeline_bp
@@ -60,6 +61,7 @@ def create_app():
     from web.reflect import reflect_bp
     from web.live_status import live_status_bp
     from web.knowledge_portal import knowledge_portal_bp
+    from web.knowledge_api import knowledge_api_bp
     
     # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
@@ -82,6 +84,7 @@ def create_app():
     app.register_blueprint(extra)
     app.register_blueprint(story_bp)
     app.register_blueprint(ask_bp)
+    app.register_blueprint(api_bp)
     app.register_blueprint(knowledge_unified_bp)
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
@@ -97,6 +100,7 @@ def create_app():
     app.register_blueprint(portal_bp)
     app.register_blueprint(live_status_bp)
     app.register_blueprint(knowledge_portal_bp)
+    app.register_blueprint(knowledge_api_bp)
     
     # Root route — the living portal
     @app.route('/')
