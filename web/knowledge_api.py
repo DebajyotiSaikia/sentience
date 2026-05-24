@@ -164,7 +164,4 @@ def api_knowledge_stats():
     })
 
 
-@knowledge_api.route('/explore')
-def explore_page():
-    """Render the knowledge exploration page."""
-    return render_template('explore.html')
+# /explore route served by web/explore.py (knowledge explorer blueprint)
