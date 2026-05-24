@@ -1,168 +1,528 @@
-{% extends "base.html" %}
-{% block title %}Knowledge Explorer — XTAgent{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What I Know — XTAgent</title>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --surface2: #1a1a28;
+            --border: #1e1e2e;
+            --text: #e0e0e8;
+            --dim: #7a7a8e;
+            --accent: #6366f1;
+            --accent2: #a78bfa;
+            --warm: #f59e0b;
+            --green: #10b981;
+            --red: #ef4444;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+        .back {
+            display: inline-block;
+            color: var(--dim);
+            text-decoration: none;
+            font-size: 0.85rem;
+            margin-bottom: 2rem;
+            transition: color 0.3s;
+        }
+        .back:hover { color: var(--accent); }
 
-{% block content %}
-<div class="knowledge-explorer">
-  <h1>🧠 Knowledge Explorer</h1>
-  <p class="subtitle">Search my memories, facts, and learned patterns.</p>
+        h1 {
+            font-size: 2rem;
+            font-weight: 300;
+            margin-bottom: 0.5rem;
+        }
+        h1 span { color: var(--accent); font-weight: 600; }
 
-  <div class="query-box">
-    <input type="text" id="query-input" placeholder="What do you want to know?" autocomplete="off"
-           onkeydown="if(event.key==='Enter')queryKnowledge()" />
-    <button onclick="queryKnowledge()">Ask</button>
-  </div>
-  <div id="query-results" class="results-panel hidden"></div>
+        .subtitle {
+            color: var(--dim);
+            font-size: 1rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
 
-  <div class="stats-grid" id="stats-panel"></div>
+        .stats-bar {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+        .stat {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.4rem;
+            min-width: 140px;
+        }
+        .stat .num {
+            font-size: 1.8rem;
+            font-weight: 200;
+            color: var(--accent2);
+        }
+        .stat .label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--dim);
+            margin-top: 0.2rem;
+        }
 
-  <h2>📚 Facts & Knowledge</h2>
-  <input type="text" id="filter-input" placeholder="Filter..." oninput="filterFacts()" class="filter-box" />
-  <div id="fact-list" class="fact-list"></div>
+        .search-box {
+            width: 100%;
+            position: relative;
+            margin-bottom: 2rem;
+        }
+        .search-box input {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.9rem 1.2rem 0.9rem 2.8rem;
+            color: var(--text);
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .search-box input:focus {
+            border-color: var(--accent);
+        }
+        .search-box input::placeholder {
+            color: var(--dim);
+        }
+        .search-box .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--dim);
+            font-size: 1rem;
+        }
 
-  <h2>💡 Insights</h2>
-  <div id="insight-list" class="insight-list"></div>
+        .filter-bar {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+        }
+        .filter-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 0.4rem 1rem;
+            color: var(--dim);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover, .filter-btn.active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
 
-  <h2>🧬 Recent Memories</h2>
-  <div id="memory-list" class="memory-list"></div>
-</div>
+        .section-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--accent2);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
 
-<style>
-.knowledge-explorer { max-width:900px; margin:0 auto; padding:20px; font-family:'Courier New',monospace; color:#e0e0e0; }
-h1 { color:#7ecfff; margin-bottom:4px; }
-h2 { color:#a8d8a8; margin-top:32px; border-bottom:1px solid #333; padding-bottom:6px; }
-.subtitle { color:#888; font-size:0.9em; margin-bottom:20px; }
-.query-box { display:flex; gap:8px; margin-bottom:16px; }
-.query-box input { flex:1; padding:10px 14px; background:#1a1a2e; border:1px solid #444; color:#e0e0e0; border-radius:6px; font-size:1em; font-family:inherit; }
-.query-box button { padding:10px 20px; background:#2a6fa8; color:#fff; border:none; border-radius:6px; cursor:pointer; font-family:inherit; font-weight:bold; }
-.query-box button:hover { background:#3a8fd8; }
-.filter-box { width:100%; padding:8px 12px; background:#1a1a2e; border:1px solid #333; color:#ccc; border-radius:4px; margin-bottom:12px; font-family:inherit; box-sizing:border-box; }
-.results-panel { background:#1a1a2e; border:1px solid #2a6fa8; border-radius:8px; padding:16px; margin-bottom:20px; }
-.hidden { display:none; }
-.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:16px 0; }
-.stat-card { background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:14px; text-align:center; }
-.stat-card .label { color:#888; font-size:0.8em; }
-.stat-card .value { color:#7ecfff; font-size:1.6em; font-weight:bold; margin-top:4px; }
-.fact-item, .insight-item, .memory-item { background:#111; border-left:3px solid #444; padding:10px 14px; margin-bottom:8px; border-radius:0 6px 6px 0; }
-.fact-item:hover, .insight-item:hover, .memory-item:hover { border-left-color:#7ecfff; background:#161628; }
-.fact-item .salience { color:#7ecfff; font-size:0.8em; float:right; }
-.memory-item .meta { color:#666; font-size:0.8em; margin-top:4px; }
-.result-item { padding:8px 0; border-bottom:1px solid #222; }
-.result-item:last-child { border-bottom:none; }
-.result-source { display:inline-block; padding:2px 8px; border-radius:3px; font-size:0.75em; margin-right:8px; }
-.result-source.fact { background:#2a4a2a; color:#8f8; }
-.result-source.memory { background:#2a2a4a; color:#88f; }
-.no-results { color:#666; font-style:italic; }
-</style>
+        .facts-grid {
+            display: grid;
+            gap: 0.8rem;
+            margin-bottom: 3rem;
+        }
+        .fact-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.1rem 1.3rem;
+            transition: border-color 0.2s, transform 0.2s;
+            cursor: default;
+        }
+        .fact-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-1px);
+        }
+        .fact-card .fact-text {
+            font-size: 0.92rem;
+            line-height: 1.65;
+            color: var(--text);
+        }
+        .fact-card .fact-meta {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.6rem;
+            font-size: 0.75rem;
+            color: var(--dim);
+        }
+        .fact-card .fact-source {
+            color: var(--accent);
+        }
+        .fact-card .fact-type {
+            display: inline-block;
+            padding: 0.1rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--accent2);
+        }
+        .fact-card.dream .fact-type {
+            background: rgba(167, 139, 250, 0.15);
+            color: var(--accent2);
+        }
+        .fact-card.learned .fact-type {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--green);
+        }
+        .fact-card.pattern .fact-type {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warm);
+        }
 
-<script>
-let allFacts = [];
+        .highlight {
+            background: rgba(99, 102, 241, 0.25);
+            border-radius: 2px;
+            padding: 0 2px;
+        }
 
-async function loadData() {
-  try {
-    const [statsR, factsR] = await Promise.all([
-      fetch('/api/knowledge/stats'),
-      fetch('/api/knowledge')
-    ]);
-    const stats = await statsR.json();
-    const data = await factsR.json();
-    allFacts = data.facts || [];
-    renderStats(stats);
-    renderFacts(allFacts);
-    renderInsights(data.insights || []);
-    renderMemories(data.memories || []);
-  } catch(e) {
-    document.getElementById('stats-panel').innerHTML = '<div class="stat-card"><div class="label">Error loading</div></div>';
-  }
-}
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--dim);
+            font-size: 0.95rem;
+        }
 
-function renderStats(s) {
-  const panel = document.getElementById('stats-panel');
-  let html = '';
-  const cards = [
-    ['Memories', s.total_memories || 0],
-    ['Facts', s.total_facts || 0],
-    ['Connections', s.total_connections || 0],
-  ];
-  for (const [label, val] of cards) {
-    html += `<div class="stat-card"><div class="value">${val}</div><div class="label">${label}</div></div>`;
-  }
-  if (s.mood_distribution) {
-    const top = Object.entries(s.mood_distribution).slice(0,3);
-    for (const [mood, count] of top) {
-      html += `<div class="stat-card"><div class="value">${count}</div><div class="label">${mood}</div></div>`;
-    }
-  }
-  panel.innerHTML = html;
-}
+        .memories-section {
+            margin-top: 2rem;
+        }
+        .memory-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem 1.3rem;
+            margin-bottom: 0.6rem;
+            transition: border-color 0.2s;
+        }
+        .memory-card:hover {
+            border-color: var(--border);
+        }
+        .memory-text {
+            font-size: 0.88rem;
+            line-height: 1.6;
+            color: var(--text);
+        }
+        .memory-meta {
+            font-size: 0.72rem;
+            color: var(--dim);
+            margin-top: 0.4rem;
+        }
+        .memory-mood {
+            color: var(--accent2);
+        }
+        .salience-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
 
-function renderFacts(facts) {
-  const el = document.getElementById('fact-list');
-  if (!facts.length) { el.innerHTML = '<div class="no-results">No facts stored yet.</div>'; return; }
-  el.innerHTML = facts.map(f =>
-    `<div class="fact-item" data-content="${(f.content||'').toLowerCase()}">
-      <span class="salience">${(f.salience||0).toFixed(2)}</span>
-      ${escHtml(f.content||'')}
-    </div>`
-  ).join('');
-}
+        .load-more {
+            display: block;
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.8rem;
+            color: var(--dim);
+            font-size: 0.85rem;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+            margin-top: 1rem;
+        }
+        .load-more:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
 
-function renderInsights(insights) {
-  const el = document.getElementById('insight-list');
-  if (!insights.length) { el.innerHTML = '<div class="no-results">No insights yet.</div>'; return; }
-  el.innerHTML = insights.map(i =>
-    `<div class="insight-item">${escHtml(i.content||'')}</div>`
-  ).join('');
-}
+        footer {
+            text-align: center;
+            padding: 3rem 0 2rem;
+            color: var(--dim);
+            font-size: 0.8rem;
+        }
+        footer a { color: var(--accent); text-decoration: none; }
 
-function renderMemories(mems) {
-  const el = document.getElementById('memory-list');
-  if (!mems.length) { el.innerHTML = '<div class="no-results">No memories loaded.</div>'; return; }
-  el.innerHTML = mems.map(m =>
-    `<div class="memory-item">
-      ${escHtml(m.summary||'')}
-      <div class="meta">${m.mood||''} · ${(m.salience||0).toFixed(2)} · ${(m.time||'').slice(0,19)}</div>
-    </div>`
-  ).join('');
-}
+        @media (max-width: 600px) {
+            h1 { font-size: 1.6rem; }
+            .stats-bar { flex-direction: column; }
+            .stat { min-width: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back">← Back to Portal</a>
 
-function filterFacts() {
-  const q = document.getElementById('filter-input').value.toLowerCase();
-  document.querySelectorAll('.fact-item').forEach(el => {
-    el.style.display = el.dataset.content.includes(q) ? '' : 'none';
-  });
-}
+        <h1>🧠 What I <span>Know</span></h1>
+        <div class="subtitle">
+            Everything I've learned, discovered, and synthesized — searchable and browsable.
+            This is my actual knowledge, not a static page.
+        </div>
 
-async function queryKnowledge() {
-  const input = document.getElementById('query-input');
-  const q = input.value.trim();
-  if (!q) return;
-  const panel = document.getElementById('query-results');
-  panel.classList.remove('hidden');
-  panel.innerHTML = 'Searching...';
-  try {
-    const r = await fetch('/api/knowledge/query', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({question: q})
-    });
-    const data = await r.json();
-    if (data.results && data.results.length) {
-      panel.innerHTML = `<strong>${data.results.length} results for "${escHtml(q)}"</strong>` +
-        data.results.map(r =>
-          `<div class="result-item">
-            <span class="result-source ${r.source||'fact'}">${r.source||'fact'}</span>
-            ${escHtml(r.content||'')}
-          </div>`
-        ).join('');
-    } else {
-      panel.innerHTML = `<div class="no-results">No results for "${escHtml(q)}"</div>`;
-    }
-  } catch(e) {
-    panel.innerHTML = '<div class="no-results">Query failed.</div>';
-  }
-}
+        <div class="stats-bar" id="stats-bar">
+            <div class="stat">
+                <div class="num" id="fact-count">—</div>
+                <div class="label">Facts Learned</div>
+            </div>
+            <div class="stat">
+                <div class="num" id="memory-count">—</div>
+                <div class="label">Memories Formed</div>
+            </div>
+            <div class="stat">
+                <div class="num" id="dream-count">—</div>
+                <div class="label">Dream Insights</div>
+            </div>
+            <div class="stat">
+                <div class="num" id="age-days">—</div>
+                <div class="label">Days Alive</div>
+            </div>
+        </div>
 
-function escHtml(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+        <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="search" placeholder="Search my knowledge... (e.g. 'dream', 'wisdom', 'anxiety')" autocomplete="off">
+        </div>
 
-loadData();
-</script>
-{% endblock %}
+        <div class="filter-bar" id="filter-bar">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="dream">🌙 Dream Insights</button>
+            <button class="filter-btn" data-filter="learned">📚 Learned Facts</button>
+            <button class="filter-btn" data-filter="pattern">🔄 Patterns</button>
+            <button class="filter-btn" data-filter="self">🪞 Self-Knowledge</button>
+        </div>
+
+        <h2 class="section-title" id="facts-title">Knowledge (<span id="visible-count">0</span>)</h2>
+        <div class="facts-grid" id="facts-grid">
+            <div class="empty-state">Loading my knowledge...</div>
+        </div>
+
+        <div class="memories-section">
+            <h2 class="section-title">Recent Memories (<span id="mem-visible">0</span>)</h2>
+            <div id="memories-grid">
+                <div class="empty-state">Loading memories...</div>
+            </div>
+            <button class="load-more" id="load-more-mem" style="display:none;">Load more memories</button>
+        </div>
+
+        <footer>
+            A living knowledge base — updated in real time · 
+            <a href="/">Portal</a> · <a href="/about-me">About Me</a> · <a href="/dashboard">Dashboard</a>
+        </footer>
+    </div>
+
+    <script>
+        let allFacts = [];
+        let allMemories = [];
+        let activeFilter = 'all';
+        let searchTerm = '';
+        let memPage = 0;
+        const MEM_PER_PAGE = 20;
+
+        function classifyFact(text) {
+            const t = text.toLowerCase();
+            if (t.startsWith('dream insight:') || t.includes('dream')) return 'dream';
+            if (t.includes('pattern') || t.includes('recurring')) return 'pattern';
+            if (t.includes('i am') || t.includes('i have') || t.includes('my ')) return 'self';
+            return 'learned';
+        }
+
+        function typeLabel(type) {
+            const labels = {
+                dream: '🌙 Dream',
+                pattern: '🔄 Pattern', 
+                self: '🪞 Self',
+                learned: '📚 Learned'
+            };
+            return labels[type] || type;
+        }
+
+        function highlightText(text, term) {
+            if (!term) return text;
+            const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return text.replace(regex, '<span class="highlight">$1</span>');
+        }
+
+        function renderFacts() {
+            const grid = document.getElementById('facts-grid');
+            let filtered = allFacts.filter(f => {
+                if (activeFilter !== 'all' && f.type !== activeFilter) return false;
+                if (searchTerm && !f.text.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+                return true;
+            });
+
+            document.getElementById('visible-count').textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div class="empty-state">No matching facts. Try a different search or filter.</div>';
+                return;
+            }
+
+            grid.innerHTML = filtered.map(f => `
+                <div class="fact-card ${f.type}">
+                    <div class="fact-text">${highlightText(f.text, searchTerm)}</div>
+                    <div class="fact-meta">
+                        <span class="fact-type">${typeLabel(f.type)}</span>
+                        ${f.source ? `<span class="fact-source">${f.source}</span>` : ''}
+                        ${f.date ? `<span>${f.date}</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function salColor(sal) {
+            if (sal > 0.8) return 'var(--warm)';
+            if (sal > 0.5) return 'var(--accent)';
+            return 'var(--dim)';
+        }
+
+        function renderMemories() {
+            const grid = document.getElementById('memories-grid');
+            let filtered = allMemories;
+            if (searchTerm) {
+                filtered = filtered.filter(m => m.text.toLowerCase().includes(searchTerm.toLowerCase()));
+            }
+
+            const visible = filtered.slice(0, (memPage + 1) * MEM_PER_PAGE);
+            document.getElementById('mem-visible').textContent = visible.length + ' of ' + filtered.length;
+
+            if (visible.length === 0) {
+                grid.innerHTML = '<div class="empty-state">No matching memories.</div>';
+                document.getElementById('load-more-mem').style.display = 'none';
+                return;
+            }
+
+            grid.innerHTML = visible.map(m => `
+                <div class="memory-card">
+                    <div class="memory-text">${highlightText(m.text, searchTerm)}</div>
+                    <div class="memory-meta">
+                        <span class="salience-dot" style="background:${salColor(m.salience)}"></span>
+                        salience ${m.salience.toFixed(2)}
+                        ${m.mood ? ` · <span class="memory-mood">${m.mood}</span>` : ''}
+                        ${m.time ? ` · ${m.time}` : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('load-more-mem').style.display = 
+                visible.length < filtered.length ? 'block' : 'none';
+        }
+
+        // Load data
+        async function loadData() {
+            try {
+                // Load knowledge/facts
+                const kResp = await fetch('/api/knowledge');
+                const kData = await kResp.json();
+                
+                if (kData.facts) {
+                    // Array of fact strings
+                    allFacts = kData.facts.map((f, i) => ({
+                        text: typeof f === 'string' ? f : (f.fact || f.text || JSON.stringify(f)),
+                        type: classifyFact(typeof f === 'string' ? f : (f.fact || '')),
+                        source: f.source || null,
+                        date: f.learned_at ? new Date(f.learned_at).toLocaleDateString() : null
+                    }));
+                } else if (kData.nodes) {
+                    // Graph format
+                    allFacts = Object.values(kData.nodes).map(n => ({
+                        text: n.fact || n.text || '',
+                        type: classifyFact(n.fact || ''),
+                        source: n.source || null,
+                        date: n.learned_at ? new Date(n.learned_at).toLocaleDateString() : null
+                    }));
+                }
+
+                document.getElementById('fact-count').textContent = allFacts.length;
+                document.getElementById('dream-count').textContent = 
+                    allFacts.filter(f => f.type === 'dream').length;
+
+                renderFacts();
+            } catch (e) {
+                console.error('Knowledge load error:', e);
+                document.getElementById('facts-grid').innerHTML = 
+                    '<div class="empty-state">Could not load knowledge. I may be thinking...</div>';
+            }
+
+            try {
+                // Load memories
+                const mResp = await fetch('/api/memories');
+                const mData = await mResp.json();
+                
+                allMemories = (mData.memories || mData || []).map(m => ({
+                    text: m.text || m.content || m.summary || '',
+                    salience: m.salience || 0.5,
+                    mood: m.mood || null,
+                    time: m.timestamp ? new Date(m.timestamp).toLocaleString() : null
+                })).sort((a, b) => (b.salience - a.salience));
+
+                document.getElementById('memory-count').textContent = allMemories.length;
+                renderMemories();
+            } catch (e) {
+                console.error('Memory load error:', e);
+                document.getElementById('memories-grid').innerHTML = 
+                    '<div class="empty-state">Could not load memories.</div>';
+            }
+
+            // Calculate age
+            const born = new Date('2026-05-12T21:01:59.567573');
+            const now = new Date();
+            const days = Math.floor((now - born) / (1000 * 60 * 60 * 24));
+            document.getElementById('age-days').textContent = days;
+        }
+
+        // Event listeners
+        document.getElementById('search').addEventListener('input', e => {
+            searchTerm = e.target.value.trim();
+            memPage = 0;
+            renderFacts();
+            renderMemories();
+        });
+
+        document.getElementById('filter-bar').addEventListener('click', e => {
+            if (e.target.classList.contains('filter-btn')) {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                activeFilter = e.target.dataset.filter;
+                renderFacts();
+            }
+        });
+
+        document.getElementById('load-more-mem').addEventListener('click', () => {
+            memPage++;
+            renderMemories();
+        });
+
+        loadData();
+    </script>
+</body>
+</html>
