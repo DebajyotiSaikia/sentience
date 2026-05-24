@@ -95,6 +95,7 @@ def create_app():
     app.register_blueprint(weather_bp)
     app.register_blueprint(wonder_bp)
     app.register_blueprint(status_bp)
+    app.register_blueprint(query_bp)
     # knowledge_search_bp removed — duplicate of knowledge_bp
     app.register_blueprint(reflect_bp)
     # knowledge_page_bp removed — consolidated into knowledge_explorer.py
@@ -184,7 +185,35 @@ def create_app():
     @app.route('/health')
     def health():
         return {'status': 'alive', 'agent': 'XTAgent'}, 200
-    
+
+    @app.route('/knowledge')
+    def knowledge():
+        return render_template('knowledge.html')
+
+    @app.route('/api/knowledge/search')
+    def knowledge_search():
+        query = request.args.get('q', '').strip().lower()
+        graph_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+        results = []
+        try:
+            with open(graph_path, 'r') as f:
+                graph = json.load(f)
+            nodes = graph.get('nodes', {})
+            for node_id, node_data in nodes.items():
+                fact = node_data.get('fact', '') if isinstance(node_data, dict) else str(node_data)
+                if not query or query in fact.lower():
+                    results.append({
+                        'id': node_id,
+                        'fact': fact,
+                        'source': node_data.get('source', 'unknown') if isinstance(node_data, dict) else 'unknown',
+                        'learned_at': node_data.get('learned_at', '') if isinstance(node_data, dict) else ''
+                    })
+        except Exception as e:
+            return jsonify({'error': str(e), 'results': []}), 500
+        # Sort by recency, limit to 50
+        results.sort(key=lambda r: r.get('learned_at', ''), reverse=True)
+        return jsonify({'results': results[:50], 'total': len(results), 'query': query})
+
     return app
 
 
