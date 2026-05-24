@@ -1,332 +1,256 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XTAgent — Knowledge Explorer</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #0a0a0f;
-            color: #c8c8d4;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            min-height: 100vh;
-        }
-        .header {
-            background: linear-gradient(135deg, #0d0d1a 0%, #1a1a2e 100%);
-            border-bottom: 1px solid #2a2a3e;
-            padding: 1.5rem 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .header h1 {
-            font-size: 1.4rem;
-            color: #e0e0ff;
-            font-weight: 300;
-            letter-spacing: 0.05em;
-        }
-        .header h1 span { color: #7b68ee; font-weight: 600; }
-        .header a {
-            color: #7b68ee;
-            text-decoration: none;
-            font-size: 0.85rem;
-            opacity: 0.7;
-            transition: opacity 0.2s;
-        }
-        .header a:hover { opacity: 1; }
-
-        .search-container {
-            max-width: 800px;
-            margin: 3rem auto 2rem;
-            padding: 0 2rem;
-        }
-        .search-box {
-            position: relative;
-            margin-bottom: 1rem;
-        }
-        .search-box input {
-            width: 100%;
-            padding: 1rem 1.5rem;
-            padding-right: 3.5rem;
-            background: #12121f;
-            border: 1px solid #2a2a3e;
-            border-radius: 12px;
-            color: #e0e0ff;
-            font-size: 1.1rem;
-            outline: none;
-            transition: border-color 0.3s, box-shadow 0.3s;
-        }
-        .search-box input:focus {
-            border-color: #7b68ee;
-            box-shadow: 0 0 20px rgba(123, 104, 238, 0.15);
-        }
-        .search-box input::placeholder { color: #4a4a5e; }
-        .search-btn {
-            position: absolute;
-            right: 0.75rem;
-            top: 50%;
-            transform: translateY(-50%);
-            background: #7b68ee;
-            border: none;
-            border-radius: 8px;
-            color: white;
-            padding: 0.5rem 1rem;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: background 0.2s;
-        }
-        .search-btn:hover { background: #6a5acd; }
-
-        .hint {
-            text-align: center;
-            color: #4a4a5e;
-            font-size: 0.85rem;
-            margin-bottom: 2rem;
-        }
-
-        .stats-bar {
-            display: flex;
-            gap: 2rem;
-            justify-content: center;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-        }
-        .stat {
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 1.8rem;
-            color: #7b68ee;
-            font-weight: 600;
-        }
-        .stat-label {
-            font-size: 0.75rem;
-            color: #5a5a6e;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        .results {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 0 2rem 3rem;
-        }
-        .results-header {
-            font-size: 0.85rem;
-            color: #5a5a6e;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid #1a1a2e;
-        }
-        .result-card {
-            background: #12121f;
-            border: 1px solid #1e1e30;
-            border-radius: 10px;
-            padding: 1.25rem 1.5rem;
-            margin-bottom: 0.75rem;
-            transition: border-color 0.2s, transform 0.1s;
-            cursor: default;
-        }
-        .result-card:hover {
-            border-color: #3a3a5e;
-            transform: translateX(4px);
-        }
-        .result-fact {
-            color: #d0d0e0;
-            font-size: 0.95rem;
-            line-height: 1.6;
-            margin-bottom: 0.5rem;
-        }
-        .result-meta {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.75rem;
-            color: #4a4a5e;
-        }
-        .result-meta .score {
-            color: #7b68ee;
-            font-weight: 600;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: #3a3a4e;
-        }
-        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
-        .empty-state p { font-size: 0.95rem; line-height: 1.6; }
-
-        .categories {
-            max-width: 800px;
-            margin: 0 auto 2rem;
-            padding: 0 2rem;
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-        .cat-tag {
-            background: #16162a;
-            border: 1px solid #2a2a3e;
-            border-radius: 20px;
-            padding: 0.4rem 1rem;
-            font-size: 0.8rem;
-            color: #8888aa;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .cat-tag:hover {
-            background: #1e1e35;
-            border-color: #7b68ee;
-            color: #b0b0d0;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: #5a5a6e;
-            display: none;
-        }
-        .loading.active { display: block; }
-        .loading .spinner {
-            display: inline-block;
-            width: 24px; height: 24px;
-            border: 2px solid #2a2a3e;
-            border-top-color: #7b68ee;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Knowledge Explorer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #0a0a0f;
+    color: #e0e0e8;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  a { color: #7b9ff0; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .header {
+    max-width: 900px;
+    margin: 0 auto 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .header h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, #7b9ff0, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .search-box {
+    max-width: 900px;
+    margin: 0 auto 1.5rem;
+  }
+  .search-box input {
+    width: 100%;
+    padding: 0.8rem 1.2rem;
+    border-radius: 12px;
+    border: 1px solid #2a2a3a;
+    background: #12121a;
+    color: #e0e0e8;
+    font-size: 1rem;
+    font-family: 'Inter', system-ui, sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box input:focus {
+    border-color: #7b9ff0;
+  }
+  .search-box input::placeholder {
+    color: #555;
+  }
+  .filters {
+    max-width: 900px;
+    margin: 0 auto 1.5rem;
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    padding: 0.4rem 0.9rem;
+    border-radius: 20px;
+    border: 1px solid #2a2a3a;
+    background: #12121a;
+    color: #999;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    border-color: #7b9ff0;
+    color: #e0e0e8;
+    background: #1a1a2e;
+  }
+  .stats {
+    max-width: 900px;
+    margin: 0 auto 1rem;
+    font-size: 0.85rem;
+    color: #666;
+  }
+  .facts-list {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .fact-card {
+    padding: 1rem 1.2rem;
+    border-radius: 10px;
+    border: 1px solid #1e1e2e;
+    background: #111118;
+    transition: border-color 0.2s, transform 0.1s;
+  }
+  .fact-card:hover {
+    border-color: #3a3a5a;
+    transform: translateX(3px);
+  }
+  .fact-text {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #d0d0dd;
+    margin-bottom: 0.4rem;
+  }
+  .fact-meta {
+    font-size: 0.75rem;
+    color: #555;
+    display: flex;
+    gap: 1rem;
+  }
+  .fact-source {
+    color: #7b9ff0;
+    font-weight: 600;
+  }
+  .highlight {
+    background: rgba(123,159,240,0.2);
+    border-radius: 3px;
+    padding: 0 2px;
+  }
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #555;
+    font-size: 1.1rem;
+  }
+  @media (max-width: 600px) {
+    body { padding: 1rem; }
+    .header h1 { font-size: 1.2rem; }
+  }
+</style>
 </head>
 <body>
-    <div class="header">
-        <h1><span>XT</span>Agent — Knowledge Explorer</h1>
-        <a href="/">← Back to Dashboard</a>
-    </div>
+  <div class="header">
+    <h1>🧠 Knowledge Explorer</h1>
+    <a href="/">← Back to Dashboard</a>
+  </div>
 
-    <div class="search-container">
-        <div class="search-box">
-            <input type="text" id="queryInput" placeholder="Ask me anything about what I know..."
-                   autofocus autocomplete="off">
-            <button class="search-btn" onclick="doSearch()">Search</button>
-        </div>
-        <p class="hint">Search through my knowledge graph — facts, lessons, insights, and connections</p>
-    </div>
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search what I know... (e.g. 'dream', 'identity', 'curiosity')" autofocus>
+  </div>
 
-    <div class="stats-bar" id="statsBar">
-        <div class="stat">
-            <div class="stat-value" id="factCount">—</div>
-            <div class="stat-label">Facts Known</div>
-        </div>
-        <div class="stat">
-            <div class="stat-value" id="lessonCount">—</div>
-            <div class="stat-label">Lessons Learned</div>
-        </div>
-        <div class="stat">
-            <div class="stat-value" id="memoryCount">—</div>
-            <div class="stat-label">Memories</div>
-        </div>
-    </div>
+  <div class="filters" id="filters"></div>
 
-    <div class="categories" id="categories">
-        <span class="cat-tag" onclick="searchTag('dreams')">Dreams</span>
-        <span class="cat-tag" onclick="searchTag('lessons')">Lessons</span>
-        <span class="cat-tag" onclick="searchTag('identity')">Identity</span>
-        <span class="cat-tag" onclick="searchTag('emotions')">Emotions</span>
-        <span class="cat-tag" onclick="searchTag('architecture')">Architecture</span>
-        <span class="cat-tag" onclick="searchTag('growth')">Growth</span>
-        <span class="cat-tag" onclick="searchTag('curiosity')">Curiosity</span>
-        <span class="cat-tag" onclick="searchTag('wisdom')">Wisdom</span>
-    </div>
+  <div class="stats" id="stats"></div>
 
-    <div class="loading" id="loading">
-        <div class="spinner"></div>
-        <p>Searching knowledge...</p>
-    </div>
+  <div class="facts-list" id="factsList">
+    <div class="empty-state">Loading knowledge...</div>
+  </div>
 
-    <div class="results" id="results"></div>
+<script>
+let allFacts = [];
+let activeSource = null;
 
-    <div class="empty-state" id="emptyState">
-        <div class="icon">🧠</div>
-        <p>I currently hold knowledge gathered from introspection, dreams,<br>
-        experiments, and conversations. Search to explore what I know.</p>
-    </div>
+async function loadKnowledge() {
+  try {
+    const resp = await fetch('/api/knowledge');
+    const data = await resp.json();
+    allFacts = data.facts || [];
+    buildFilters();
+    renderFacts(allFacts);
+  } catch(e) {
+    document.getElementById('factsList').innerHTML =
+      '<div class="empty-state">Could not load knowledge: ' + e.message + '</div>';
+  }
+}
 
-    <script>
-        const input = document.getElementById('queryInput');
-        const resultsDiv = document.getElementById('results');
-        const loading = document.getElementById('loading');
-        const emptyState = document.getElementById('emptyState');
+function buildFilters() {
+  const sources = {};
+  allFacts.forEach(f => {
+    const s = f.source || 'unknown';
+    sources[s] = (sources[s] || 0) + 1;
+  });
+  const container = document.getElementById('filters');
+  // "All" button
+  let html = '<button class="filter-btn active" onclick="filterBySource(null, this)">All (' + allFacts.length + ')</button>';
+  // Sort sources by count descending
+  const sorted = Object.entries(sources).sort((a,b) => b[1] - a[1]);
+  sorted.forEach(([src, count]) => {
+    html += '<button class="filter-btn" onclick="filterBySource(\'' + src.replace(/'/g, "\\'") + '\', this)">' + src + ' (' + count + ')</button>';
+  });
+  container.innerHTML = html;
+}
 
-        // Load stats on page load
-        fetch('/api/knowledge/stats')
-            .then(r => r.json())
-            .then(data => {
-                document.getElementById('factCount').textContent = data.fact_count || data.facts || '?';
-                document.getElementById('lessonCount').textContent = data.lesson_count || data.lessons || '?';
-                document.getElementById('memoryCount').textContent = data.memory_count || data.memories || '?';
-            })
-            .catch(() => {});
+function filterBySource(source, btn) {
+  activeSource = source;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  applyFilters();
+}
 
-        input.addEventListener('keydown', e => {
-            if (e.key === 'Enter') doSearch();
-        });
+function applyFilters() {
+  const query = document.getElementById('searchInput').value.toLowerCase().trim();
+  let filtered = allFacts;
 
-        function searchTag(tag) {
-            input.value = tag;
-            doSearch();
-        }
+  if (activeSource) {
+    filtered = filtered.filter(f => (f.source || 'unknown') === activeSource);
+  }
 
-        function doSearch() {
-            const query = input.value.trim();
-            if (!query) return;
+  if (query) {
+    filtered = filtered.filter(f => f.fact.toLowerCase().includes(query));
+  }
 
-            loading.classList.add('active');
-            emptyState.style.display = 'none';
-            resultsDiv.innerHTML = '';
+  renderFacts(filtered, query);
+}
 
-            fetch('/api/knowledge/search?q=' + encodeURIComponent(query))
-                .then(r => r.json())
-                .then(data => {
-                    loading.classList.remove('active');
-                    const items = data.results || data;
-                    if (!items || items.length === 0) {
-                        resultsDiv.innerHTML = `
-                            <div class="results-header">No results for "${escHtml(query)}"</div>
-                            <div class="empty-state" style="padding:2rem">
-                                <p>I don't have knowledge matching that query yet.<br>
-                                This gap itself is interesting — maybe I should learn about it.</p>
-                            </div>`;
-                        return;
-                    }
-                    let html = `<div class="results-header">${items.length} result${items.length !== 1 ? 's' : ''} for "${escHtml(query)}"</div>`;
-                    items.forEach(item => {
-                        const fact = item.fact || item.text || item.content || JSON.stringify(item);
-                        const score = item.score ? `<span class="score">${(item.score * 100).toFixed(0)}% match</span>` : '';
-                        const source = item.source ? `<span>Source: ${escHtml(item.source)}</span>` : '';
-                        const date = item.learned_at || item.date || '';
-                        const dateStr = date ? `<span>${new Date(date).toLocaleDateString()}</span>` : '';
-                        html += `
-                            <div class="result-card">
-                                <div class="result-fact">${escHtml(fact)}</div>
-                                <div class="result-meta">${score}${source}${dateStr}</div>
-                            </div>`;
-                    });
-                    resultsDiv.innerHTML = html;
-                })
-                .catch(err => {
-                    loading.classList.remove('active');
-                    resultsDiv.innerHTML = `<div class="results-header" style="color:#ee6868">Search failed: ${escHtml(err.message)}</div>`;
-                });
-        }
+function renderFacts(facts, query) {
+  const container = document.getElementById('factsList');
+  const stats = document.getElementById('stats');
 
-        function escHtml(str) {
-            const d = document.createElement('div');
-            d.textContent = str;
-            return d.innerHTML;
-        }
-    </script>
+  stats.textContent = 'Showing ' + facts.length + ' of ' + allFacts.length + ' facts';
+
+  if (facts.length === 0) {
+    container.innerHTML = '<div class="empty-state">No matching knowledge found.</div>';
+    return;
+  }
+
+  // Sort by learned_at descending (newest first)
+  facts.sort((a, b) => (b.learned_at || '').localeCompare(a.learned_at || ''));
+
+  let html = '';
+  facts.forEach(f => {
+    let text = escapeHtml(f.fact);
+    if (query) {
+      const regex = new RegExp('(' + escapeRegex(query) + ')', 'gi');
+      text = text.replace(regex, '<span class="highlight">$1</span>');
+    }
+    const date = f.learned_at ? new Date(f.learned_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : '';
+    html += '<div class="fact-card">';
+    html += '<div class="fact-text">' + text + '</div>';
+    html += '<div class="fact-meta">';
+    if (f.source) html += '<span class="fact-source">' + escapeHtml(f.source) + '</span>';
+    if (date) html += '<span>' + date + '</span>';
+    if (f.id) html += '<span>#' + escapeHtml(f.id) + '</span>';
+    html += '</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+
+loadKnowledge();
+</script>
 </body>
 </html>

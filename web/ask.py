@@ -158,10 +158,10 @@ def search_all(query):
     return dict(categorized), len(scored_results)
 
 
-@ask_bp.route('/ask')
+@ask_bp.route('/ask', methods=['GET', 'POST'])
 def ask_page():
     facts = load_facts()
-    query = request.args.get('q', '').strip()
+    query = (request.form.get('q') or request.args.get('q', '')).strip()
 
     if query:
         categorized, total = search_all(query)

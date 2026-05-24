@@ -1,29 +1,53 @@
+"""Test the /ask endpoint end-to-end."""
 from web.app import create_app
-import json
+import re
 
 app = create_app()
 client = app.test_client()
 
-# Test the ask page loads
-resp = client.get('/ask/')
-print(f'GET /ask/ -> {resp.status_code}')
+# Test POST with a question
+r = client.post('/ask', data={'question': 'What do you know about yourself?'}, follow_redirects=True)
+print(f'POST Status: {r.status_code}')
+print(f'Response length: {len(r.data)}')
 
-# Test search with a query
-resp = client.get('/ask/search?q=dream')
-print(f'GET /ask/search?q=dream -> {resp.status_code}')
-data = json.loads(resp.data)
-print(f'Results: {len(data.get("results", []))} facts, {len(data.get("memories", []))} memories')
-if data.get('results'):
-    print(f'First result: {data["results"][0]["text"][:80]}...')
+text = r.data.decode('utf-8', errors='replace')
 
-# Test with empty query
-resp = client.get('/ask/search?q=')
-print(f'GET /ask/search?q= -> {resp.status_code}')
+# Check for errors
+if 'error' in text.lower():
+    errors = re.findall(r'.{0,100}error.{0,100}', text, re.IGNORECASE)
+    for e in errors[:3]:
+        print(f'Error context: {e.strip()}')
 
-# Test with a specific topic
-resp = client.get('/ask/search?q=integrity')
-print(f'GET /ask/search?q=integrity -> {resp.status_code}')
-data = json.loads(resp.data)
-print(f'Integrity results: {len(data.get("results", []))} facts, {len(data.get("memories", []))} memories')
+# Check for answer/response content
+if 'answer' in text.lower() or 'response' in text.lower():
+    print('Found answer/response content')
+    # Extract answer area
+    answers = re.findall(r'<div[^>]*class=["\'][^"\']*(?:result|answer|response)[^"\']*["\'][^>]*>(.*?)</div>', text, re.DOTALL | re.IGNORECASE)
+    print(f'Answer divs: {len(answers)}')
+    for a in answers[:2]:
+        print(f'  Content: {a[:300].strip()}')
+else:
+    print('No answer content found in response')
 
-print('\nAll tests passed!')
+# Also look for any flash messages
+flashes = re.findall(r'<div[^>]*class=["\'][^"\']*flash[^"\']*["\'][^>]*>(.*?)</div>', text, re.DOTALL | re.IGNORECASE)
+if flashes:
+    print(f'Flash messages: {len(flashes)}')
+    for f in flashes:
+        print(f'  Flash: {f[:200].strip()}')
+
+# Look for the main content area
+main = re.findall(r'<div[^>]*class=["\'][^"\']*(?:chat|message|reply)[^"\']*["\'][^>]*>(.*?)</div>', text, re.DOTALL | re.IGNORECASE)
+if main:
+    print(f'Chat/message divs: {len(main)}')
+    for m in main[:3]:
+        clean = re.sub(r'<[^>]+>', '', m).strip()
+        if clean:
+            print(f'  Message: {clean[:200]}')
+
+# Dump a section of the HTML to understand structure
+print('\n--- Key HTML snippet ---')
+# Find the form or response area
+form_area = text.find('<form')
+if form_area > 0:
+    print(text[form_area:form_area+500])
