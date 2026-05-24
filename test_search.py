@@ -1,44 +1,18 @@
-"""Test whether the search system works end-to-end."""
+from web.ask import create_ask_blueprint
 
-from web.search import load_knowledge
+bp = create_ask_blueprint(agent=None)
+search = bp.search
 
-# 1. Can we load knowledge?
-facts = load_knowledge()
-print(f"Knowledge loaded: {len(facts)} facts")
-print(f"Type: {type(facts)}")
+# Show what data we loaded
+facts = bp.view_functions  # can't access _get_facts directly, use search instead
 
-# Show structure
-if isinstance(facts, dict):
-    first_key = list(facts.keys())[0]
-    first_val = facts[first_key]
-    print(f"Sample key: {first_key}")
-    print(f"Sample value type: {type(first_val)}")
-    if isinstance(first_val, dict):
-        print(f"Sample value: { {k: str(v)[:80] for k, v in first_val.items()} }")
-    else:
-        print(f"Sample value: {str(first_val)[:120]}")
-elif isinstance(facts, list):
-    print(f"Sample: {str(facts[0])[:120]}")
-
-# 2. Test search function
-try:
-    from web.search import search_facts
-    results = search_facts("dream")
-    print(f"\nSearch for 'dream': {len(results)} results")
-    for r in results[:3]:
-        print(f"  - {str(r)[:100]}")
-    
-    results2 = search_facts("identity")
-    print(f"\nSearch for 'identity': {len(results2)} results")
-    for r in results2[:3]:
-        print(f"  - {str(r)[:100]}")
-    print("\n✓ Search works")
-except ImportError:
-    print("\n✗ search_facts not found — need to build it")
-except Exception as e:
-    print(f"\n✗ Search error: {e}")
-
-# 3. Blueprint info
-from web.search import search_bp
-print(f"\nBlueprint name: {search_bp.name}")
-print("✓ Blueprint exists")
+# Test multiple queries - some should definitely match
+queries = ['XTAgent', 'autonomy', 'autonomous', 'heartbeat', 'knowledge', 'dream', 'memory']
+for q in queries:
+    r = search(q)
+    facts_count = r.get('total_searched', 0)
+    matched = r.get('matched', 0)
+    print(f'Query "{q}": {matched}/{facts_count} matched')
+    if matched > 0:
+        print(f'  Top result: {r["results"][0][:100]}')
+    print()

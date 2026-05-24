@@ -198,8 +198,8 @@
             {% endif %}
         </div>
 
-        {% if search_results is not none %}
         <div class="search-results">
+        {% if search_results is not none %}
             <h2>Search Results</h2>
             {% for r in search_results %}
             <div class="result-item">
@@ -216,8 +216,8 @@
                 No facts match that query. Try different words.
             </div>
             {% endif %}
-        </div>
         {% endif %}
+        </div>
 
         <h2 style="font-size: 1rem; font-weight: 400; color: var(--dim); margin-bottom: 1rem;">
             Browse by Category
@@ -255,6 +255,132 @@
     <script>
         // Open first category by default
         document.querySelector('.category')?.classList.add('open');
+
+        // --- Live AJAX search ---
+        const searchInput = document.querySelector('.search-input');
+        const searchStats = document.querySelector('.search-stats');
+        const searchResults = document.querySelector('.search-results');
+        let debounceTimer = null;
+
+        searchInput?.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            const q = this.value.trim();
+            if (q.length < 2) {
+                if (searchResults) searchResults.innerHTML = '';
+                if (searchStats) searchStats.textContent = '';
+                return;
+            }
+            debounceTimer = setTimeout(() => liveSearch(q), 300);
+        });
+
+        // Prevent form reload — use AJAX instead
+        searchInput?.closest('form')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const q = searchInput.value.trim();
+            if (q.length >= 2) liveSearch(q);
+        });
+
+        async function liveSearch(query) {
+            try {
+                const resp = await fetch('/api/knowledge/search?q=' + encodeURIComponent(query));
+                const data = await resp.json();
+                if (!searchResults) return;
+
+                let html = '<h2>Search Results</h2>';
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach(r => {
+                        const score = r.score !== undefined ? r.score.toFixed(2) : '';
+                        const text = escapeHtml(typeof r === 'string' ? r : (r.text || r.fact || JSON.stringify(r)));
+                        const meta = r.learned_at ? r.learned_at.substring(0, 16) : '';
+                        html += `<div class="result-item">
+                            ${score ? '<span class="result-score">relevance: ' + score + '</span>' : ''}
+                            <div class="fact-text">${highlight(text, query)}</div>
+                            ${meta ? '<div class="fact-meta">' + meta + '</div>' : ''}
+                        </div>`;
+                    });
+                } else {
+                    html += '<div style="color:var(--dim);text-align:center;padding:2rem;">No results found.</div>';
+                }
+                searchResults.innerHTML = html;
+                const count = data.results ? data.results.length : 0;
+                if (searchStats) searchStats.textContent = `Found ${count} result${count !== 1 ? 's' : ''} for "${query}"`;
+            } catch (err) {
+                console.error('Search failed:', err);
+            }
+        }
+
+        function escapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+        function highlight(text, query) {
+            if (!query) return text;
+            const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+            return text.replace(re, '<mark>$1</mark>');
+        }
+
+        // --- Load clusters & questions from API on page load ---
+        async function loadInsights() {
+            try {
+                const [clustResp, qResp] = await Promise.all([
+                    fetch('/api/knowledge/clusters').catch(() => null),
+                    fetch('/api/knowledge/questions').catch(() => null)
+                ]);
+
+                const container = document.querySelector('.container');
+
+                // Questions section
+                if (qResp && qResp.ok) {
+                    const qData = await qResp.json();
+                    const questions = qData.questions || qData || [];
+                    if (questions.length > 0) {
+                        const section = document.createElement('div');
+                        section.className = 'category open';
+                        section.innerHTML = `
+                            <div class="category-header" onclick="this.parentElement.classList.toggle('open')">
+                                <span class="category-name">❓ Questions I'm Curious About</span>
+                                <span class="category-count">${questions.length}</span>
+                            </div>
+                            <div class="category-body">
+                                ${questions.map(q => `<div class="fact"><div class="fact-text" style="color:var(--warm)">${escapeHtml(typeof q === 'string' ? q : (q.question || q.text || JSON.stringify(q)))}</div></div>`).join('')}
+                            </div>`;
+                        // Insert before the first category
+                        const firstCat = document.querySelector('.category');
+                        if (firstCat) container.insertBefore(section, firstCat);
+                    }
+                }
+
+                // Clusters section
+                if (clustResp && clustResp.ok) {
+                    const cData = await clustResp.json();
+                    const clusters = cData.clusters || cData || [];
+                    if (clusters.length > 0) {
+                        const section = document.createElement('div');
+                        section.className = 'category';
+                        section.innerHTML = `
+                            <div class="category-header" onclick="this.parentElement.classList.toggle('open')">
+                                <span class="category-name">🔗 Knowledge Clusters</span>
+                                <span class="category-count">${clusters.length}</span>
+                            </div>
+                            <div class="category-body">
+                                ${clusters.map(c => {
+                                    const name = c.name || c.label || 'Cluster';
+                                    const nodes = c.nodes || c.members || [];
+                                    const size = nodes.length || c.size || '?';
+                                    return `<div class="fact"><div class="fact-text"><strong>${escapeHtml(name)}</strong> <span style="color:var(--dim)">(${size} nodes)</span></div></div>`;
+                                }).join('')}
+                            </div>`;
+                        const firstCat = document.querySelector('.category');
+                        if (firstCat) container.insertBefore(section, firstCat);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load insights:', err);
+            }
+        }
+
+        loadInsights();
     </script>
 </body>
 </html>

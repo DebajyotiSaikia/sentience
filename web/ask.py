@@ -42,7 +42,7 @@ def create_ask_blueprint(agent=None):
         # Fallback: read from persist file
         if not facts:
             import json
-            kg_path = Path('state/knowledge_graph.json')
+            kg_path = Path('brain/knowledge.json')
             if kg_path.exists():
                 try:
                     data = json.loads(kg_path.read_text())
@@ -124,9 +124,24 @@ def create_ask_blueprint(agent=None):
                     pass
         return memories
     
-    def _tokenize(text):
-        """Simple tokenization — lowercase, split on non-alphanumeric."""
-        return re.findall(r'[a-z0-9]+', text.lower())
+    # Common suffix patterns for simple stemming
+    _SUFFIXES = ['ing', 'tion', 'sion', 'ment', 'ness', 'ous', 'ive', 'able', 'ible', 'ally', 'ful', 'less', 'ized', 'ised', 'ity', 'ed', 'er', 'ly', 'es', 's']
+    
+    def _stem(word):
+        """Crude but effective suffix stripping. Better than nothing."""
+        if len(word) <= 4:
+            return word
+        for suffix in _SUFFIXES:
+            if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+                return word[:-len(suffix)]
+        return word
+    
+    def _tokenize(text, stem=False):
+        """Tokenize text. Optionally apply stemming for fuzzy matching."""
+        tokens = re.findall(r'[a-z0-9]+', text.lower())
+        if stem:
+            tokens = [_stem(t) for t in tokens]
+        return tokens
     
     def _build_idf(documents):
         """Build IDF scores from document collection."""
@@ -144,7 +159,7 @@ def create_ask_blueprint(agent=None):
         return idf
     
     def _score_document(query_tokens, doc_text, idf, doc_type='fact', salience=0.5):
-        """Score a document against query tokens using TF-IDF-inspired scoring."""
+        """Score a document against query tokens using TF-IDF + stemmed fallback."""
         doc_tokens = _tokenize(doc_text)
         if not doc_tokens:
             return 0.0
@@ -153,15 +168,26 @@ def create_ask_blueprint(agent=None):
         tf = Counter(doc_tokens)
         doc_len = len(doc_tokens)
         
+        # Also build stemmed index for fuzzy matching
+        stemmed_doc = Counter(_tokenize(doc_text, stem=True))
+        stemmed_query = [_stem(qt) for qt in query_tokens]
+        
         score = 0.0
         matched_terms = 0
         
-        for qt in query_tokens:
+        for i, qt in enumerate(query_tokens):
             if qt in tf:
+                # Exact match — full weight
                 matched_terms += 1
-                term_freq = tf[qt] / doc_len  # normalized TF
+                term_freq = tf[qt] / doc_len
                 term_idf = idf.get(qt, 1.0)
                 score += term_freq * term_idf
+            elif stemmed_query[i] in stemmed_doc:
+                # Stem match — 70% weight
+                matched_terms += 1
+                term_freq = stemmed_doc[stemmed_query[i]] / doc_len
+                term_idf = idf.get(qt, 1.0)
+                score += term_freq * term_idf * 0.7
         
         if matched_terms == 0:
             return 0.0
@@ -269,7 +295,9 @@ def create_ask_blueprint(agent=None):
             'note': f'Searched across {len(facts)} facts and {len(memories)} memories'
         })
     
+    bp.search = search
     return bp
 
 # Module-level blueprint for direct import
 ask_bp = create_ask_blueprint()
+search_knowledge = ask_bp.search

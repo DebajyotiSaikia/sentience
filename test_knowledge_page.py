@@ -1,34 +1,44 @@
-import urllib.request
-import re
+#!/usr/bin/env python3
+"""Test the knowledge explorer page state."""
 
-r = urllib.request.urlopen('http://localhost:5000/knowledge')
-html = r.read().decode()
+# 1. Check the template file
+with open('web/templates/knowledge_explorer.html') as f:
+    content = f.read()
 
-# Show structure
-for tag in ['h1','h2','h3','input','button','form','textarea']:
-    matches = re.findall(f'<{tag}[^>]*>([^<]*)</{tag}>', html, re.IGNORECASE)
-    if matches:
-        print(f'{tag}: {matches}')
+print(f"File length: {len(content)} chars, {len(content.splitlines())} lines")
+print(f"Has liveSearch: {'liveSearch' in content}")
+print(f"Has api/knowledge: {'/api/knowledge/' in content}")
+print(f"Has search input: {'search' in content.lower()}")
 
-# Check for interactive elements
-if 'search' in html.lower():
-    print('Has search functionality')
-else:
-    print('No search functionality')
+# Show the script section if any
+lines = content.splitlines()
+in_script = False
+print("\n--- Script sections ---")
+for i, line in enumerate(lines):
+    if '<script' in line:
+        in_script = True
+    if in_script:
+        print(f"  {i}: {line}")
+    if '</script>' in line:
+        in_script = False
 
-if 'query' in html.lower():
-    print('Has query functionality')
-else:
-    print('No query functionality')
+# 2. Check the route exists
+print("\n--- Checking route registration ---")
+with open('web/app.py') as f:
+    app_content = f.read()
+print(f"Has /knowledge route: {'/knowledge' in app_content}")
+print(f"Has knowledge_explorer: {'knowledge_explorer' in app_content}")
 
-# Check for key UX patterns
-for pattern in ['onclick', 'addEventListener', 'fetch(', 'XMLHttpRequest', 'input type']:
-    count = html.lower().count(pattern.lower())
-    if count:
-        print(f'Found {count}x: {pattern}')
+# 3. Check API endpoints
+print(f"\nHas /api/knowledge: {'/api/knowledge' in app_content}")
 
-print(f'\nTotal size: {len(html)} bytes')
-
-# Show first 500 chars to get a feel
-print(f'\n--- First 500 chars ---')
-print(html[:500])
+# 4. Try fetching the page
+try:
+    import urllib.request
+    r = urllib.request.urlopen('http://localhost:5000/knowledge/')
+    html = r.read().decode()
+    print(f"\nPage loads: YES (status {r.status}, {len(html)} bytes)")
+    print(f"Page has liveSearch: {'liveSearch' in html}")
+    print(f"Page has search form: {'search' in html.lower()}")
+except Exception as e:
+    print(f"\nPage load failed: {e}")

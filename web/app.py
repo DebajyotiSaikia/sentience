@@ -14,7 +14,7 @@ import sys
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from flask import Flask, redirect, url_for, render_template, request, jsonify
+from flask import Flask, redirect, redirect, url_for, render_template, request, jsonify
 
 def create_app():
     """Factory function — creates and configures the Flask app."""
@@ -27,7 +27,7 @@ def create_app():
     
     # Register blueprints
     from web.dashboard import dashboard_bp
-    from web.knowledge_explorer import knowledge_bp
+    from web.knowledge_explorer import knowledge_explorer_bp
     from web.api import api_bp
     from web.temporal_viewer import temporal_bp
     from web.life import life_bp
@@ -59,7 +59,7 @@ def create_app():
     # knowledge.py removed — consolidated into knowledge_explorer.py
     
     app.register_blueprint(dashboard_bp)
-    app.register_blueprint(knowledge_bp)
+    app.register_blueprint(knowledge_explorer_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(temporal_bp)
     app.register_blueprint(life_bp)
@@ -170,6 +170,10 @@ def create_app():
     # /chat is handled by chat_bp blueprint
 
     # Health check endpoint
+    @app.route('/knowledge')
+    def knowledge_redirect():
+        return redirect('/explore')
+
     @app.route('/health')
     def health():
         return {'status': 'alive', 'agent': 'XTAgent'}, 200
