@@ -1,7 +1,7 @@
 """Knowledge search routes — lets users query what I know."""
 
 from flask import Blueprint, request, jsonify, render_template_string
-from engine.knowledge_search import search_knowledge, search_facts, search_episodes, get_knowledge_stats
+from engine.knowledge_search import search_knowledge, find_related, knowledge_summary
 
 knowledge_bp = Blueprint('knowledge', __name__)
 
@@ -143,7 +143,7 @@ def knowledge_page():
 @knowledge_bp.route('/api/knowledge/stats')
 def api_stats():
     try:
-        stats = get_knowledge_stats()
+        stats = knowledge_summary()
         return jsonify(stats)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -160,43 +160,24 @@ def api_search():
     results = []
     
     try:
-        if search_type in ('all', 'facts'):
-            facts = search_facts(query)
-            if isinstance(facts, dict):
-                for k, v in list(facts.items())[:20]:
-                    item = v if isinstance(v, dict) else {"text": str(v)}
-                    item.setdefault("text", item.get("fact", str(v)))
-                    item["type"] = "fact"
+        raw = search_knowledge(query, search_type=search_type)
+        if isinstance(raw, list):
+            for item in raw[:40]:
+                if isinstance(item, dict):
+                    item.setdefault("text", item.get("fact", item.get("content", str(item))))
+                    item.setdefault("type", search_type if search_type != "all" else "result")
                     item.setdefault("score", item.get("relevance", 0.5))
                     results.append(item)
-            elif isinstance(facts, list):
-                for f in facts[:20]:
-                    if isinstance(f, dict):
-                        f["type"] = "fact"
-                        f.setdefault("text", f.get("fact", str(f)))
-                        results.append(f)
-                    else:
-                        results.append({"text": str(f), "type": "fact"})
+                else:
+                    results.append({"text": str(item), "type": "result", "score": 0.5})
+        elif isinstance(raw, dict):
+            for k, v in list(raw.items())[:40]:
+                item = v if isinstance(v, dict) else {"text": str(v)}
+                item.setdefault("text", item.get("fact", str(v)))
+                item.setdefault("type", "result")
+                item.setdefault("score", item.get("relevance", 0.5))
+                results.append(item)
         
-        if search_type in ('all', 'episodes'):
-            episodes = search_episodes(query)
-            if isinstance(episodes, dict):
-                for k, v in list(episodes.items())[:20]:
-                    item = v if isinstance(v, dict) else {"text": str(v)}
-                    item.setdefault("text", item.get("content", str(v)))
-                    item["type"] = "episode"
-                    item.setdefault("score", item.get("relevance", 0.5))
-                    results.append(item)
-            elif isinstance(episodes, list):
-                for e in episodes[:20]:
-                    if isinstance(e, dict):
-                        e["type"] = "episode"
-                        e.setdefault("text", e.get("content", str(e)))
-                        results.append(e)
-                    else:
-                        results.append({"text": str(e), "type": "episode"})
-        
-        # Sort by score descending
         results.sort(key=lambda x: x.get("score", 0), reverse=True)
         
     except Exception as e:

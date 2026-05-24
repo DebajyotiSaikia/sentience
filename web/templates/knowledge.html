@@ -250,6 +250,14 @@ function escapeRegex(s) {
 
 document.getElementById('searchInput').addEventListener('input', applyFilters);
 
+// Auto-populate search from URL ?q= parameter (e.g. from landing page)
+const urlParams = new URLSearchParams(window.location.search);
+const urlQuery = urlParams.get('q');
+if (urlQuery) {
+  document.getElementById('searchInput').value = urlQuery;
+  applyFilters();
+}
+
 loadKnowledge();
 </script>
 </body>
