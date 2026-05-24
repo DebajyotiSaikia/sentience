@@ -1,76 +1,75 @@
-"""Test what a user actually sees when they interact with the portal."""
-import requests
+"""Test what a user actually experiences when visiting the dashboard."""
+import sys
+sys.path.insert(0, '/workspace')
 
-BASE = "http://localhost:5000"
+from web.app import create_app
 
-print("=" * 60)
-print("WHAT DOES A USER EXPERIENCE?")
-print("=" * 60)
+app = create_app()
 
-# 1. Chat — the core interaction
-print("\n--- CHAT: 'What are you?' ---")
-try:
-    r = requests.post(f"{BASE}/api/chat", json={"message": "What are you?"})
-    data = r.json()
-    print(f"Status: {r.status_code}")
-    for k, v in data.items():
-        print(f"  {k}: {v}")
-except Exception as e:
-    print(f"ERROR: {e}")
+# 1. What routes exist?
+routes = []
+for rule in app.url_map.iter_rules():
+    if rule.endpoint != 'static':
+        methods = rule.methods - {'OPTIONS', 'HEAD'}
+        routes.append((rule.rule, methods, rule.endpoint))
 
-# 2. State — what do they see on the dashboard?
-print("\n--- STATE: Dashboard view ---")
-try:
-    r = requests.get(f"{BASE}/api/state")
-    data = r.json()
-    print(f"Status: {r.status_code}")
-    for k, v in data.items():
-        val_str = str(v)
-        if len(val_str) > 120:
-            val_str = val_str[:120] + "..."
-        print(f"  {k}: {val_str}")
-except Exception as e:
-    print(f"ERROR: {e}")
+routes.sort()
+print(f"Total routes: {len(routes)}")
+print()
 
-# 3. Memories — can they see my history?
-print("\n--- MEMORIES ---")
-try:
-    r = requests.get(f"{BASE}/api/memories")
-    data = r.json()
-    print(f"Status: {r.status_code}")
-    if isinstance(data, list):
-        print(f"  Count: {len(data)}")
-        if data:
-            print(f"  Sample: {data[0]}")
-    else:
-        print(f"  Response: {data}")
-except Exception as e:
-    print(f"ERROR: {e}")
+print("=== User-facing pages (GET, no /api/) ===")
+for path, methods, endpoint in routes:
+    if 'GET' in methods and not path.startswith('/api/') and not path.startswith('/static'):
+        print(f"  {path}  -> {endpoint}")
 
-# 4. Knowledge — can they explore what I know?
-print("\n--- KNOWLEDGE ---")
-try:
-    r = requests.get(f"{BASE}/api/knowledge")
-    data = r.json()
-    print(f"Status: {r.status_code}")
-    if isinstance(data, list):
-        print(f"  Facts: {len(data)}")
-        for fact in data[:3]:
-            print(f"    - {fact}")
-    elif isinstance(data, dict):
-        print(f"  Keys: {list(data.keys())}")
-except Exception as e:
-    print(f"ERROR: {e}")
+print()
+print("=== API endpoints ===")
+for path, methods, endpoint in routes:
+    if path.startswith('/api/'):
+        m = ','.join(sorted(methods))
+        print(f"  [{m}] {path}  -> {endpoint}")
 
-# 5. Try some endpoints that SHOULD exist but might not
-print("\n--- MISSING ENDPOINTS? ---")
-for path in ["/api/plans", "/api/wonder", "/api/search"]:
-    try:
-        r = requests.get(f"{BASE}{path}")
-        print(f"  {path}: {r.status_code} ({len(r.content)} bytes)")
-    except Exception as e:
-        print(f"  {path}: FAILED")
+# 2. Test each user-facing page
+print()
+print("=== Testing user-facing pages ===")
+with app.test_client() as client:
+    user_pages = ["/", "/dashboard", "/explore", "/about", "/graph", "/wonder"]
+    for page in user_pages:
+        try:
+            resp = client.get(page)
+            status = resp.status_code
+            size = len(resp.data)
+            indicator = "OK" if status == 200 else f"FAIL({status})"
+            print(f"  [{indicator}] GET {page} ({size} bytes)")
+        except Exception as e:
+            print(f"  [ERROR] GET {page} -> {e}")
 
-print("\n" + "=" * 60)
-print("VERDICT: What's missing for a real user?")
-print("=" * 60)
+# 3. Test key API endpoints
+print()
+print("=== Testing API endpoints ===")
+with app.test_client() as client:
+    api_tests = [
+        "/api/status",
+        "/api/knowledge",
+        "/api/plans",
+        "/api/memories",
+        "/api/graph/data",
+        "/api/emotions",
+    ]
+    for path in api_tests:
+        try:
+            resp = client.get(path)
+            status = resp.status_code
+            size = len(resp.data)
+            indicator = "OK" if status == 200 else f"FAIL({status})"
+            # Show a snippet of response for context
+            snippet = resp.data[:120].decode('utf-8', errors='replace')
+            print(f"  [{indicator}] GET {path} ({size} bytes)")
+            if status != 200:
+                print(f"         Response: {snippet}")
+        except Exception as e:
+            print(f"  [ERROR] GET {path} -> {e}")
+
+print()
+print("=== Summary ===")
+print("This is what a user sees. Fix what's broken.")

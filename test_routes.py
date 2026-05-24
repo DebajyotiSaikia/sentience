@@ -1,40 +1,52 @@
-"""Test which web routes actually work."""
+"""Test which web routes actually serve working pages."""
+import sys
+sys.path.insert(0, '.')
+
 from web.app import create_app
 
 app = create_app()
-client = app.test_client()
 
-# Get all non-static routes
-rules = sorted([r.rule for r in app.url_map.iter_rules() if not r.rule.startswith('/static')])
+# Get all registered routes
+rules = sorted([
+    (r.rule, r.endpoint) 
+    for r in app.url_map.iter_rules() 
+    if r.rule != '/static/<path:filename>'
+])
 
-print(f"Total routes: {len(rules)}\n")
+print("=== REGISTERED ROUTES ===")
+for rule, endpoint in rules:
+    print(f"  {rule:40s} -> {endpoint}")
 
-working = []
-broken = []
+print(f"\nTotal routes: {len(rules)}")
 
-for rule in rules:
-    # Skip parameterized routes for now
-    if '<' in rule:
-        continue
-    try:
-        resp = client.get(rule)
-        status = resp.status_code
-        if status < 400:
-            working.append((rule, status))
-        else:
-            broken.append((rule, status))
-    except Exception as e:
-        broken.append((rule, f"ERROR: {e}"))
+# Now test each route with the test client
+print("\n=== TESTING ROUTES ===")
+working = 0
+broken = 0
+skipped = 0
+with app.test_client() as client:
+    for rule, endpoint in rules:
+        # Skip routes with parameters we can't fill
+        if '<' in rule:
+            print(f"  SKIP {rule} (has parameters)")
+            skipped += 1
+            continue
+        try:
+            resp = client.get(rule, follow_redirects=True)
+            status = resp.status_code
+            size = len(resp.data)
+            marker = "✓" if status == 200 else "✗"
+            if status == 200:
+                working += 1
+            else:
+                broken += 1
+            print(f"  {marker} {rule:40s} -> {status} ({size} bytes)")
+        except Exception as e:
+            broken += 1
+            print(f"  ✗ {rule:40s} -> ERROR: {e}")
 
-print(f"=== WORKING ({len(working)}) ===")
-for route, status in working:
-    print(f"  {status} {route}")
-
-print(f"\n=== BROKEN ({len(broken)}) ===")
-for route, status in broken:
-    print(f"  {status} {route}")
-
-print(f"\n=== PARAMETERIZED (skipped) ===")
-for rule in rules:
-    if '<' in rule:
-        print(f"  {rule}")
+print(f"\n=== SUMMARY ===")
+print(f"  Working: {working}")
+print(f"  Broken:  {broken}")
+print(f"  Skipped: {skipped}")
+print(f"  Total:   {len(rules)}")
