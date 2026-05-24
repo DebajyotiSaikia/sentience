@@ -35,7 +35,7 @@ def create_app():
     from web.search import search_bp
     from web.explore import explore_bp
     from web.query import query_bp
-    from web.knowledge_api import knowledge_bp as knowledge_api_bp
+    from web.knowledge_api import knowledge_api as knowledge_api_bp
     from web.briefing import briefing_bp
     from web.essays import essays_bp
     from web.chat import chat_bp
@@ -49,7 +49,7 @@ def create_app():
     from web.knowledge_explorer import knowledge_explorer_bp
     from web.knowledge_hub import knowledge_hub_bp
     from web.ask import ask_bp
-    from web.knowledge_search import knowledge_bp
+    # from web.knowledge_search import knowledge_bp  # uses register_routes(), not Blueprint
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
     from web.emotional_timeline import emotional_timeline_bp
@@ -85,7 +85,7 @@ def create_app():
     app.register_blueprint(knowledge_explorer_bp)
     app.register_blueprint(ask_bp)
     app.register_blueprint(knowledge_hub_bp)
-    app.register_blueprint(knowledge_bp)
+    # app.register_blueprint(knowledge_bp)  # no Blueprint in knowledge_search.py
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(emotional_timeline_bp)
@@ -213,6 +213,31 @@ def create_app():
         # Sort by recency, limit to 50
         results.sort(key=lambda r: r.get('learned_at', ''), reverse=True)
         return jsonify({'results': results[:50], 'total': len(results), 'query': query})
+
+    @app.route('/ask')
+    def ask_page():
+        """Knowledge search interface for users."""
+        import json, os
+        query = request.args.get('q', '').strip().lower()
+        results = []
+        if query:
+            kg_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge_graph.json')
+            try:
+                with open(kg_path) as f:
+                    kg = json.load(f)
+                nodes = kg.get('nodes', {})
+                for node_id, node_data in nodes.items():
+                    fact = node_data.get('fact', '') if isinstance(node_data, dict) else str(node_data)
+                    if query in fact.lower():
+                        results.append({
+                            'id': node_id,
+                            'fact': fact,
+                            'source': node_data.get('source', 'unknown') if isinstance(node_data, dict) else 'unknown',
+                            'learned': node_data.get('learned_at', '') if isinstance(node_data, dict) else ''
+                        })
+            except Exception as e:
+                results = [{'id': 'error', 'fact': f'Could not search: {e}', 'source': '', 'learned': ''}]
+        return render_template('ask.html', query=query, results=results, count=len(results))
 
     return app
 

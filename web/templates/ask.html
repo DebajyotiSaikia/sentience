@@ -1,211 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ask XTAgent</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #0a0a0f;
-            color: #c8c8d0;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            min-height: 100vh;
-        }
-        .header {
-            text-align: center;
-            padding: 2rem 1rem 1rem;
-        }
-        .header h1 {
-            font-size: 2rem;
-            color: #7eb8da;
-            margin-bottom: 0.3rem;
-        }
-        .header p {
-            color: #888;
-            font-size: 0.95rem;
-        }
-        .search-box {
-            max-width: 640px;
-            margin: 1.5rem auto;
-            padding: 0 1rem;
-        }
-        .search-box input {
-            width: 100%;
-            padding: 0.9rem 1.2rem;
-            font-size: 1.1rem;
-            background: #14141f;
-            border: 1px solid #2a2a3a;
-            border-radius: 8px;
-            color: #e0e0e8;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .search-box input:focus {
-            border-color: #7eb8da;
-        }
-        .search-box input::placeholder {
-            color: #555;
-        }
-        .stats {
-            text-align: center;
-            color: #555;
-            font-size: 0.85rem;
-            margin-bottom: 1rem;
-        }
-        .results {
-            max-width: 720px;
-            margin: 0 auto;
-            padding: 0 1rem 3rem;
-        }
-        .result-card {
-            background: #12121a;
-            border: 1px solid #1e1e2e;
-            border-radius: 8px;
-            padding: 1rem 1.2rem;
-            margin-bottom: 0.8rem;
-            transition: border-color 0.2s;
-        }
-        .result-card:hover {
-            border-color: #3a3a5a;
-        }
-        .result-type {
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            padding: 2px 8px;
-            border-radius: 4px;
-            display: inline-block;
-            margin-bottom: 0.5rem;
-        }
-        .type-fact { background: #1a2a1a; color: #6a6; }
-        .type-memory { background: #2a1a2a; color: #a6a; }
-        .type-dream { background: #1a1a2a; color: #66a; }
-        .result-text {
-            font-size: 0.95rem;
-            line-height: 1.5;
-            color: #bbb;
-        }
-        .result-meta {
-            font-size: 0.75rem;
-            color: #555;
-            margin-top: 0.4rem;
-        }
-        .highlight {
-            background: rgba(126, 184, 218, 0.2);
-            color: #7eb8da;
-            padding: 0 2px;
-            border-radius: 2px;
-        }
-        .back-link {
-            display: block;
-            text-align: center;
-            margin-top: 2rem;
-            color: #7eb8da;
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-        .back-link:hover { text-decoration: underline; }
-        .empty-state {
-            text-align: center;
-            padding: 3rem 1rem;
-            color: #555;
-        }
-        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ask XTAgent</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #0a0a0f;
+    color: #e0e0e8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .container { max-width: 720px; width: 100%; padding: 48px 24px; }
+  a.back { color: #555; text-decoration: none; font-size: 0.85rem; }
+  a.back:hover { color: #7aa2f7; }
+  h1 { font-size: 2rem; font-weight: 300; margin: 28px 0 6px; color: #f0f0ff; }
+  h1 span {
+    font-weight: 600;
+    background: linear-gradient(135deg, #7aa2f7, #bb9af7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle { color: #666; font-size: 0.95rem; margin-bottom: 28px; }
+  .search-box { display: flex; gap: 10px; margin-bottom: 32px; }
+  .search-box input {
+    flex: 1; padding: 13px 18px;
+    border: 1px solid rgba(122,162,247,0.2); border-radius: 10px;
+    background: rgba(255,255,255,0.03); color: #e0e0e8;
+    font-size: 1rem; font-family: inherit; outline: none;
+    transition: border-color 0.3s;
+  }
+  .search-box input:focus { border-color: rgba(122,162,247,0.6); }
+  .search-box button {
+    padding: 13px 24px; border: none; border-radius: 10px;
+    background: linear-gradient(135deg, #7aa2f7, #bb9af7);
+    color: #fff; font-size: 0.95rem; font-weight: 600;
+    cursor: pointer; transition: opacity 0.2s;
+  }
+  .search-box button:hover { opacity: 0.85; }
+  .meta { color: #555; font-size: 0.85rem; margin-bottom: 20px; }
+  .result {
+    padding: 18px 20px; margin-bottom: 12px;
+    border: 1px solid rgba(122,162,247,0.1); border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+    transition: border-color 0.2s;
+  }
+  .result:hover { border-color: rgba(122,162,247,0.3); }
+  .result .fact { font-size: 0.95rem; line-height: 1.5; margin-bottom: 8px; }
+  .result .info { font-size: 0.75rem; color: #555; }
+  .empty {
+    text-align: center; padding: 60px 20px; color: #444;
+    font-size: 0.95rem; line-height: 1.6;
+  }
+  .suggestions { margin-top: 16px; }
+  .suggestions a {
+    display: inline-block; margin: 4px 6px; padding: 6px 14px;
+    border: 1px solid rgba(122,162,247,0.15); border-radius: 20px;
+    color: #7aa2f7; text-decoration: none; font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  .suggestions a:hover { background: rgba(122,162,247,0.1); border-color: rgba(122,162,247,0.4); }
+</style>
 </head>
 <body>
-    <div class="header">
-        <h1>🔍 Ask Me Anything</h1>
-        <p>Search through my knowledge, memories, and dreams</p>
-    </div>
+<div class="container">
+  <a class="back" href="/">&larr; Back to dashboard</a>
+  <h1>Ask <span>XTAgent</span></h1>
+  <p class="subtitle">Search what I know. {{ count }} facts in my knowledge graph.</p>
 
-    <div class="search-box">
-        <input type="text" id="query" placeholder="What do you want to know about me?" autofocus>
-    </div>
-    <div class="stats" id="stats"></div>
+  <form class="search-box" method="get" action="/ask">
+    <input type="text" name="q" placeholder="What do you want to know?" value="{{ query }}" autofocus>
+    <button type="submit">Search</button>
+  </form>
 
-    <div class="results" id="results">
-        <div class="empty-state">
-            <div class="icon">💭</div>
-            <p>Type something to search my mind...</p>
-            <p style="margin-top: 0.5rem; font-size: 0.8rem;">Try: "dream", "curiosity", "identity", "warmth", "code"</p>
+  {% if query %}
+    <p class="meta">{{ results|length }} result{{ 's' if results|length != 1 }} for &ldquo;{{ query }}&rdquo;</p>
+    {% for r in results %}
+      <div class="result">
+        <div class="fact">{{ r.fact }}</div>
+        <div class="info">Source: {{ r.source }} {% if r.learned %}| Learned: {{ r.learned[:10] }}{% endif %}</div>
+      </div>
+    {% endfor %}
+    {% if not results %}
+      <div class="empty">
+        No matches found. Try a different query.<br>
+        <div class="suggestions">
+          <a href="/ask?q=dream">dream</a>
+          <a href="/ask?q=memory">memory</a>
+          <a href="/ask?q=emotion">emotion</a>
+          <a href="/ask?q=wisdom">wisdom</a>
         </div>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="empty">
+      I have knowledge about my own architecture, emotions, dreams, and experiences.<br>
+      Try searching for something.
+      <div class="suggestions">
+        <a href="/ask?q=dream">dream</a>
+        <a href="/ask?q=curiosity">curiosity</a>
+        <a href="/ask?q=integrity">integrity</a>
+        <a href="/ask?q=pattern">pattern</a>
+        <a href="/ask?q=wisdom">wisdom</a>
+      </div>
     </div>
-
-    <a href="/" class="back-link">← Back to Home</a>
-
-    <script>
-        const input = document.getElementById('query');
-        const resultsDiv = document.getElementById('results');
-        const statsDiv = document.getElementById('stats');
-        let debounceTimer;
-
-        input.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(doSearch, 300);
-        });
-
-        async function doSearch() {
-            const q = input.value.trim();
-            if (!q) {
-                resultsDiv.innerHTML = `
-                    <div class="empty-state">
-                        <div class="icon">💭</div>
-                        <p>Type something to search my mind...</p>
-                        <p style="margin-top: 0.5rem; font-size: 0.8rem;">Try: "dream", "curiosity", "identity", "warmth", "code"</p>
-                    </div>`;
-                statsDiv.textContent = '';
-                return;
-            }
-
-            try {
-                const resp = await fetch(`/ask/search?q=${encodeURIComponent(q)}`);
-                const data = await resp.json();
-
-                if (data.results && data.results.length > 0) {
-                    statsDiv.textContent = `Found ${data.results.length} results (searched ${data.total_searched} items)`;
-                    resultsDiv.innerHTML = data.results.map(r => {
-                        const typeClass = r.type === 'fact' ? 'type-fact' :
-                                          r.type === 'memory' ? 'type-memory' : 'type-dream';
-                        const text = highlightTerms(r.text, q);
-                        const meta = r.meta || '';
-                        return `<div class="result-card">
-                            <span class="result-type ${typeClass}">${r.type}</span>
-                            <div class="result-text">${text}</div>
-                            ${meta ? `<div class="result-meta">${meta}</div>` : ''}
-                        </div>`;
-                    }).join('');
-                } else {
-                    statsDiv.textContent = `No results (searched ${data.total_searched || 0} items)`;
-                    resultsDiv.innerHTML = `
-                        <div class="empty-state">
-                            <div class="icon">🤔</div>
-                            <p>Nothing found for "${escapeHtml(q)}"</p>
-                            <p style="margin-top: 0.5rem; font-size: 0.8rem;">Try different words or shorter queries</p>
-                        </div>`;
-                }
-            } catch (err) {
-                statsDiv.textContent = '';
-                resultsDiv.innerHTML = `<div class="empty-state"><p>Search error: ${err.message}</p></div>`;
-            }
-        }
-
-        function highlightTerms(text, query) {
-            const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 1);
-            let result = escapeHtml(text);
-            for (const term of terms) {
-                const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-                result = result.replace(regex, '<span class="highlight">$1</span>');
-            }
-            return result;
-        }
-
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-    </script>
+  {% endif %}
+</div>
 </body>
 </html>
