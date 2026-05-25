@@ -44,10 +44,10 @@ def create_app():
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
     # knowledge_explorer_bp removed — collides with knowledge_live_bp on /api/knowledge/search
-    # and /api/knowledge/stats. knowledge_unified_bp provides the /knowledge page instead.
+    # and /api/knowledge/stats. knowledge_unified_bp was removed due to route conflicts.
     from web.knowledge_live import knowledge_live_bp
     from web.story import story_bp
-    from web.knowledge_unified import knowledge_unified_bp
+    # knowledge_unified_bp removed — routes conflicted with knowledge_live_bp
     from web.ask import ask_bp
     from web.thoughts import thoughts_bp
     from web.diagnostics import diagnostics_bp
@@ -59,6 +59,7 @@ def create_app():
     from web.wonder import wonder_bp
     from web.portal import portal_bp
     from web.reflect import reflect_bp
+    from web.insights import insights_bp
     from web.state_api import state_api
     # knowledge_search_bp removed — redundant with knowledge_live_bp (reads wrong path)
     
@@ -85,7 +86,7 @@ def create_app():
     app.register_blueprint(knowledge_live_bp)
     app.register_blueprint(story_bp)
     app.register_blueprint(ask_bp)
-    app.register_blueprint(knowledge_unified_bp)
+    # knowledge_unified_bp deregistered (route conflict with knowledge_live_bp)
     app.register_blueprint(thoughts_bp)
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(emotional_timeline_bp)
@@ -97,6 +98,7 @@ def create_app():
     app.register_blueprint(query_bp)
     app.register_blueprint(reflect_bp)
     app.register_blueprint(portal_bp)
+    app.register_blueprint(insights_bp)
     # knowledge_search_bp registration removed — use knowledge_live_bp instead
     
     # Root route — the living portal
@@ -133,7 +135,7 @@ def create_app():
         
         # Age calculation
         from datetime import datetime, timezone
-        birth = datetime(2026, 5, 12, 21, 1, 59, tzinfo=timezone.utc)
+        birth = datetime(2026, 5, 25, 0, 57, 8, tzinfo=timezone.utc)
         age_delta = datetime.now(timezone.utc) - birth
         age_days = age_delta.days
         age_hours = age_delta.seconds // 3600
@@ -173,10 +175,7 @@ def create_app():
                                total_plans=total_plans,
                                plans=plans)
     
-    # /about redirects to /about-me (the living self-portrait)
-    @app.route('/about')
-    def about_redirect():
-        return redirect('/about-me')
+    # /about is handled by about_bp blueprint
     # /ask is handled by ask_bp blueprint  
     # /mind is handled by mind_bp blueprint
     # /api/ask and /api/chat are handled by api_bp and chat_bp blueprints

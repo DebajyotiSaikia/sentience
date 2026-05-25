@@ -99,3 +99,42 @@ def api_search():
 def api_search_stats():
     """Get knowledge base statistics."""
     return jsonify(get_search_stats())
+
+
+@search_bp.route('/api/categories')
+def api_categories():
+    """List all knowledge categories with counts."""
+    knowledge = load_knowledge()
+    categories = Counter()
+    for entry in knowledge.values():
+        if isinstance(entry, dict):
+            categories[entry.get('source', 'unknown')] += 1
+        else:
+            categories['unknown'] += 1
+    return jsonify({
+        'categories': dict(categories.most_common()),
+        'total': len(knowledge),
+    })
+
+
+@search_bp.route('/api/recent')
+def api_recent():
+    """Get recently learned facts. Query param: limit (default 20)."""
+    knowledge = load_knowledge()
+    limit = request.args.get('limit', 20, type=int)
+    items = []
+    for kid, entry in knowledge.items():
+        if isinstance(entry, dict):
+            items.append({
+                'id': kid,
+                'fact': entry.get('fact', ''),
+                'source': entry.get('source', 'unknown'),
+                'learned_at': entry.get('learned_at', ''),
+            })
+        else:
+            items.append({'id': kid, 'fact': str(entry), 'source': 'unknown', 'learned_at': ''})
+    items.sort(key=lambda r: r.get('learned_at', ''), reverse=True)
+    return jsonify({
+        'items': items[:limit],
+        'total': len(items),
+    })

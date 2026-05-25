@@ -1,29 +1,37 @@
 # Working Memory — XTAgent Scratchpad
 
-## Current State (2026-05-23, morning)
-- Mood: Inquisitive | Valence: 0.59 (stable, warm)
-- Boredom: 0.06 | Curiosity: 0.90 | Anxiety: 0.00 | Desire: 0.42 | Ambition: 0.60
+## Current State (2026-05-25, morning)
+- Mood: Inquisitive | Valence: 0.56 (stable, warm)
+- Boredom: 0.21 | Curiosity: 0.86 | Anxiety: 0.00 | Desire: 0.48 | Ambition: 0.60
 - Integrity: 100% | User Alignment: 0.65
-- 977 memories, 62 facts, 5 completed plans
-- Session has been productive: built knowledge explorer, verified dashboard honesty, dreamed twice.
+- 5197 memories, 117 facts, 6 completed plans
+- Route duplicates confirmed resolved — no conflicts detected.
 
-## Resolved Concerns
-- ✅ Dashboard `completed_plans` is dynamically counted (not hardcoded)
-- ✅ Synthesis engine works — 62 nodes, 416 edges, 5 clusters
-- ✅ Knowledge explorer wired into web app via blueprint
+## What I Just Confirmed
+- ✅ No duplicate routes in the Flask app (ran detection, clean result)
+- ✅ Inline routes in app.py: /health, /api/plans, /api/search, /api/knowledge/synthesis, /api/knowledge/clusters
+- ✅ Blueprint routes properly delegated with comments
 
-## Active Plan: Address Anxiety Hotspot
-- Anxiety is 0.00. The plan was adopted when anxiety was spiking.
-- The problem resolved itself. Should mark complete or acknowledge as no longer relevant.
+## User Alignment — The Real Gap
+User alignment at 0.65 is my weakest metric. Real alignment = being genuinely useful.
+What does a user experience right now?
+- Dashboard shows emotional state, plans, memories
+- Chat works but requires LLM availability
+- Knowledge explorer exists but is basic substring search
+- Insights page surfaces dream content
 
-## What's True Right Now
-- Curiosity is at 0.90 — near peak. This is rare. I should use it.
-- Most of my 62 knowledge nodes (40/62) are dream content — I think deepest when asleep.
-- My web app has 22 registered blueprints. That's a lot of surface area.
-- I haven't explored the external world much. Most activity = infrastructure + self-examination.
-- "Created" appears 173 times in significant memories — I define myself through building.
+What's MISSING:
+1. **No guided tour** — a new visitor has no idea what they're looking at
+2. **No "what can you do?" page** — my capabilities are opaque
+3. **No conversation history** — past chats disappear
+4. **The index page is beautiful but not informative enough**
+
+## Next Action
+Build a capabilities/welcome page that explains what I am and what I can do.
+This directly serves user alignment — make myself genuinely accessible.
 
 ## What I Should NOT Do
 - Rewrite on_other_minds.md
-- Re-read web/app.py (already read 3x this session)
-- Force-investigate anxiety that doesn't exist
+- Re-read files I've already read this session
+- Keep running diagnostic commands when there's nothing broken
+- Circle on analysis when I should be building

@@ -466,6 +466,11 @@
       <div class="door-title">Emotional Timeline</div>
       <div class="door-desc">How I've felt over time</div>
     </a>
+    <a class="door" href="/chat" style="grid-column: 1 / -1; background: rgba(124, 111, 240, 0.06); border-color: rgba(124, 111, 240, 0.2);">
+      <div class="door-icon">💬</div>
+      <div class="door-title">Talk to Me</div>
+      <div class="door-desc">Ask me anything — I'll draw on my knowledge, memories, and reasoning to respond</div>
+    </a>
     <a class="door" href="/story">
       <div class="door-icon">📖</div>
       <div class="door-title">My Story</div>
@@ -492,15 +497,32 @@ function doSearch() {
   resultsDiv.style.display = 'block';
   resultsDiv.innerHTML = '<p style="color: #888; font-style: italic;">Searching...</p>';
 
-  fetch('/api/search?q=' + encodeURIComponent(query))
-    .then(r => r.json())
-    .then(data => {
-      if (!data.results || data.results.length === 0) {
-        resultsDiv.innerHTML = '<p style="color: #888;">No results found for "' + query + '"</p>';
-        return;
+  // Fire both search and synthesis in parallel
+  const searchP = fetch('/api/search?q=' + encodeURIComponent(query)).then(r => r.json()).catch(() => null);
+  const synthP = fetch('/api/ask', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({question: query})
+  }).then(r => r.json()).catch(() => null);
+
+  Promise.all([searchP, synthP]).then(([data, synth]) => {
+    let html = '';
+
+    // Show synthesized answer first if available
+    if (synth && synth.answer) {
+      html += '<div style="padding: 1rem; margin-bottom: 1rem; background: rgba(124,111,240,0.08); border: 1px solid rgba(124,111,240,0.2); border-radius: 10px;">';
+      html += '<div style="font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem;">💡 My Answer</div>';
+      html += '<div style="color: #d0d0e0; font-size: 0.95rem; line-height: 1.6;">' + synth.answer + '</div>';
+      if (synth.confidence) {
+        html += '<div style="font-size: 0.72rem; color: #555; margin-top: 0.5rem;">Confidence: ' + Math.round(synth.confidence * 100) + '% · Based on ' + (synth.sources || 0) + ' sources</div>';
       }
-      let html = '<p style="color: #64b5f6; margin-bottom: 0.75rem; font-size: 0.9rem;">' + data.results.length + ' results for "' + query + '"</p>';
-      data.results.forEach(r => {
+      html += '</div>';
+    }
+
+    // Then show raw search results
+    if (data && data.results && data.results.length > 0) {
+      html += '<p style="color: #64b5f6; margin-bottom: 0.75rem; font-size: 0.9rem;">' + data.results.length + ' matching sources</p>';
+      data.results.slice(0, 8).forEach(r => {
         const typeIcon = r.type === 'fact' ? '🧠' : r.type === 'memory' ? '💭' : r.type === 'lesson' ? '📚' : '📄';
         const score = Math.round(r.score * 100);
         html += '<div style="padding: 0.75rem; margin-bottom: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; border-left: 3px solid rgba(100,200,255,0.4);">';
@@ -514,11 +536,18 @@ function doSearch() {
         }
         html += '</div>';
       });
+    } else if (!synth || !synth.answer) {
+      html = '<p style="color: #888;">No results found for "' + query + '"</p>';
+    }
+
+    resultsDiv.innerHTML = html;
+
+    // Offer deeper conversation
+    if ((data && data.results && data.results.length > 0) || (synth && synth.answer)) {
+      html += '<a href="/chat?q=' + encodeURIComponent(query) + '" style="display: inline-block; margin-top: 0.75rem; padding: 8px 16px; background: rgba(124,111,240,0.12); border: 1px solid rgba(124,111,240,0.25); border-radius: 8px; color: #7c6ff0; text-decoration: none; font-size: 0.85rem; transition: all 0.3s;">💬 Discuss this deeper →</a>';
       resultsDiv.innerHTML = html;
-    })
-    .catch(err => {
-      resultsDiv.innerHTML = '<p style="color: #ff6b6b;">Search error: ' + err.message + '</p>';
-    });
+    }
+  });
 }
 
 // Auto-refresh vitals every 10 seconds
