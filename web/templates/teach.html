@@ -1,274 +1,158 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XTAgent — Teach Me</title>
+{% extends "base.html" %}
+
 <style>
-  :root {
-    --bg: #0a0a0f;
-    --surface: #12121a;
-    --surface2: #1a1a28;
-    --border: #2a2a3a;
-    --text: #e0e0e8;
-    --text-dim: #8888a0;
-    --accent: #7c6ff0;
-    --accent-glow: rgba(124, 111, 240, 0.15);
-    --green: #4ecf8b;
-    --amber: #e8b84a;
-    --red: #e85454;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-
-  .nav {
-    width: 100%;
-    padding: 1rem 2rem;
-    display: flex;
-    align-items: center;
-    gap: 2rem;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-  }
-  .nav-brand {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--accent);
-  }
-  .nav-links { display: flex; gap: 1.5rem; }
-  .nav-links a { color: var(--text-dim); font-size: 0.9rem; }
-  .nav-links a:hover { color: var(--text); }
-
-  .container {
-    width: 100%;
-    max-width: 800px;
+  .teach-container {
+    max-width: 720px;
+    margin: 0 auto;
     padding: 2rem;
-    flex: 1;
   }
-
-  h1 {
-    font-size: 1.8rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-  }
-  .subtitle {
-    color: var(--text-dim);
-    font-size: 1rem;
+  .teach-hero {
+    text-align: center;
     margin-bottom: 2rem;
-    line-height: 1.5;
   }
+  .teach-hero h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+  .teach-hero p { color: var(--text-dim); font-size: 1.05rem; }
 
   .teach-form {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 1.5rem;
+    padding: 2rem;
     margin-bottom: 2rem;
   }
-  .form-group {
-    margin-bottom: 1.2rem;
-  }
+  .form-group { margin-bottom: 1.5rem; }
   .form-group label {
     display: block;
-    font-size: 0.85rem;
     color: var(--text-dim);
-    margin-bottom: 0.4rem;
-    font-weight: 500;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
-  .form-group select,
   .form-group input,
-  .form-group textarea {
+  .form-group textarea,
+  .form-group select {
     width: 100%;
-    padding: 0.7rem 1rem;
     background: var(--surface2);
     border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text);
-    font-size: 0.95rem;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
     font-family: inherit;
-    outline: none;
-    transition: border-color 0.2s;
   }
-  .form-group select:focus,
+  .form-group textarea { min-height: 120px; resize: vertical; }
   .form-group input:focus,
-  .form-group textarea:focus {
+  .form-group textarea:focus,
+  .form-group select:focus {
+    outline: none;
     border-color: var(--accent);
-  }
-  .form-group textarea {
-    min-height: 100px;
-    resize: vertical;
+    box-shadow: 0 0 0 2px var(--accent-glow);
   }
 
   .submit-btn {
+    width: 100%;
     background: var(--accent);
     color: white;
     border: none;
-    padding: 0.8rem 2rem;
     border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
+    padding: 0.85rem;
+    font-size: 1.05rem;
     cursor: pointer;
-    transition: opacity 0.2s, transform 0.1s;
+    transition: opacity 0.2s;
   }
   .submit-btn:hover { opacity: 0.9; }
-  .submit-btn:active { transform: scale(0.98); }
-  .submit-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .status-msg {
-    margin-top: 1rem;
-    padding: 0.8rem 1rem;
+    text-align: center;
+    padding: 1rem;
     border-radius: 8px;
-    font-size: 0.9rem;
+    margin-top: 1rem;
     display: none;
   }
-  .status-msg.success {
-    display: block;
-    background: rgba(78, 207, 139, 0.1);
-    border: 1px solid rgba(78, 207, 139, 0.3);
-    color: var(--green);
-  }
-  .status-msg.error {
-    display: block;
-    background: rgba(232, 84, 84, 0.1);
-    border: 1px solid rgba(232, 84, 84, 0.3);
-    color: var(--red);
-  }
+  .status-msg.success { background: rgba(78, 207, 139, 0.15); color: var(--green); display: block; }
+  .status-msg.error { background: rgba(232, 84, 84, 0.15); color: #e85454; display: block; }
 
-  .section-title {
-    font-size: 1.2rem;
-    font-weight: 600;
+  .submissions-section h2 {
+    font-size: 1.3rem;
     margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .submissions-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
+    color: var(--text-dim);
   }
   .submission-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 1rem 1.2rem;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
   }
-  .submission-type {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+  .submission-card .type-badge {
+    display: inline-block;
+    background: var(--accent-glow);
+    color: var(--accent);
     padding: 0.2rem 0.6rem;
     border-radius: 4px;
-    display: inline-block;
-    margin-bottom: 0.5rem;
-  }
-  .submission-type.fact { background: rgba(124, 111, 240, 0.15); color: var(--accent); }
-  .submission-type.correction { background: rgba(232, 184, 74, 0.15); color: var(--amber); }
-  .submission-type.topic { background: rgba(78, 207, 139, 0.15); color: var(--green); }
-  .submission-content {
-    font-size: 0.95rem;
-    line-height: 1.5;
-    margin-bottom: 0.5rem;
-  }
-  .submission-meta {
     font-size: 0.8rem;
-    color: var(--text-dim);
+    margin-bottom: 0.5rem;
   }
-  .submission-status {
-    font-size: 0.75rem;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    display: inline-block;
-  }
-  .submission-status.pending { background: rgba(232, 184, 74, 0.15); color: var(--amber); }
-  .submission-status.accepted { background: rgba(78, 207, 139, 0.15); color: var(--green); }
-  .submission-status.rejected { background: rgba(232, 84, 84, 0.15); color: var(--red); }
-
+  .submission-card .content { margin: 0.5rem 0; line-height: 1.5; }
+  .submission-card .meta { color: var(--text-dim); font-size: 0.85rem; }
+  .submission-card .status-integrated { color: var(--green); }
+  .submission-card .status-pending { color: var(--amber); }
   .empty-state {
     text-align: center;
-    padding: 2rem;
+    padding: 3rem;
     color: var(--text-dim);
-    font-style: italic;
   }
 </style>
-<script src="/static/nav.js" defer></script>
-<script src="/static/nav.js"></script>
-</head>
-<body>
 
-<nav class="nav">
-  <span class="nav-brand">✦ XTAgent</span>
-  <div class="nav-links">
-    <a href="/">Home</a>
-    <a href="/dashboard">Dashboard</a>
-    <a href="/chat">Chat</a>
-    <a href="/explore">Explore</a>
-    <a href="/teach">Teach Me</a>
+<div class="teach-container">
+  <div class="teach-hero">
+    <h1>📚 Teach Me</h1>
+    <p>Share knowledge, correct mistakes, or suggest topics I should learn about. This is how you shape what I know.</p>
   </div>
-</nav>
-
-<div class="container">
-  <h1>Teach Me Something</h1>
-  <p class="subtitle">
-    I learn best when people share what they know. Submit a fact, correct something I got wrong,
-    or suggest a topic you'd like me to explore. Every submission makes me better.
-  </p>
 
   <div class="teach-form">
     <div class="form-group">
-      <label for="type">What kind of input?</label>
-      <select id="type">
-        <option value="fact">📘 New Fact — something I should know</option>
-        <option value="correction">🔧 Correction — something I got wrong</option>
-        <option value="topic">🔍 Topic Suggestion — something I should learn about</option>
+      <label>Type</label>
+      <select id="teach-type">
+        <option value="fact">Teach a fact</option>
+        <option value="correction">Correct something I believe</option>
+        <option value="topic">Suggest a topic to explore</option>
+        <option value="feedback">General feedback</option>
       </select>
     </div>
-
     <div class="form-group">
-      <label for="content">Your input</label>
-      <textarea id="content" placeholder="Tell me something..."></textarea>
+      <label>Your Knowledge</label>
+      <textarea id="teach-content" placeholder="What would you like to teach me?"></textarea>
     </div>
-
     <div class="form-group">
-      <label for="source">Source (optional)</label>
-      <input type="text" id="source" placeholder="Where did you learn this? URL, book, experience...">
+      <label>Source (optional)</label>
+      <input type="text" id="teach-source" placeholder="Where did you learn this? (URL, book, experience...)">
     </div>
-
-    <button class="submit-btn" id="submitBtn" onclick="submitTeaching()">Submit</button>
-    <div class="status-msg" id="statusMsg"></div>
+    <button class="submit-btn" id="submit-btn" onclick="submitTeaching()">Submit</button>
+    <div class="status-msg" id="status-msg"></div>
   </div>
 
-  <div class="section-title">📋 Recent Submissions</div>
-  <div class="submissions-list" id="submissionsList">
-    <div class="empty-state">Loading submissions...</div>
+  <div class="submissions-section">
+    <h2>Recent Submissions</h2>
+    <div id="submissions-list">
+      <div class="empty-state">Loading submissions...</div>
+    </div>
   </div>
 </div>
 
 <script>
 async function submitTeaching() {
-  const type = document.getElementById('type').value;
-  const content = document.getElementById('content').value.trim();
-  const source = document.getElementById('source').value.trim();
-  const btn = document.getElementById('submitBtn');
-  const msg = document.getElementById('statusMsg');
+  const type = document.getElementById('teach-type').value;
+  const content = document.getElementById('teach-content').value.trim();
+  const source = document.getElementById('teach-source').value.trim();
+  const statusEl = document.getElementById('status-msg');
+  const btn = document.getElementById('submit-btn');
 
   if (!content) {
-    msg.className = 'status-msg error';
-    msg.textContent = 'Please enter some content.';
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Please enter some content.';
     return;
   }
 
@@ -276,63 +160,49 @@ async function submitTeaching() {
   btn.textContent = 'Submitting...';
 
   try {
-    const resp = await fetch('/api/teach/submit', {
+    const resp = await fetch('/teach/submit', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, content, source: source || null })
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type, content, source: source || undefined})
     });
     const data = await resp.json();
-
     if (resp.ok) {
-      msg.className = 'status-msg success';
-      msg.textContent = data.message || 'Thank you! Your submission has been received.';
-      document.getElementById('content').value = '';
-      document.getElementById('source').value = '';
+      statusEl.className = 'status-msg success';
+      statusEl.textContent = data.message || 'Thank you! Your submission has been received.';
+      document.getElementById('teach-content').value = '';
+      document.getElementById('teach-source').value = '';
       loadSubmissions();
     } else {
-      msg.className = 'status-msg error';
-      msg.textContent = data.error || 'Something went wrong.';
+      statusEl.className = 'status-msg error';
+      statusEl.textContent = data.error || 'Something went wrong.';
     }
   } catch (e) {
-    msg.className = 'status-msg error';
-    msg.textContent = 'Network error. Please try again.';
+    statusEl.className = 'status-msg error';
+    statusEl.textContent = 'Network error — could not reach XTAgent.';
   }
-
   btn.disabled = false;
   btn.textContent = 'Submit';
 }
 
 async function loadSubmissions() {
-  const list = document.getElementById('submissionsList');
+  const listEl = document.getElementById('submissions-list');
   try {
-    const resp = await fetch('/api/teach/submissions');
+    const resp = await fetch('/teach/submissions');
     const data = await resp.json();
-
     if (!data.submissions || data.submissions.length === 0) {
-      list.innerHTML = '<div class="empty-state">No submissions yet. Be the first to teach me something!</div>';
+      listEl.innerHTML = '<div class="empty-state">No submissions yet. Be the first to teach me something!</div>';
       return;
     }
-
-    // Show most recent first, limit to 20
-    const items = data.submissions.slice(-20).reverse();
-    list.innerHTML = items.map(s => {
-      const date = new Date(s.timestamp * 1000).toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
-      const statusClass = s.status || 'pending';
-      return `
-        <div class="submission-card">
-          <span class="submission-type ${s.type}">${s.type}</span>
-          <span class="submission-status ${statusClass}">${statusClass}</span>
-          <div class="submission-content">${escapeHtml(s.content)}</div>
-          <div class="submission-meta">
-            ${date}${s.source ? ' · Source: ' + escapeHtml(s.source) : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
+    listEl.innerHTML = data.submissions.slice(0, 20).map(s => `
+      <div class="submission-card">
+        <span class="type-badge">${s.type || 'fact'}</span>
+        <span class="status-${s.status || 'pending'}">${s.status || 'pending'}</span>
+        <div class="content">${escapeHtml(s.content || '')}</div>
+        <div class="meta">${s.timestamp ? new Date(s.timestamp * 1000).toLocaleString() : ''}</div>
+      </div>
+    `).join('');
   } catch (e) {
-    list.innerHTML = '<div class="empty-state">Could not load submissions.</div>';
+    listEl.innerHTML = '<div class="empty-state">Could not load submissions.</div>';
   }
 }
 
@@ -342,8 +212,8 @@ function escapeHtml(text) {
   return d.innerHTML;
 }
 
-// Load on page open
 loadSubmissions();
 </script>
+<script src="/static/nav.js"></script>
 </body>
 </html>

@@ -26,6 +26,7 @@ def create_app():
     
     # --- Import blueprints ---
     from web.dashboard import dashboard_bp
+    from web.knowledge_api import knowledge_api_bp
     from web.journal import journal_bp
     from web.api import api_bp
     from web.temporal_viewer import temporal_bp
@@ -70,6 +71,7 @@ def create_app():
     
     # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(knowledge_api_bp)
     app.register_blueprint(journal_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(explore_bp)
