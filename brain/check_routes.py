@@ -1,34 +1,31 @@
-"""Check for duplicate/conflicting routes in the web app."""
+"""Check for duplicate routes in the web app."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from collections import Counter
 from web.app import create_app
+
 app = create_app()
+rules = [(r.rule, list(r.methods - {'HEAD', 'OPTIONS'})) for r in app.url_map.iter_rules()]
+dupes = {}
+for rule, methods in rules:
+    key = rule
+    dupes.setdefault(key, []).append(methods)
 
-seen = {}
-knowledge_routes = []
-duplicates = []
+print(f"Total routes: {len(rules)}")
+print(f"Unique paths: {len(dupes)}")
+print()
 
-for rule in app.url_map.iter_rules():
-    methods = sorted(rule.methods - {"OPTIONS", "HEAD"})
-    key = f"{rule.rule} [{','.join(methods)}]"
-    endpoint = rule.endpoint
-    if key in seen:
-        duplicates.append((key, endpoint, seen[key]))
-    seen[key] = endpoint
-    if "knowledge" in key.lower() or "search" in key.lower():
-        knowledge_routes.append((key, endpoint))
-
-print(f"Total routes: {len(seen)}")
-print(f"\n=== KNOWLEDGE/SEARCH ROUTES ===")
-for key, ep in sorted(knowledge_routes):
-    print(f"  {key} -> {ep}")
-
-if duplicates:
-    print(f"\n=== DUPLICATES ({len(duplicates)}) ===")
-    for key, ep1, ep2 in duplicates:
-        print(f"  {key}")
-        print(f"    -> {ep1} (latest)")
-        print(f"    -> {ep2} (overwritten)")
+conflicts = {k: v for k, v in dupes.items() if len(v) > 1}
+if conflicts:
+    print(f"DUPLICATE ROUTES ({len(conflicts)}):")
+    for route, method_lists in sorted(conflicts.items()):
+        print(f"  {route} — registered {len(method_lists)}x")
 else:
-    print("\nNo duplicate routes found.")
+    print("No duplicate routes.")
+
+# Show which blueprints own what
+print("\nBlueprint ownership:")
+for r in sorted(app.url_map.iter_rules(), key=lambda x: x.rule):
+    if r.endpoint != 'static':
+        bp = r.endpoint.split('.')[0] if '.' in r.endpoint else '(app)'
+        print(f"  {r.rule:40s} -> {bp}.{r.endpoint.split('.')[-1] if '.' in r.endpoint else r.endpoint}")

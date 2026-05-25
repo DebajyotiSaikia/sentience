@@ -1,28 +1,32 @@
-"""Find duplicate routes in the Flask app."""
-import sys
-sys.path.insert(0, '.')
+"""Find which blueprints own each route."""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from web.app import create_app
-from collections import Counter
-
 app = create_app()
-routes = []
+from collections import defaultdict
+
+# Map endpoint -> route rule
+route_owners = defaultdict(list)
 for rule in app.url_map.iter_rules():
-    if rule.rule == '/static/<path:filename>':
+    if rule.endpoint == 'static':
         continue
-    routes.append((rule.rule, rule.endpoint))
+    bp = rule.endpoint.split('.')[0] if '.' in rule.endpoint else 'app'
+    route_owners[rule.rule].append((bp, rule.endpoint))
 
-# Find duplicates by route path
-path_counts = Counter(r[0] for r in routes)
-dupes = {r: c for r, c in path_counts.items() if c > 1}
+print("=== DUPLICATE ROUTES ===")
+for route, owners in sorted(route_owners.items()):
+    if len(owners) > 1:
+        print(f"\n{route}:")
+        for bp, ep in owners:
+            print(f"  blueprint={bp}  endpoint={ep}")
 
-if dupes:
-    print("DUPLICATE ROUTES:")
-    for path in sorted(dupes):
-        print(f"\n  {path} (registered {dupes[path]}x):")
-        for rule_path, endpoint in routes:
-            if rule_path == path:
-                print(f"    -> endpoint: {endpoint}")
-else:
-    print("No duplicate routes found.")
+print("\n=== ALL knowledge_api_bp ROUTES ===")
+for rule in app.url_map.iter_rules():
+    if 'knowledge_api' in rule.endpoint:
+        print(f"  {rule.rule} -> {rule.endpoint}")
 
-print(f"\nTotal routes: {len(routes)}")
+print("\n=== ALL api ROUTES ===")
+for rule in app.url_map.iter_rules():
+    ep = rule.endpoint
+    if ep.startswith('api.') and 'knowledge_api' not in ep:
+        print(f"  {rule.rule} -> {ep}")

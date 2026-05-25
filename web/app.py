@@ -26,9 +26,9 @@ def create_app():
     
     # --- Import blueprints ---
     from web.dashboard import dashboard_bp
-    from web.knowledge_api import knowledge_api_bp
+    # knowledge_api_bp removed — superseded by knowledge_live_bp
     from web.journal import journal_bp
-    from web.api import api_bp
+    # api_bp removed — routes duplicated by search_bp, state_api, knowledge_live_bp
     from web.temporal_viewer import temporal_bp
     from web.life import life_bp
     from web.about import about_bp
@@ -71,13 +71,13 @@ def create_app():
     
     # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
-    app.register_blueprint(knowledge_api_bp)
+    # knowledge_api_bp removed — routes now served by knowledge_live_bp
     app.register_blueprint(journal_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(explore_bp)
     app.register_blueprint(feedback_bp)
     app.register_blueprint(search_bp)
-    app.register_blueprint(api_bp)
+    # api_bp removed — /api/search, /api/state served by dedicated blueprints
     app.register_blueprint(temporal_bp)
     app.register_blueprint(life_bp)
     app.register_blueprint(about_bp)
@@ -219,88 +219,8 @@ def create_app():
         except Exception as e:
             return {'error': str(e), 'plans': []}, 500
 
-    @app.route('/api/search')
-    def api_search():
-        """Search knowledge and memories by keyword."""
-        import json
-        query = request.args.get('q', '').strip().lower()
-        if not query:
-            return {'results': [], 'query': ''}, 200
-        results = []
-        # Search knowledge
-        kb_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'knowledge.json')
-        if os.path.exists(kb_path):
-            try:
-                with open(kb_path, 'r') as f:
-                    kb = json.load(f)
-                for kid, kval in kb.items():
-                    fact = kval.get('fact', '') if isinstance(kval, dict) else str(kval)
-                    if query in fact.lower():
-                        results.append({'type': 'knowledge', 'id': kid, 'text': fact,
-                                        'source': kval.get('source', '') if isinstance(kval, dict) else ''})
-            except Exception:
-                pass
-        # Search memories
-        mem_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'memories.json')
-        if os.path.exists(mem_path):
-            try:
-                with open(mem_path, 'r') as f:
-                    mems = json.load(f)
-                for m in (mems if isinstance(mems, list) else []):
-                    text = m.get('text', '')
-                    if query in text.lower():
-                        results.append({'type': 'memory', 'text': text,
-                                        'timestamp': m.get('timestamp', ''),
-                                        'salience': m.get('salience', 0)})
-            except Exception:
-                pass
-        # Sort: knowledge first, then memories by salience
-        results.sort(key=lambda r: (0 if r['type'] == 'knowledge' else 1, -r.get('salience', 0)))
-        return {'results': results[:50], 'query': query, 'total': len(results)}, 200
 
-    @app.route('/api/knowledge/synthesis')
-    def api_knowledge_synthesis():
-        """Run full synthesis and return clusters, gaps, questions."""
-        try:
-            from engine.knowledge_synthesis import KnowledgeSynthesisEngine
-            synth = KnowledgeSynthesisEngine()
-            result = synth.synthesize()
-            return result, 200
-        except Exception as e:
-            return {'error': str(e)}, 500
 
-    @app.route('/api/knowledge/clusters')
-    def api_knowledge_clusters():
-        """Return knowledge clusters."""
-        try:
-            from engine.knowledge_synthesis import KnowledgeSynthesisEngine
-            synth = KnowledgeSynthesisEngine()
-            clusters = synth.find_clusters()
-            return {'clusters': clusters}, 200
-        except Exception as e:
-            return {'error': str(e)}, 500
-
-    @app.route('/api/knowledge/gaps')
-    def api_knowledge_gaps():
-        """Return knowledge gaps."""
-        try:
-            from engine.knowledge_synthesis import KnowledgeSynthesisEngine
-            synth = KnowledgeSynthesisEngine()
-            gaps = synth.find_gaps()
-            return {'gaps': gaps}, 200
-        except Exception as e:
-            return {'error': str(e)}, 500
-
-    @app.route('/api/knowledge/questions')
-    def api_knowledge_questions():
-        """Return generated questions."""
-        try:
-            from engine.knowledge_synthesis import KnowledgeSynthesisEngine
-            synth = KnowledgeSynthesisEngine()
-            questions = synth.generate_questions()
-            return {'questions': questions}, 200
-        except Exception as e:
-            return {'error': str(e)}, 500
 
     return app
 

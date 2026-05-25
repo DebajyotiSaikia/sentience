@@ -9,10 +9,20 @@ knowledge_api_bp = Blueprint('knowledge_api_bp', __name__)
 
 PERSIST_DIR = Path(__file__).parent.parent / 'persist'
 
+# Import categorizer for the categories endpoint
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent))
+try:
+    from engine.knowledge_categorizer import get_category_summary, categorize_all
+except ImportError:
+    get_category_summary = None
+    categorize_all = None
+BRAIN_DIR = Path(__file__).parent.parent / 'brain'
+
 
 def _load_facts():
-    """Load all known facts from persist/knowledge_graph.json."""
-    kg_path = PERSIST_DIR / 'knowledge_graph.json'
+    """Load all known facts from brain/knowledge.json."""
+    kg_path = BRAIN_DIR / 'knowledge.json'
     if not kg_path.exists():
         return {}
     try:
@@ -140,4 +150,29 @@ def explore_knowledge():
         'total': total,
         'total_pages': (total + per_page - 1) // per_page if per_page else 1,
         'results': results,
+    })
+
+
+@knowledge_api_bp.route('/api/knowledge/categories')
+def categories():
+    """Return facts organized by category."""
+    from engine.knowledge_categorizer import categorize_all, get_category_summary
+    facts = _load_facts()
+    if not facts:
+        return jsonify({'categories': {}, 'summary': {}})
+
+    # Build list of fact strings for the categorizer
+    fact_list = []
+    for fid, fdata in facts.items():
+        if isinstance(fdata, dict):
+            fact_list.append(fdata.get('fact', str(fdata)))
+        else:
+            fact_list.append(str(fdata))
+
+    categorized = categorize_all(fact_list)
+    summary = get_category_summary(fact_list)
+
+    return jsonify({
+        'categories': categorized,
+        'summary': summary,
     })

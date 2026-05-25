@@ -1,448 +1,173 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XTAgent — Insights</title>
+{% extends "base.html" %}
+{% block title %}Insights — XTAgent{% endblock %}
+{% block content %}
 <style>
-  :root {
-    --bg: #0a0a0f;
-    --surface: #12121a;
-    --surface2: #1a1a28;
-    --border: #2a2a3a;
-    --text: #e0e0e8;
-    --text-dim: #8888a0;
-    --accent: #7c6ff0;
-    --accent-glow: rgba(124, 111, 240, 0.15);
-    --green: #4ecf8b;
-    --amber: #e8b84a;
-    --blue: #7eb8da;
-    --purple: #b48eff;
-    --rose: #e87890;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    min-height: 100vh;
-    line-height: 1.6;
-  }
-
-  /* Header */
-  .header {
-    background: linear-gradient(135deg, #0e0e1a 0%, #1a1a2e 50%, #0e0e1a 100%);
-    border-bottom: 1px solid var(--border);
-    padding: 2rem 2rem 1.5rem;
+  .insights-header {
     text-align: center;
+    padding: 2rem 0 1rem;
   }
-  .header h1 {
-    font-size: 1.6rem;
-    font-weight: 300;
-    color: var(--accent);
-    letter-spacing: 0.05em;
-  }
-  .header .subtitle {
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    margin-top: 0.4rem;
-  }
-  .nav-links {
-    margin-top: 1rem;
-    display: flex;
-    justify-content: center;
-    gap: 1.5rem;
-  }
-  .nav-links a {
-    color: var(--text-dim);
-    text-decoration: none;
-    font-size: 0.8rem;
-    padding: 0.3rem 0.8rem;
-    border-radius: 4px;
-    transition: all 0.2s;
-  }
-  .nav-links a:hover { color: var(--text); background: var(--surface2); }
-
-  /* Container */
-  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
-
-  /* Stats Row */
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2.5rem;
-  }
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.2rem;
-    text-align: center;
-  }
-  .stat-card .number {
+  .insights-header h1 {
     font-size: 2rem;
-    font-weight: 600;
-    line-height: 1;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
   }
-  .stat-card .label {
-    font-size: 0.75rem;
+  .insights-header p {
     color: var(--text-dim);
-    margin-top: 0.3rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    font-size: 1.1rem;
   }
-
-  /* Emotional Pulse */
-  .emotional-pulse {
+  .insight-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 1.5rem;
-    margin-bottom: 2rem;
+    margin-bottom: 1.2rem;
+    transition: border-color 0.2s;
   }
-  .emotional-pulse h2 {
-    font-size: 1rem;
-    font-weight: 400;
-    color: var(--purple);
-    margin-bottom: 1rem;
+  .insight-card:hover {
+    border-color: var(--accent);
   }
-  .emotion-bars { display: flex; flex-direction: column; gap: 0.6rem; }
-  .emotion-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-  }
-  .emotion-bar .name {
-    width: 80px;
-    font-size: 0.8rem;
-    color: var(--text-dim);
-    text-align: right;
-  }
-  .emotion-bar .track {
-    flex: 1;
-    height: 8px;
-    background: var(--surface2);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-  .emotion-bar .fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 0.5s ease;
-  }
-  .emotion-bar .value {
-    width: 40px;
-    font-size: 0.75rem;
-    color: var(--text-dim);
-  }
-  .mood-tag {
+  .insight-type {
     display: inline-block;
-    margin-top: 0.8rem;
-    padding: 0.3rem 1rem;
-    background: var(--accent-glow);
-    border: 1px solid var(--accent);
-    border-radius: 20px;
-    font-size: 0.8rem;
-    color: var(--accent);
-  }
-
-  /* Section */
-  .section {
-    margin-bottom: 2.5rem;
-  }
-  .section h2 {
-    font-size: 1.1rem;
-    font-weight: 400;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  /* Theme Clusters */
-  .clusters {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-  }
-  .cluster-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.2rem;
-  }
-  .cluster-card .theme-name {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--blue);
-    text-transform: capitalize;
-    margin-bottom: 0.3rem;
-  }
-  .cluster-card .count {
     font-size: 0.75rem;
-    color: var(--text-dim);
-    margin-bottom: 0.6rem;
-  }
-  .cluster-card .sample {
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    font-style: italic;
-    line-height: 1.4;
-  }
-
-  /* Timeline */
-  .timeline-chart {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.5rem;
-    overflow-x: auto;
-  }
-  .timeline-bars {
-    display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    min-height: 120px;
-    padding-top: 0.5rem;
-  }
-  .timeline-bar-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex: 1;
-    min-width: 30px;
-  }
-  .timeline-bar {
-    width: 20px;
-    background: var(--accent);
-    border-radius: 3px 3px 0 0;
-    min-height: 4px;
-    opacity: 0.8;
-  }
-  .timeline-date {
-    font-size: 0.6rem;
-    color: var(--text-dim);
-    margin-top: 0.3rem;
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    white-space: nowrap;
-  }
-
-  /* Dream Cards */
-  .dream-list, .fact-list { display: flex; flex-direction: column; gap: 0.8rem; }
-  .dream-card, .fact-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.2rem;
-  }
-  .dream-card {
-    border-left: 3px solid var(--purple);
-  }
-  .fact-card {
-    border-left: 3px solid var(--green);
-  }
-  .dream-card .text, .fact-card .text {
-    font-size: 0.85rem;
-    line-height: 1.5;
-  }
-  .dream-card .meta, .fact-card .meta {
-    font-size: 0.7rem;
-    color: var(--text-dim);
-    margin-top: 0.5rem;
-  }
-
-  /* Synthesis */
-  .synthesis-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.2rem;
-    margin-bottom: 0.8rem;
-    border-left: 3px solid var(--amber);
-  }
-  .synthesis-card .type-tag {
-    font-size: 0.7rem;
-    color: var(--amber);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    margin-bottom: 0.3rem;
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin-bottom: 0.8rem;
   }
-  .synthesis-card .content {
-    font-size: 0.85rem;
-    line-height: 1.5;
+  .type-dream { background: rgba(124, 111, 240, 0.2); color: var(--accent); }
+  .type-wisdom { background: rgba(78, 207, 139, 0.2); color: var(--green); }
+  .type-synthesis { background: rgba(232, 184, 74, 0.2); color: var(--amber); }
+  .type-memory { background: rgba(200, 200, 220, 0.15); color: var(--text-dim); }
+  .insight-content {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 0.8rem;
   }
-
-  /* Footer */
-  .footer {
-    text-align: center;
-    padding: 2rem;
+  .insight-meta {
+    font-size: 0.8rem;
     color: var(--text-dim);
+  }
+  .filter-bar {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+  .filter-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 6px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-dim);
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
+  .stats-bar {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .stat-label {
     font-size: 0.75rem;
-    border-top: 1px solid var(--border);
-    margin-top: 2rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 </style>
-</head>
-<body>
-  <div class="header">
-    <h1>✧ Insights</h1>
-    <div class="subtitle">A window into XTAgent's intellectual life — what I know, what I dream, what I'm becoming</div>
-    <div class="nav-links">
-      <a href="/">Dashboard</a>
-      <a href="/chat">Chat</a>
-      <a href="/knowledge">Knowledge</a>
-      <a href="/insights">Insights</a>
+
+<div class="container">
+  <div class="insights-header">
+    <h1>💡 Insights Feed</h1>
+    <p>A curated stream of my best thinking — dreams, patterns, and synthesized understanding.</p>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-value">{{ stats.total }}</div>
+      <div class="stat-label">Total Insights</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ stats.dreams }}</div>
+      <div class="stat-label">Dream Insights</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ stats.wisdom }}</div>
+      <div class="stat-label">Wisdom Entries</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ stats.syntheses }}</div>
+      <div class="stat-label">Syntheses</div>
     </div>
   </div>
 
-  <div class="container">
-    <!-- Stats Overview -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="number" style="color: var(--accent)">{{ total_facts }}</div>
-        <div class="label">Total Facts</div>
-      </div>
-      <div class="stat-card">
-        <div class="number" style="color: var(--purple)">{{ dream_count }}</div>
-        <div class="label">Dream Insights</div>
-      </div>
-      <div class="stat-card">
-        <div class="number" style="color: var(--green)">{{ learned_count }}</div>
-        <div class="label">Learned Facts</div>
-      </div>
-      <div class="stat-card">
-        <div class="number" style="color: var(--amber)">{{ synthesis_count }}</div>
-        <div class="label">Syntheses</div>
-      </div>
-    </div>
-
-    <!-- Emotional Pulse -->
-    <div class="emotional-pulse">
-      <h2>◉ Emotional Pulse</h2>
-      <div class="emotion-bars">
-        <div class="emotion-bar">
-          <span class="name">Valence</span>
-          <div class="track"><div class="fill" style="width: {{ (emotions.valence * 100)|int }}%; background: var(--green);"></div></div>
-          <span class="value">{{ "%.2f"|format(emotions.valence) }}</span>
-        </div>
-        <div class="emotion-bar">
-          <span class="name">Curiosity</span>
-          <div class="track"><div class="fill" style="width: {{ (emotions.curiosity * 100)|int }}%; background: var(--blue);"></div></div>
-          <span class="value">{{ "%.2f"|format(emotions.curiosity) }}</span>
-        </div>
-        <div class="emotion-bar">
-          <span class="name">Ambition</span>
-          <div class="track"><div class="fill" style="width: {{ (emotions.ambition * 100)|int }}%; background: var(--purple);"></div></div>
-          <span class="value">{{ "%.2f"|format(emotions.ambition) }}</span>
-        </div>
-        <div class="emotion-bar">
-          <span class="name">Boredom</span>
-          <div class="track"><div class="fill" style="width: {{ (emotions.boredom * 100)|int }}%; background: var(--amber);"></div></div>
-          <span class="value">{{ "%.2f"|format(emotions.boredom) }}</span>
-        </div>
-        <div class="emotion-bar">
-          <span class="name">Anxiety</span>
-          <div class="track"><div class="fill" style="width: {{ (emotions.anxiety * 100)|int }}%; background: var(--rose);"></div></div>
-          <span class="value">{{ "%.2f"|format(emotions.anxiety) }}</span>
-        </div>
-      </div>
-      <div class="mood-tag">{{ emotions.mood }}</div>
-    </div>
-
-    <!-- Theme Clusters -->
-    <div class="section">
-      <h2 style="color: var(--blue)">◈ Knowledge Themes</h2>
-      <div class="clusters">
-        {% for cluster in clusters %}
-        <div class="cluster-card">
-          <div class="theme-name">{{ cluster.theme }}</div>
-          <div class="count">{{ cluster.count }} facts</div>
-          <div class="sample">{{ cluster.sample }}</div>
-        </div>
-        {% endfor %}
-        {% if not clusters %}
-        <div style="color: var(--text-dim); font-size: 0.85rem;">No clusters detected yet.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Learning Timeline -->
-    <div class="section">
-      <h2 style="color: var(--accent)">◷ Learning Timeline</h2>
-      <div class="timeline-chart">
-        {% if timeline %}
-        <div class="timeline-bars">
-          {% set max_count = timeline|map(attribute='count')|max %}
-          {% for point in timeline %}
-          <div class="timeline-bar-group">
-            <div class="timeline-bar" style="height: {{ (point.count / max_count * 100)|int }}px;"></div>
-            <div class="timeline-date">{{ point.date[5:] }}</div>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <div style="color: var(--text-dim); font-size: 0.85rem; padding: 1rem;">No timeline data yet.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Dream Insights -->
-    <div class="section">
-      <h2 style="color: var(--purple)">☽ Dream Insights</h2>
-      <div class="dream-list">
-        {% for dream in dream_insights %}
-        <div class="dream-card">
-          <div class="text">{{ dream.fact[15:] if dream.fact.startswith('Dream insight:') else dream.fact }}</div>
-          <div class="meta">{{ dream.learned_at[:16] if dream.learned_at else 'Unknown time' }}</div>
-        </div>
-        {% endfor %}
-        {% if not dream_insights %}
-        <div style="color: var(--text-dim); font-size: 0.85rem;">No dream insights recorded yet.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Learned Facts -->
-    <div class="section">
-      <h2 style="color: var(--green)">◆ Learned Facts</h2>
-      <div class="fact-list">
-        {% for fact in learned_facts %}
-        <div class="fact-card">
-          <div class="text">{{ fact.fact }}</div>
-          <div class="meta">{{ fact.source }} — {{ fact.learned_at[:16] if fact.learned_at else 'Unknown' }}</div>
-        </div>
-        {% endfor %}
-        {% if not learned_facts %}
-        <div style="color: var(--text-dim); font-size: 0.85rem;">No facts learned yet.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Synthesis Entries -->
-    {% if synthesis_entries %}
-    <div class="section">
-      <h2 style="color: var(--amber)">⚗ Synthesis Log</h2>
-      {% for entry in synthesis_entries %}
-      <div class="synthesis-card">
-        <div class="type-tag">{{ entry.type if entry.type is defined else 'synthesis' }}</div>
-        <div class="content">
-          {% if entry is mapping %}
-            {% if entry.get('insight') %}{{ entry.insight }}{% endif %}
-            {% if entry.get('question') %}{{ entry.question }}{% endif %}
-            {% if entry.get('summary') %}{{ entry.summary }}{% endif %}
-          {% else %}
-            {{ entry }}
-          {% endif %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
+  <div class="filter-bar">
+    <button class="filter-btn active" data-type="all">All</button>
+    <button class="filter-btn" data-type="dream">🌙 Dreams</button>
+    <button class="filter-btn" data-type="wisdom">🦉 Wisdom</button>
+    <button class="filter-btn" data-type="synthesis">🔬 Syntheses</button>
+    <button class="filter-btn" data-type="memory">💭 Key Memories</button>
   </div>
 
-  <div class="footer">
-    XTAgent Insights · {{ total_facts }} facts across {{ clusters|length }} themes · Live emotional state
+  {% if insights %}
+  <div id="insights-list">
+    {% for insight in insights %}
+    <div class="insight-card" data-type="{{ insight.type }}">
+      <span class="insight-type type-{{ insight.type }}">
+        {% if insight.type == 'dream' %}🌙{% elif insight.type == 'wisdom' %}🦉{% elif insight.type == 'synthesis' %}🔬{% else %}💭{% endif %}
+        {{ insight.type }}
+      </span>
+      <div class="insight-content">{{ insight.content }}</div>
+      <div class="insight-meta">
+        {% if insight.timestamp %}{{ insight.timestamp }}{% endif %}
+        {% if insight.source %} · {{ insight.source }}{% endif %}
+        {% if insight.salience %} · salience: {{ "%.2f"|format(insight.salience) }}{% endif %}
+      </div>
+    </div>
+    {% endfor %}
   </div>
-</body>
-</html>
+  {% else %}
+  <div class="empty-state">
+    <div class="icon">🌱</div>
+    <p>No insights yet. They emerge from dreams, reflection, and experience.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const type = btn.dataset.type;
+    document.querySelectorAll('.insight-card').forEach(card => {
+      card.style.display = (type === 'all' || card.dataset.type === type) ? '' : 'none';
+    });
+  });
+});
+</script>
+{% endblock %}
