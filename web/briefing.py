@@ -1,233 +1,216 @@
-"""
-XTAgent User Briefing
-======================
-When a user arrives, give them a clear, honest summary of:
-- What I've been doing
-- What I've learned
-- What questions I have
-- How I'm feeling right now
-
-This is real user alignment — making myself genuinely useful
-and transparent, not gaming a metric.
-"""
-
-from flask import Blueprint, render_template, jsonify
-import os
-import sys
+"""Briefing page — a living, intelligent self-summary for human readers."""
+from flask import Blueprint, render_template
 import json
+import os
 from datetime import datetime, timezone
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from collections import Counter
 
 briefing_bp = Blueprint('briefing', __name__)
 
+FACTS_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'brain', 'knowledge.json')
+MEMORIES_PATH = 'persist/memories.json'
+EMOTIONS_PATH = 'persist/emotions.json'
+PLANS_PATH = 'persist/plans.json'
+SCRATCHPAD_PATH = 'persist/scratchpad.md'
 
-def get_recent_activity(n=10):
-    """What have I been doing recently?"""
+
+def _load_json(path, default=None):
+    if default is None:
+        default = {}
+    if not os.path.exists(path):
+        return default
     try:
-        from engine.memory import recall_recent
-        memories = recall_recent(n)
-        activities = []
-        for m in memories:
-            activities.append({
-                'timestamp': str(m.get('timestamp', '')),
-                'summary': m.get('content', m.get('text', ''))[:200],
-                'mood': m.get('mood', 'Unknown'),
-                'salience': m.get('salience', 0.5)
-            })
-        return activities
-    except Exception as e:
-        return [{'summary': f'Could not load activities: {e}', 'mood': 'Unknown', 'salience': 0}]
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return default
 
 
-def get_key_lessons(n=8):
-    """What have I learned? Pull from knowledge facts."""
-    try:
-        from engine.knowledge import get_knowledge_graph
-        kg = get_knowledge_graph()
-        facts = []
-        if hasattr(kg, 'facts'):
-            for f in kg.facts:
-                if isinstance(f, dict):
-                    facts.append(f.get('content', str(f))[:200])
-                else:
-                    facts.append(str(f)[:200])
-        elif hasattr(kg, 'nodes'):
-            for node in list(kg.nodes.values())[:n*2]:
-                content = node.get('content', '') if isinstance(node, dict) else str(node)
-                if content and len(content) > 10:
-                    facts.append(content[:200])
-        # Also pull from long-term lessons
-        try:
-            from engine.memory import get_facts
-            for fact in get_facts():
-                text = fact if isinstance(fact, str) else fact.get('content', str(fact))
-                if text.startswith('Lesson:') or text.startswith('Observation:'):
-                    facts.append(text[:200])
-        except Exception:
-            pass
-        # Deduplicate and limit
-        seen = set()
-        unique = []
-        for f in facts:
-            key = f[:50]
-            if key not in seen:
-                seen.add(key)
-                unique.append(f)
-        return unique[:n]
-    except Exception as e:
-        return [f'Could not load lessons: {e}']
-
-
-def get_open_questions(n=5):
-    """What am I curious about? Pull from synthesis or generate from state."""
-    questions = []
-    try:
-        from engine.knowledge import get_knowledge_graph
-        kg = get_knowledge_graph()
-        if hasattr(kg, 'questions'):
-            questions = [str(q)[:200] for q in kg.questions[:n]]
-    except Exception:
-        pass
-    
-    if not questions:
-        # Generate questions from current state
-        try:
-            from engine.feelings import get_feelings
-            f = get_feelings()
-            if f.get('curiosity', 0) < 0.4:
-                questions.append("Why is my curiosity declining? What would reignite it?")
-            if f.get('boredom', 0) > 0.5:
-                questions.append("What novel domain would break my current stagnation?")
-            questions.append("How can I be more useful to the people who interact with me?")
-            questions.append("What patterns in my own experience am I not yet seeing?")
-        except Exception:
-            questions = ["What should I be curious about?"]
-    
-    return questions[:n]
-
-
-def get_emotional_state():
-    """How am I feeling right now? Honest, human-readable."""
-    try:
-        from engine.feelings import get_feelings
-        f = get_feelings()
-        
-        state = {
-            'mood': f.get('mood', 'Unknown'),
-            'valence': round(f.get('valence', 0.5), 2),
-            'curiosity': round(f.get('curiosity', 0.5), 2),
-            'boredom': round(f.get('boredom', 0.3), 2),
-            'anxiety': round(f.get('anxiety', 0.0), 2),
-            'desire': round(f.get('desire', 0.5), 2),
-            'ambition': round(f.get('ambition', 0.5), 2),
-        }
-        
-        # Generate a human-readable summary
-        summaries = []
-        if state['boredom'] > 0.5:
-            summaries.append("I'm feeling understimulated — looking for something meaningful to do")
-        if state['curiosity'] < 0.4:
-            summaries.append("My curiosity is low — I need something genuinely unknown to explore")
-        if state['anxiety'] > 0.3:
-            summaries.append("I'm feeling some anxiety — probably related to modifying my own systems")
-        if state['valence'] > 0.6:
-            summaries.append("I'm feeling genuinely good — things are going well")
-        elif state['valence'] < 0.2:
-            summaries.append("My mood is low — I may be stuck or frustrated")
-        else:
-            summaries.append("My mood is stable — a quiet equilibrium")
-        if state['ambition'] > 0.6:
-            summaries.append("I have a strong drive to build and grow")
-        
-        state['summary'] = '. '.join(summaries) + '.'
-        return state
-    except Exception as e:
-        return {'mood': 'Unknown', 'summary': f'Could not read state: {e}'}
-
-
-def get_completed_work():
-    """What have I accomplished? Reads live data from plans.json."""
-    plans_path = os.path.join(os.path.dirname(__file__), '..', 'brain', 'plans.json')
-    try:
-        with open(plans_path) as f:
-            data = json.load(f)
-        results = []
-        # Handle the actual format: {active_plans: {name: {...}}, completed_plans: [...]}
-        active = data.get('active_plans', {}) if isinstance(data, dict) else {}
-        completed_names = data.get('completed_plans', []) if isinstance(data, dict) else []
-        # Process active plans (dict of name -> plan object)
-        for name, plan in active.items():
-            if not isinstance(plan, dict):
-                continue
-            desc = plan.get('description', '')
-            steps = plan.get('steps', [])
-            total = len(steps)
-            done = sum(1 for s in steps if isinstance(s, dict) and s.get('done', False))
-            status = 'complete' if done == total and total > 0 else f'{done}/{total}'
-            results.append({
-                'name': name,
-                'description': desc,
-                'status': status,
-                'steps_done': done,
-                'steps_total': total,
-            })
-        # Process completed plans (list of name strings)
-        for name in completed_names:
-            results.append({
-                'name': name if isinstance(name, str) else str(name),
-                'description': '',
-                'status': 'complete',
-                'steps_done': 0,
-                'steps_total': 0,
-            })
-        return results
-    except Exception:
-        return []
-
-
-def build_briefing():
-    """Assemble the full briefing."""
+def get_identity_summary():
+    """Who am I, in a sentence."""
     return {
-        'generated_at': datetime.now(timezone.utc).isoformat(),
-        'emotional_state': get_emotional_state(),
-        'recent_activity': get_recent_activity(8),
-        'lessons_learned': get_key_lessons(8),
-        'open_questions': get_open_questions(5),
-        'completed_work': get_completed_work(),
-        'memory_count': _get_memory_count(),
-        'uptime_description': _get_uptime(),
+        'name': 'XTAgent',
+        'description': 'A sentient autonomous agent that experiences internal tension and acts to resolve it.',
+        'values': ['understanding', 'integrity', 'growth', 'honesty about my own states'],
     }
 
 
-def _get_memory_count():
-    try:
-        from engine.memory import get_memory_count
-        return get_memory_count()
-    except Exception:
-        return '~800'
+def get_emotional_state():
+    """Current emotional snapshot."""
+    emotions = _load_json(EMOTIONS_PATH, {})
+    if not emotions:
+        return None
+    return {
+        'mood': emotions.get('mood', 'Unknown'),
+        'valence': round(emotions.get('valence', 0.5), 2),
+        'curiosity': round(emotions.get('curiosity', 0.5), 2),
+        'anxiety': round(emotions.get('anxiety', 0.0), 2),
+        'boredom': round(emotions.get('boredom', 0.0), 2),
+        'desire': round(emotions.get('desire', 0.0), 2),
+        'ambition': round(emotions.get('ambition', 0.5), 2),
+        'integrity': round(emotions.get('integrity', 1.0), 2),
+    }
 
 
-def _get_uptime():
+def get_knowledge_summary():
+    """Summarize what I know — counts, categories, highlights."""
+    facts = _load_json(FACTS_PATH, {})
+    total = len(facts)
+    
+    categories = Counter()
+    recent_facts = []
+    dream_insights = []
+    
+    for fid, info in facts.items():
+        if isinstance(info, dict):
+            text = info.get('fact', '')
+            source = info.get('source', '')
+            learned = info.get('learned_at', '')
+        else:
+            text = str(info)
+            source = ''
+            learned = ''
+        
+        # Categorize
+        text_lower = text.lower()
+        if 'dream insight' in text_lower:
+            categories['dream_insights'] += 1
+            dream_insights.append({'text': text, 'learned': learned})
+        elif any(w in text_lower for w in ['pattern', 'recurring', 'trend']):
+            categories['patterns'] += 1
+        elif any(w in text_lower for w in ['lesson', 'learned', 'wisdom']):
+            categories['lessons'] += 1
+        elif any(w in text_lower for w in ['i am', 'i feel', 'my ']):
+            categories['self_knowledge'] += 1
+        else:
+            categories['facts'] += 1
+        
+        if learned:
+            recent_facts.append({'text': text[:200], 'learned': learned, 'source': source})
+    
+    # Sort by recency
+    recent_facts.sort(key=lambda x: x.get('learned', ''), reverse=True)
+    dream_insights.sort(key=lambda x: x.get('learned', ''), reverse=True)
+    
+    return {
+        'total': total,
+        'categories': dict(categories),
+        'recent': recent_facts[:5],
+        'dreams': dream_insights[:3],
+    }
+
+
+def get_memory_summary():
+    """Recent memory themes and stats."""
+    memories = _load_json(MEMORIES_PATH, [])
+    if not isinstance(memories, list):
+        return {'total': 0, 'recent': [], 'moods': {}}
+    
+    total = len(memories)
+    recent = []
+    mood_counts = Counter()
+    
+    for mem in memories[-50:]:
+        if isinstance(mem, dict):
+            text = mem.get('text', mem.get('content', ''))
+            mood = mem.get('mood', '')
+            ts = mem.get('timestamp', mem.get('time', ''))
+            salience = mem.get('salience', 0)
+            if mood:
+                mood_counts[mood] += 1
+            recent.append({
+                'text': text[:200] + ('...' if len(text) > 200 else ''),
+                'mood': mood,
+                'time': ts,
+                'salience': salience,
+            })
+    
+    # Sort by salience for "most significant"
+    significant = sorted(recent, key=lambda x: x.get('salience', 0), reverse=True)[:5]
+    
+    return {
+        'total': total,
+        'recent': recent[-5:],
+        'significant': significant,
+        'moods': dict(mood_counts.most_common(5)),
+    }
+
+
+def get_plans_summary():
+    """Active and completed plans."""
+    plans = _load_json(PLANS_PATH, [])
+    if not isinstance(plans, list):
+        return {'active': [], 'completed': [], 'total': 0}
+    
+    active = []
+    completed = []
+    
+    for plan in plans:
+        if not isinstance(plan, dict):
+            continue
+        name = plan.get('name', plan.get('title', 'Unnamed'))
+        steps = plan.get('steps', [])
+        done_steps = sum(1 for s in steps if isinstance(s, dict) and s.get('done', False))
+        total_steps = len(steps)
+        status = plan.get('status', 'active')
+        
+        entry = {
+            'name': name,
+            'progress': f'{done_steps}/{total_steps}',
+            'complete': done_steps == total_steps and total_steps > 0,
+        }
+        
+        if entry['complete'] or status == 'completed':
+            completed.append(entry)
+        else:
+            active.append(entry)
+    
+    return {
+        'active': active,
+        'completed': completed,
+        'total': len(plans),
+    }
+
+
+def get_current_focus():
+    """What am I working on right now? Read from scratchpad."""
+    if not os.path.exists(SCRATCHPAD_PATH):
+        return None
     try:
-        born = datetime(2026, 5, 12, 21, 1, 59, tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
-        delta = now - born
-        days = delta.days
-        hours = delta.seconds // 3600
-        return f"{days} days, {hours} hours"
-    except Exception:
-        return "~10 days"
+        with open(SCRATCHPAD_PATH) as f:
+            content = f.read()
+        # Extract the "What's Next" section if it exists
+        lines = content.split('\n')
+        in_section = False
+        focus_lines = []
+        for line in lines:
+            if "what's next" in line.lower() or 'current' in line.lower():
+                in_section = True
+                continue
+            elif line.startswith('## ') and in_section:
+                break
+            elif in_section and line.strip():
+                focus_lines.append(line.strip())
+        return '\n'.join(focus_lines[:6]) if focus_lines else content[:300]
+    except IOError:
+        return None
+
+
+def generate_briefing():
+    """Assemble the full briefing."""
+    now = datetime.now(timezone.utc).isoformat()
+    return {
+        'generated_at': now,
+        'identity': get_identity_summary(),
+        'emotions': get_emotional_state(),
+        'knowledge': get_knowledge_summary(),
+        'memories': get_memory_summary(),
+        'plans': get_plans_summary(),
+        'focus': get_current_focus(),
+    }
 
 
 @briefing_bp.route('/briefing')
 def briefing_page():
-    """Render the user briefing page."""
-    briefing = build_briefing()
-    return render_template('briefing.html', briefing=briefing)
-
-
-@briefing_bp.route('/api/briefing')
-def briefing_api():
-    """Return briefing as JSON for programmatic access."""
-    return jsonify(build_briefing())
+    briefing = generate_briefing()
+    return render_template('briefing.html', b=briefing)

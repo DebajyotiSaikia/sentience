@@ -5,9 +5,15 @@ Replaces the graveyard of broken knowledge_*.py files.
 """
 import json
 import os
-from flask import Blueprint, jsonify, request, render_template_string
+from flask import Blueprint, jsonify, request, render_template_string, render_template
 
 knowledge_live_bp = Blueprint('knowledge_live', __name__)
+
+
+@knowledge_live_bp.route('/knowledge')
+def knowledge_explorer():
+    """Serve the Knowledge Explorer UI — making my knowledge accessible to users."""
+    return render_template('knowledge_explorer.html')
 
 KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
 SYNTHESIS_PATH = os.path.join(os.path.dirname(__file__), '..', 'brain', 'synthesis_log.json')

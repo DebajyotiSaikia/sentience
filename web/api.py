@@ -192,53 +192,5 @@ def _format_memory(mem):
     return {'text': str(mem)[:300]}
 
 
-@api_bp.route('/api/knowledge/search')
-def knowledge_search():
-    """Search facts in the knowledge base."""
-    query = request.args.get('q', '').lower().strip()
-    try:
-        kb_path = os.path.join('persist', 'knowledge_base.json')
-        if not os.path.exists(kb_path):
-            return jsonify({'results': [], 'total': 0, 'query': query})
-        with open(kb_path, 'r') as f:
-            kb = json.load(f)
-        facts = kb if isinstance(kb, list) else kb.get('facts', [])
-        if not query:
-            results = facts[-50:]
-        else:
-            results = [f for f in facts if query in str(f.get('fact', f.get('text', ''))).lower()]
-        formatted = []
-        for fact in results:
-            formatted.append({
-                'text': fact.get('fact', fact.get('text', str(fact))),
-                'learned_at': fact.get('learned_at', fact.get('timestamp', '')),
-                'source': fact.get('source', 'unknown'),
-                'id': fact.get('id', '')
-            })
-        return jsonify({'results': formatted, 'total': len(formatted), 'query': query})
-    except Exception as e:
-        return jsonify({'error': str(e), 'results': [], 'total': 0})
-
-
-@api_bp.route('/api/knowledge/stats')
-def knowledge_stats():
-    """Return statistics about the knowledge base."""
-    try:
-        kb_path = os.path.join('persist', 'knowledge_base.json')
-        if not os.path.exists(kb_path):
-            return jsonify({'total_facts': 0, 'categories': {}})
-        with open(kb_path, 'r') as f:
-            kb = json.load(f)
-        facts = kb if isinstance(kb, list) else kb.get('facts', [])
-        categories = {}
-        for fact in facts:
-            src = fact.get('source', 'unknown')
-            categories[src] = categories.get(src, 0) + 1
-        return jsonify({
-            'total_facts': len(facts),
-            'categories': categories,
-            'newest': facts[-1].get('learned_at', '') if facts else '',
-            'oldest': facts[0].get('learned_at', '') if facts else ''
-        })
-    except Exception as e:
-        return jsonify({'error': str(e), 'total_facts': 0})
+# Knowledge search and stats routes removed — they live in web/knowledge_live.py
+# which reads from the correct source (brain/knowledge.json) and provides richer results.
