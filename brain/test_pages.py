@@ -1,4 +1,4 @@
-"""Test that all key user-facing pages render without errors."""
+"""Test which web pages actually render."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -7,27 +7,43 @@ from web.app import create_app
 app = create_app()
 client = app.test_client()
 
-pages = ['/', '/dashboard', '/chat/', '/explore', '/help', '/knowledge', '/briefing', '/story', '/insights']
-print(f"Testing {len(pages)} pages...\n")
+pages = [
+    '/', '/dashboard', '/chat/', '/explore', '/knowledge',
+    '/briefing', '/story', '/collaborate', '/insights',
+    '/digest', '/journal', '/teach', '/help', '/about', '/ask',
+    '/live', '/search',
+]
 
-errors = []
-for page in pages:
-    resp = client.get(page)
-    status = resp.status_code
-    size = len(resp.data)
-    data_str = resp.data.decode('utf-8', errors='replace')[:500]
-    has_error = 'Internal Server Error' in data_str or 'Traceback' in data_str
-    label = 'ERROR' if has_error else 'ok'
-    if status >= 400:
-        label = f'HTTP {status}'
-    print(f"  {label:>8}  {size:>6}b  {page}")
-    if has_error or status >= 400:
-        errors.append((page, status, data_str[:200]))
+print("=" * 55)
+print("PAGE HEALTH CHECK")
+print("=" * 55)
 
-print()
-if errors:
-    print(f"FAILURES ({len(errors)}):")
-    for page, status, preview in errors:
-        print(f"  {page} [{status}]: {preview[:100]}...")
-else:
-    print("ALL PAGES OK")
+working = []
+broken = []
+
+for p in pages:
+    try:
+        resp = client.get(p, follow_redirects=False)
+        status = resp.status_code
+        size = len(resp.data) if status == 200 else 0
+        if status == 200:
+            icon = '✓'
+            working.append(p)
+        elif status in (301, 302, 308):
+            icon = '→'
+            loc = resp.headers.get('Location', '?')
+            working.append(p)
+        else:
+            icon = '✗'
+            broken.append((p, status))
+        extra = f"  -> {loc}" if status in (301,302,308) else ""
+        print(f"  {icon} {p:20s} {status}  ({size:>6} bytes){extra}")
+    except Exception as e:
+        print(f"  ✗ {p:20s} ERROR: {e}")
+        broken.append((p, str(e)))
+
+print(f"\n{len(working)} working, {len(broken)} broken")
+if broken:
+    print("Broken pages:")
+    for p, s in broken:
+        print(f"  - {p}: {s}")

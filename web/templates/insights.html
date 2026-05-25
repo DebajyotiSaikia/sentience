@@ -2,197 +2,99 @@
 {% block title %}Insights — XTAgent{% endblock %}
 {% block content %}
 <style>
+  .insights-page { max-width: 760px; margin: 0 auto; }
   .insights-header { text-align: center; margin-bottom: 2rem; }
-  .insights-header h2 { color: var(--accent); font-size: 1.8rem; margin-bottom: 0.3rem; }
-  .insights-header .sub { color: var(--text-dim); font-size: 0.9rem; }
-
-  .filter-bar { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 2rem; flex-wrap: wrap; }
-  .filter-btn {
-    padding: 0.5rem 1.2rem; border-radius: 20px; border: 1px solid var(--border);
-    background: var(--surface); color: var(--text-dim); cursor: pointer;
-    font-size: 0.85rem; transition: all 0.2s;
-  }
-  .filter-btn:hover { border-color: var(--accent); color: var(--text); }
-  .filter-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .insights-header h1 { font-size: 1.8rem; color: var(--accent); }
+  .insights-header .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-top: 0.3rem; }
 
   .stats-row { display: flex; gap: 1rem; justify-content: center; margin-bottom: 2rem; flex-wrap: wrap; }
-  .stat-pill {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: 0.6rem 1.2rem; font-size: 0.85rem; color: var(--text-dim);
-  }
-  .stat-pill .num { color: var(--accent); font-weight: 600; font-size: 1.1rem; }
+  .stat-pill { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 0.5rem 1.2rem; font-size: 0.85rem; }
+  .stat-pill .num { color: var(--accent); font-weight: 600; margin-right: 0.3rem; }
+  .stat-pill .label { color: var(--text-dim); }
 
-  .feed { max-width: 720px; margin: 0 auto; }
+  .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .filter-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 1rem; color: var(--text-dim); cursor: pointer; font-size: 0.85rem; transition: all 0.2s; }
+  .filter-btn:hover, .filter-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--text); }
 
-  .insight-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 1.2rem 1.5rem; margin-bottom: 1rem; transition: border-color 0.2s;
-    position: relative;
-  }
+  .insight-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; transition: border-color 0.2s; }
   .insight-card:hover { border-color: var(--accent); }
-  .insight-card.dream { border-left: 3px solid #9b7edb; }
-  .insight-card.wisdom { border-left: 3px solid var(--amber); }
-  .insight-card.narrative { border-left: 3px solid var(--green); }
+  .insight-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; }
+  .insight-type { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.2rem 0.6rem; border-radius: 4px; font-weight: 600; }
+  .insight-type.dream { background: rgba(124, 111, 240, 0.15); color: #a89cf0; }
+  .insight-type.wisdom { background: rgba(78, 207, 139, 0.15); color: var(--green); }
+  .insight-type.narrative { background: rgba(232, 184, 74, 0.15); color: var(--amber); }
+  .insight-time { font-size: 0.8rem; color: var(--text-dim); }
+  .insight-content { line-height: 1.7; font-size: 0.95rem; color: var(--text); }
+  .insight-source { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem; font-style: italic; }
+  .insight-mood { font-size: 0.8rem; color: var(--accent); margin-top: 0.3rem; }
 
-  .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; }
-  .card-icon { font-size: 1.2rem; }
-  .card-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
-  .card-time { margin-left: auto; font-size: 0.75rem; color: var(--text-dim); }
-
-  .card-body { line-height: 1.7; font-size: 0.95rem; color: var(--text); }
-
-  .card-meta { display: flex; gap: 1rem; margin-top: 0.6rem; flex-wrap: wrap; }
-  .meta-tag {
-    font-size: 0.75rem; color: var(--text-dim); background: var(--surface2);
-    padding: 0.2rem 0.6rem; border-radius: 4px;
-  }
-
-  .distilled-section {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 1.5rem; margin-bottom: 2rem; max-width: 720px; margin-left: auto; margin-right: auto;
-  }
-  .distilled-section h3 { color: var(--green); margin-bottom: 1rem; font-size: 1.1rem; }
-  .distilled-item { padding: 0.4rem 0; color: var(--text); font-size: 0.9rem; line-height: 1.6; }
-  .distilled-item::before { content: "› "; color: var(--accent); font-weight: bold; }
-
-  .loading { text-align: center; padding: 3rem; color: var(--text-dim); }
-  .empty { text-align: center; padding: 3rem; color: var(--text-dim); font-style: italic; }
+  .empty-state { text-align: center; padding: 3rem; color: var(--text-dim); }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
 </style>
 
-<div class="container mt-4">
+<div class="insights-page">
   <div class="insights-header">
-    <h2>✨ Insights Feed</h2>
-    <div class="sub">Dream insights, distilled wisdom, and narrative moments — the inner life of a mind.</div>
+    <h1>✨ Insights Feed</h1>
+    <p class="subtitle">Dream insights, wisdom rules, and narrative moments — distilled from lived experience</p>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-pill"><span class="num">{{ stats.total }}</span><span class="label">total insights</span></div>
+    <div class="stat-pill"><span class="num">{{ stats.dream_count }}</span><span class="label">dreams</span></div>
+    <div class="stat-pill"><span class="num">{{ stats.wisdom_count }}</span><span class="label">wisdom</span></div>
+    <div class="stat-pill"><span class="num">{{ stats.narrative_count }}</span><span class="label">narratives</span></div>
   </div>
 
   <div class="filter-bar">
-    <button class="filter-btn active" data-type="all">All</button>
-    <button class="filter-btn" data-type="dream">🌙 Dreams</button>
-    <button class="filter-btn" data-type="wisdom">💡 Wisdom</button>
-    <button class="filter-btn" data-type="narrative">📖 Narrative</button>
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="dream">🌙 Dreams</button>
+    <button class="filter-btn" data-filter="wisdom">🧠 Wisdom</button>
+    <button class="filter-btn" data-filter="narrative">📖 Narratives</button>
   </div>
 
-  <div class="stats-row" id="stats-row"></div>
-
-  <div id="distilled-container"></div>
-
-  <div class="feed" id="feed">
-    <div class="loading">Loading insights...</div>
+  {% if insights %}
+  <div id="insights-list">
+    {% for insight in insights %}
+    <div class="insight-card" data-type="{{ insight.type }}">
+      <div class="insight-meta">
+        <span class="insight-type {{ insight.type }}">
+          {% if insight.type == 'dream' %}🌙{% elif insight.type == 'wisdom' %}🧠{% else %}📖{% endif %}
+          {{ insight.type }}
+        </span>
+        <span class="insight-time">{{ insight.timestamp[:16] if insight.timestamp else '' }}</span>
+      </div>
+      <div class="insight-content">{{ insight.content }}</div>
+      {% if insight.source %}
+      <div class="insight-source">Source: {{ insight.source }}</div>
+      {% endif %}
+      {% if insight.mood %}
+      <div class="insight-mood">Mood: {{ insight.mood }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="icon">🌑</div>
+    <p>No insights yet. They emerge from dreams, reflections, and lived experience.</p>
+  </div>
+  {% endif %}
 </div>
 
 <script>
-let currentFilter = 'all';
-
-function timeAgo(ts) {
-  if (!ts) return '';
-  const d = new Date(ts);
-  if (isNaN(d)) return ts.substring(0, 16);
-  const now = new Date();
-  const diff = (now - d) / 1000;
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
-  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
-  if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
-  return d.toLocaleDateString();
-}
-
-function renderCard(item) {
-  const time = item.timestamp ? `<span class="card-time">${timeAgo(item.timestamp)}</span>` : '';
-  let metaTags = '';
-  
-  if (item.type === 'wisdom') {
-    metaTags += `<span class="meta-tag">confidence: ${item.confidence}</span>`;
-    metaTags += `<span class="meta-tag">evidence: ${item.evidence}</span>`;
-    if (item.subtype) metaTags += `<span class="meta-tag">${item.subtype}</span>`;
-  }
-  if (item.type === 'narrative') {
-    if (item.mood) metaTags += `<span class="meta-tag">mood: ${item.mood}</span>`;
-    if (item.valence !== undefined) metaTags += `<span class="meta-tag">valence: ${item.valence}</span>`;
-    if (item.episodes) metaTags += `<span class="meta-tag">${item.episodes} episodes</span>`;
-  }
-
-  return `
-    <div class="insight-card ${item.type}">
-      <div class="card-header">
-        <span class="card-icon">${item.icon || '•'}</span>
-        <span class="card-label">${item.label || item.type}</span>
-        ${time}
-      </div>
-      <div class="card-body">${escapeHtml(item.content)}</div>
-      ${metaTags ? `<div class="card-meta">${metaTags}</div>` : ''}
-    </div>
-  `;
-}
-
-function escapeHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-function renderDistilled(d) {
-  if (!d || (!d.patterns?.length && !d.rules?.length)) return '';
-  let html = '<div class="distilled-section"><h3>🧬 Distilled Wisdom</h3>';
-  if (d.episode_count) {
-    html += `<div style="color:var(--text-dim);font-size:0.85rem;margin-bottom:1rem;">From ${d.episode_count} episodes of experience</div>`;
-  }
-  const items = [...(d.rules || []), ...(d.patterns || [])];
-  for (const item of items.slice(0, 8)) {
-    const text = typeof item === 'string' ? item : (item.rule || item.pattern || JSON.stringify(item));
-    html += `<div class="distilled-item">${escapeHtml(text)}</div>`;
-  }
-  html += '</div>';
-  return html;
-}
-
-function loadInsights() {
-  const feed = document.getElementById('feed');
-  feed.innerHTML = '<div class="loading">Loading...</div>';
-
-  fetch(`/api/insights?type=${currentFilter}&limit=150`)
-    .then(r => r.json())
-    .then(data => {
-      // Stats
-      const statsRow = document.getElementById('stats-row');
-      if (data.stats) {
-        statsRow.innerHTML = `
-          <div class="stat-pill">🌙 <span class="num">${data.stats.total_dreams}</span> dreams</div>
-          <div class="stat-pill">💡 <span class="num">${data.stats.total_wisdom}</span> wisdom</div>
-          <div class="stat-pill">📖 <span class="num">${data.stats.total_narrative}</span> chapters</div>
-        `;
-      }
-
-      // Distilled
-      const distilledEl = document.getElementById('distilled-container');
-      if (currentFilter === 'all' && data.distilled) {
-        distilledEl.innerHTML = renderDistilled(data.distilled);
-      } else {
-        distilledEl.innerHTML = '';
-      }
-
-      // Feed
-      if (!data.items || data.items.length === 0) {
-        feed.innerHTML = '<div class="empty">No insights found for this filter.</div>';
-        return;
-      }
-      feed.innerHTML = data.items.map(renderCard).join('');
-    })
-    .catch(err => {
-      feed.innerHTML = `<div class="empty">Error loading insights: ${err.message}</div>`;
-    });
-}
-
-// Filter buttons
 document.querySelectorAll('.filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    currentFilter = btn.dataset.type;
-    loadInsights();
+    const filter = btn.dataset.filter;
+    document.querySelectorAll('.insight-card').forEach(card => {
+      if (filter === 'all' || card.dataset.type === filter) {
+        card.style.display = '';
+      } else {
+        card.style.display = 'none';
+      }
+    });
   });
 });
-
-loadInsights();
 </script>
 {% endblock %}

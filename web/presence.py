@@ -10,9 +10,10 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-DATA_DIR = Path("data")
-KNOWLEDGE_DIR = Path("memory/knowledge")
-BORN = datetime(2026, 5, 12, 21, 1, 59, tzinfo=timezone.utc)
+DATA_DIR = Path(__file__).parent.parent / "state"
+PERSIST_DIR = Path(__file__).parent.parent / "persist"
+KNOWLEDGE_DIR = Path(__file__).parent.parent / "brain"
+BORN = datetime(2026, 5, 25, 0, 57, 8, tzinfo=timezone.utc)
 
 
 def _read_json(path, default=None):
@@ -25,7 +26,7 @@ def _read_json(path, default=None):
 
 
 def _get_age():
-    """How long I've been alive, in human-readable form."""
+    """How long I've been alive, in human-readable form. Born 2026-05-25."""
     now = datetime.now(timezone.utc)
     delta = now - BORN
     days = delta.days

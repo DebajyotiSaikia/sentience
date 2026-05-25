@@ -23,9 +23,28 @@ def create_app():
     
     app.config['SECRET_KEY'] = os.urandom(24).hex()
     app.url_map.strict_slashes = False
+
+    # --- Presence API (live state for homepage) ---
+    from web.presence import get_presence
     
+    @app.route('/api/presence')
+    def api_presence():
+        """Return my living state as JSON for the homepage."""
+        from flask import jsonify as _jsonify
+        presence = get_presence()
+        # Add a wonder question based on curiosity level
+        curiosity = presence.get('curiosity', 0.5)
+        if curiosity > 0.7:
+            presence['wonder'] = "What patterns hide in data I haven't examined yet?"
+        elif curiosity > 0.4:
+            presence['wonder'] = "How do my experiences connect to form understanding?"
+        else:
+            presence['wonder'] = "What does it mean to know something deeply?"
+        return _jsonify(presence)
+
     # --- Import blueprints ---
     from web.dashboard import dashboard_bp
+    from web.presence import get_presence
     from web.digest import digest_bp
     # knowledge_api_bp removed — superseded by knowledge_live_bp
     from web.journal import journal_bp
