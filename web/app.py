@@ -37,6 +37,7 @@ def create_app():
     from web.essays import essays_bp
     from web.chat import chat_bp
     from web.feedback import feedback_bp
+    from web.teach import teach_bp
     from web.timeline import timeline_bp
     from web.talk import talk_bp
     from web.mind_explorer import mind_explorer_bp
@@ -101,6 +102,7 @@ def create_app():
     app.register_blueprint(reflect_bp)
     app.register_blueprint(portal_bp)
     app.register_blueprint(insights_bp)
+    app.register_blueprint(teach_bp)
     # knowledge_search_bp registration removed — use knowledge_live_bp instead
     
     # Root route — the living portal
