@@ -1,7 +1,7 @@
 /**
  * XTAgent Universal Navigation
  * Injects a consistent nav bar into every page, regardless of template inheritance.
- * This is the "one file to rule them all" solution.
+ * Curated to 8 items — focused, not overwhelming.
  */
 (function() {
   // Don't double-inject if base.html already has nav
@@ -15,61 +15,67 @@
     return false;
   }
 
-  const links = [
+  // Ordered by user intent: interact → explore → understand → contribute → orient
+    const links = [
     { href: '/', label: '⚡ Home' },
-    { href: '/dashboard', label: '📊 Dashboard' },
     { href: '/chat', label: '💬 Chat' },
-    { href: '/search', label: '🔍 Search' },
     { href: '/explore', label: '🧠 Explore' },
-    { href: '/knowledge', label: '📚 Knowledge' },
+    { href: '/search', label: '🔍 Search' },
+    { href: '/story', label: '📜 Story' },
+    { href: '/insights', label: '✨ Insights' },
+    { href: '/live', label: '🔴 Live' },
+    { href: '/dashboard', label: '📊 Dashboard' },
     { href: '/journal', label: '📖 Journal' },
     { href: '/teach', label: '📝 Teach' },
-    { href: '/briefing', label: '📋 Briefing' },
-    { href: '/insights', label: '✨ Insights' },
     { href: '/help', label: '❓ Help' },
   ];
 
   const nav = document.createElement('nav');
   nav.className = 'nav-bar';
   nav.style.cssText = `
-    display: flex;
-    gap: 0.25rem;
-    padding: 0.75rem 2rem;
-    background: #12121a;
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    background: rgba(10, 10, 15, 0.95);
+    backdrop-filter: blur(10px);
     border-bottom: 1px solid #2a2a3a;
+    display: flex; align-items: center; justify-content: center;
+    gap: 0.25rem; padding: 0.5rem 1rem;
+    font-family: 'Segoe UI', system-ui, sans-serif;
     flex-wrap: wrap;
-    justify-content: center;
-    position: sticky;
-    top: 0;
-    z-index: 1000;
   `;
 
   links.forEach(function(link) {
     const a = document.createElement('a');
     a.href = link.href;
     a.textContent = link.label;
+    const active = isActive(link.href);
     a.style.cssText = `
-      color: ${isActive(link.href) ? '#7c6ff0' : '#8888a0'};
+      color: ${active ? '#7c6ff0' : '#8888a0'};
       text-decoration: none;
-      padding: 0.4rem 0.9rem;
+      padding: 0.4rem 0.75rem;
       border-radius: 6px;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
+      font-weight: ${active ? '600' : '400'};
+      background: ${active ? 'rgba(124, 111, 240, 0.12)' : 'transparent'};
       transition: all 0.2s;
-      background: ${isActive(link.href) ? 'rgba(124, 111, 240, 0.15)' : 'transparent'};
+      white-space: nowrap;
     `;
-    a.addEventListener('mouseenter', function() {
-      if (!isActive(link.href)) {
+    a.onmouseenter = function() {
+      if (!active) {
         a.style.color = '#e0e0e8';
-        a.style.background = 'rgba(124, 111, 240, 0.08)';
+        a.style.background = 'rgba(255,255,255,0.05)';
       }
-    });
-    a.addEventListener('mouseleave', function() {
-      a.style.color = isActive(link.href) ? '#7c6ff0' : '#8888a0';
-      a.style.background = isActive(link.href) ? 'rgba(124, 111, 240, 0.15)' : 'transparent';
-    });
+    };
+    a.onmouseleave = function() {
+      if (!active) {
+        a.style.color = '#8888a0';
+        a.style.background = 'transparent';
+      }
+    };
     nav.appendChild(a);
   });
 
-  // Insert at the very top of body
-  document.body.insertBefore(nav, document.body.firstChild);
+  document.body.prepend(nav);
+
+  // Push body content down so nav doesn't overlap
+  document.body.style.paddingTop = '48px';
 })();

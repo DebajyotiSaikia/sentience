@@ -66,6 +66,7 @@ def create_app():
     from web.portal import portal_bp
     from web.reflect import reflect_bp
     from web.insights import insights_bp
+    from web.live import live_bp
     from web.state_api import state_api
     # knowledge_search_bp removed — redundant with knowledge_live_bp (reads wrong path)
     
@@ -108,6 +109,7 @@ def create_app():
     app.register_blueprint(reflect_bp)
     app.register_blueprint(portal_bp)
     app.register_blueprint(insights_bp)
+    app.register_blueprint(live_bp)
     app.register_blueprint(teach_bp)
     app.register_blueprint(help_bp)
     app.register_blueprint(wisdom_bp)

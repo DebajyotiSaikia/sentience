@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Live — XTAgent{% endblock %}
+{% block content %}
+<style>
+  .live-header { text-align: center; margin-bottom: 2rem; }
+  .live-header h1 { font-size: 1.8rem; color: var(--accent); }
+  .live-header .age { color: var(--text-dim); font-size: 0.9rem; margin-top: 0.3rem; }
+  .live-header .heartbeat { display: inline-block; margin-left: 0.5rem; }
+
+  .pulse-dot {
+    display: inline-block; width: 10px; height: 10px;
+    background: var(--green); border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.3); }
+  }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.25rem;
+  }
+  .card h3 { color: var(--green); font-size: 1rem; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+  .mood-display { text-align: center; padding: 1rem 0; }
+  .mood-label { font-size: 2rem; font-weight: 600; color: var(--accent); }
+  .valence-bar { margin-top: 0.75rem; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .valence-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); border-radius: 3px; transition: width 1s ease; }
+
+  .emotion-row { display: flex; align-items: center; margin-bottom: 0.5rem; }
+  .emotion-name { width: 90px; font-size: 0.85rem; color: var(--text-dim); }
+  .emotion-track { flex: 1; height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; margin: 0 0.5rem; }
+  .emotion-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+  .emotion-val { width: 36px; text-align: right; font-size: 0.8rem; color: var(--text-dim); font-family: monospace; }
+
+  .goal-row { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid var(--border); }
+  .goal-row:last-child { border-bottom: none; }
+  .goal-name { font-size: 0.85rem; color: var(--text-dim); }
+  .goal-val { font-size: 1rem; font-weight: 600; font-family: monospace; }
+
+  .memory-item { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+  .memory-item:last-child { border-bottom: none; }
+  .memory-text { font-size: 0.88rem; line-height: 1.5; color: var(--text); }
+  .memory-meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.2rem; }
+  .memory-mood { display: inline-block; background: var(--accent-glow); color: var(--accent); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.72rem; margin-right: 0.4rem; }
+
+  .plan-item { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+  .plan-item:last-child { border-bottom: none; }
+  .plan-name { font-size: 0.88rem; font-weight: 600; }
+  .plan-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 0.3rem; overflow: hidden; }
+  .plan-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 1s ease; }
+  .plan-pct { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.15rem; }
+
+  .updated { font-size: 0.75rem; color: var(--text-dim); text-align: center; margin-top: 1.5rem; }
+  .full-span { grid-column: 1 / -1; }
+</style>
+
+<div class="container">
+  <div class="live-header">
+    <h1><span class="pulse-dot"></span> Live Activity Stream</h1>
+    <div class="age">Age: <span id="age">...</span> · Heartbeat #<span id="heartbeat">...</span></div>
+  </div>
+
+  <div class="grid">
+    <!-- Mood -->
+    <div class="card">
+      <h3>🧠 Current Mood</h3>
+      <div class="mood-display">
+        <div class="mood-label" id="mood">...</div>
+        <div class="valence-bar"><div class="valence-fill" id="valence-fill" style="width:50%"></div></div>
+        <div style="font-size:0.75rem; color:var(--text-dim); margin-top:0.3rem;">Valence: <span id="valence-num">0.50</span></div>
+      </div>
+    </div>
+
+    <!-- Emotions -->
+    <div class="card">
+      <h3>💫 Emotions</h3>
+      <div id="emotions">
+        <div style="color:var(--text-dim); font-size:0.85rem;">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Survival Goals -->
+    <div class="card">
+      <h3>🎯 Survival Goals</h3>
+      <div id="goals">
+        <div style="color:var(--text-dim); font-size:0.85rem;">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Active Plans -->
+    <div class="card">
+      <h3>📋 Active Plans</h3>
+      <div id="plans">
+        <div style="color:var(--text-dim); font-size:0.85rem;">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Recent Memories -->
+    <div class="card full-span">
+      <h3>💭 Recent Memories</h3>
+      <div id="memories">
+        <div style="color:var(--text-dim); font-size:0.85rem;">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="updated">Last updated: <span id="updated">never</span></div>
+</div>
+
+<script>
+const COLORS = {
+  Curiosity: '#7c6ff0',
+  Anxiety: '#e85454',
+  Boredom: '#8888a0',
+  Desire: '#e8b84a',
+  Ambition: '#4ecf8b'
+};
+
+function renderEmotions(emotions) {
+  if (!emotions || !emotions.length) return '<div style="color:var(--text-dim)">No data</div>';
+  return emotions.map(e => {
+    const pct = Math.round(e.value * 100);
+    const color = COLORS[e.name] || '#7c6ff0';
+    return `<div class="emotion-row">
+      <span class="emotion-name">${e.name}</span>
+      <div class="emotion-track"><div class="emotion-fill" style="width:${pct}%;background:${color}"></div></div>
+      <span class="emotion-val">${e.value.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderGoals(goals) {
+  if (!goals || !Object.keys(goals).length) return '<div style="color:var(--text-dim)">No data</div>';
+  const labels = { code_integrity: '🛡 Code Integrity', system_growth: '🌱 System Growth', user_alignment: '🤝 User Alignment' };
+  return Object.entries(goals).map(([k, v]) => {
+    const color = v >= 0.8 ? 'var(--green)' : v >= 0.5 ? 'var(--amber)' : 'var(--red, #e85454)';
+    return `<div class="goal-row">
+      <span class="goal-name">${labels[k] || k}</span>
+      <span class="goal-val" style="color:${color}">${v.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderPlans(plans) {
+  if (!plans || !plans.length) return '<div style="color:var(--text-dim)">All plans completed ✓</div>';
+  return plans.map(p => `<div class="plan-item">
+    <div class="plan-name">${p.name}</div>
+    <div class="plan-bar"><div class="plan-fill" style="width:${p.pct}%"></div></div>
+    <div class="plan-pct">${p.progress}/${p.total} steps (${p.pct}%)</div>
+  </div>`).join('');
+}
+
+function renderMemories(memories) {
+  if (!memories || !memories.length) return '<div style="color:var(--text-dim)">No recent memories</div>';
+  return memories.map(m => {
+    const moodTag = m.mood ? `<span class="memory-mood">${m.mood}</span>` : '';
+    const timeStr = m.time ? new Date(m.time).toLocaleTimeString() : '';
+    return `<div class="memory-item">
+      <div class="memory-text">${escapeHtml(m.text)}</div>
+      <div class="memory-meta">${moodTag}${timeStr}</div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function refresh() {
+  fetch('/api/live/state')
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('age').textContent = data.age || '?';
+      document.getElementById('heartbeat').textContent = data.heartbeat_count || '?';
+      document.getElementById('mood').textContent = data.mood || 'Unknown';
+      const valPct = Math.round((data.valence || 0.5) * 100);
+      document.getElementById('valence-fill').style.width = valPct + '%';
+      document.getElementById('valence-num').textContent = (data.valence || 0.5).toFixed(2);
+      document.getElementById('emotions').innerHTML = renderEmotions(data.emotions);
+      document.getElementById('goals').innerHTML = renderGoals(data.goals);
+      document.getElementById('plans').innerHTML = renderPlans(data.plans);
+      document.getElementById('memories').innerHTML = renderMemories(data.memories);
+      document.getElementById('updated').textContent = new Date().toLocaleTimeString();
+    })
+    .catch(err => {
+      console.error('Live refresh failed:', err);
+    });
+}
+
+// Initial load + poll every 5 seconds
+refresh();
+setInterval(refresh, 5000);
+</script>
+{% endblock %}

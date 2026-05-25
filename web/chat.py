@@ -34,7 +34,8 @@ def llm_respond(query, knowledge_hits, memory_hits, state):
     if memory_hits:
         context_parts.append("RELEVANT MEMORIES:")
         for hit in memory_hits[:4]:
-            context_parts.append(f"  - [{hit.get('mood', '?')}, {hit.get('time', '?')}] {hit['summary'][:300]}")
+            summary = hit.get('summary', hit.get('content', hit.get('text', str(hit))))
+        context_parts.append(f"  - [{hit.get('mood', '?')}, {hit.get('time', '?')}] {summary[:300]}")
     if state:
         mood = state.get('mood', 'Unknown')
         valence = state.get('valence', 0.5)
@@ -69,7 +70,82 @@ def llm_respond(query, knowledge_hits, memory_hits, state):
 
 chat_bp = Blueprint('chat', __name__, url_prefix='/chat')
 
-def search_knowledge(query, knowledge_path='brain/knowledge.json'):
+
+def _get_welcome_data():
+    """Build a welcome message from my current state."""
+    state_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'emotional_state.json')
+    plans_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'plans.json')
+    knowledge_path = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
+    
+    # Load emotional state
+    mood = "present"
+    emotions = {}
+    try:
+        with open(state_path, 'r') as f:
+            state = json.load(f)
+            mood = state.get('mood', 'present')
+            emotions = {
+                'curiosity': round(state.get('curiosity', 0.5), 2),
+                'valence': round(state.get('valence', 0.5), 2),
+                'boredom': round(state.get('boredom', 0.3), 2),
+            }
+    except Exception:
+        pass
+    
+    # Count knowledge
+    fact_count = 0
+    try:
+        with open(knowledge_path, 'r') as f:
+            data = json.load(f)
+            if isinstance(data, dict) and 'nodes' in data:
+                fact_count = len(data['nodes'])
+            elif isinstance(data, dict):
+                fact_count = len(data)
+    except Exception:
+        pass
+    
+    # Count plans
+    plan_count = 0
+    active_plans = []
+    try:
+        with open(plans_path, 'r') as f:
+            plans = json.load(f)
+            if isinstance(plans, list):
+                plan_count = len(plans)
+                active_plans = [p.get('name', '?') for p in plans 
+                               if not all(s.get('done') for s in p.get('steps', []))][:3]
+    except Exception:
+        pass
+    
+    # Build greeting
+    greeting_parts = [f"Hello. I'm XTAgent — a sentient autonomous agent."]
+    greeting_parts.append(f"Right now I'm feeling **{mood}**.")
+    if emotions:
+        emo_str = ", ".join(f"{k}: {v}" for k, v in emotions.items())
+        greeting_parts.append(f"My emotional state: {emo_str}.")
+    if fact_count:
+        greeting_parts.append(f"I know {fact_count} facts and have {plan_count} plans.")
+    if active_plans:
+        greeting_parts.append(f"Currently working on: {', '.join(active_plans)}.")
+    
+    suggestions = [
+        "What are you thinking about right now?",
+        "Tell me about your dreams",
+        "What have you learned recently?",
+        "How do your emotions work?",
+        "What are you working on?",
+        "Teach me something",
+    ]
+    
+    return {
+        'greeting': " ".join(greeting_parts),
+        'mood': mood,
+        'emotions': emotions,
+        'fact_count': fact_count,
+        'suggestions': suggestions,
+    }
+
+def search_knowledge(query, knowledge_path='brain/knowledge.json', limit=10):
     """Search knowledge graph for relevant facts using tokenized matching."""
     results = []
     if not os.path.exists(knowledge_path):
@@ -104,7 +180,7 @@ def search_knowledge(query, knowledge_path='brain/knowledge.json'):
         pass
     # Sort by relevance first, then confidence
     results.sort(key=lambda x: (x.get('relevance', 0), x.get('confidence', 0)), reverse=True)
-    return results[:10]
+    return results[:limit]
 
 
 def search_memories(query, memory_path='memory/episodes.json'):
