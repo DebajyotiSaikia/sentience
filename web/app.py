@@ -36,6 +36,7 @@ def create_app():
     from web.briefing import briefing_bp
     from web.essays import essays_bp
     from web.chat import chat_bp
+    from web.feedback import feedback_bp
     from web.timeline import timeline_bp
     from web.talk import talk_bp
     from web.mind_explorer import mind_explorer_bp
@@ -74,6 +75,7 @@ def create_app():
     app.register_blueprint(briefing_bp)
     app.register_blueprint(essays_bp)
     app.register_blueprint(chat_bp)
+    app.register_blueprint(feedback_bp)
     app.register_blueprint(timeline_bp)
     app.register_blueprint(talk_bp)
     app.register_blueprint(mind_explorer_bp)

@@ -387,9 +387,39 @@ function addMessage(role, text) {
     body.textContent = text;
   }
   msg.appendChild(body);
+  if (role === 'agent') {
+    const fb = document.createElement('div');
+    fb.className = 'feedback-row';
+    fb.innerHTML = `<button class="feedback-btn" onclick="submitFeedback(this,'up','${encodeURIComponent(text.substring(0,80))}')">👍</button>`
+      + `<button class="feedback-btn" onclick="submitFeedback(this,'down','${encodeURIComponent(text.substring(0,80))}')">👎</button>`;
+    msg.appendChild(fb);
+  }
   // Insert before typing indicator
   chatContainer.insertBefore(msg, typingIndicator);
   scrollToBottom();
+}
+NEW_FUNC:
+async function submitFeedback(btn, direction, snippet) {
+  const row = btn.parentElement;
+  const buttons = row.querySelectorAll('.feedback-btn');
+  buttons.forEach(b => { b.disabled = true; b.classList.remove('selected-up','selected-down'); });
+  btn.classList.add(direction === 'up' ? 'selected-up' : 'selected-down');
+  const thanks = document.createElement('span');
+  thanks.className = 'feedback-thanks';
+  thanks.textContent = 'Thanks!';
+  row.appendChild(thanks);
+  try {
+    await fetch('/feedback/submit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        rating: direction === 'up' ? 5 : 1,
+        response_text: decodeURIComponent(snippet),
+        feedback_text: direction === 'up' ? 'Helpful response' : 'Not helpful',
+        context: {source: 'chat_rating', direction: direction}
+      })
+    });
+  } catch(e) { console.error('Feedback failed:', e); }
 }
 
 function scrollToBottom() {
