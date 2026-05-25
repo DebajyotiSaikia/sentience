@@ -211,31 +211,51 @@ def check_knowledge():
     if kg_file.exists():
         try:
             kg = json.loads(kg_file.read_text())
-            nodes = kg.get('nodes', [])
+            nodes_raw = kg.get('nodes', {})
             edges = kg.get('edges', [])
-            checks.append({'name': 'Nodes', 'value': str(len(nodes)), 'status': 'ok' if nodes else 'warn'})
+            # nodes can be dict {id: {fact, learned_at, source}} or list of dicts
+            if isinstance(nodes_raw, dict):
+                node_count = len(nodes_raw)
+                node_items = nodes_raw.values()
+            else:
+                node_count = len(nodes_raw)
+                node_items = nodes_raw
+            
+            checks.append({'name': 'Nodes', 'value': str(node_count), 'status': 'ok' if node_count > 0 else 'warn'})
             checks.append({'name': 'Edges', 'value': str(len(edges)), 'status': 'ok' if edges else 'warn'})
             
             # Check connectivity
-            if nodes and edges:
-                ratio = len(edges) / len(nodes)
+            if node_count > 0 and edges:
+                ratio = len(edges) / node_count
                 status = 'ok' if ratio > 0.5 else 'warn'
                 checks.append({'name': 'Edge/node ratio', 'value': f'{ratio:.2f}', 'status': status})
             
             # Check for empty nodes
-            empty = sum(1 for n in nodes if not n.get('content', '').strip())
+            empty = 0
+            for n in node_items:
+                if isinstance(n, dict):
+                    content = n.get('fact', n.get('content', ''))
+                elif isinstance(n, str):
+                    content = n
+                else:
+                    content = ''
+                if not str(content).strip():
+                    empty += 1
             if empty > 0:
                 checks.append({'name': 'Empty nodes', 'value': str(empty), 'status': 'warn'})
             else:
                 checks.append({'name': 'Node quality', 'value': 'All have content', 'status': 'ok'})
             
-            # Node types
-            types = {}
-            for n in nodes:
-                t = n.get('type', 'unknown')
-                types[t] = types.get(t, 0) + 1
-            type_str = ', '.join(f'{k}:{v}' for k, v in sorted(types.items(), key=lambda x: -x[1])[:5])
-            checks.append({'name': 'Node types', 'value': type_str or 'None', 'status': 'ok'})
+            # Node sources (instead of types, since our format uses 'source')
+            sources = {}
+            for n in node_items:
+                if isinstance(n, dict):
+                    s = n.get('source', n.get('type', 'unknown'))
+                else:
+                    s = 'unknown'
+                sources[s] = sources.get(s, 0) + 1
+            source_str = ', '.join(f'{k}:{v}' for k, v in sorted(sources.items(), key=lambda x: -x[1])[:5])
+            checks.append({'name': 'Node sources', 'value': source_str or 'None', 'status': 'ok'})
             
         except json.JSONDecodeError:
             checks.append({'name': 'Knowledge graph', 'value': 'Corrupt JSON', 'status': 'fail'})

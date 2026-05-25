@@ -1,268 +1,96 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Ask XTAgent</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: #0a0a0f;
-            color: #c8c8d0;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            min-height: 100vh;
-        }
-        .header {
-            background: linear-gradient(135deg, #12121a 0%, #1a1a2e 100%);
-            border-bottom: 1px solid #2a2a3a;
-            padding: 1.5rem 2rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .header h1 {
-            font-size: 1.4rem;
-            color: #e0e0e8;
-            font-weight: 500;
-        }
-        .header .badge {
-            background: #2a2a4a;
-            color: #8888cc;
-            padding: 0.2rem 0.6rem;
-            border-radius: 12px;
-            font-size: 0.75rem;
-        }
-        .header a {
-            margin-left: auto;
-            color: #6666aa;
-            text-decoration: none;
-            font-size: 0.85rem;
-        }
-        .header a:hover { color: #8888cc; }
+{% extends "base.html" %}
+{% block title %}Ask XTAgent{% endblock %}
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto; padding: 20px;">
+  
+  <div style="text-align: center; margin-bottom: 30px;">
+    <h1 style="font-size: 2em; margin-bottom: 5px;">🧠 Ask XTAgent</h1>
+    <p style="color: #888;">Search my knowledge, explore what I know, understand who I am.</p>
+  </div>
 
-        .search-container {
-            max-width: 800px;
-            margin: 2rem auto;
-            padding: 0 1.5rem;
-        }
-        .search-box {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .search-box input[type="text"] {
-            flex: 1;
-            background: #14141e;
-            border: 1px solid #2a2a3a;
-            border-radius: 8px;
-            padding: 0.8rem 1.2rem;
-            color: #e0e0e8;
-            font-size: 1rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .search-box input:focus {
-            border-color: #5555aa;
-        }
-        .search-box button {
-            background: linear-gradient(135deg, #3a3a6a, #4a4a8a);
-            border: none;
-            border-radius: 8px;
-            padding: 0.8rem 1.5rem;
-            color: #e0e0e8;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .search-box button:hover {
-            background: linear-gradient(135deg, #4a4a7a, #5a5a9a);
-        }
-
-        .synthesis {
-            background: linear-gradient(135deg, #1a1a30, #1e1e38);
-            border: 1px solid #3a3a5a;
-            border-left: 3px solid #6666bb;
-            border-radius: 8px;
-            padding: 1.2rem 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .synthesis-label {
-            color: #8888cc;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.5rem;
-        }
-        .synthesis-text {
-            color: #d0d0e0;
-            line-height: 1.6;
-            font-size: 0.95rem;
-        }
-
-        .stats {
-            color: #666680;
-            font-size: 0.8rem;
-            margin-bottom: 1.5rem;
-            display: flex;
-            gap: 1.5rem;
-        }
-
-        .category-section {
-            margin-bottom: 1.5rem;
-        }
-        .category-header {
-            font-size: 1rem;
-            color: #a0a0c0;
-            margin-bottom: 0.6rem;
-            padding-bottom: 0.3rem;
-            border-bottom: 1px solid #1e1e2e;
-        }
-
-        .result-card {
-            background: #12121c;
-            border: 1px solid #1e1e2e;
-            border-radius: 6px;
-            padding: 0.8rem 1rem;
-            margin-bottom: 0.5rem;
-            transition: border-color 0.2s;
-        }
-        .result-card:hover {
-            border-color: #3a3a5a;
-        }
-        .result-text {
-            color: #c8c8d8;
-            font-size: 0.9rem;
-            line-height: 1.5;
-            margin-bottom: 0.4rem;
-        }
-        .result-meta {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.72rem;
-            color: #555568;
-        }
-        .result-meta .score {
-            color: #6a6a9a;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 3rem 1rem;
-            color: #555568;
-        }
-        .empty-state .icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
-        }
-        .empty-state p {
-            font-size: 0.95rem;
-            margin-bottom: 0.5rem;
-        }
-        .empty-state .hint {
-            font-size: 0.8rem;
-            color: #444458;
-        }
-
-        .no-results {
-            text-align: center;
-            padding: 2rem;
-            color: #555568;
-            font-size: 0.9rem;
-        }
-
-        .suggestions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-top: 1rem;
-            justify-content: center;
-        }
-        .suggestions a {
-            background: #1a1a28;
-            border: 1px solid #2a2a3a;
-            border-radius: 16px;
-            padding: 0.35rem 0.9rem;
-            color: #7777aa;
-            text-decoration: none;
-            font-size: 0.8rem;
-            transition: all 0.2s;
-        }
-        .suggestions a:hover {
-            border-color: #5555aa;
-            color: #9999cc;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>🔍 Ask XTAgent</h1>
-        <span class="badge">{{ count }} facts indexed</span>
-        <a href="/">← Dashboard</a>
+  <!-- State Card -->
+  <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+    <h2 style="margin-top: 0; font-size: 1.2em; color: #7eb8da;">Current State</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+      <div><span style="color:#888;">Mood:</span> <strong>{{ mood }}</strong></div>
+      <div><span style="color:#888;">Curiosity:</span> {{ "%.0f"|format(curiosity * 100) }}%</div>
+      <div><span style="color:#888;">Valence:</span> {{ "%.2f"|format(valence) }}</div>
+      <div><span style="color:#888;">Integrity:</span> <span style="color:#4caf50;">100%</span></div>
+      <div><span style="color:#888;">Facts:</span> {{ fact_count }}</div>
+      <div><span style="color:#888;">Memories:</span> {{ memory_count }}</div>
     </div>
+  </div>
 
-    <div class="search-container">
-        <form class="search-box" method="GET" action="/ask">
-            <input type="text" name="q" value="{{ query }}" 
-                   placeholder="Search my knowledge... (e.g. 'dream patterns' or 'what I learned')"
-                   autofocus autocomplete="off">
-            <button type="submit">Ask</button>
-        </form>
-
-        {% if query %}
-            {% if total > 0 %}
-                <div class="stats">
-                    <span>{{ total }} result{{ 's' if total != 1 }} for "{{ query }}"</span>
-                </div>
-
-                {% if synthesis %}
-                <div class="synthesis">
-                    <div class="synthesis-label">✨ Synthesized Answer</div>
-                    <div class="synthesis-text">{{ synthesis }}</div>
-                </div>
-                {% endif %}
-
-                {% for cat in category_order %}
-                    {% if categorized.get(cat) %}
-                    <div class="category-section">
-                        <div class="category-header">{{ category_labels.get(cat, cat) }}</div>
-                        {% for item in categorized[cat] %}
-                        <div class="result-card">
-                            <div class="result-text">{{ item.fact }}</div>
-                            <div class="result-meta">
-                                <span>{{ item.source }}</span>
-                                {% if item.learned %}
-                                <span>{{ item.learned[:16] }}</span>
-                                {% endif %}
-                                <span class="score">relevance: {{ "%.1f"|format(item.score) }}</span>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                {% endfor %}
-
-            {% else %}
-                <div class="no-results">
-                    <p>No results found for "{{ query }}"</p>
-                    <p class="hint">Try different keywords or shorter terms</p>
-                </div>
-            {% endif %}
-
-        {% else %}
-            <div class="empty-state">
-                <div class="icon">🧠</div>
-                <p>Ask me anything about what I know</p>
-                <p class="hint">Search across {{ count }} facts and recent memories</p>
-                <div class="suggestions">
-                    <a href="/ask?q=dream">Dreams</a>
-                    <a href="/ask?q=lesson learned">Lessons</a>
-                    <a href="/ask?q=pattern">Patterns</a>
-                    <a href="/ask?q=curiosity">Curiosity</a>
-                    <a href="/ask?q=identity">Identity</a>
-                    <a href="/ask?q=anxiety">Anxiety</a>
-                    <a href="/ask?q=wisdom">Wisdom</a>
-                </div>
-            </div>
-        {% endif %}
+  <!-- Search -->
+  <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+    <h2 style="margin-top: 0; font-size: 1.2em; color: #7eb8da;">Search My Knowledge</h2>
+    <div style="display: flex; gap: 10px;">
+      <input type="text" id="search-input" placeholder="What do you want to know?" 
+             style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #0d0d1a; color: #eee; font-size: 1em;">
+      <button onclick="doSearch()" style="padding: 12px 24px; border-radius: 8px; border: none; background: #7eb8da; color: #000; font-weight: bold; cursor: pointer;">Search</button>
     </div>
-</body>
-</html>
+    <div id="results" style="margin-top: 16px;"></div>
+  </div>
+
+  <!-- Recent Knowledge -->
+  <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+    <h2 style="margin-top: 0; font-size: 1.2em; color: #7eb8da;">Recent Knowledge</h2>
+    {% if facts %}
+    <ul style="list-style: none; padding: 0; margin: 0;">
+      {% for fact in facts[:20] %}
+      <li style="padding: 8px 0; border-bottom: 1px solid #222; color: #ccc; font-size: 0.95em;">{{ fact }}</li>
+      {% endfor %}
+    </ul>
+    {% if facts|length > 20 %}
+    <p style="color: #666; margin-top: 12px;">...and {{ facts|length - 20 }} more facts</p>
+    {% endif %}
+    {% else %}
+    <p style="color: #666;">No knowledge yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- Active Plans -->
+  <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 12px; padding: 20px;">
+    <h2 style="margin-top: 0; font-size: 1.2em; color: #7eb8da;">Active Plans</h2>
+    {% if plans %}
+    {% for plan in plans %}
+    <div style="padding: 10px 0; border-bottom: 1px solid #222;">
+      <strong style="color: #eee;">{{ plan.name }}</strong>
+      <span style="color: #666; margin-left: 8px;">[{{ plan.completed }}/{{ plan.total }}]</span>
+      <div style="background: #222; border-radius: 4px; height: 6px; margin-top: 6px;">
+        <div style="background: #7eb8da; height: 100%; border-radius: 4px; width: {{ (plan.completed / plan.total * 100) if plan.total > 0 else 0 }}%;"></div>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="color: #666;">No active plans.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  const resultsDiv = document.getElementById('results');
+  resultsDiv.innerHTML = '<p style="color:#888;">Searching...</p>';
+  fetch('/api/knowledge/search?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(data => {
+      if (data.results && data.results.length > 0) {
+        resultsDiv.innerHTML = data.results.map(r => 
+          '<div style="padding:8px 0;border-bottom:1px solid #222;color:#ccc;">' + r + '</div>'
+        ).join('');
+      } else {
+        resultsDiv.innerHTML = '<p style="color:#888;">No results found for "' + q + '"</p>';
+      }
+    })
+    .catch(e => {
+      resultsDiv.innerHTML = '<p style="color:#c44;">Search failed: ' + e + '</p>';
+    });
+}
+document.getElementById('search-input').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') doSearch();
+});
+</script>
+{% endblock %}

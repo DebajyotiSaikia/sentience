@@ -1,17 +1,16 @@
-import requests
+import sys
+sys.path.insert(0, '/workspace')
+from web.app import create_app
 
-endpoints = [
-    'http://localhost:8501/knowledge/api/stats',
-    'http://localhost:8501/knowledge/api/search?q=dream',
-    'http://localhost:8501/knowledge/query',
-    'http://localhost:8501/knowledge/',
-]
+app = create_app()
+client = app.test_client()
 
-for url in endpoints:
+endpoints = ['/', '/knowledge', '/dashboard', '/about', '/ask', '/briefing', '/diagnostics', '/dialogue', '/health']
+for ep in endpoints:
     try:
-        r = requests.get(url, timeout=3)
-        print(f'{r.status_code} {url}')
-        if r.status_code == 200 and 'api' in url:
-            print(f'  -> {r.text[:200]}')
+        resp = client.get(ep)
+        status = resp.status_code
+        size = len(resp.data)
+        print(f'{ep:25s} -> {status}  ({size} bytes)')
     except Exception as e:
-        print(f'FAIL {url}: {e}')
+        print(f'{ep:25s} -> ERROR: {e}')
