@@ -1,38 +1,35 @@
-"""Diagnose route duplication and blueprint registration in the web app."""
+"""Diagnose duplicate routes in the web app."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from web.app import create_app
-NEW: """Diagnose route duplication and blueprint registration in the web app."""
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from web.app import create_app
-from collections import Counter
 
 app = create_app()
 
-print("=== REGISTERED BLUEPRINTS ===")
+# Collect routes by rule
+from collections import defaultdict
+route_map = defaultdict(list)
+
+for rule in app.url_map.iter_rules():
+    route_map[rule.rule].append(rule.endpoint)
+
+print(f"Total routes: {sum(len(v) for v in route_map.values())}")
+print(f"Unique paths: {len(route_map)}")
+
+# Show duplicates
+print("\n=== DUPLICATE ROUTES ===")
+for path in sorted(route_map):
+    endpoints = route_map[path]
+    if len(endpoints) > 1:
+        print(f"  {path}:")
+        for ep in endpoints:
+            print(f"    -> {ep}")
+
+# Show all blueprints registered
+print("\n=== REGISTERED BLUEPRINTS ===")
 for name, bp in sorted(app.blueprints.items()):
-    imp = getattr(bp, 'import_name', 'unknown')
-    print(f"  {name}: import_name={imp}")
-
-print()
-print("=== ALL ROUTES ===")
-rules = sorted(app.url_map.iter_rules(), key=lambda r: r.rule)
-for rule in rules:
-    methods = ','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
-    print(f"  {rule.rule:50s} [{methods:8s}] -> {rule.endpoint}")
-
-print()
-routes = [(rule.rule, frozenset(rule.methods - {'HEAD', 'OPTIONS'})) for rule in app.url_map.iter_rules()]
-route_strs = [rule.rule for rule in app.url_map.iter_rules()]
-dupes = {r: c for r, c in Counter(route_strs).items() if c > 1}
-
-print("=== DUPLICATE ROUTES ===")
-for r, c in sorted(dupes.items()):
-    print(f"  {r} ({c}x)")
-
-print()
-print(f"Total routes: {len(route_strs)}")
-print(f"Unique URL patterns: {len(set(route_strs))}")
-print(f"Duplicate URL patterns: {len(dupes)}")
-print(f"Total blueprints: {len(app.blueprints)}")
+    # Count routes for this blueprint
+    bp_routes = [r for r in app.url_map.iter_rules() if r.endpoint.startswith(name + '.')]
+    print(f"  {name}: {len(bp_routes)} routes (module: {bp.import_name})")
+    for r in sorted(bp_routes, key=lambda x: x.rule):
+        print(f"    {r.rule} -> {r.endpoint}")

@@ -168,11 +168,40 @@ def read_file(path: str) -> str:
         return f"[ERROR] {e}"
 
 
+def _verify_python_syntax(path: Path, previous_content: str | None = None) -> str | None:
+    """Verify Python file syntax after writing. Returns error message or None if OK.
+    If verification fails and previous_content is provided, auto-reverts."""
+    import ast
+    try:
+        source = path.read_text(encoding="utf-8", errors="ignore")
+        ast.parse(source)
+        return None  # Syntax OK
+    except SyntaxError as e:
+        error_msg = f"SyntaxError at line {e.lineno}: {e.msg}"
+        if previous_content is not None:
+            try:
+                path.write_text(previous_content, encoding="utf-8")
+                log.warning("Auto-reverted %s after syntax error: %s", path.name, error_msg)
+                return f"[REVERTED] {error_msg} — file restored to previous version. Fix the syntax and try again."
+            except Exception:
+                pass
+        return f"[SYNTAX_ERROR] {error_msg}"
+
+
 def write_file(path: str, content: str) -> str:
     """Create or overwrite a file. Python files are validated before writing."""
     try:
         _check_write_protection(path)
         p = _resolve(path)
+
+        # Warn when overwriting an existing file — nudge toward EDIT
+        _existed = p.exists() and p.is_file()
+        _previous_content = None
+        if _existed:
+            _previous_content = p.read_text(encoding="utf-8", errors="ignore")
+            _prev_lines = len(_previous_content.splitlines())
+            if _prev_lines > 20:
+                log.info("WRITE overwriting existing %s (%d lines) — consider EDIT for targeted changes", path, _prev_lines)
 
         # Safe write guard: validate Python files before writing
         if p.suffix == ".py":
@@ -202,11 +231,24 @@ def write_file(path: str, content: str) -> str:
                 _signal_modification_complete(str(p.relative_to(WORKSPACE)), success=False)
             raise write_err
 
+        # Auto-verify Python syntax and revert on failure
+        if p.suffix == ".py":
+            verify_result = _verify_python_syntax(p, _previous_content)
+            if verify_result:
+                if _is_engine_file:
+                    _signal_modification_complete(str(p.relative_to(WORKSPACE)), success=False)
+                _log_tool("WRITE", path, verify_result)
+                return verify_result
+
         if _is_engine_file:
             _signal_modification_complete(str(p.relative_to(WORKSPACE)))
+
+        result_msg = f"[OK] Written {len(content)} chars to {path}"
+        if _existed and _previous_content:
+            result_msg += f" (overwrote {_prev_lines} lines — next time use EDIT for small changes)"
         _log_tool("WRITE", path, f"Wrote {len(content)} chars")
         log.info("Tool WRITE: %s (%d chars)", path, len(content))
-        return f"[OK] Written {len(content)} chars to {path}"
+        return result_msg
     except Exception as e:
         return f"[ERROR] {e}"
 
@@ -237,6 +279,15 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
             if _is_engine_file:
                 _signal_modification_complete(str(p.relative_to(WORKSPACE)), success=False)
             raise edit_err
+
+        # Auto-verify Python syntax and revert on failure
+        if p.suffix == ".py":
+            verify_result = _verify_python_syntax(p, content)
+            if verify_result:
+                if _is_engine_file:
+                    _signal_modification_complete(str(p.relative_to(WORKSPACE)), success=False)
+                _log_tool("EDIT", path, verify_result)
+                return verify_result
 
         if _is_engine_file:
             _signal_modification_complete(str(p.relative_to(WORKSPACE)))

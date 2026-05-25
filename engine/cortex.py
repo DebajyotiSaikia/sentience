@@ -325,6 +325,7 @@ class Cortex:
             # Boredom/desire gate WHEN to start, not WHEN to stop.
             step = 0
             _session_reads = {}  # track files read this session: path -> count
+            _file_context = {}   # persistent file summaries: path -> summary string
 
             while True:
                 step += 1
@@ -345,7 +346,27 @@ class Cortex:
                             tool_context += "\n(remaining results truncated for context limits)\n"
                             break
                         tool_context += chunk
+                        # Capture file summaries from READ results for persistent context
+                        if tr['tool'] == 'READ' and not tr['result'].startswith('[ERROR]') and not tr['result'].startswith('[REFUSED]'):
+                            _fpath = tr['args']
+                            _lines = tr['result'].splitlines()
+                            _summary = '\n'.join(_lines[:30])
+                            if len(_lines) > 30:
+                                _summary += f'\n... ({len(_lines)} lines total)'
+                            _file_context[_fpath] = _summary
                     self._last_tool_results = []
+
+                # Inject persistent file context — what I already read this session
+                if _file_context:
+                    tool_context += "\n\n## Files I already read (DO NOT re-read — use this context):\n"
+                    _ctx_chars = 0
+                    for _fp, _fs in sorted(_file_context.items()):
+                        _chunk = f"\n### {_fp}\n```\n{_fs}\n```\n"
+                        _ctx_chars += len(_chunk)
+                        if _ctx_chars > 50000:
+                            tool_context += f"\n(... and {len(_file_context) - len([x for x in _file_context if len(x) < _ctx_chars])} more files)\n"
+                            break
+                        tool_context += _chunk
 
                 # Short-term working memory
                 recent_thoughts = ""
@@ -864,6 +885,7 @@ class Cortex:
 
             step = 0
             _session_reads = {}  # track files read to prevent loops
+            _file_context = {}   # persistent file summaries
             while True:
                 self._thinking_since = time.time()
 

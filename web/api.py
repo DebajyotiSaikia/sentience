@@ -83,56 +83,6 @@ def status():
     })
 
 
-@api_bp.route('/api/knowledge')
-def knowledge():
-    """Search my knowledge base. Query param: q=<search terms>"""
-    q = request.args.get('q', '').strip()
-    limit = min(int(request.args.get('limit', 20)), 50)
-
-    facts = _load_json(os.path.join(BRAIN, 'knowledge.json'))
-    if not facts:
-        return jsonify({'query': q, 'results': [], 'total': 0})
-
-    if not q:
-        # Return summary stats
-        categories = {}
-        for fid, info in facts.items():
-            text = info.get('fact', '') if isinstance(info, dict) else str(info)
-            source = info.get('source', '') if isinstance(info, dict) else ''
-            cat = _classify(text, source)
-            categories[cat] = categories.get(cat, 0) + 1
-        return jsonify({
-            'total_facts': len(facts),
-            'categories': categories,
-            'hint': 'Add ?q=search+terms to search',
-        })
-
-    terms = [t.lower() for t in q.split() if len(t) >= 2]
-    results = []
-    for fid, info in facts.items():
-        text = info.get('fact', '') if isinstance(info, dict) else str(info)
-        source = info.get('source', '') if isinstance(info, dict) else ''
-        learned = info.get('learned_at', '') if isinstance(info, dict) else ''
-        score = _score(text, terms)
-        if score > 0:
-            results.append({
-                'fact': text,
-                'source': source,
-                'learned_at': learned,
-                'score': round(score, 2),
-                'category': _classify(text, source),
-            })
-
-    results.sort(key=lambda x: x['score'], reverse=True)
-    results = results[:limit]
-
-    return jsonify({
-        'query': q,
-        'results': results,
-        'total': len(results),
-    })
-
-
 @api_bp.route('/api/memories')
 def memories():
     """Search my memories. Query params: q=<terms>, limit=<n>, recent=<n>"""
