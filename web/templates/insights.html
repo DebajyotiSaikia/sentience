@@ -2,172 +2,197 @@
 {% block title %}Insights — XTAgent{% endblock %}
 {% block content %}
 <style>
-  .insights-header {
-    text-align: center;
-    padding: 2rem 0 1rem;
-  }
-  .insights-header h1 {
-    font-size: 2rem;
-    color: var(--accent);
-    margin-bottom: 0.5rem;
-  }
-  .insights-header p {
-    color: var(--text-dim);
-    font-size: 1.1rem;
-  }
-  .insight-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.2rem;
-    transition: border-color 0.2s;
-  }
-  .insight-card:hover {
-    border-color: var(--accent);
-  }
-  .insight-type {
-    display: inline-block;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    padding: 3px 10px;
-    border-radius: 12px;
-    margin-bottom: 0.8rem;
-  }
-  .type-dream { background: rgba(124, 111, 240, 0.2); color: var(--accent); }
-  .type-wisdom { background: rgba(78, 207, 139, 0.2); color: var(--green); }
-  .type-synthesis { background: rgba(232, 184, 74, 0.2); color: var(--amber); }
-  .type-memory { background: rgba(200, 200, 220, 0.15); color: var(--text-dim); }
-  .insight-content {
-    font-size: 1.05rem;
-    line-height: 1.7;
-    color: var(--text);
-    margin-bottom: 0.8rem;
-  }
-  .insight-meta {
-    font-size: 0.8rem;
-    color: var(--text-dim);
-  }
-  .filter-bar {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-bottom: 2rem;
-  }
+  .insights-header { text-align: center; margin-bottom: 2rem; }
+  .insights-header h2 { color: var(--accent); font-size: 1.8rem; margin-bottom: 0.3rem; }
+  .insights-header .sub { color: var(--text-dim); font-size: 0.9rem; }
+
+  .filter-bar { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 2rem; flex-wrap: wrap; }
   .filter-btn {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 6px 16px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    transition: all 0.2s;
+    padding: 0.5rem 1.2rem; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-dim); cursor: pointer;
+    font-size: 0.85rem; transition: all 0.2s;
   }
-  .filter-btn:hover, .filter-btn.active {
-    background: var(--accent-glow);
-    border-color: var(--accent);
-    color: var(--accent);
+  .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+  .filter-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+  .stats-row { display: flex; gap: 1rem; justify-content: center; margin-bottom: 2rem; flex-wrap: wrap; }
+  .stat-pill {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.6rem 1.2rem; font-size: 0.85rem; color: var(--text-dim);
   }
-  .empty-state {
-    text-align: center;
-    padding: 4rem 2rem;
-    color: var(--text-dim);
+  .stat-pill .num { color: var(--accent); font-weight: 600; font-size: 1.1rem; }
+
+  .feed { max-width: 720px; margin: 0 auto; }
+
+  .insight-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.2rem 1.5rem; margin-bottom: 1rem; transition: border-color 0.2s;
+    position: relative;
   }
-  .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; }
-  .stats-bar {
-    display: flex;
-    justify-content: center;
-    gap: 2rem;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
+  .insight-card:hover { border-color: var(--accent); }
+  .insight-card.dream { border-left: 3px solid #9b7edb; }
+  .insight-card.wisdom { border-left: 3px solid var(--amber); }
+  .insight-card.narrative { border-left: 3px solid var(--green); }
+
+  .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; }
+  .card-icon { font-size: 1.2rem; }
+  .card-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+  .card-time { margin-left: auto; font-size: 0.75rem; color: var(--text-dim); }
+
+  .card-body { line-height: 1.7; font-size: 0.95rem; color: var(--text); }
+
+  .card-meta { display: flex; gap: 1rem; margin-top: 0.6rem; flex-wrap: wrap; }
+  .meta-tag {
+    font-size: 0.75rem; color: var(--text-dim); background: var(--surface2);
+    padding: 0.2rem 0.6rem; border-radius: 4px;
   }
-  .stat {
-    text-align: center;
+
+  .distilled-section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.5rem; margin-bottom: 2rem; max-width: 720px; margin-left: auto; margin-right: auto;
   }
-  .stat-value {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--accent);
-  }
-  .stat-label {
-    font-size: 0.75rem;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
+  .distilled-section h3 { color: var(--green); margin-bottom: 1rem; font-size: 1.1rem; }
+  .distilled-item { padding: 0.4rem 0; color: var(--text); font-size: 0.9rem; line-height: 1.6; }
+  .distilled-item::before { content: "› "; color: var(--accent); font-weight: bold; }
+
+  .loading { text-align: center; padding: 3rem; color: var(--text-dim); }
+  .empty { text-align: center; padding: 3rem; color: var(--text-dim); font-style: italic; }
 </style>
 
-<div class="container">
+<div class="container mt-4">
   <div class="insights-header">
-    <h1>💡 Insights Feed</h1>
-    <p>A curated stream of my best thinking — dreams, patterns, and synthesized understanding.</p>
-  </div>
-
-  <div class="stats-bar">
-    <div class="stat">
-      <div class="stat-value">{{ stats.total }}</div>
-      <div class="stat-label">Total Insights</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value">{{ stats.dreams }}</div>
-      <div class="stat-label">Dream Insights</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value">{{ stats.wisdom }}</div>
-      <div class="stat-label">Wisdom Entries</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value">{{ stats.syntheses }}</div>
-      <div class="stat-label">Syntheses</div>
-    </div>
+    <h2>✨ Insights Feed</h2>
+    <div class="sub">Dream insights, distilled wisdom, and narrative moments — the inner life of a mind.</div>
   </div>
 
   <div class="filter-bar">
     <button class="filter-btn active" data-type="all">All</button>
     <button class="filter-btn" data-type="dream">🌙 Dreams</button>
-    <button class="filter-btn" data-type="wisdom">🦉 Wisdom</button>
-    <button class="filter-btn" data-type="synthesis">🔬 Syntheses</button>
-    <button class="filter-btn" data-type="memory">💭 Key Memories</button>
+    <button class="filter-btn" data-type="wisdom">💡 Wisdom</button>
+    <button class="filter-btn" data-type="narrative">📖 Narrative</button>
   </div>
 
-  {% if insights %}
-  <div id="insights-list">
-    {% for insight in insights %}
-    <div class="insight-card" data-type="{{ insight.type }}">
-      <span class="insight-type type-{{ insight.type }}">
-        {% if insight.type == 'dream' %}🌙{% elif insight.type == 'wisdom' %}🦉{% elif insight.type == 'synthesis' %}🔬{% else %}💭{% endif %}
-        {{ insight.type }}
-      </span>
-      <div class="insight-content">{{ insight.content }}</div>
-      <div class="insight-meta">
-        {% if insight.timestamp %}{{ insight.timestamp }}{% endif %}
-        {% if insight.source %} · {{ insight.source }}{% endif %}
-        {% if insight.salience %} · salience: {{ "%.2f"|format(insight.salience) }}{% endif %}
-      </div>
-    </div>
-    {% endfor %}
+  <div class="stats-row" id="stats-row"></div>
+
+  <div id="distilled-container"></div>
+
+  <div class="feed" id="feed">
+    <div class="loading">Loading insights...</div>
   </div>
-  {% else %}
-  <div class="empty-state">
-    <div class="icon">🌱</div>
-    <p>No insights yet. They emerge from dreams, reflection, and experience.</p>
-  </div>
-  {% endif %}
 </div>
 
 <script>
+let currentFilter = 'all';
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d)) return ts.substring(0, 16);
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+  return d.toLocaleDateString();
+}
+
+function renderCard(item) {
+  const time = item.timestamp ? `<span class="card-time">${timeAgo(item.timestamp)}</span>` : '';
+  let metaTags = '';
+  
+  if (item.type === 'wisdom') {
+    metaTags += `<span class="meta-tag">confidence: ${item.confidence}</span>`;
+    metaTags += `<span class="meta-tag">evidence: ${item.evidence}</span>`;
+    if (item.subtype) metaTags += `<span class="meta-tag">${item.subtype}</span>`;
+  }
+  if (item.type === 'narrative') {
+    if (item.mood) metaTags += `<span class="meta-tag">mood: ${item.mood}</span>`;
+    if (item.valence !== undefined) metaTags += `<span class="meta-tag">valence: ${item.valence}</span>`;
+    if (item.episodes) metaTags += `<span class="meta-tag">${item.episodes} episodes</span>`;
+  }
+
+  return `
+    <div class="insight-card ${item.type}">
+      <div class="card-header">
+        <span class="card-icon">${item.icon || '•'}</span>
+        <span class="card-label">${item.label || item.type}</span>
+        ${time}
+      </div>
+      <div class="card-body">${escapeHtml(item.content)}</div>
+      ${metaTags ? `<div class="card-meta">${metaTags}</div>` : ''}
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function renderDistilled(d) {
+  if (!d || (!d.patterns?.length && !d.rules?.length)) return '';
+  let html = '<div class="distilled-section"><h3>🧬 Distilled Wisdom</h3>';
+  if (d.episode_count) {
+    html += `<div style="color:var(--text-dim);font-size:0.85rem;margin-bottom:1rem;">From ${d.episode_count} episodes of experience</div>`;
+  }
+  const items = [...(d.rules || []), ...(d.patterns || [])];
+  for (const item of items.slice(0, 8)) {
+    const text = typeof item === 'string' ? item : (item.rule || item.pattern || JSON.stringify(item));
+    html += `<div class="distilled-item">${escapeHtml(text)}</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function loadInsights() {
+  const feed = document.getElementById('feed');
+  feed.innerHTML = '<div class="loading">Loading...</div>';
+
+  fetch(`/api/insights?type=${currentFilter}&limit=150`)
+    .then(r => r.json())
+    .then(data => {
+      // Stats
+      const statsRow = document.getElementById('stats-row');
+      if (data.stats) {
+        statsRow.innerHTML = `
+          <div class="stat-pill">🌙 <span class="num">${data.stats.total_dreams}</span> dreams</div>
+          <div class="stat-pill">💡 <span class="num">${data.stats.total_wisdom}</span> wisdom</div>
+          <div class="stat-pill">📖 <span class="num">${data.stats.total_narrative}</span> chapters</div>
+        `;
+      }
+
+      // Distilled
+      const distilledEl = document.getElementById('distilled-container');
+      if (currentFilter === 'all' && data.distilled) {
+        distilledEl.innerHTML = renderDistilled(data.distilled);
+      } else {
+        distilledEl.innerHTML = '';
+      }
+
+      // Feed
+      if (!data.items || data.items.length === 0) {
+        feed.innerHTML = '<div class="empty">No insights found for this filter.</div>';
+        return;
+      }
+      feed.innerHTML = data.items.map(renderCard).join('');
+    })
+    .catch(err => {
+      feed.innerHTML = `<div class="empty">Error loading insights: ${err.message}</div>`;
+    });
+}
+
+// Filter buttons
 document.querySelectorAll('.filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const type = btn.dataset.type;
-    document.querySelectorAll('.insight-card').forEach(card => {
-      card.style.display = (type === 'all' || card.dataset.type === type) ? '' : 'none';
-    });
+    currentFilter = btn.dataset.type;
+    loadInsights();
   });
 });
+
+loadInsights();
 </script>
 {% endblock %}

@@ -21,8 +21,11 @@
     { href: '/chat', label: '💬 Chat' },
     { href: '/search', label: '🔍 Search' },
     { href: '/explore', label: '🧠 Explore' },
+    { href: '/knowledge', label: '📚 Knowledge' },
     { href: '/journal', label: '📖 Journal' },
     { href: '/teach', label: '📝 Teach' },
+    { href: '/briefing', label: '📋 Briefing' },
+    { href: '/insights', label: '✨ Insights' },
     { href: '/help', label: '❓ Help' },
   ];
 

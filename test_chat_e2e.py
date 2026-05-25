@@ -1,39 +1,42 @@
-"""End-to-end test of the chat/talk API — the core user interaction."""
+"""End-to-end test of the chat experience — the core of user alignment."""
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+
 from web.app import create_app
 
 app = create_app()
-with app.test_client() as c:
-    # Test 1: POST to /api/talk
-    r = c.post('/api/talk', json={'message': 'What do you know about yourself?'})
-    print(f'POST /api/talk → {r.status_code}')
-    data = r.get_json()
-    if data:
-        print(f'  Keys: {list(data.keys())}')
-        resp = data.get('response', data.get('reply', data.get('message', '')))
-        print(f'  Response: {repr(resp[:300]) if resp else "(empty)"}')
-    else:
-        print(f'  Raw: {r.data[:300]}')
-    
-    # Test 2: GET /chat page
-    r2 = c.get('/chat')
-    print(f'\nGET /chat → {r2.status_code}')
-    print(f'  Content length: {len(r2.data)} bytes')
-    
-    # Test 3: Search API
-    r3 = c.get('/api/knowledge/search?q=identity')
-    print(f'\nGET /api/knowledge/search?q=identity → {r3.status_code}')
-    d3 = r3.get_json()
-    if d3:
-        results = d3.get('results', [])
-        print(f'  Results: {len(results)}')
-        if results:
-            print(f'  First: {repr(str(results[0])[:200])}')
-    
-    # Test 4: State API
-    r4 = c.get('/api/state')
-    print(f'\nGET /api/state → {r4.status_code}')
-    d4 = r4.get_json()
-    if d4:
-        print(f'  Keys: {list(d4.keys())}')
+client = app.test_client()
 
-print('\n✓ All tests completed')
+# Test 1: Chat page loads
+resp = client.get('/chat/')
+print(f"1. GET /chat/ → {resp.status_code} ({len(resp.data)} bytes)")
+
+# Test 2: Chat ask endpoint  
+resp = client.post('/chat/ask', 
+    json={'message': 'What do you know about yourself?'},
+    content_type='application/json')
+print(f"2. POST /chat/ask → {resp.status_code}")
+if resp.status_code == 200:
+    data = resp.get_json()
+    if data:
+        print(f"   Keys: {list(data.keys())}")
+        if 'response' in data:
+            print(f"   Response: {str(data['response'])[:400]}")
+        if 'knowledge_hits' in data:
+            print(f"   Knowledge hits: {len(data.get('knowledge_hits', []))}")
+        if 'memory_hits' in data:
+            print(f"   Memory hits: {len(data.get('memory_hits', []))}")
+    else:
+        print(f"   Raw: {resp.data[:300]}")
+else:
+    print(f"   Error: {resp.data[:500]}")
+
+# Test 3: Knowledge search
+resp = client.get('/api/knowledge/search?q=identity')
+print(f"3. Knowledge search 'identity' → {resp.status_code}")
+if resp.status_code == 200:
+    data = resp.get_json()
+    results = data.get('results', data.get('facts', []))
+    print(f"   {len(results)} results")
+
+print("\nDone.")

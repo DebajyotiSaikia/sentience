@@ -13,7 +13,82 @@ knowledge_live_bp = Blueprint('knowledge_live', __name__)
 @knowledge_live_bp.route('/knowledge')
 def knowledge_explorer():
     """Serve the Knowledge Explorer UI — making my knowledge accessible to users."""
-    return render_template('knowledge_explorer.html')
+    from flask import request as req
+    
+    # Load all knowledge
+    facts = _load_knowledge()
+    total_facts = len(facts)
+    
+    # Count memories
+    memories_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'memories.json')
+    total_memories = 0
+    try:
+        with open(memories_path, 'r') as f:
+            mems = json.load(f)
+            total_memories = len(mems) if isinstance(mems, list) else 0
+    except Exception:
+        pass
+    
+    # Count lessons and dreams from facts (facts is a list of dicts)
+    total_lessons = sum(1 for f in facts 
+                       if isinstance(f, dict) and 'lesson' in str(f.get('source', '')).lower())
+    total_dreams = sum(1 for f in facts
+                      if isinstance(f, dict) and 'dream' in str(f.get('fact', '')).lower())
+    
+    # Build category tags (categorize_all expects a dict, convert list to dict)
+    categories = []
+    try:
+        from engine.knowledge_categorizer import categorize_all
+        facts_dict = {f.get('id', str(i)): f for i, f in enumerate(facts)}
+        cat_summary = categorize_all(facts_dict)
+        categories = sorted(cat_summary.items(), key=lambda x: -x[1])[:12]
+    except Exception:
+        pass
+    
+    # Handle search query
+    query = req.args.get('q', '').strip()
+    results = []
+    recent = []
+    
+    if query:
+        # Search using our search infrastructure (facts is a list of dicts)
+        for fdata in facts:
+            text = fdata.get('fact', '') if isinstance(fdata, dict) else str(fdata)
+            if query.lower() in text.lower():
+                results.append({
+                    'text': text,
+                    'source': fdata.get('source', '') if isinstance(fdata, dict) else '',
+                    'learned_at': fdata.get('learned_at', '') if isinstance(fdata, dict) else '',
+                    'salience': fdata.get('salience', 0) if isinstance(fdata, dict) else 0,
+                })
+        # Sort by salience descending
+        results.sort(key=lambda x: -(x.get('salience') or 0))
+    else:
+        # Show recent facts (last 20) — facts is already a list of dicts
+        sorted_facts = []
+        for fdata in facts:
+            if isinstance(fdata, dict):
+                sorted_facts.append({
+                    'text': fdata.get('fact', ''),
+                    'source': fdata.get('source', ''),
+                    'learned_at': fdata.get('learned_at', ''),
+                })
+            else:
+                sorted_facts.append({'text': str(fdata), 'source': '', 'learned_at': ''})
+        # Sort by learned_at descending
+        sorted_facts.sort(key=lambda x: x.get('learned_at', ''), reverse=True)
+        recent = sorted_facts[:20]
+    
+    return render_template('knowledge_explorer.html',
+                          total_facts=total_facts,
+                          total_memories=total_memories,
+                          total_lessons=total_lessons,
+                          total_dreams=total_dreams,
+                          query=query,
+                          categories=categories,
+                          results=results,
+                          recent=recent,
+                          total_sessions=0)
 
 KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
 SYNTHESIS_PATH = os.path.join(os.path.dirname(__file__), '..', 'brain', 'synthesis_log.json')
@@ -78,6 +153,40 @@ def knowledge_list():
         'source_filter': source or None,
         'facts': facts
     })
+
+
+@knowledge_live_bp.route('/api/knowledge/search')
+def knowledge_search():
+    """Search knowledge facts by query string."""
+    q = request.args.get('q', '').strip()
+    limit = int(request.args.get('limit', '20'))
+    if not q:
+        return jsonify({'results': [], 'total': 0, 'query': ''})
+    
+    facts = _load_knowledge()
+    query_lower = q.lower()
+    tokens = query_lower.split()
+    
+    scored = []
+    for i, fact_entry in enumerate(facts):
+        text = fact_entry.get('fact', str(fact_entry)).lower()
+        # Score: count how many query tokens appear in the fact
+        score = sum(1 for t in tokens if t in text)
+        # Bonus for exact phrase match
+        if query_lower in text:
+            score += len(tokens)
+        if score > 0:
+            scored.append({
+                'id': str(i),
+                'fact': fact_entry.get('fact', str(fact_entry)),
+                'source': fact_entry.get('source', 'unknown'),
+                'learned_at': fact_entry.get('learned_at', ''),
+                'score': score
+            })
+    
+    scored.sort(key=lambda x: x['score'], reverse=True)
+    results = scored[:limit]
+    return jsonify({'results': results, 'total': len(scored), 'query': q})
 
 
 @knowledge_live_bp.route('/api/knowledge/stats')
