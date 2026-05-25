@@ -1,54 +1,64 @@
 {% extends "base.html" %}
 {% block title %}Knowledge Search — XTAgent{% endblock %}
 {% block content %}
-<div class="container" style="max-width: 800px; margin: 2rem auto; padding: 0 1rem;">
-  <h1 style="color: #e0e0e0;">🧠 Knowledge Search</h1>
-  <p style="color: #aaa;">Search across {{ total }} facts I've learned. Ask me anything about what I know.</p>
-
-  <div style="margin: 1.5rem 0;">
-    <input type="text" id="search-input" placeholder="Search my knowledge..."
-      style="width: 100%; padding: 12px 16px; font-size: 16px; background: #1e1e2e; color: #e0e0e0;
-             border: 1px solid #444; border-radius: 8px; outline: none;"
-      oninput="doSearch(this.value)">
+<div class="container mt-4">
+  <h2>🔍 Knowledge Search</h2>
+  <p class="text-muted">Explore what I know — {{ total }} facts and counting.</p>
+  
+  <div class="input-group mb-4">
+    <input type="text" id="search-input" class="form-control form-control-lg" 
+           placeholder="Search my knowledge... (e.g. 'dream', 'emotion', 'identity')" autofocus>
+    <button class="btn btn-primary" id="search-btn">Search</button>
   </div>
 
-  <div id="results" style="margin-top: 1rem;">
-    {% for fact in facts %}
-    <div class="fact-card" style="background: #1e1e2e; border: 1px solid #333; border-radius: 8px;
-                padding: 1rem; margin-bottom: 0.75rem;">
-      <div style="color: #e0e0e0; font-size: 14px; line-height: 1.5;">{{ fact.fact }}</div>
-      <div style="color: #666; font-size: 11px; margin-top: 0.5rem;">
-        Source: {{ fact.source }} {% if fact.learned_at %}· Learned: {{ fact.learned_at[:10] }}{% endif %}
-      </div>
-    </div>
-    {% endfor %}
-  </div>
+  <div id="results-info" class="text-muted mb-2" style="display:none;"></div>
+  <div id="results" class="list-group"></div>
 </div>
 
 <script>
-let debounce;
-function doSearch(q) {
-  clearTimeout(debounce);
-  debounce = setTimeout(() => {
-    fetch('/knowledge/api/search?q=' + encodeURIComponent(q))
-      .then(r => r.json())
-      .then(data => {
-        const el = document.getElementById('results');
-        if (!data.results || data.results.length === 0) {
-          el.innerHTML = '<p style="color:#666;">No matching facts found.</p>';
-          return;
-        }
-        el.innerHTML = data.results.map(f =>
-          `<div class="fact-card" style="background:#1e1e2e;border:1px solid #333;border-radius:8px;padding:1rem;margin-bottom:0.75rem;">
-            <div style="color:#e0e0e0;font-size:14px;line-height:1.5;">${esc(f.fact)}</div>
-            <div style="color:#666;font-size:11px;margin-top:0.5rem;">
-              Source: ${esc(f.source)} ${f.learned_at ? '· Learned: ' + esc(f.learned_at.slice(0,10)) : ''}
-            </div>
-          </div>`
-        ).join('');
+const input = document.getElementById('search-input');
+const resultsDiv = document.getElementById('results');
+const infoDiv = document.getElementById('results-info');
+let debounce = null;
+
+function doSearch() {
+  const q = input.value.trim();
+  fetch('/api/knowledge/search?q=' + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(data => {
+      infoDiv.style.display = 'block';
+      infoDiv.textContent = data.results.length + ' result' + (data.results.length !== 1 ? 's' : '') +
+        (q ? ' for "' + q + '"' : ' (most recent)');
+      resultsDiv.innerHTML = '';
+      data.results.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'list-group-item';
+        const badge = item.source === 'dream' ? '🌙' : 
+                      item.source === 'reflection' ? '🪞' : 
+                      item.source === 'user' ? '👤' : '📝';
+        const time = item.learned_at ? new Date(item.learned_at).toLocaleDateString() : '';
+        el.innerHTML = '<div class="d-flex justify-content-between">' +
+          '<span>' + badge + ' ' + escapeHtml(item.fact) + '</span>' +
+          '<small class="text-muted ms-2 text-nowrap">' + time + '</small></div>';
+        resultsDiv.appendChild(el);
       });
-  }, 300);
+    });
 }
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+input.addEventListener('input', () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(doSearch, 300);
+});
+document.getElementById('search-btn').addEventListener('click', doSearch);
+input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+// Load initial results
+doSearch();
 </script>
 {% endblock %}

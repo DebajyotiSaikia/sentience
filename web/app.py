@@ -43,6 +43,7 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
+    from web.knowledge_explorer import knowledge_explorer_bp
     from web.knowledge_live import knowledge_live_bp
     from web.story import story_bp
     from web.knowledge_unified import knowledge_unified_bp
@@ -58,6 +59,8 @@ def create_app():
     from web.wonder import wonder_bp
     from web.portal import portal_bp
     from web.reflect import reflect_bp
+    from web.state_api import state_api
+    from web.knowledge_search import bp as knowledge_search_bp
     
     # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
@@ -77,6 +80,8 @@ def create_app():
     app.register_blueprint(collaborate_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
+    app.register_blueprint(state_api)
+    app.register_blueprint(knowledge_explorer_bp)
     app.register_blueprint(knowledge_live_bp)
     app.register_blueprint(story_bp)
     app.register_blueprint(ask_bp)
@@ -92,6 +97,7 @@ def create_app():
     app.register_blueprint(query_bp)
     app.register_blueprint(reflect_bp)
     app.register_blueprint(portal_bp)
+    app.register_blueprint(knowledge_search_bp)
     
     # Root route — the living portal
     @app.route('/')
