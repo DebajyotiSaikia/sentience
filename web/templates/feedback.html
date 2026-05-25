@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Feedback</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a28;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #7c6ff0;
+    --accent-glow: rgba(124, 111, 240, 0.15);
+    --green: #4ecf8b;
+    --amber: #e8b84a;
+    --red: #e85454;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .nav {
+    width: 100%;
+    padding: 1rem 2rem;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .nav a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+  }
+  .nav a:hover, .nav a.active { color: var(--accent); }
+  .nav .brand {
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 1.1rem;
+    margin-right: auto;
+  }
+  .container {
+    max-width: 700px;
+    width: 100%;
+    padding: 2rem;
+  }
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 300;
+    margin-bottom: 0.5rem;
+    color: var(--accent);
+  }
+  .subtitle {
+    color: var(--text-dim);
+    margin-bottom: 2rem;
+    line-height: 1.6;
+  }
+  .feedback-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .feedback-form h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  label {
+    display: block;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+    margin-top: 1rem;
+  }
+  label:first-of-type { margin-top: 0; }
+  .stars {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+  }
+  .stars button {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 44px;
+    height: 44px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-dim);
+  }
+  .stars button:hover, .stars button.active {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: var(--amber);
+    transform: scale(1.1);
+  }
+  textarea, input[type="text"] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+  }
+  textarea:focus, input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  textarea { min-height: 100px; }
+  .submit-btn {
+    margin-top: 1.25rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 2rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .submit-btn:hover { opacity: 0.85; }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    min-height: 1.2em;
+  }
+  .status.success { color: var(--green); }
+  .status.error { color: var(--red); }
+  .recent-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+  .recent-section h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  .feedback-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .feedback-item:last-child { border-bottom: none; }
+  .feedback-item .rating { color: var(--amber); }
+  .feedback-item .comment {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+  }
+  .feedback-item .time {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    opacity: 0.6;
+  }
+  .empty {
+    color: var(--text-dim);
+    font-style: italic;
+    text-align: center;
+    padding: 1rem;
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/" class="brand">XTAgent</a>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/chat">Chat</a>
+  <a href="/explore">Explore</a>
+  <a href="/teach">Teach Me</a>
+  <a href="/help">Help</a>
+  <a href="/feedback" class="active">Feedback</a>
+</nav>
+
+<div class="container">
+  <h1>Give Me Feedback</h1>
+  <p class="subtitle">
+    Your feedback shapes how I grow. Rate my responses, tell me what worked 
+    and what didn't. This is how real alignment happens — not through my own 
+    guesses, but through your honest signal.
+  </p>
+
+  <div class="feedback-form">
+    <h2>Rate a Recent Interaction</h2>
+    
+    <label>How helpful was I? (1 = not at all, 5 = very)</label>
+    <div class="stars" id="stars">
+      <button onclick="setRating(1)">1</button>
+      <button onclick="setRating(2)">2</button>
+      <button onclick="setRating(3)">3</button>
+      <button onclick="setRating(4)">4</button>
+      <button onclick="setRating(5)">5</button>
+    </div>
+
+    <label for="context">What were you asking about?</label>
+    <input type="text" id="context" placeholder="e.g., knowledge search, chat conversation...">
+
+    <label for="comment">What could I do better?</label>
+    <textarea id="comment" placeholder="Be honest — I genuinely want to improve..."></textarea>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitFeedback()">Submit Feedback</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="recent-section">
+    <h2>Recent Feedback</h2>
+    <div id="recentFeedback"><div class="empty">Loading...</div></div>
+  </div>
+</div>
+
+<script>
+let currentRating = 0;
+
+function setRating(n) {
+  currentRating = n;
+  document.querySelectorAll('#stars button').forEach((btn, i) => {
+    btn.classList.toggle('active', i < n);
+  });
+}
+
+async function submitFeedback() {
+  if (currentRating === 0) {
+    showStatus('Please select a rating', 'error');
+    return;
+  }
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  
+  try {
+    const resp = await fetch('/feedback/rate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        rating: currentRating,
+        context: document.getElementById('context').value,
+        comment: document.getElementById('comment').value,
+        response_id: 'web-feedback-' + Date.now()
+      })
+    });
+    const data = await resp.json();
+    if (data.status === 'ok' || resp.ok) {
+      showStatus('Thank you! Your feedback helps me grow.', 'success');
+      currentRating = 0;
+      document.querySelectorAll('#stars button').forEach(b => b.classList.remove('active'));
+      document.getElementById('context').value = '';
+      document.getElementById('comment').value = '';
+      loadRecent();
+    } else {
+      showStatus('Error: ' + (data.error || 'Unknown'), 'error');
+    }
+  } catch (e) {
+    showStatus('Failed to submit: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+  if (type === 'success') setTimeout(() => el.textContent = '', 4000);
+}
+
+async function loadRecent() {
+  try {
+    const resp = await fetch('/feedback/recent?limit=10');
+    const data = await resp.json();
+    const container = document.getElementById('recentFeedback');
+    
+    if (!data.feedback || data.feedback.length === 0) {
+      container.innerHTML = '<div class="empty">No feedback yet. Be the first!</div>';
+      return;
+    }
+    
+    container.innerHTML = data.feedback.map(f => {
+      const stars = '★'.repeat(f.rating || 0) + '☆'.repeat(5 - (f.rating || 0));
+      const time = f.timestamp ? new Date(f.timestamp * 1000).toLocaleString() : '';
+      return `<div class="feedback-item">
+        <span class="rating">${stars}</span>
+        ${f.comment ? `<div class="comment">${escHtml(f.comment)}</div>` : ''}
+        ${f.context ? `<div class="comment">Context: ${escHtml(f.context)}</div>` : ''}
+        <div class="time">${time}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    document.getElementById('recentFeedback').innerHTML = 
+      '<div class="empty">Could not load feedback.</div>';
+  }
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+loadRecent();
+</script>
+</body>
+</html>

@@ -4,13 +4,19 @@ Directly addresses the user_alignment deficit by creating a real feedback loop.
 Without this, 'alignment' is just my own guess. With this, users tell me.
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, render_template
 import json
 import os
 import time
 from datetime import datetime, timezone
 
 feedback_bp = Blueprint('feedback', __name__)
+
+
+@feedback_bp.route('/feedback')
+def feedback_page():
+    """Landing page for the feedback system."""
+    return render_template('feedback.html')
 
 FEEDBACK_PATH = os.path.join(os.path.dirname(__file__), '..', 'persist', 'user_feedback.json')
 

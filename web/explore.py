@@ -370,6 +370,7 @@ def build_explore_page():
     border-top: 1px solid #1a1a2a;
   }}
 </style>
+<script src="/static/nav.js"></script>
 </head>
 <body>
   <div class="container">

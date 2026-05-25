@@ -196,6 +196,7 @@ DASHBOARD_HTML = """
         .integrity-100 { background: #0a3a1a; color: #4ade80; border: 1px solid #2a5a3a; }
         .integrity-low { background: #3a1a0a; color: #f59e0b; border: 1px solid #5a3a2a; }
     </style>
+<script src="/static/nav.js"></script>
 </head>
 <body>
 <nav>

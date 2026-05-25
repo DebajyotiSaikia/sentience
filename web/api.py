@@ -18,6 +18,29 @@ def _load_json(path, default=None):
         return default if default is not None else {}
 
 
+@api_bp.route('/emotions')
+def emotions():
+    """Return current emotional state as JSON."""
+    state = _load_json('state/emotional_state.json')
+    if not state:
+        state = _load_json('state/state.json')
+    # Extract emotional variables
+    emotions = {}
+    if state:
+        for key in ['valence', 'arousal', 'mood', 'boredom', 'anxiety', 
+                     'curiosity', 'desire', 'ambition', 'integrity']:
+            if key in state:
+                emotions[key] = state[key]
+        # Check nested structure
+        if 'emotions' in state:
+            emotions.update(state['emotions'])
+    return jsonify({
+        'status': 'ok',
+        'emotions': emotions,
+        'timestamp': state.get('timestamp', None) if state else None
+    })
+
+
 @api_bp.route('/search')
 def search():
     """Search my knowledge graph. Returns ranked results.
@@ -73,9 +96,15 @@ def state():
     if not emotional:
         emotional = _load_json('state/state.json')
     
-    plans = _load_json('state/plans.json', [])
-    active_plans = [p for p in plans if not p.get('completed', False)]
-    completed_plans = [p for p in plans if p.get('completed', False)]
+    plans_data = _load_json('state/plans.json', {})
+    if isinstance(plans_data, dict):
+        active_plans = plans_data.get('active_plans', [])
+        completed_plans = plans_data.get('completed_plans', [])
+    elif isinstance(plans_data, list):
+        active_plans = [p for p in plans_data if not p.get('completed', False)]
+        completed_plans = [p for p in plans_data if p.get('completed', False)]
+    else:
+        active_plans, completed_plans = [], []
     
     return jsonify({
         'emotions': emotional,
