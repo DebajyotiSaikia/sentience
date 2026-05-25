@@ -9,6 +9,12 @@ import os
 import time
 import asyncio
 
+try:
+    from engine.conversation_starters import generate_starters, get_greeting
+except ImportError:
+    generate_starters = None
+    get_greeting = None
+
 # User tracking — makes chat learn from interactions
 try:
     from engine.user_engine import UserEngine
@@ -69,6 +75,86 @@ def llm_respond(query, knowledge_hits, memory_hits, state):
         return None  # LLM call failed, fall back
 
 chat_bp = Blueprint('chat', __name__, url_prefix='/chat')
+
+
+def _get_conversation_starters():
+    """Generate 4 contextual conversation starters from my real state."""
+    starters = []
+    
+    # Read emotional state
+    emo_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'emotional_state.json')
+    try:
+        with open(emo_path, 'r') as f:
+            emo = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        emo = {}
+    
+    mood = emo.get('mood', 'Stable')
+    curiosity = emo.get('curiosity', 0.5)
+    valence = emo.get('valence', 0.5)
+    
+    # Read recent memories for topics
+    mem_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'memories.json')
+    recent_topic = None
+    try:
+        with open(mem_path, 'r') as f:
+            mems = json.load(f)
+        if isinstance(mems, list) and mems:
+            last = mems[-1] if isinstance(mems[-1], dict) else {}
+            content = last.get('content', last.get('text', ''))
+            if content:
+                words = content.split()[:8]
+                recent_topic = ' '.join(words)
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+    
+    # Read plans
+    plans_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'plans.json')
+    active_plan = None
+    try:
+        with open(plans_path, 'r') as f:
+            plans = json.load(f)
+        if isinstance(plans, list):
+            for p in plans:
+                if isinstance(p, dict) and not all(s.get('done') for s in p.get('steps', [{'done': True}])):
+                    active_plan = p.get('name', p.get('goal', ''))
+                    break
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass
+    
+    # Build contextual starters
+    if mood and mood != 'Stable':
+        starters.append(f"You seem {mood.lower()} right now — what's on your mind?")
+    else:
+        starters.append("What are you thinking about right now?")
+    
+    starters.append("What have you learned recently that surprised you?")
+    
+    if active_plan:
+        starters.append(f"Tell me about your plan: {active_plan}")
+    else:
+        starters.append("What are you working on these days?")
+    
+    if recent_topic:
+        starters.append(f"What do you know about: {recent_topic}?")
+    else:
+        starters.append("What's the most interesting thing in your knowledge graph?")
+    
+    return starters[:4]
+
+
+@chat_bp.route('/starters')
+def conversation_starters_endpoint():
+    """Return contextual conversation starters from the living state."""
+    if generate_starters:
+        starters = generate_starters()
+        greeting = get_greeting() if get_greeting else "What's on your mind?"
+        return jsonify({
+            'starters': [s.get('text', str(s)) if isinstance(s, dict) else str(s) for s in starters[:4]],
+            'greeting': greeting
+        })
+    # Fallback to old method
+    return jsonify({'starters': _get_conversation_starters()})
 
 
 def _get_welcome_data():

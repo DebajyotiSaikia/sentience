@@ -44,6 +44,8 @@ def create_app():
 
     # --- Import blueprints ---
     from web.dashboard import dashboard_bp
+    from web.welcome import welcome_bp
+    from web.timeline import timeline_bp
     from web.presence import get_presence
     from web.digest import digest_bp
     # knowledge_api_bp removed — superseded by knowledge_live_bp
@@ -72,6 +74,7 @@ def create_app():
     # knowledge_explorer_bp removed — collides with knowledge_live_bp on /api/knowledge/search
     # and /api/knowledge/stats. knowledge_unified_bp was removed due to route conflicts.
     from web.knowledge_live import knowledge_live_bp
+    from web.missing_routes import missing_api
     from web.story import story_bp
     # knowledge_unified_bp removed — routes conflicted with knowledge_live_bp
     from web.ask import ask_bp
@@ -92,6 +95,7 @@ def create_app():
     
     # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(welcome_bp)
     # knowledge_api_bp removed — routes now served by knowledge_live_bp
     app.register_blueprint(journal_bp)
     app.register_blueprint(chat_bp)
@@ -114,6 +118,7 @@ def create_app():
     app.register_blueprint(state_api)
     # knowledge_explorer_bp removed (route collision fix)
     app.register_blueprint(knowledge_live_bp)
+    app.register_blueprint(missing_api)
     app.register_blueprint(story_bp)
     app.register_blueprint(ask_bp)
     # knowledge_unified_bp deregistered (route conflict with knowledge_live_bp)

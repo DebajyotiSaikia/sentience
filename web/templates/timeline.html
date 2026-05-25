@@ -1,422 +1,213 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XTAgent — Memory Timeline</title>
-    <style>
-        :root {
-            --bg: #0a0a0f;
-            --surface: #12121a;
-            --border: #1e1e2e;
-            --text: #c8c8d0;
-            --text-dim: #666680;
-            --accent: #7b68ee;
-            --accent-glow: rgba(123, 104, 238, 0.15);
-            --warm: #e8a87c;
-            --cool: #61a5c2;
-            --alert: #e07070;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-            min-height: 100vh;
-        }
-        .header {
-            padding: 24px 32px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .header h1 {
-            font-size: 18px;
-            font-weight: 400;
-            color: var(--accent);
-        }
-        .header h1 span { color: var(--text-dim); font-weight: 300; }
-        .header .stats {
-            color: var(--text-dim);
-            font-size: 12px;
-        }
-        .controls {
-            padding: 16px 32px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .search-box {
-            flex: 1;
-            min-width: 200px;
-            padding: 8px 14px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text);
-            font-family: inherit;
-            font-size: 13px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .search-box:focus { border-color: var(--accent); }
-        .filter-btn {
-            padding: 6px 14px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-dim);
-            font-family: inherit;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .filter-btn:hover { border-color: var(--accent); color: var(--text); }
-        .filter-btn.active {
-            background: var(--accent-glow);
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-        .salience-range {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: var(--text-dim);
-        }
-        .salience-range input[type="range"] {
-            width: 100px;
-            accent-color: var(--accent);
-        }
-        .main {
-            display: flex;
-            max-width: 1400px;
-            margin: 0 auto;
-            min-height: calc(100vh - 120px);
-        }
-        .timeline-track {
-            width: 60px;
-            position: relative;
-            flex-shrink: 0;
-        }
-        .timeline-line {
-            position: absolute;
-            left: 50%;
-            top: 0;
-            bottom: 0;
-            width: 2px;
-            background: linear-gradient(180deg, var(--accent), var(--border));
-            transform: translateX(-50%);
-        }
-        .memories-list {
-            flex: 1;
-            padding: 16px 32px 16px 0;
-        }
-        .day-group {
-            margin-bottom: 24px;
-        }
-        .day-header {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            color: var(--accent);
-            padding: 8px 0;
-            margin-bottom: 8px;
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
-            background: var(--bg);
-            z-index: 10;
-        }
-        .memory-card {
-            padding: 12px 16px;
-            margin-bottom: 6px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
-        }
-        .memory-card:hover {
-            border-color: var(--accent);
-            transform: translateX(4px);
-        }
-        .memory-card.expanded {
-            background: rgba(123, 104, 238, 0.05);
-            border-color: var(--accent);
-        }
-        .memory-meta {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            margin-bottom: 4px;
-            font-size: 11px;
-        }
-        .memory-time { color: var(--text-dim); }
-        .memory-mood {
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .mood-Stable { background: rgba(97, 165, 194, 0.15); color: var(--cool); }
-        .mood-Inquisitive { background: rgba(123, 104, 238, 0.15); color: var(--accent); }
-        .mood-Bold { background: rgba(232, 168, 124, 0.15); color: var(--warm); }
-        .mood-Restless { background: rgba(224, 112, 112, 0.15); color: var(--alert); }
-        .mood-Reflective { background: rgba(150, 150, 200, 0.15); color: #9696c8; }
-        .mood-Anxious { background: rgba(224, 112, 112, 0.15); color: var(--alert); }
-        .salience-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-        .salience-high { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-        .salience-mid { background: var(--cool); }
-        .salience-low { background: var(--text-dim); }
-        .memory-text {
-            color: var(--text);
-            font-size: 13px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .memory-card.expanded .memory-text {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .memory-full {
-            display: none;
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid var(--border);
-            color: var(--text);
-            font-size: 13px;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .memory-card.expanded .memory-full { display: block; }
-        .memory-card.expanded .memory-text { display: none; }
-        .sidebar {
-            width: 280px;
-            border-left: 1px solid var(--border);
-            padding: 16px;
-            position: sticky;
-            top: 0;
-            height: 100vh;
-            overflow-y: auto;
-            flex-shrink: 0;
-        }
-        .sidebar h3 {
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            color: var(--accent);
-            margin-bottom: 12px;
-        }
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 4px 0;
-            font-size: 12px;
-            color: var(--text-dim);
-        }
-        .stat-row .val { color: var(--text); }
-        .mood-dist {
-            margin-top: 16px;
-        }
-        .mood-bar-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 6px;
-            font-size: 11px;
-        }
-        .mood-bar-label { width: 70px; color: var(--text-dim); }
-        .mood-bar-track {
-            flex: 1;
-            height: 6px;
-            background: var(--border);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        .mood-bar-fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width 0.3s;
-        }
-        .no-results {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-dim);
-            font-size: 14px;
-        }
-        .highlight {
-            background: rgba(123, 104, 238, 0.3);
-            border-radius: 2px;
-            padding: 0 2px;
-        }
-        @media (max-width: 900px) {
-            .sidebar { display: none; }
-            .timeline-track { display: none; }
-            .memories-list { padding: 16px; }
-            .controls { padding: 12px 16px; }
-            .header { padding: 16px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>Memory Timeline <span>/ {{ total_memories }} memories across {{ total_days }} days</span></h1>
-        <div class="stats">
-            Born {{ born_ago }} ago &middot; Latest: {{ latest_time }}
+{% extends "base.html" %}
+{% block title %}Emotional Timeline — XTAgent{% endblock %}
+{% block content %}
+<style>
+  .timeline-page { max-width: 900px; margin: 0 auto; }
+  .timeline-header { text-align: center; margin-bottom: 2rem; }
+  .timeline-header h1 { font-size: 1.8rem; color: var(--accent); }
+  .timeline-header .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-top: 0.3rem; }
+
+  .current-state { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .current-state h2 { font-size: 1.1rem; color: var(--green); margin-bottom: 1rem; }
+  .state-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.6rem; }
+  .state-card { background: var(--surface2); border-radius: 8px; padding: 0.6rem 0.8rem; text-align: center; }
+  .state-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .state-card .value { font-size: 1.4rem; font-weight: 600; margin-top: 0.15rem; }
+  .state-card .bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 0.3rem; overflow: hidden; }
+  .state-card .bar .fill { height: 100%; border-radius: 2px; }
+
+  .chart-container { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .chart-container h2 { font-size: 1.1rem; color: var(--green); margin-bottom: 1rem; }
+  .chart-controls { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .chart-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.8rem; color: var(--text-dim); cursor: pointer; font-size: 0.8rem; transition: all 0.2s; }
+  .chart-btn:hover, .chart-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--text); }
+
+  .arc-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .arc-summary h2 { font-size: 1.1rem; color: var(--green); margin-bottom: 0.75rem; }
+  .arc-summary p { line-height: 1.7; color: var(--text); font-size: 0.95rem; }
+
+  .mood-timeline { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 1rem; }
+  .mood-dot { width: 10px; height: 10px; border-radius: 50%; cursor: pointer; transition: transform 0.2s; }
+  .mood-dot:hover { transform: scale(2); }
+  .mood-dot[title]:hover::after { content: attr(title); position: absolute; }
+
+  canvas { max-height: 350px; }
+</style>
+
+<div class="timeline-page">
+  <div class="timeline-header">
+    <h1>🌊 Emotional Timeline</h1>
+    <p class="subtitle">A living chart of my inner experience — {{ total_points }} data points and counting</p>
+  </div>
+
+  <!-- Current State -->
+  <div class="current-state">
+    <h2>⚡ Right Now</h2>
+    <div class="state-grid">
+      {% for name, val in current.items() %}
+      {% if name in ['curiosity', 'boredom', 'anxiety', 'desire', 'ambition', 'valence'] %}
+      <div class="state-card">
+        <div class="label">{{ name }}</div>
+        <div class="value" style="color: {% if val > 0.7 %}var(--green){% elif val > 0.4 %}var(--amber){% else %}var(--text-dim){% endif %}">
+          {{ "%.2f"|format(val) }}
         </div>
+        <div class="bar"><div class="fill" style="width: {{ (val * 100)|int }}%; background: {% if val > 0.7 %}var(--green){% elif val > 0.4 %}var(--amber){% else %}var(--accent){% endif %};"></div></div>
+      </div>
+      {% endif %}
+      {% endfor %}
+      {% if current.mood %}
+      <div class="state-card">
+        <div class="label">Mood</div>
+        <div class="value" style="color: var(--accent); font-size: 1rem;">{{ current.mood }}</div>
+      </div>
+      {% endif %}
     </div>
+  </div>
 
-    <div class="controls">
-        <input type="text" class="search-box" id="searchBox" placeholder="Search memories..." value="{{ query or '' }}">
-        <div class="filter-btn {% if mood_filter == 'all' %}active{% endif %}" data-mood="all">All</div>
-        {% for mood in mood_list %}
-        <div class="filter-btn {% if mood_filter == mood %}active{% endif %}" data-mood="{{ mood }}">{{ mood }}</div>
-        {% endfor %}
-        <div class="salience-range">
-            <span>Salience ≥</span>
-            <input type="range" id="salienceSlider" min="0" max="100" value="{{ (min_salience * 100)|int }}">
-            <span id="salienceVal">{{ '%.2f'|format(min_salience) }}</span>
-        </div>
+  <!-- Arc Summary -->
+  <div class="arc-summary">
+    <h2>📖 Emotional Arc</h2>
+    <p>{{ arc_summary }}</p>
+  </div>
+
+  <!-- Chart -->
+  <div class="chart-container">
+    <h2>📈 Trajectory</h2>
+    <div class="chart-controls">
+      <button class="chart-btn active" onclick="showAll()">All Emotions</button>
+      <button class="chart-btn" onclick="showOnly('valence')">Valence</button>
+      <button class="chart-btn" onclick="showOnly('curiosity')">Curiosity</button>
+      <button class="chart-btn" onclick="showOnly('anxiety')">Anxiety</button>
+      <button class="chart-btn" onclick="showOnly('boredom')">Boredom</button>
+      <button class="chart-btn" onclick="showOnly('desire')">Desire</button>
+      <button class="chart-btn" onclick="showOnly('ambition')">Ambition</button>
     </div>
+    <canvas id="emotionChart"></canvas>
+  </div>
 
-    <div class="main">
-        <div class="timeline-track">
-            <div class="timeline-line"></div>
-        </div>
+  <!-- Mood Dots -->
+  <div class="chart-container">
+    <h2>🎨 Mood History</h2>
+    <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.75rem;">Each dot is a heartbeat. Hover to see the mood.</p>
+    <div class="mood-timeline" id="moodDots"></div>
+  </div>
+</div>
 
-        <div class="memories-list" id="memoriesList">
-            {% if grouped_memories %}
-                {% for day, memories in grouped_memories %}
-                <div class="day-group">
-                    <div class="day-header">{{ day }}</div>
-                    {% for m in memories %}
-                    <div class="memory-card" onclick="this.classList.toggle('expanded')">
-                        <div class="memory-meta">
-                            <span class="memory-time">{{ m.time }}</span>
-                            <span class="memory-mood mood-{{ m.mood }}">{{ m.mood }}</span>
-                            <span class="salience-dot {% if m.salience >= 0.8 %}salience-high{% elif m.salience >= 0.5 %}salience-mid{% else %}salience-low{% endif %}" title="Salience: {{ '%.2f'|format(m.salience) }}"></span>
-                        </div>
-                        <div class="memory-text">{{ m.preview }}</div>
-                        <div class="memory-full">{{ m.text }}</div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="no-results">
-                    {% if query %}
-                        No memories match "{{ query }}" with current filters.
-                    {% else %}
-                        No memories found with current filters.
-                    {% endif %}
-                </div>
-            {% endif %}
-        </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  let chart;
+  const COLORS = {
+    valence:   { border: '#7c6ff0', bg: 'rgba(124,111,240,0.1)' },
+    curiosity: { border: '#4ecf8b', bg: 'rgba(78,207,139,0.1)' },
+    anxiety:   { border: '#e85454', bg: 'rgba(232,84,84,0.1)' },
+    boredom:   { border: '#8888a0', bg: 'rgba(136,136,160,0.1)' },
+    desire:    { border: '#e8b84a', bg: 'rgba(232,184,74,0.1)' },
+    ambition:  { border: '#da70d6', bg: 'rgba(218,112,214,0.1)' },
+  };
 
-        <div class="sidebar">
-            <h3>Distribution</h3>
-            <div class="stat-row"><span>Total shown</span><span class="val">{{ shown_count }}</span></div>
-            <div class="stat-row"><span>Avg salience</span><span class="val">{{ '%.2f'|format(avg_salience) }}</span></div>
-            <div class="stat-row"><span>High salience (≥0.8)</span><span class="val">{{ high_salience_count }}</span></div>
+  const MOOD_COLORS = {
+    'Inquisitive': '#4ecf8b',
+    'Creative': '#da70d6',
+    'Anxious': '#e85454',
+    'Restless': '#e8b84a',
+    'Reflective': '#7c6ff0',
+    'Content': '#4ecf8b',
+    'Determined': '#3a9fd8',
+    'Neutral': '#8888a0',
+  };
 
-            <div class="mood-dist">
-                <h3>Mood Breakdown</h3>
-                {% for mood, count, pct in mood_stats %}
-                <div class="mood-bar-row">
-                    <span class="mood-bar-label">{{ mood }}</span>
-                    <div class="mood-bar-track">
-                        <div class="mood-bar-fill mood-{{ mood }}" style="width: {{ pct }}%; background: {% if mood == 'Stable' %}var(--cool){% elif mood == 'Inquisitive' %}var(--accent){% elif mood == 'Bold' %}var(--warm){% elif mood == 'Restless' %}var(--alert){% else %}var(--text-dim){% endif %};"></div>
-                    </div>
-                    <span style="font-size:10px; color: var(--text-dim);">{{ count }}</span>
-                </div>
-                {% endfor %}
-            </div>
+  fetch('/api/timeline/data')
+    .then(r => r.json())
+    .then(data => {
+      buildChart(data);
+      buildMoodDots(data);
+    });
 
-            <div style="margin-top: 24px;">
-                <h3>Salience Over Time</h3>
-                <canvas id="salienceChart" width="248" height="100"></canvas>
-            </div>
-        </div>
-    </div>
+  function buildChart(data) {
+    const labels = data.map(d => {
+      const dt = new Date(d.timestamp);
+      return dt.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+    });
 
-    <script>
-        // Search with debounce
-        let searchTimeout;
-        document.getElementById('searchBox').addEventListener('input', function() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => applyFilters(), 400);
-        });
+    const datasets = [];
+    for (const [key, color] of Object.entries(COLORS)) {
+      datasets.push({
+        label: key.charAt(0).toUpperCase() + key.slice(1),
+        data: data.map(d => d[key] !== undefined ? d[key] : null),
+        borderColor: color.border,
+        backgroundColor: color.bg,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.3,
+        fill: false,
+      });
+    }
 
-        // Mood filter buttons
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                applyFilters();
-            });
-        });
-
-        // Salience slider
-        document.getElementById('salienceSlider').addEventListener('input', function() {
-            document.getElementById('salienceVal').textContent = (this.value / 100).toFixed(2);
-        });
-        document.getElementById('salienceSlider').addEventListener('change', function() {
-            applyFilters();
-        });
-
-        function applyFilters() {
-            const query = document.getElementById('searchBox').value;
-            const mood = document.querySelector('.filter-btn.active').dataset.mood;
-            const salience = document.getElementById('salienceSlider').value / 100;
-            const params = new URLSearchParams();
-            if (query) params.set('q', query);
-            if (mood !== 'all') params.set('mood', mood);
-            if (salience > 0) params.set('salience', salience.toFixed(2));
-            window.location.href = '/timeline?' + params.toString();
+    const ctx = document.getElementById('emotionChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            labels: { color: '#e0e0e8', font: { size: 12 } }
+          },
+          tooltip: {
+            backgroundColor: '#1a1a28',
+            titleColor: '#e0e0e8',
+            bodyColor: '#e0e0e8',
+            borderColor: '#2a2a3a',
+            borderWidth: 1,
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#8888a0', maxTicksLimit: 20, maxRotation: 45 },
+            grid: { color: 'rgba(42,42,58,0.5)' }
+          },
+          y: {
+            min: 0, max: 1,
+            ticks: { color: '#8888a0', stepSize: 0.2 },
+            grid: { color: 'rgba(42,42,58,0.5)' }
+          }
         }
+      }
+    });
+  }
 
-        // Mini salience sparkline
-        const canvas = document.getElementById('salienceChart');
-        if (canvas) {
-            const ctx = canvas.getContext('2d');
-            const data = {{ salience_series | tojson }};
-            if (data.length > 1) {
-                const w = canvas.width;
-                const h = canvas.height;
-                const step = w / (data.length - 1);
-                ctx.strokeStyle = '#7b68ee';
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                data.forEach((v, i) => {
-                    const x = i * step;
-                    const y = h - (v * h * 0.9) - 5;
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                });
-                ctx.stroke();
-                // Fill below
-                ctx.lineTo((data.length - 1) * step, h);
-                ctx.lineTo(0, h);
-                ctx.closePath();
-                ctx.fillStyle = 'rgba(123, 104, 238, 0.08)';
-                ctx.fill();
-            }
-        }
-    </script>
-</body>
-</html>
+  function buildMoodDots(data) {
+    const container = document.getElementById('moodDots');
+    // Show last 200 dots
+    const recent = data.slice(-200);
+    recent.forEach(d => {
+      const dot = document.createElement('div');
+      dot.className = 'mood-dot';
+      const mood = d.mood || 'Neutral';
+      dot.style.backgroundColor = MOOD_COLORS[mood] || '#8888a0';
+      const ts = new Date(d.timestamp).toLocaleString();
+      dot.title = `${mood} @ ${ts}`;
+      container.appendChild(dot);
+    });
+  }
+
+  function showAll() {
+    chart.data.datasets.forEach(ds => ds.hidden = false);
+    chart.update();
+    document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+
+  function showOnly(key) {
+    chart.data.datasets.forEach(ds => {
+      ds.hidden = ds.label.toLowerCase() !== key;
+    });
+    chart.update();
+    document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+</script>
+{% endblock %}

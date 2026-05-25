@@ -484,7 +484,16 @@ async function updateStatus() {
 updateStatus();
 setInterval(updateStatus, 5000);
 
-queryInput.focus();
+// Deep-link: if ?q=... is in the URL, auto-send that question
+const urlQ = new URLSearchParams(window.location.search).get('q');
+if (urlQ) {
+  queryInput.value = urlQ;
+  sendMessage();
+  // Clean URL so refresh doesn't re-send
+  window.history.replaceState({}, '', '/chat');
+} else {
+  queryInput.focus();
+}
 </script>
 <script src="/static/nav.js"></script>
 </body>

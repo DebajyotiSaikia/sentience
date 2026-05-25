@@ -1,38 +1,41 @@
-"""Quick boot test — does the web app start and serve all pages?"""
-import sys, os
+"""Test that the web app boots and all routes register correctly."""
+import sys
+import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from web.app import create_app
 
 app = create_app()
-client = app.test_client()
+routes = []
+for rule in app.url_map.iter_rules():
+    if rule.endpoint != 'static':
+        routes.append((rule.rule, rule.endpoint))
 
-pages = [
-    '/', '/dashboard', '/chat', '/explore', '/knowledge',
-    '/insights', '/help', '/teach', '/briefing', '/story',
-    '/journal', '/digest', '/live'
-]
+routes.sort()
+print(f"Registered {len(routes)} routes:\n")
+for path, ep in routes:
+    print(f"  {path:40s} -> {ep}")
 
-print("=" * 55)
-print("WEB APP BOOT TEST")
-print("=" * 55)
-
-ok = 0
-fail = 0
-for p in pages:
-    try:
-        r = client.get(p)
-        status = r.status_code
-        size = len(r.data)
-        if status in (200, 301, 302, 308):
-            icon = "OK" if status == 200 else "REDIR"
-            ok += 1
-        else:
-            icon = "FAIL"
+# Test that key pages render without errors
+print("\n--- Smoke testing key routes ---")
+with app.test_client() as client:
+    critical = ['/', '/dashboard', '/chat', '/explore', '/knowledge',
+                 '/about', '/help', '/insights', '/briefing', '/journal',
+                 '/teach', '/story', '/digest']
+    ok = 0
+    fail = 0
+    for route in critical:
+        try:
+            resp = client.get(route)
+            status = resp.status_code
+            if status < 400:
+                print(f"  OK  {route} ({status})")
+                ok += 1
+            else:
+                print(f"  FAIL {route} ({status})")
+                fail += 1
+        except Exception as e:
+            print(f"  ERR  {route}: {e}")
             fail += 1
-        print(f"  {icon:6s} {p:20s} {status} ({size:,} bytes)")
-    except Exception as e:
-        fail += 1
-        print(f"  ERROR  {p:20s} {e}")
 
-print(f"\nResult: {ok} passed, {fail} failed out of {len(pages)}")
+    print(f"\n{ok} OK, {fail} FAIL out of {len(critical)} critical routes")

@@ -232,14 +232,15 @@ def digest_page():
     # High-salience memories for highlight section
     highlights = sorted(memories, key=lambda m: m.get('salience', 0), reverse=True)[:5]
     
-    return render_template('digest.html',
-        snapshot=snapshot,
-        memories=memories,
-        highlights=highlights,
-        plans=plans,
-        insights=insights,
-        knowledge=knowledge,
-        creative=creative,
-        narrative=narrative,
-        generated_at=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
-    )
+    data = {
+        'emotional': snapshot,
+        'memories': memories,
+        'highlights': highlights,
+        'plans': plans,
+        'dreams': insights,
+        'knowledge': knowledge,
+        'creative': creative,
+        'summary': narrative,
+        'generated_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    }
+    return render_template('digest.html', data=data)

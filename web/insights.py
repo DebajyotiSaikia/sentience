@@ -152,7 +152,16 @@ def get_all_insights(limit=200):
 @insights_bp.route('/insights')
 def insights_page():
     """Render the Insights Feed page."""
-    return render_template('insights.html')
+    dreams = _get_dream_insights()
+    wisdom = _get_wisdom_rules()
+    narratives = _get_narrative_moments()
+    stats = {
+        'total': len(dreams) + len(wisdom) + len(narratives),
+        'dreams': len(dreams),
+        'wisdom': len(wisdom),
+        'narratives': len(narratives),
+    }
+    return render_template('insights.html', stats=stats)
 
 
 @insights_bp.route('/api/insights')
