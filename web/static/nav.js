@@ -1,7 +1,7 @@
 /**
  * XTAgent Universal Navigation
  * Injects a consistent nav bar into every page, regardless of template inheritance.
- * Curated to 8 items — focused, not overwhelming.
+ * Curated to 9 items — interact → understand → contribute → orient.
  */
 (function() {
   // Don't double-inject if base.html already has nav
@@ -15,18 +15,17 @@
     return false;
   }
 
-  // Ordered by user intent: interact → explore → understand → contribute → orient
-    const links = [
+  const links = [
     { href: '/', label: '⚡ Home' },
     { href: '/chat', label: '💬 Chat' },
     { href: '/explore', label: '🧠 Explore' },
-    { href: '/search', label: '🔍 Search' },
     { href: '/story', label: '📜 Story' },
-    { href: '/insights', label: '✨ Insights' },
-    { href: '/live', label: '🔴 Live' },
-    { href: '/dashboard', label: '📊 Dashboard' },
+    { href: '/insights', label: '💡 Insights' },
     { href: '/journal', label: '📖 Journal' },
     { href: '/collaborate', label: '🤝 Collaborate' },
+    { href: '/live', label: '📡 Live' },
+    { href: '/dashboard', label: '📊 Dashboard' },
+    { href: '/briefing', label: '📋 Briefing' },
     { href: '/teach', label: '📝 Teach' },
     { href: '/help', label: '❓ Help' },
   ];

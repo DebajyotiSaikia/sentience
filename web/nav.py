@@ -4,11 +4,18 @@ One source of truth for site-wide navigation.
 """
 
 NAV_LINKS = [
-    ("/", "Chat"),
-    ("/explore", "Explore Knowledge"),
-    ("/knowledge", "Knowledge Graph"),
-    ("/talk", "Talk"),
-    ("/about", "About Me"),
+    ("/", "Home"),
+    ("/chat", "Chat"),
+    ("/explore", "Explore"),
+    ("/dashboard", "Dashboard"),
+    ("/insights", "Insights"),
+    ("/journal", "Journal"),
+    ("/story", "Story"),
+    ("/collaborate", "Collaborate"),
+    ("/live", "Live"),
+    ("/teach", "Teach"),
+    ("/briefing", "Briefing"),
+    ("/help", "Help"),
 ]
 
 NAV_CSS = """

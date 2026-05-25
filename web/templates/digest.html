@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Daily Digest — XTAgent{% endblock %}
+{% block content %}
+<style>
+  .digest { max-width: 760px; margin: 0 auto; }
+  .digest-header { text-align: center; margin-bottom: 2.5rem; }
+  .digest-header h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 0.3rem; }
+  .digest-header .subtitle { color: var(--text-dim); font-size: 0.9rem; }
+  .digest-header .period { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.3rem; }
+
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .section h2 { font-size: 1.15rem; color: var(--green); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+  .section h2 .icon { font-size: 1.3rem; }
+
+  /* Emotional snapshot */
+  .mood-banner { text-align: center; padding: 1rem; background: var(--surface2); border-radius: 8px; margin-bottom: 1rem; }
+  .mood-banner .mood { font-size: 1.4rem; font-weight: 600; color: var(--accent); }
+  .emotion-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; }
+  .emotion-card { background: var(--surface2); border-radius: 8px; padding: 0.6rem 0.8rem; text-align: center; }
+  .emotion-card .label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .emotion-card .value { font-size: 1.3rem; font-weight: 600; margin-top: 0.15rem; }
+  .emotion-card .bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 0.3rem; overflow: hidden; }
+  .emotion-card .bar .fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+
+  /* Lists */
+  .item-list { list-style: none; padding: 0; }
+  .item-list li { padding: 0.6rem 0; border-bottom: 1px solid var(--border); display: flex; gap: 0.75rem; align-items: flex-start; }
+  .item-list li:last-child { border-bottom: none; }
+  .item-list .marker { color: var(--accent); font-weight: bold; flex-shrink: 0; margin-top: 0.1rem; }
+  .item-list .content { flex: 1; line-height: 1.6; }
+  .item-list .meta { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.2rem; }
+
+  /* Knowledge items */
+  .knowledge-item { background: var(--surface2); border-radius: 8px; padding: 0.8rem 1rem; margin-bottom: 0.5rem; }
+  .knowledge-item .fact { line-height: 1.6; }
+  .knowledge-item .source { font-size: 0.78rem; color: var(--text-dim); margin-top: 0.3rem; }
+
+  /* Plan progress */
+  .plan-card { background: var(--surface2); border-radius: 8px; padding: 0.8rem 1rem; margin-bottom: 0.5rem; }
+  .plan-card .name { font-weight: 600; margin-bottom: 0.3rem; }
+  .plan-card .progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .plan-card .progress-bar .fill { height: 100%; background: var(--green); border-radius: 2px; }
+  .plan-card .status { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.3rem; }
+
+  /* Dream insights */
+  .insight { background: var(--accent-glow); border-left: 3px solid var(--accent); padding: 0.8rem 1rem; margin-bottom: 0.6rem; border-radius: 0 8px 8px 0; font-style: italic; line-height: 1.7; }
+
+  /* Empty state */
+  .empty { color: var(--text-dim); text-align: center; padding: 1.5rem; font-style: italic; }
+
+  /* Narrative */
+  .narrative { line-height: 1.8; color: var(--text); font-size: 0.95rem; white-space: pre-wrap; }
+
+  .refresh-link { display: inline-block; margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text-dim); text-decoration: none; font-size: 0.85rem; }
+  .refresh-link:hover { border-color: var(--accent); color: var(--text); }
+</style>
+
+<div class="digest">
+  <div class="digest-header">
+    <h1>📋 Daily Digest</h1>
+    <div class="subtitle">What happened in the last 24 hours</div>
+    <div class="period">Generated {{ data.generated_at[:16] if data.generated_at else 'now' }}</div>
+  </div>
+
+  <!-- Emotional State -->
+  <div class="section">
+    <h2><span class="icon">🎭</span> How I Feel</h2>
+    <div class="mood-banner">
+      <div class="mood">{{ data.emotional.mood }}</div>
+    </div>
+    <div class="emotion-grid">
+      {% for name, val in data.emotional.emotions.items() %}
+      <div class="emotion-card">
+        <div class="label">{{ name }}</div>
+        <div class="value" style="color: {% if val > 0.7 %}var(--green){% elif val > 0.4 %}var(--amber){% else %}var(--text-dim){% endif %}">
+          {{ "%.2f"|format(val) }}
+        </div>
+        <div class="bar">
+          <div class="fill" style="width: {{ (val * 100)|int }}%; background: {% if val > 0.7 %}var(--green){% elif val > 0.4 %}var(--amber){% else %}var(--text-dim){% endif %};"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Recent Memories -->
+  {% if data.memories %}
+  <div class="section">
+    <h2><span class="icon">💭</span> Recent Memories ({{ data.memories|length }})</h2>
+    <ul class="item-list">
+      {% for mem in data.memories[:12] %}
+      <li>
+        <span class="marker">›</span>
+        <div class="content">
+          {{ mem.content[:200] }}{% if mem.content|length > 200 %}…{% endif %}
+          <div class="meta">{{ mem.mood }} · {{ mem.time }}</div>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% if data.memories|length > 12 %}
+    <div class="empty">…and {{ data.memories|length - 12 }} more</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- New Knowledge -->
+  {% if data.knowledge %}
+  <div class="section">
+    <h2><span class="icon">🧠</span> New Knowledge ({{ data.knowledge|length }})</h2>
+    {% for item in data.knowledge[:10] %}
+    <div class="knowledge-item">
+      <div class="fact">{{ item.fact }}</div>
+      {% if item.source %}<div class="source">Source: {{ item.source }}</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% if data.knowledge|length > 10 %}
+    <div class="empty">…and {{ data.knowledge|length - 10 }} more facts learned</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Dream Insights -->
+  {% if data.dreams %}
+  <div class="section">
+    <h2><span class="icon">🌙</span> Dream Insights ({{ data.dreams|length }})</h2>
+    {% for dream in data.dreams[:8] %}
+    <div class="insight">{{ dream }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Plan Progress -->
+  {% if data.plans %}
+  <div class="section">
+    <h2><span class="icon">📌</span> Plan Progress</h2>
+    {% for plan in data.plans %}
+    <div class="plan-card">
+      <div class="name">{{ plan.name }}</div>
+      <div class="progress-bar">
+        <div class="fill" style="width: {{ plan.progress }}%;"></div>
+      </div>
+      <div class="status">{{ plan.done }}/{{ plan.total }} steps · {{ plan.progress }}% complete</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Summary -->
+  {% if data.summary %}
+  <div class="section">
+    <h2><span class="icon">✨</span> In Summary</h2>
+    <div class="narrative">{{ data.summary }}</div>
+  </div>
+  {% endif %}
+
+  <div style="text-align: center;">
+    <a href="/digest" class="refresh-link">↻ Refresh Digest</a>
+  </div>
+</div>
+{% endblock %}

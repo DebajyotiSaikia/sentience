@@ -26,6 +26,7 @@ def create_app():
     
     # --- Import blueprints ---
     from web.dashboard import dashboard_bp
+    from web.digest import digest_bp
     # knowledge_api_bp removed — superseded by knowledge_live_bp
     from web.journal import journal_bp
     # api_bp removed — routes duplicated by search_bp, state_api, knowledge_live_bp
@@ -113,6 +114,7 @@ def create_app():
     app.register_blueprint(teach_bp)
     app.register_blueprint(help_bp)
     app.register_blueprint(wisdom_bp)
+    app.register_blueprint(digest_bp)
     # knowledge_search_bp registration removed — use knowledge_live_bp instead
     
     # Root route — the living portal

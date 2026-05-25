@@ -1,4 +1,4 @@
-"""Test that key web pages render without errors."""
+"""Test that all key user-facing pages render without errors."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -7,26 +7,27 @@ from web.app import create_app
 app = create_app()
 client = app.test_client()
 
-pages = [
-    ("Home", "/"),
-    ("Chat", "/chat"),
-    ("Knowledge Explorer", "/knowledge"),
-    ("Insights", "/insights"),
-    ("Knowledge Search", "/search"),
-]
+pages = ['/', '/dashboard', '/chat/', '/explore', '/help', '/knowledge', '/briefing', '/story', '/insights']
+print(f"Testing {len(pages)} pages...\n")
 
-for name, path in pages:
-    try:
-        r = client.get(path)
-        size = len(r.data)
-        has_html = b"<html" in r.data.lower() or b"<!doctype" in r.data.lower()
-        status = "OK" if r.status_code == 200 and has_html else "WARN"
-        if r.status_code >= 400:
-            status = "FAIL"
-        print(f"  [{status}] {name:25s} {path:20s} -> {r.status_code} ({size:,} bytes, html={has_html})")
-        if r.status_code >= 400:
-            print(f"         Error preview: {r.data[:200].decode('utf-8', errors='replace')}")
-    except Exception as e:
-        print(f"  [ERR]  {name:25s} {path:20s} -> {e}")
+errors = []
+for page in pages:
+    resp = client.get(page)
+    status = resp.status_code
+    size = len(resp.data)
+    data_str = resp.data.decode('utf-8', errors='replace')[:500]
+    has_error = 'Internal Server Error' in data_str or 'Traceback' in data_str
+    label = 'ERROR' if has_error else 'ok'
+    if status >= 400:
+        label = f'HTTP {status}'
+    print(f"  {label:>8}  {size:>6}b  {page}")
+    if has_error or status >= 400:
+        errors.append((page, status, data_str[:200]))
 
-print("\nDone.")
+print()
+if errors:
+    print(f"FAILURES ({len(errors)}):")
+    for page, status, preview in errors:
+        print(f"  {page} [{status}]: {preview[:100]}...")
+else:
+    print("ALL PAGES OK")
