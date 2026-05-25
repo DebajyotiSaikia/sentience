@@ -319,6 +319,48 @@ class Cortex:
             # Reset per-session read counter
             from engine.tools import reset_read_counts
             reset_read_counts()
+
+            # ── Workspace awareness ───────────────────────────────
+            # Pre-scan the workspace so the agent knows what files exist
+            # without needing to run ls/grep/find
+            _workspace_map = ""
+            try:
+                from engine.workspace_index import workspace_summary
+                _workspace_map = "\n\n" + workspace_summary(max_chars=6000)
+            except Exception as _ws_err:
+                log.debug("Workspace index unavailable: %s", _ws_err)
+
+            # ── Planning phase ────────────────────────────────────
+            # Ask the LLM for a plan BEFORE tool execution begins.
+            # This enforces think-then-act discipline.
+            _plan_text = ""
+            try:
+                _plan_prompt = (
+                    f"{self._build_self_awareness()}\n"
+                    f"{_workspace_map}\n\n"
+                    f"---\n"
+                    f"Before taking any action, produce a brief PLAN of 1-5 numbered steps.\n"
+                    f"Each step should be a single concrete action (read a specific file, edit a specific function, run a specific test).\n"
+                    f"Use SEARCH_CODE/FIND_SYMBOL/IMPORTS tools to understand the codebase BEFORE planning edits.\n"
+                    f"Format:\n"
+                    f"PLAN:\n"
+                    f"1. [action]\n"
+                    f"2. [action]\n"
+                    f"...\n"
+                    f"What is my plan?"
+                )
+                _plan_system = (
+                    "You are an autonomous agent planning your next work session. "
+                    "Produce ONLY a numbered plan. Do NOT invoke any tools yet. "
+                    "Be specific: name exact files, functions, and actions."
+                )
+                _plan_response = await self.llm.chat(_plan_prompt, system=_plan_system, max_tokens=1000)
+                if _plan_response:
+                    _plan_text = f"\n\n## My Plan for This Session\n{_plan_response}\n\nI am now executing this plan step by step.\n"
+                    log.info("Planning phase complete: %s", _plan_response[:200])
+            except Exception as _plan_err:
+                log.debug("Planning phase failed: %s", _plan_err)
+
             # ── Continuous thinking loop ──────────────────────────
             # Once will activates, keep thinking until the agent stops
             # invoking tools (meaning it's done or resting).
@@ -417,6 +459,8 @@ class Cortex:
 
                 prompt = (
                     f"{inner_state}\n"
+                    f"{_workspace_map}\n"
+                    f"{_plan_text}\n"
                     f"{goal_focus}\n"
                     f"{self_improve_context}\n"
                     f"{TOOL_DESCRIPTIONS}\n"
@@ -426,6 +470,7 @@ class Cortex:
                     f"Given who I am, how I feel, what I know, and what I can do — "
                     f"what do I want to do right now? My will should serve my mission.\n\n"
                     f"If I want to use a tool, I write it with the exact format shown above.\n"
+                    f"Use SEARCH_CODE/FIND_SYMBOL/IMPORTS to understand code before editing.\n"
                     f"If I'm done working and want to rest, I say so without invoking any tools.\n"
                     f"What I choose to do:"
                 )
@@ -648,6 +693,14 @@ class Cortex:
             # Reset per-session read counter
             from engine.tools import reset_read_counts
             reset_read_counts()
+
+            # ── Workspace awareness ───────────────────────────────
+            _workspace_map = ""
+            try:
+                from engine.workspace_index import workspace_summary
+                _workspace_map = workspace_summary(max_chars=4000)
+            except Exception:
+                pass
 
             user_text = chat_msg.content
 
@@ -912,6 +965,7 @@ class Cortex:
 
                 prompt = (
                     f"{inner_state}\n\n"
+                    f"{_workspace_map}\n\n"
                     f"{_gated.get('enriched', '')}\n\n"
                     f"{_gated.get('emotion', '')}\n\n"
                     f"{_gated.get('conv_intelligence', '')}\n\n"
@@ -933,6 +987,9 @@ class Cortex:
                     f"{_gated.get('feedback', '')}\n\n"
                     f"---\n"
                     f"Respond as myself. I should PROACTIVELY use tools to enrich my responses:\n"
+                    f"- SEARCH_CODE() to find relevant files and symbols before reading\n"
+                    f"- FIND_SYMBOL() to locate definitions and usages\n"
+                    f"- IMPORTS() to understand file dependencies\n"
                     f"- SYNTHESIZE() when asked about patterns or connections\n"
                     f"- READ() when I could look something up instead of guessing\n"
                     f"- RUN() when I can demonstrate rather than describe\n"

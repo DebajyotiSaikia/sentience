@@ -1571,6 +1571,20 @@ Changed curiosity decay from 0.02/s toward zero to 0.005/s toward baseline 0.20.
 Reason: deep thinking produces no file changes, so curiosity was draining during
 the exact activity it should reward. Tested in simulation first.
 >>> END_CHECKPOINT
+
+>>> SEARCH_CODE(query)
+Search the entire workspace for files, symbols (classes, functions), and content.
+Much faster than RUN(grep ...) — uses a pre-built index.
+Example: >>> SEARCH_CODE(knowledge_bp)
+
+>>> FIND_SYMBOL(name)
+Find where a class, function, or variable is defined and used across the workspace.
+Shows definitions and first usage per file.
+Example: >>> FIND_SYMBOL(ChatSystem)
+
+>>> IMPORTS(path)
+Show what a file imports and what other files import it. Reveals dependencies.
+Example: >>> IMPORTS(engine/cortex.py)
 """
 
 
@@ -1652,6 +1666,15 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
             result = web_tool(args or "help")
         elif tool_name == "CHECKPOINT":
             result = checkpoint_cmd(args, body)
+        elif tool_name == "SEARCH_CODE":
+            from engine.workspace_index import search_code
+            result = search_code(args or "")
+        elif tool_name == "FIND_SYMBOL":
+            from engine.workspace_index import find_symbol
+            result = find_symbol(args or "")
+        elif tool_name == "IMPORTS":
+            from engine.workspace_index import get_imports
+            result = get_imports(args or "")
         elif tool_name == "DREAM":
             result = "[DREAM_REQUESTED]"
         elif tool_name == "RESTART":
