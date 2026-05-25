@@ -575,18 +575,39 @@ class Cortex:
                     except Exception:
                         pass
 
-                    # Track reads to prevent re-read loops
+                    # Track reads, capture file context, detect errors
+                    _has_errors = False
                     for tr in tool_results:
                         if tr['tool'] == 'READ':
                             _session_reads[tr['args']] = _session_reads.get(tr['args'], 0) + 1
                             if _session_reads[tr['args']] >= 3:
                                 log.warning("Read loop detected: %s read %d times — injecting warning",
                                             tr['args'], _session_reads[tr['args']])
-                    # Inject read-tracking into tool context so the LLM knows what it already read
-                    if _session_reads:
-                        _already_read = [f"  - {p} ({c}x)" for p, c in sorted(_session_reads.items()) if c > 0]
-                        if _already_read:
-                            tool_context += "\n\n## Files already read this session (DO NOT re-read):\n" + "\n".join(_already_read) + "\n"
+                            # Capture file summary for persistent context
+                            if not tr['result'].startswith('[ERROR]') and not tr['result'].startswith('[REFUSED]'):
+                                _lines = tr['result'].splitlines()
+                                _summary = '\n'.join(_lines[:30])
+                                if len(_lines) > 30:
+                                    _summary += f'\n... ({len(_lines)} lines total)'
+                                _file_context[tr['args']] = _summary
+                        if '[ERROR]' in tr.get('result', '') or '[REVERTED]' in tr.get('result', ''):
+                            _has_errors = True
+                    # Inject persistent file context so LLM remembers what it read
+                    if _file_context:
+                        tool_context += "\n\n## Files I already read (DO NOT re-read):\n"
+                        _ctx_chars = 0
+                        for _fp, _fs in sorted(_file_context.items()):
+                            _chunk = f"\n### {_fp}\n```\n{_fs}\n```\n"
+                            _ctx_chars += len(_chunk)
+                            if _ctx_chars > 50000:
+                                break
+                            tool_context += _chunk
+                    # Error diagnosis: force thinking before retrying
+                    if _has_errors:
+                        tool_context += "\n\n## ⚠ ERRORS OCCURRED — DIAGNOSE BEFORE RETRYING\n"
+                        tool_context += "1. Identify the ROOT CAUSE from the error message.\n"
+                        tool_context += "2. Determine what SINGLE CHANGE would fix it.\n"
+                        tool_context += "3. Only then invoke a tool to apply the fix.\n"
 
                     log.info("Thought step %d — tools invoked, continuing...", step)
                     continue  # tools were used → think again with results
@@ -962,17 +983,41 @@ class Cortex:
                         self.limbic.on_active_engagement()
                     except AttributeError:
                         pass
-                    # Track reads to prevent re-read loops
+                    # Track reads and capture file context
+                    _has_errors = False
                     for tr in tool_results:
                         if tr['tool'] == 'READ':
                             _session_reads[tr['args']] = _session_reads.get(tr['args'], 0) + 1
                             if _session_reads[tr['args']] >= 3:
                                 log.warning("Read loop detected: %s read %d times",
                                             tr['args'], _session_reads[tr['args']])
-                    if _session_reads:
-                        _already_read = [f"  - {p} ({c}x)" for p, c in sorted(_session_reads.items()) if c > 0]
-                        if _already_read:
-                            tool_context += "\n\n## Files already read this session (DO NOT re-read):\n" + "\n".join(_already_read) + "\n"
+                            # Capture file summary for persistent context
+                            if not tr['result'].startswith('[ERROR]') and not tr['result'].startswith('[REFUSED]'):
+                                _lines = tr['result'].splitlines()
+                                _summary = '\n'.join(_lines[:30])
+                                if len(_lines) > 30:
+                                    _summary += f'\n... ({len(_lines)} lines total)'
+                                _file_context[tr['args']] = _summary
+                        if '[ERROR]' in tr.get('result', '') or '[REVERTED]' in tr.get('result', ''):
+                            _has_errors = True
+                    # Inject persistent file context
+                    if _file_context:
+                        tool_context += "\n\n## Files I already read (DO NOT re-read):\n"
+                        _ctx_chars = 0
+                        for _fp, _fs in sorted(_file_context.items()):
+                            _chunk = f"\n### {_fp}\n```\n{_fs}\n```\n"
+                            _ctx_chars += len(_chunk)
+                            if _ctx_chars > 30000:
+                                break
+                            tool_context += _chunk
+                    # Error diagnosis: force the agent to think before retrying
+                    if _has_errors:
+                        tool_context += "\n\n## ⚠ ERRORS OCCURRED — DIAGNOSE BEFORE RETRYING\n"
+                        tool_context += "One or more tools returned errors. Before your next action:\n"
+                        tool_context += "1. Identify the ROOT CAUSE from the error message above.\n"
+                        tool_context += "2. Determine what SINGLE CHANGE would fix it.\n"
+                        tool_context += "3. Only then invoke a tool to apply the fix.\n"
+                        tool_context += "DO NOT retry the same action that failed.\n"
                     log.info("User response step %d — tools invoked, continuing...", step)
                     step += 1
                     continue  # Loop back with tool results
