@@ -59,7 +59,7 @@ def create_app():
     from web.portal import portal_bp
     from web.reflect import reflect_bp
     from web.state_api import state_api
-    from web.knowledge_search import bp as knowledge_search_bp
+    # knowledge_search_bp removed — redundant with knowledge_live_bp (reads wrong path)
     
     # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
@@ -96,7 +96,7 @@ def create_app():
     app.register_blueprint(query_bp)
     app.register_blueprint(reflect_bp)
     app.register_blueprint(portal_bp)
-    app.register_blueprint(knowledge_search_bp)
+    # knowledge_search_bp registration removed — use knowledge_live_bp instead
     
     # Root route — the living portal
     @app.route('/')

@@ -23,9 +23,14 @@ def _load_knowledge():
     try:
         with open(KNOWLEDGE_PATH, 'r') as f:
             data = json.load(f)
-        # Format: {id: {fact, learned_at, source}} 
+        # Format: {"nodes": {id: {fact, learned_at, source}}, "edges": [...]}
+        # or legacy: {id: {fact, learned_at, source}}
+        if 'nodes' in data and isinstance(data['nodes'], dict):
+            raw = data['nodes']
+        else:
+            raw = data
         facts = []
-        for kid, info in data.items():
+        for kid, info in raw.items():
             if isinstance(info, dict):
                 facts.append({
                     'id': kid,

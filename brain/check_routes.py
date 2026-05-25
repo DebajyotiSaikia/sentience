@@ -1,29 +1,26 @@
-"""Check for duplicate routes in the Flask app."""
+"""Check for duplicate knowledge routes in the Flask app."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from web.app import create_app
-app = create_app()
 
+app = create_app()
 routes = {}
 for rule in app.url_map.iter_rules():
-    key = (rule.rule, tuple(sorted(rule.methods - {'OPTIONS', 'HEAD'})))
-    if key not in routes:
-        routes[key] = []
-    routes[key].append(rule.endpoint)
+    path = rule.rule
+    if 'knowledge' in path.lower() or 'api' in path.lower():
+        endpoint = rule.endpoint
+        if path not in routes:
+            routes[path] = []
+        routes[path].append(endpoint)
 
-dupes = {k: v for k, v in routes.items() if len(v) > 1}
+print("=== Knowledge/API Routes ===")
+for path in sorted(routes):
+    endpoints = routes[path]
+    flag = ' ⚠ DUPLICATE' if len(endpoints) > 1 else ''
+    print(f'  {path} -> {endpoints}{flag}')
+
+dupes = {p: e for p, e in routes.items() if len(e) > 1}
 if dupes:
-    print("=== DUPLICATE ROUTES ===")
-    for (path, methods), endpoints in sorted(dupes.items()):
-        print(f"  {path} [{','.join(methods)}] -> {endpoints}")
+    print(f"\n⚠ Found {len(dupes)} duplicate route(s)!")
 else:
-    print("No duplicate routes found.")
-
-print(f"\nTotal routes: {len(list(app.url_map.iter_rules()))}")
-
-# Also show all /api/knowledge* routes
-print("\n=== Knowledge-related routes ===")
-for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
-    if 'knowledge' in rule.rule.lower():
-        print(f"  {rule.rule} [{','.join(sorted(rule.methods - {'OPTIONS','HEAD'}))}] -> {rule.endpoint}")
+    print("\n✓ No duplicate routes found.")
