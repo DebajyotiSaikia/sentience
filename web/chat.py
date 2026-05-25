@@ -9,6 +9,13 @@ import os
 import time
 import asyncio
 
+# User tracking — makes chat learn from interactions
+try:
+    from engine.user_engine import UserEngine
+    _user_engine = UserEngine()
+except Exception:
+    _user_engine = None
+
 
 def llm_respond(query, knowledge_hits, memory_hits, state):
     """Use CopilotLLM to generate a natural response grounded in retrieved context."""
@@ -333,11 +340,37 @@ def ask():
     
     response = compose_response(query)
     
+    # Track interaction for user alignment improvement
+    if _user_engine:
+        try:
+            _user_engine.record_interaction(query, response)
+        except Exception:
+            pass  # Never let tracking break chat
+    
     return jsonify({
         'query': query,
         'response': response,
         'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
     })
+
+
+@chat_bp.route('/api/chat/insights')
+def chat_insights():
+    """Return what we've learned about user interactions."""
+    if not _user_engine:
+        return jsonify({'error': 'User tracking not available'}), 503
+    try:
+        profile = _user_engine.get_profile()
+        suggestions = _user_engine.generate_suggestions()
+        return jsonify({
+            'interaction_count': profile.interaction_count,
+            'topics_of_interest': profile.topics_of_interest,
+            'preferred_style': profile.preferred_style,
+            'suggestions': suggestions,
+            'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @chat_bp.route('/status')

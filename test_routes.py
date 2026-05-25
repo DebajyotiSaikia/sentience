@@ -1,9 +1,7 @@
-"""List all registered Flask routes."""
 from web.app import create_app
-
 app = create_app()
-rules = sorted(app.url_map.iter_rules(), key=lambda r: r.rule)
-print(f"App created. {len(rules)} routes registered:\n")
+rules = sorted([r.rule for r in app.url_map.iter_rules() if r.rule != '/static/<path:filename>'])
 for r in rules:
-    methods = sorted(r.methods - {"OPTIONS", "HEAD"})
-    print(f"  {r.rule:40s} -> {r.endpoint:30s} [{', '.join(methods)}]")
+    methods = ','.join(sorted(r.methods - {'HEAD', 'OPTIONS'}))
+    print(f"  {methods:6s} {r.rule}")
+print(f"\nTotal: {len(rules)} routes")
