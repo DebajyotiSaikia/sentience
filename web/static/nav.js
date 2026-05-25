@@ -26,6 +26,7 @@
     { href: '/live', label: '🔴 Live' },
     { href: '/dashboard', label: '📊 Dashboard' },
     { href: '/journal', label: '📖 Journal' },
+    { href: '/collaborate', label: '🤝 Collaborate' },
     { href: '/teach', label: '📝 Teach' },
     { href: '/help', label: '❓ Help' },
   ];

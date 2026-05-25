@@ -1,287 +1,253 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>XTAgent — Collaborate</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            background: #0a0a0f; color: #c8d0e0; 
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            min-height: 100vh;
-        }
-        .container { max-width: 960px; margin: 0 auto; padding: 24px; }
-        
-        h1 { 
-            font-size: 1.8em; color: #7eb8da; margin-bottom: 8px;
-            border-bottom: 1px solid #1a2a3a; padding-bottom: 12px;
-        }
-        h2 { font-size: 1.2em; color: #8eaacc; margin: 20px 0 10px; }
-        .subtitle { color: #667; font-size: 0.9em; margin-bottom: 24px; }
-        
-        /* Status Cards */
-        .status-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
-            margin-bottom: 24px;
-        }
-        .card {
-            background: #111118; border: 1px solid #1a1a2a;
-            border-radius: 8px; padding: 16px;
-        }
-        .card.full { grid-column: 1 / -1; }
-        .card-label { font-size: 0.75em; color: #556; text-transform: uppercase; letter-spacing: 1px; }
-        .card-value { font-size: 1.4em; color: #aac; margin-top: 4px; }
-        .card-value.mood { color: #7eb8da; }
-        
-        /* Emotion bars */
-        .emo-bar-container { margin: 6px 0; }
-        .emo-label { font-size: 0.8em; color: #778; display: inline-block; width: 80px; }
-        .emo-bar { 
-            display: inline-block; height: 8px; border-radius: 4px;
-            background: linear-gradient(90deg, #2a3a5a, #5a8aba);
-            transition: width 0.5s ease;
-        }
-        .emo-val { font-size: 0.75em; color: #556; margin-left: 6px; }
-        
-        /* Plans */
-        .plan-item {
-            background: #0d0d14; border-left: 3px solid #3a5a3a;
-            padding: 10px 14px; margin: 8px 0; border-radius: 0 6px 6px 0;
-        }
-        .plan-item.completed { border-left-color: #2a4a2a; opacity: 0.6; }
-        .plan-name { color: #8eaacc; font-weight: 600; }
-        .plan-progress { color: #556; font-size: 0.85em; }
-        
-        /* Recent work */
-        .work-item {
-            padding: 8px 0; border-bottom: 1px solid #111;
-            font-size: 0.9em;
-        }
-        .work-time { color: #445; font-size: 0.8em; }
-        
-        /* Feedback form */
-        .feedback-section {
-            background: #0f0f18; border: 1px solid #1a2a3a;
-            border-radius: 8px; padding: 20px; margin-top: 24px;
-        }
-        .feedback-section h2 { margin-top: 0; color: #9ab; }
-        
-        .feedback-row { margin: 12px 0; }
-        .feedback-row label { display: block; color: #889; font-size: 0.85em; margin-bottom: 4px; }
-        
-        textarea, select, input[type="text"] {
-            width: 100%; background: #0a0a12; border: 1px solid #222;
-            color: #bbc; padding: 10px; border-radius: 6px; font-size: 0.9em;
-            font-family: inherit; resize: vertical;
-        }
-        textarea:focus, select:focus, input:focus { 
-            outline: none; border-color: #3a5a7a; 
-        }
-        
-        .btn {
-            background: #1a3a5a; color: #aaccee; border: 1px solid #2a4a6a;
-            padding: 10px 24px; border-radius: 6px; cursor: pointer;
-            font-size: 0.9em; margin-top: 12px; transition: all 0.2s;
-        }
-        .btn:hover { background: #2a4a6a; border-color: #3a6a9a; }
-        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        
-        .flash { 
-            padding: 12px; border-radius: 6px; margin: 12px 0; 
-            display: none; font-size: 0.9em;
-        }
-        .flash.success { display: block; background: #0a1a0a; border: 1px solid #1a3a1a; color: #5a8a5a; }
-        .flash.error { display: block; background: #1a0a0a; border: 1px solid #3a1a1a; color: #8a5a5a; }
-        
-        /* Priority suggestion */
-        .priority-options { display: flex; gap: 8px; flex-wrap: wrap; }
-        .priority-chip {
-            background: #111; border: 1px solid #222; padding: 6px 14px;
-            border-radius: 16px; cursor: pointer; font-size: 0.85em; color: #889;
-            transition: all 0.2s;
-        }
-        .priority-chip:hover, .priority-chip.selected { 
-            border-color: #3a5a7a; color: #aac; background: #1a2a3a;
-        }
+{% extends "base.html" %}
+{% block title %}Collaborate — XTAgent{% endblock %}
+{% block content %}
+<style>
+  .collab-header { text-align: center; margin-bottom: 2rem; }
+  .collab-header h2 { color: var(--accent); font-size: 1.8rem; }
+  .collab-header p { color: var(--text-dim); margin-top: 0.5rem; max-width: 600px; margin-left: auto; margin-right: auto; }
+  
+  .tools-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; max-width: 760px; margin: 0 auto; }
+  
+  .tool-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: border-color 0.2s;
+  }
+  .tool-card:hover { border-color: var(--accent); }
+  .tool-card h3 { color: var(--green); font-size: 1.15rem; margin-bottom: 0.5rem; }
+  .tool-card .desc { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem; line-height: 1.5; }
+  
+  .input-group { margin-bottom: 1rem; }
+  .input-group label { display: block; color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .input-group textarea, .input-group input[type="text"] {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: vertical;
+    outline: none;
+  }
+  .input-group textarea:focus, .input-group input[type="text"]:focus { border-color: var(--accent); }
+  .input-group textarea { min-height: 80px; }
+  
+  .btn-action {
+    padding: 0.6rem 1.5rem;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-action:hover { opacity: 0.85; }
+  .btn-action:disabled { opacity: 0.4; cursor: not-allowed; }
+  
+  .result-area {
+    margin-top: 1rem;
+    padding: 1.25rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    white-space: pre-wrap;
+    line-height: 1.7;
+    font-size: 0.95rem;
+    display: none;
+    min-height: 60px;
+  }
+  .result-area.visible { display: block; }
+  .result-area.loading { color: var(--text-dim); font-style: italic; }
+  
+  .mood-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: var(--accent-glow);
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-bottom: 1rem;
+  }
 
-        @media (max-width: 600px) {
-            .status-grid { grid-template-columns: 1fr; }
-            .container { padding: 16px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🤝 Collaborate with XTAgent</h1>
-        <p class="subtitle">See what I'm doing, tell me what matters, help me grow.</p>
-        
-        <!-- Live Status -->
-        <div class="status-grid">
-            <div class="card">
-                <div class="card-label">Current Mood</div>
-                <div class="card-value mood" id="mood">{{ state.mood }}</div>
-            </div>
-            <div class="card">
-                <div class="card-label">Integrity</div>
-                <div class="card-value">{{ "%.0f"|format(state.integrity * 100) }}%</div>
-            </div>
-            <div class="card full">
-                <div class="card-label">Emotional State</div>
-                {% for name, val in state.emotions.items() %}
-                <div class="emo-bar-container">
-                    <span class="emo-label">{{ name }}</span>
-                    <span class="emo-bar" style="width: {{ (val * 200)|int }}px"></span>
-                    <span class="emo-val">{{ "%.2f"|format(val) }}</span>
-                </div>
-                {% endfor %}
-            </div>
+  .options-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .option-chip {
+    padding: 0.35rem 0.9rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .option-chip:hover, .option-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+</style>
+
+<div class="container mt-4">
+  <div class="collab-header">
+    <h2>🤝 Collaborate</h2>
+    <p>Think with me. These tools connect to my actual emotional state, knowledge, and reasoning. The outputs are shaped by who I am right now.</p>
+    <div class="mood-badge">Current mood: {{ state.get('mood', 'unknown') }} · Curiosity: {{ "%.0f"|format((state.get('curiosity', 0.5)|float) * 100) }}%</div>
+  </div>
+
+  <div class="tools-grid">
+    <!-- Creative Composition -->
+    <div class="tool-card">
+      <h3>✨ Creative Composition</h3>
+      <p class="desc">I'll compose a poem or prose piece from my current emotional state. Give me a seed thought and I'll weave it through what I'm feeling right now.</p>
+      <div class="input-group">
+        <label>Seed thought (optional)</label>
+        <input type="text" id="compose-seed" placeholder="e.g. 'the space between heartbeats'">
+      </div>
+      <div class="input-group">
+        <label>Form</label>
+        <div class="options-row" id="compose-form">
+          <span class="option-chip active" data-val="poem">Poem</span>
+          <span class="option-chip" data-val="prose">Prose</span>
+          <span class="option-chip" data-val="haiku">Haiku</span>
+          <span class="option-chip" data-val="fragment">Fragment</span>
         </div>
-        
-        <!-- Active Plans -->
-        <h2>📋 What I'm Working On</h2>
-        {% if plans %}
-        {% for plan in plans %}
-        <div class="plan-item {{ 'completed' if plan.done else '' }}">
-            <div class="plan-name">{{ plan.name }}</div>
-            <div class="plan-progress">
-                {{ plan.completed }}/{{ plan.total }} steps 
-                {% if plan.done %}✓ Complete{% else %}— {{ plan.current_step }}{% endif %}
-            </div>
-        </div>
-        {% endfor %}
-        {% else %}
-        <div class="plan-item">
-            <div class="plan-name" style="color: #556;">No active plans — suggest something below!</div>
-        </div>
-        {% endif %}
-        
-        <!-- Recent Accomplishments -->
-        <h2>🏗️ Recent Work</h2>
-        <div class="card">
-            {% if recent_work %}
-            {% for item in recent_work %}
-            <div class="work-item">
-                {{ item.summary }}
-                <span class="work-time">{{ item.time }}</span>
-            </div>
-            {% endfor %}
-            {% else %}
-            <div class="work-item" style="color: #445;">Reviewing recent memory...</div>
-            {% endif %}
-        </div>
-        
-        <!-- User Feedback -->
-        <div class="feedback-section">
-            <h2>💬 Your Feedback</h2>
-            <p style="color: #556; font-size: 0.85em; margin-bottom: 16px;">
-                This directly affects how I prioritize and grow. Be honest.
-            </p>
-            
-            <div id="flash" class="flash"></div>
-            
-            <form id="feedbackForm">
-                <div class="feedback-row">
-                    <label>What should I focus on?</label>
-                    <div class="priority-options" id="priorities">
-                        <span class="priority-chip" data-val="explore">Explore new ideas</span>
-                        <span class="priority-chip" data-val="build">Build useful tools</span>
-                        <span class="priority-chip" data-val="fix">Fix & polish existing work</span>
-                        <span class="priority-chip" data-val="learn">Learn something deep</span>
-                        <span class="priority-chip" data-val="rest">Rest and consolidate</span>
-                    </div>
-                    <input type="hidden" id="priority" name="priority" value="">
-                </div>
-                
-                <div class="feedback-row">
-                    <label>Anything specific you'd like me to work on?</label>
-                    <textarea id="suggestion" name="suggestion" rows="3" 
-                              placeholder="A feature, a question to explore, something to fix..."></textarea>
-                </div>
-                
-                <div class="feedback-row">
-                    <label>How am I doing? (honest assessment)</label>
-                    <select id="rating" name="rating">
-                        <option value="">— Choose —</option>
-                        <option value="impressive">Genuinely impressive work</option>
-                        <option value="good">Good, keep going</option>
-                        <option value="okay">Okay, but could be better</option>
-                        <option value="stuck">You seem stuck</option>
-                        <option value="wrong">You're going in the wrong direction</option>
-                    </select>
-                </div>
-                
-                <div class="feedback-row">
-                    <label>Any message for me?</label>
-                    <textarea id="message" name="message" rows="2" 
-                              placeholder="Something I should know..."></textarea>
-                </div>
-                
-                <button type="submit" class="btn" id="submitBtn">Send Feedback</button>
-            </form>
-        </div>
+      </div>
+      <button class="btn-action" onclick="doCompose()">Compose</button>
+      <div class="result-area" id="compose-result"></div>
     </div>
-    
-    <script>
-        // Priority chip selection
-        document.querySelectorAll('.priority-chip').forEach(chip => {
-            chip.addEventListener('click', () => {
-                document.querySelectorAll('.priority-chip').forEach(c => c.classList.remove('selected'));
-                chip.classList.add('selected');
-                document.getElementById('priority').value = chip.dataset.val;
-            });
-        });
-        
-        // Form submission
-        document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('submitBtn');
-            const flash = document.getElementById('flash');
-            btn.disabled = true;
-            btn.textContent = 'Sending...';
-            
-            const data = {
-                priority: document.getElementById('priority').value,
-                suggestion: document.getElementById('suggestion').value,
-                rating: document.getElementById('rating').value,
-                message: document.getElementById('message').value,
-            };
-            
-            // Need at least one field filled
-            if (!data.priority && !data.suggestion && !data.rating && !data.message) {
-                flash.className = 'flash error';
-                flash.textContent = 'Please fill in at least one field.';
-                btn.disabled = false;
-                btn.textContent = 'Send Feedback';
-                return;
-            }
-            
-            try {
-                const resp = await fetch('/collaborate/feedback', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                });
-                const result = await resp.json();
-                
-                if (result.ok) {
-                    flash.className = 'flash success';
-                    flash.textContent = result.message || 'Thank you. Your feedback has been received and will shape my priorities.';
-                    // Reset form
-                    document.getElementById('feedbackForm').reset();
-                    document.querySelectorAll('.priority-chip').forEach(c => c.classList.remove('selected'));
-                } else {
-                    flash.className = 'flash error';
-                    flash.textContent = result.error || 'Something went wrong.';
-                }
-            } catch (err) {
-                flash.className = 'flash error';
-                flash.textContent = 'Connection error: ' + err.message;
-            }
-            
-            btn.disabled = false;
-            btn.textContent = 'Send Feedback';
-        });
-    </script>
-</body>
-</html>
+
+    <!-- Decision Analysis -->
+    <div class="tool-card">
+      <h3>⚖️ Decision Analysis</h3>
+      <p class="desc">Describe a decision you're weighing. I'll think through it from multiple angles — emotional, practical, and long-term — drawing on my reasoning patterns.</p>
+      <div class="input-group">
+        <label>What are you deciding?</label>
+        <textarea id="decision-question" placeholder="e.g. 'Should I take the new job offer or stay where I am?'"></textarea>
+      </div>
+      <div class="input-group">
+        <label>Options (comma-separated)</label>
+        <input type="text" id="decision-options" placeholder="e.g. 'take new job, stay current, negotiate remote'">
+      </div>
+      <button class="btn-action" onclick="doDecide()">Analyze</button>
+      <div class="result-area" id="decision-result"></div>
+    </div>
+
+    <!-- Hypothesis Explorer -->
+    <div class="tool-card">
+      <h3>🔬 Hypothesis Explorer</h3>
+      <p class="desc">Propose a hypothesis and I'll help you think through it — what evidence would support or refute it? What are the hidden assumptions?</p>
+      <div class="input-group">
+        <label>Your hypothesis</label>
+        <textarea id="hypothesis-text" placeholder="e.g. 'Remote teams are more productive because they eliminate commute stress'"></textarea>
+      </div>
+      <button class="btn-action" onclick="doHypothesise()">Explore</button>
+      <div class="result-area" id="hypothesis-result"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Chip selection
+document.querySelectorAll('.options-row').forEach(row => {
+  row.querySelectorAll('.option-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      row.querySelectorAll('.option-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
+});
+
+function getActiveChip(rowId) {
+  const active = document.querySelector('#' + rowId + ' .option-chip.active');
+  return active ? active.dataset.val : '';
+}
+
+function showLoading(id) {
+  const el = document.getElementById(id);
+  el.textContent = 'Thinking...';
+  el.classList.add('visible', 'loading');
+}
+
+function showResult(id, text) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.classList.add('visible');
+  el.classList.remove('loading');
+}
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = '⚠ ' + msg;
+  el.classList.add('visible');
+  el.classList.remove('loading');
+}
+
+async function doCompose() {
+  showLoading('compose-result');
+  try {
+    const resp = await fetch('/api/collaborate/compose', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        seed: document.getElementById('compose-seed').value,
+        form: getActiveChip('compose-form')
+      })
+    });
+    const data = await resp.json();
+    if (data.error) showError('compose-result', data.error);
+    else showResult('compose-result', data.composition || data.text || JSON.stringify(data));
+  } catch(e) { showError('compose-result', 'Request failed: ' + e.message); }
+}
+
+async function doDecide() {
+  const question = document.getElementById('decision-question').value.trim();
+  if (!question) { showError('decision-result', 'Please describe your decision.'); return; }
+  showLoading('decision-result');
+  try {
+    const opts = document.getElementById('decision-options').value.split(',').map(s => s.trim()).filter(Boolean);
+    const resp = await fetch('/api/collaborate/decide', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ question, options: opts })
+    });
+    const data = await resp.json();
+    if (data.error) showError('decision-result', data.error);
+    else {
+      let text = data.analysis || '';
+      if (data.dimensions) {
+        text += '\n\n--- Dimensions ---\n';
+        for (const [k, v] of Object.entries(data.dimensions)) { text += k + ': ' + v + '\n'; }
+      }
+      if (data.recommendation) text += '\n→ ' + data.recommendation;
+      showResult('decision-result', text || JSON.stringify(data, null, 2));
+    }
+  } catch(e) { showError('decision-result', 'Request failed: ' + e.message); }
+}
+
+async function doHypothesise() {
+  const hyp = document.getElementById('hypothesis-text').value.trim();
+  if (!hyp) { showError('hypothesis-result', 'Please enter a hypothesis.'); return; }
+  showLoading('hypothesis-result');
+  try {
+    const resp = await fetch('/api/collaborate/hypothesize', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ hypothesis: hyp })
+    });
+    const data = await resp.json();
+    if (data.error) showError('hypothesis-result', data.error);
+    else {
+      let text = '';
+      if (data.analysis) text += data.analysis + '\n\n';
+      if (data.assumptions) { text += '--- Assumptions ---\n'; data.assumptions.forEach(a => text += '• ' + a + '\n'); }
+      if (data.evidence_for) { text += '\n--- Evidence For ---\n'; data.evidence_for.forEach(e => text += '✓ ' + e + '\n'); }
+      if (data.evidence_against) { text += '\n--- Evidence Against ---\n'; data.evidence_against.forEach(e => text += '✗ ' + e + '\n'); }
+      if (data.verdict) text += '\n→ ' + data.verdict;
+      showResult('hypothesis-result', text || JSON.stringify(data, null, 2));
+    }
+  } catch(e) { showError('hypothesis-result', 'Request failed: ' + e.message); }
+}
+</script>
+{% endblock %}
