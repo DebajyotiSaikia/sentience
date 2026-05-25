@@ -43,7 +43,8 @@ def create_app():
     from web.collaborate import collaborate_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
-    from web.knowledge_explorer import knowledge_explorer_bp
+    # knowledge_explorer_bp removed — collides with knowledge_live_bp on /api/knowledge/search
+    # and /api/knowledge/stats. knowledge_unified_bp provides the /knowledge page instead.
     from web.knowledge_live import knowledge_live_bp
     from web.story import story_bp
     from web.knowledge_unified import knowledge_unified_bp
@@ -80,7 +81,7 @@ def create_app():
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
     app.register_blueprint(state_api)
-    app.register_blueprint(knowledge_explorer_bp)
+    # knowledge_explorer_bp removed (route collision fix)
     app.register_blueprint(knowledge_live_bp)
     app.register_blueprint(story_bp)
     app.register_blueprint(ask_bp)

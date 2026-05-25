@@ -7,15 +7,19 @@ from datetime import datetime
 
 knowledge_explorer_bp = Blueprint('knowledge_explorer', __name__)
 
-KNOWLEDGE_PATH = 'persist/knowledge_graph.json'
+KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
 MEMORY_PATH = 'persist/memory.json'
 
 def load_knowledge():
-    """Load the knowledge graph."""
+    """Load the knowledge graph, extracting nodes from graph format."""
     if not os.path.exists(KNOWLEDGE_PATH):
         return {}
     with open(KNOWLEDGE_PATH, 'r') as f:
-        return json.load(f)
+        data = json.load(f)
+    # Knowledge file uses graph format {nodes: {id: {fact, ...}}, edges: [...]}
+    if isinstance(data, dict) and 'nodes' in data:
+        return data['nodes']
+    return data
 
 def load_memories(limit=100):
     """Load recent memories."""
