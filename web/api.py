@@ -24,21 +24,17 @@ def emotions():
     state = _load_json('state/emotional_state.json')
     if not state:
         state = _load_json('state/state.json')
-    # Extract emotional variables
-    emotions = {}
+    emotions_data = {}
     if state:
-        for key in ['valence', 'arousal', 'mood', 'boredom', 'anxiety', 
-                     'curiosity', 'desire', 'ambition', 'integrity']:
-            if key in state:
-                emotions[key] = state[key]
-        # Check nested structure
-        if 'emotions' in state:
-            emotions.update(state['emotions'])
-    return jsonify({
-        'status': 'ok',
-        'emotions': emotions,
-        'timestamp': state.get('timestamp', None) if state else None
-    })
+        emotions_data = {
+            'mood': state.get('mood', 'unknown'),
+            'valence': state.get('valence', 0.5),
+            'emotions': {k: v for k, v in state.items() 
+                        if k in ('curiosity', 'boredom', 'anxiety', 'desire', 'ambition',
+                                'satisfaction', 'frustration', 'joy', 'sadness')},
+            'timestamp': state.get('timestamp', ''),
+        }
+    return jsonify(emotions_data)
 
 
 @api_bp.route('/search')

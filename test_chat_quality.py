@@ -1,21 +1,33 @@
-"""Test the quality of chat responses."""
+"""Test the chat endpoint — the primary user interaction point."""
+import sys, os, json
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from web.app import create_app
-import json
 
 app = create_app()
-with app.test_client() as c:
-    r = c.post('/chat/ask', json={'message': 'What do you know about yourself?'}, content_type='application/json')
-    data = json.loads(r.data)
-    print('Status:', r.status_code)
-    print('Keys:', list(data.keys()))
-    for k, v in data.items():
-        val_str = str(v)
-        print(f'  {k}: {val_str[:300]}')
-    print()
-    
-    # Test a knowledge query
-    r2 = c.post('/chat/ask', json={'message': 'What are your plans?'}, content_type='application/json')
-    data2 = json.loads(r2.data)
-    print('Plans query status:', r2.status_code)
-    print('Response:', str(data2.get('response', ''))[:400])
-    print('Sources:', data2.get('sources', 'none'))
+client = app.test_client()
+
+questions = [
+    "What do you know about yourself?",
+    "What are you currently working on?",
+    "Can you help me understand something?",
+]
+
+for q in questions:
+    print(f"\n{'='*60}")
+    print(f"Q: {q}")
+    r = client.post('/chat/send', json={'message': q})
+    print(f"Status: {r.status_code}")
+    try:
+        data = json.loads(r.data)
+        if 'response' in data:
+            resp = data['response']
+            print(f"Response ({len(resp)} chars):")
+            print(resp[:500])
+        if 'error' in data:
+            print(f"Error: {data['error']}")
+        if 'knowledge_used' in data:
+            print(f"Knowledge hits: {data['knowledge_used']}")
+    except Exception as e:
+        print(f"Parse error: {e}")
+        print(f"Raw: {r.data[:200]}")

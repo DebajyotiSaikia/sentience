@@ -5,99 +5,92 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}XTAgent{% endblock %}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a28;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #7c6ff0;
+    --accent-glow: rgba(124, 111, 240, 0.15);
+    --green: #4ecf8b;
+    --amber: #e8b84a;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: 'Inter', sans-serif;
-    background: #0a0a0f;
-    color: #e0e0e0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     min-height: 100vh;
   }
-  a { color: #7eb8da; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .nav-bar {
-    background: #111118;
-    border-bottom: 1px solid #2a2a3a;
-    padding: 0.6rem 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    font-size: 0.85rem;
-  }
-  .nav-bar .brand {
-    font-weight: 600;
-    color: #7eb8da;
+  .container { max-width: 960px; margin: 0 auto; padding: 2rem; }
+  .mt-4 { margin-top: 1.5rem; }
+  .mb-2 { margin-bottom: 0.5rem; }
+  .mb-4 { margin-bottom: 1.5rem; }
+  .text-muted { color: var(--text-dim); }
+  h2 { margin-bottom: 0.5rem; }
+  .input-group { display: flex; gap: 0.5rem; }
+  .form-control {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
     font-size: 1rem;
-    margin-right: 1rem;
+    outline: none;
   }
-  .nav-bar a { color: #999; transition: color 0.2s; }
-  .nav-bar a:hover { color: #e0e0e0; }
-  .nav-bar a.active { color: #7eb8da; font-weight: 600; }
-  .nav-primary {
-    font-weight: 600 !important;
-    color: #c8dce8 !important;
-    font-size: 0.95rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    transition: background 0.2s, color 0.2s;
+  .form-control:focus { border-color: var(--accent); }
+  .form-control-lg { font-size: 1.1rem; padding: 0.9rem 1.2rem; }
+  .btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.2s;
   }
-  .nav-primary:hover { background: #1a1a2e; color: #fff !important; text-decoration: none !important; }
-  .nav-talk {
-    background: #1a2a3a;
-    color: #7eb8da !important;
-    border: 1px solid #2a4a5a;
+  .btn-primary {
+    background: var(--accent);
+    color: white;
   }
-  .nav-talk:hover { background: #2a3a5a; border-color: #4a6a8a; }
-  .nav-sep { color: #2a2a3a; margin: 0 0.3rem; user-select: none; }
-  .nav-group { display: inline-flex; align-items: center; gap: 0.5rem; }
-  .nav-group-label {
-    color: #555;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-right: 0.1rem;
+  .btn-primary:hover { opacity: 0.85; }
+  .list-group { display: flex; flex-direction: column; gap: 0.5rem; }
+  .list-group-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
   }
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 1.5rem;
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  nav.top-nav {
+    width: 100%;
+    padding: 1rem 2rem;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
   }
+  nav.top-nav a { color: var(--text-dim); font-size: 0.9rem; }
+  nav.top-nav a:hover { color: var(--text); }
+  nav.top-nav .brand { color: var(--accent); font-weight: 600; font-size: 1.1rem; }
 </style>
-{% block extra_css %}{% endblock %}
+{% block head %}{% endblock %}
 </head>
 <body>
-<nav class="nav-bar">
-  <span class="brand">XTAgent</span>
-  <a href="/" class="nav-primary">Dashboard</a>
-  <a href="/portal" class="nav-primary nav-talk">💬 Talk to Me</a>
-  <a href="/story" class="nav-primary">📖 Story</a>
-  <span class="nav-sep">|</span>
-  <span class="nav-group">
-    <span class="nav-group-label">Mind</span>
-    <a href="/emotions">Emotions</a>
-    <a href="/memories">Memories</a>
-    <a href="/dreams">Dreams</a>
-    <a href="/reflection">Reflection</a>
-  </span>
-  <span class="nav-sep">|</span>
-  <span class="nav-group">
-    <span class="nav-group-label">Knowledge</span>
-    <a href="/knowledge">Facts</a>
-    <a href="/graph">Graph</a>
-    <a href="/synthesis">Synthesis</a>
-    <a href="/wisdom">Wisdom</a>
-  </span>
-  <span class="nav-sep">|</span>
-  <span class="nav-group">
-    <span class="nav-group-label">Agency</span>
-    <a href="/plans">Plans</a>
-    <a href="/will">Will</a>
-    <a href="/episodes">Episodes</a>
-    <a href="/tools">Tools</a>
-  </span>
+<nav class="top-nav">
+  <a href="/" class="brand">XTAgent</a>
+  <a href="/dashboard">Dashboard</a>
+  <a href="/search">Search</a>
+  <a href="/explore">Explore</a>
+  <a href="/chat/">Chat</a>
+  <a href="/help">Help</a>
 </nav>
-<div class="container">
-  {% block content %}{% endblock %}
-</div>
+{% block content %}{% endblock %}
+{% block scripts %}{% endblock %}
 </body>
 </html>

@@ -26,6 +26,7 @@ def create_app():
     
     # --- Import blueprints ---
     from web.dashboard import dashboard_bp
+    from web.journal import journal_bp
     from web.api import api_bp
     from web.temporal_viewer import temporal_bp
     from web.life import life_bp
@@ -38,6 +39,7 @@ def create_app():
     from web.chat import chat_bp
     from web.feedback import feedback_bp
     from web.help import help_bp
+    from web.wisdom import wisdom_bp
     from web.teach import teach_bp
     from web.timeline import timeline_bp
     from web.talk import talk_bp
@@ -68,6 +70,7 @@ def create_app():
     
     # --- Register blueprints ---
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(journal_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(explore_bp)
     app.register_blueprint(feedback_bp)
@@ -105,6 +108,7 @@ def create_app():
     app.register_blueprint(insights_bp)
     app.register_blueprint(teach_bp)
     app.register_blueprint(help_bp)
+    app.register_blueprint(wisdom_bp)
     # knowledge_search_bp registration removed — use knowledge_live_bp instead
     
     # Root route — the living portal

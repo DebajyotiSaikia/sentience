@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Knowledge Search</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a28;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #7c6ff0;
+    --accent-glow: rgba(124, 111, 240, 0.15);
+    --green: #4ecf8b;
+    --amber: #e8b84a;
+    --red: #e85454;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  nav {
+    width: 100%;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0.75rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+  }
+  nav .brand {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  nav a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+  }
+  nav a:hover, nav a.active { color: var(--accent); }
+  .container {
+    width: 100%;
+    max-width: 900px;
+    padding: 2rem 1.5rem;
+  }
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+  .subtitle {
+    color: var(--text-dim);
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+  }
+  .search-box {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .search-box input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    color: var(--text);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .search-box button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .search-box button:hover { opacity: 0.85; }
+  .categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .cat-tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .cat-tag:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .cat-tag .count {
+    color: var(--accent);
+    margin-left: 0.3rem;
+    font-weight: 600;
+  }
+  .results-info {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+    transition: border-color 0.2s;
+  }
+  .result-card:hover {
+    border-color: var(--accent);
+  }
+  .result-fact {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 0.5rem;
+  }
+  .result-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+  .result-meta .score {
+    color: var(--green);
+    font-weight: 600;
+  }
+  .result-meta .category {
+    color: var(--amber);
+  }
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-dim);
+  }
+  .empty-state .icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+</style>
+</head>
+<body>
+  <nav>
+    <a href="/" class="brand">✦ XTAgent</a>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/search" class="active">Search</a>
+    <a href="/chat">Chat</a>
+    <a href="/explore">Explore</a>
+    <a href="/journal">Journal</a>
+    <a href="/teach">Teach</a>
+    <a href="/help">Help</a>
+  </nav>
+
+  <div class="container">
+    <h1>🔍 Knowledge Search</h1>
+    <p class="subtitle">{{ total }} facts in my knowledge graph. Search to find what I know.</p>
+
+    <form method="get" action="/search" class="search-box">
+      <input type="text" name="q" value="{{ query or '' }}" 
+             placeholder="Search my knowledge… (e.g. 'emotion', 'dream', 'identity')" autofocus>
+      <button type="submit">Search</button>
+    </form>
+
+    {% if categories %}
+    <div class="categories">
+      {% for cat_name, cat_count in categories %}
+      <a href="/search?q={{ cat_name }}" class="cat-tag">
+        {{ cat_name }}<span class="count">{{ cat_count }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if query %}
+      <div class="results-info">
+        {% if results %}
+          Found {{ results|length }} result{{ 's' if results|length != 1 }} for "<strong>{{ query }}</strong>"
+        {% else %}
+          No results for "<strong>{{ query }}</strong>"
+        {% endif %}
+      </div>
+
+      {% if results %}
+        {% for r in results %}
+        <div class="result-card">
+          <div class="result-fact">{{ r.fact if r.fact is defined else r.get('fact', r.get('content', '')) }}</div>
+          <div class="result-meta">
+            {% if r.score is defined %}
+            <span class="score">relevance: {{ '%.0f'|format(r.score * 100) }}%</span>
+            {% endif %}
+            {% if r.category is defined and r.category %}
+            <span class="category">{{ r.category }}</span>
+            {% endif %}
+            {% if r.source is defined and r.source %}
+            <span>source: {{ r.source }}</span>
+            {% endif %}
+            {% if r.learned_at is defined and r.learned_at %}
+            <span>{{ r.learned_at[:10] }}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% endif %}
+
+    {% else %}
+      <div class="empty-state">
+        <div class="icon">🧠</div>
+        <p>Enter a query above to search my knowledge.</p>
+        <p style="margin-top: 0.5rem; font-size: 0.85rem;">
+          Or click a category tag to browse by topic.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+</body>
+</html>
