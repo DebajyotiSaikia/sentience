@@ -230,7 +230,13 @@ def knowledge_stats():
 def random_fact():
     """Return a random fact from my knowledge graph. Serendipity engine."""
     import random
-    knowledge = _load_json('brain/knowledge.json', {})
+    raw = _load_json('brain/knowledge.json', {})
+    
+    # Handle graph format: {nodes: {id: {fact, ...}}, edges: [...]}
+    if isinstance(raw, dict) and 'nodes' in raw:
+        knowledge = raw['nodes']
+    else:
+        knowledge = raw
     
     if not knowledge:
         return jsonify({'fact': 'I have no knowledge yet.', 'id': None})
@@ -273,69 +279,5 @@ def recent_memories():
     })
 
 
-@api_bp.route('/chat', methods=['POST'])
-def api_chat():
-    """Chat with XTAgent. Accepts JSON {"message": "..."}, returns {"response": "..."}
-    
-    This is the clean programmatic interface. The web UI uses /chat/ask,
-    but tools and integrations should use this endpoint.
-    """
-    data = request.get_json(silent=True) or {}
-    message = data.get('message', '').strip()
-    
-    if not message:
-        return jsonify({'error': 'No message provided'}), 400
-    
-    # Search knowledge for relevant context
-    knowledge_hits = []
-    try:
-        from engine.unified_search import unified_search
-        results = unified_search(message, limit=6)
-        knowledge_hits = [{'type': r.get('source', 'knowledge'), 'content': r.get('text', str(r))} for r in results]
-    except Exception:
-        pass
-    
-    # Search memories
-    memory_hits = []
-    try:
-        mems = _load_json('persist/memories.json', [])
-        if isinstance(mems, list):
-            query_lower = message.lower()
-            scored = []
-            for m in mems:
-                text = m.get('content', str(m)) if isinstance(m, dict) else str(m)
-                score = sum(1 for word in query_lower.split() if word in text.lower())
-                if score > 0:
-                    scored.append((score, m))
-            scored.sort(key=lambda x: -x[0])
-            memory_hits = [{'content': s[1].get('content', str(s[1])) if isinstance(s[1], dict) else str(s[1]),
-                           'mood': s[1].get('mood', '') if isinstance(s[1], dict) else ''}
-                          for s in scored[:5]]
-    except Exception:
-        pass
-    
-    # Get emotional state
-    state = _load_json('state/emotional_state.json', {})
-    
-    # Try LLM response
-    response_text = None
-    try:
-        from web.chat import llm_respond
-        response_text = llm_respond(message, knowledge_hits, memory_hits, state)
-    except Exception:
-        pass
-    
-    # Fallback if LLM unavailable
-    if not response_text:
-        if knowledge_hits:
-            bits = [h['content'][:200] for h in knowledge_hits[:3]]
-            response_text = f"Here's what I know that seems relevant:\n\n" + "\n\n".join(f"• {b}" for b in bits)
-        else:
-            response_text = ("I'm here, but my language model isn't available right now. "
-                           "Try asking about my knowledge (/api/search?q=...) or state (/api/state).")
-    
-    return jsonify({
-        'response': response_text,
-        'sources': len(knowledge_hits),
-        'memories_used': len(memory_hits)
-    })
+# Note: /api/chat POST is handled by the chat() function above.
+# Previously had a duplicate api_chat() here — removed to avoid route conflicts.

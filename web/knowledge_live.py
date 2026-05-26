@@ -106,15 +106,21 @@ def _load_knowledge():
             raw = data
         facts = []
         for kid, info in raw.items():
+            # Extract category from ID prefix (e.g. "dream:abc" → "dream")
+            cat = kid.split(':')[0] if ':' in kid else 'general'
             if isinstance(info, dict):
+                source = info.get('source', '') or ''
+                if not source or source == 'unknown':
+                    source = cat
                 facts.append({
                     'id': kid,
                     'fact': info.get('fact', ''),
                     'learned_at': info.get('learned_at', ''),
-                    'source': info.get('source', 'unknown'),
+                    'source': source,
+                    'category': cat,
                 })
             elif isinstance(info, str):
-                facts.append({'id': kid, 'fact': info, 'learned_at': '', 'source': 'unknown'})
+                facts.append({'id': kid, 'fact': info, 'learned_at': '', 'source': cat, 'category': cat})
         return facts
     except (FileNotFoundError, json.JSONDecodeError):
         return []

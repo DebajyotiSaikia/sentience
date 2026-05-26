@@ -7,6 +7,8 @@ NAV_LINKS = [
     ("/", "Home"),
     ("/chat", "Chat"),
     ("/explore", "Explore"),
+    ("/knowledge", "Knowledge"),
+    ("/knowledge", "Knowledge"),
     ("/dashboard", "Dashboard"),
     ("/insights", "Insights"),
     ("/journal", "Journal"),

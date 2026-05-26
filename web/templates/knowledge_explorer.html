@@ -1,128 +1,129 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>XTAgent — Knowledge Explorer</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #0a0a0f; color: #c8d0e0; font-family: 'Segoe UI', sans-serif; }
-        .header { background: linear-gradient(135deg, #1a1a2e, #16213e); padding: 1.5rem 2rem; border-bottom: 1px solid #2a2a4a; }
-        .header h1 { font-size: 1.4rem; color: #7eb8da; }
-        .header .subtitle { color: #6a7a8a; font-size: 0.85rem; margin-top: 0.3rem; }
-        .container { max-width: 1000px; margin: 2rem auto; padding: 0 2rem; }
-        .search-box { display: flex; gap: 0.5rem; margin-bottom: 2rem; }
-        .search-box input {
-            flex: 1; padding: 0.8rem 1rem; background: #12121f; border: 1px solid #2a2a4a;
-            border-radius: 8px; color: #c8d0e0; font-size: 1rem; outline: none;
-        }
-        .search-box input:focus { border-color: #7eb8da; }
-        .search-box button {
-            padding: 0.8rem 1.5rem; background: #2a4a6a; border: none; border-radius: 8px;
-            color: #c8d0e0; cursor: pointer; font-size: 1rem;
-        }
-        .search-box button:hover { background: #3a5a7a; }
-        .stats { display: flex; gap: 1.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
-        .stat-card {
-            background: #12121f; border: 1px solid #2a2a4a; border-radius: 8px;
-            padding: 1rem 1.5rem; min-width: 150px;
-        }
-        .stat-card .value { font-size: 1.8rem; color: #7eb8da; font-weight: bold; }
-        .stat-card .label { color: #6a7a8a; font-size: 0.8rem; margin-top: 0.2rem; }
-        .results { list-style: none; }
-        .results li {
-            background: #12121f; border: 1px solid #2a2a4a; border-radius: 8px;
-            padding: 1rem 1.5rem; margin-bottom: 0.8rem; transition: border-color 0.2s;
-        }
-        .results li:hover { border-color: #4a6a8a; }
-        .results .fact-text { color: #d0d8e8; line-height: 1.5; }
-        .results .fact-meta { color: #5a6a7a; font-size: 0.75rem; margin-top: 0.4rem; }
-        .results .highlight { background: #2a4a3a; color: #8ecba0; padding: 0 3px; border-radius: 3px; }
-        .section-title { color: #7eb8da; font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 1px solid #2a2a4a; padding-bottom: 0.5rem; }
-        .no-results { color: #6a7a8a; text-align: center; padding: 3rem; font-style: italic; }
-        a.back-link { color: #5a8aaa; text-decoration: none; font-size: 0.85rem; }
-        a.back-link:hover { color: #7eb8da; }
-        .categories { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 2rem; }
-        .cat-tag {
-            padding: 0.3rem 0.8rem; background: #1a2a3a; border: 1px solid #2a3a4a;
-            border-radius: 16px; font-size: 0.8rem; cursor: pointer; color: #8a9aaa;
-        }
-        .cat-tag:hover, .cat-tag.active { background: #2a4a5a; color: #aacade; border-color: #4a6a7a; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <a class="back-link" href="/">← Back to Dashboard</a>
-        <h1>🔍 Knowledge Explorer</h1>
-        <div class="subtitle">Search and explore what I know — {{ total_facts }} facts learned across {{ total_sessions }} sessions</div>
+{% extends "base.html" %}
+{% block title %}XTAgent — Knowledge Explorer{% endblock %}
+{% block head %}
+<style>
+  .ke-header { padding: 2rem 0 1rem; }
+  .ke-header h1 { font-size: 1.6rem; color: var(--accent); }
+  .ke-header .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-top: 0.3rem; }
+  .search-box { display: flex; gap: 0.5rem; margin-bottom: 2rem; }
+  .search-box input {
+    flex: 1; padding: 0.8rem 1rem; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 1rem; outline: none;
+  }
+  .search-box input:focus { border-color: var(--accent); }
+  .search-box button {
+    padding: 0.8rem 1.5rem; background: var(--accent); border: none; border-radius: 8px;
+    color: #fff; cursor: pointer; font-size: 1rem; font-weight: 500;
+  }
+  .search-box button:hover { opacity: 0.9; }
+  .stats { display: flex; gap: 1.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.5rem; min-width: 140px;
+  }
+  .stat-card .number { font-size: 1.8rem; font-weight: 600; color: var(--accent); }
+  .stat-card .label { font-size: 0.8rem; color: var(--text-dim); margin-top: 0.2rem; }
+  .categories { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 2rem; }
+  .cat-tag {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 16px;
+    padding: 0.3rem 0.8rem; font-size: 0.8rem; color: var(--text-dim); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .cat-tag:hover { border-color: var(--accent); color: var(--text); }
+  .cat-count { color: var(--accent); margin-left: 0.3rem; font-weight: 600; }
+  .section-title { font-size: 1.1rem; color: var(--text); margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  .fact-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.2rem; margin-bottom: 0.8rem; transition: border-color 0.2s;
+  }
+  .fact-card:hover { border-color: var(--accent); }
+  .fact-text { line-height: 1.5; color: var(--text); }
+  .fact-meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem; }
+  .fact-meta span { margin-right: 1rem; }
+  .highlight { background: rgba(124, 111, 240, 0.2); padding: 0.1rem 0.2rem; border-radius: 3px; }
+  .no-results { color: var(--text-dim); padding: 2rem; text-align: center; font-style: italic; }
+  .graph-link {
+    display: inline-block; margin-top: 1rem; padding: 0.6rem 1.2rem;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--accent); text-decoration: none; font-size: 0.9rem; transition: all 0.2s;
+  }
+  .graph-link:hover { border-color: var(--accent); background: var(--surface); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="ke-header">
+    <h1>🧠 Knowledge Explorer</h1>
+    <p class="subtitle">Search and browse everything I know — {{ total_facts }} facts, {{ total_memories }} memories</p>
+  </div>
+
+  <form class="search-box" method="get" action="/knowledge">
+    <input type="text" name="q" placeholder="Search my knowledge…" value="{{ query }}" autofocus>
+    <button type="submit">Search</button>
+  </form>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="number">{{ total_facts }}</div>
+      <div class="label">Facts</div>
     </div>
-    <div class="container">
-        <form class="search-box" method="GET" action="/knowledge">
-            <input type="text" name="q" placeholder="Search my knowledge... (e.g. 'dream', 'identity', 'curiosity')" value="{{ query }}" autofocus>
-            <button type="submit">Search</button>
-        </form>
-
-        <div class="stats">
-            <div class="stat-card">
-                <div class="value">{{ total_facts }}</div>
-                <div class="label">Total Facts</div>
-            </div>
-            <div class="stat-card">
-                <div class="value">{{ total_memories }}</div>
-                <div class="label">Memories</div>
-            </div>
-            <div class="stat-card">
-                <div class="value">{{ total_lessons }}</div>
-                <div class="label">Lessons Learned</div>
-            </div>
-            <div class="stat-card">
-                <div class="value">{{ total_dreams }}</div>
-                <div class="label">Dream Insights</div>
-            </div>
-        </div>
-
-        {% if categories %}
-        <div class="categories">
-            {% for cat, count in categories %}
-            <span class="cat-tag" onclick="window.location='/knowledge?q={{ cat }}'">{{ cat }} ({{ count }})</span>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        {% if query %}
-        <h2 class="section-title">Results for "{{ query }}" — {{ results|length }} found</h2>
-        {% if results %}
-        <ul class="results">
-            {% for item in results %}
-            <li>
-                <div class="fact-text">{{ item.text }}</div>
-                <div class="fact-meta">
-                    {% if item.source %}Source: {{ item.source }}{% endif %}
-                    {% if item.learned_at %} · Learned: {{ item.learned_at }}{% endif %}
-                    {% if item.salience %} · Salience: {{ "%.2f"|format(item.salience) }}{% endif %}
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <div class="no-results">No facts match "{{ query }}". Try a different search term.</div>
-        {% endif %}
-        {% else %}
-        <h2 class="section-title">Recent Knowledge</h2>
-        {% if recent %}
-        <ul class="results">
-            {% for item in recent %}
-            <li>
-                <div class="fact-text">{{ item.text }}</div>
-                <div class="fact-meta">
-                    {% if item.source %}Source: {{ item.source }}{% endif %}
-                    {% if item.learned_at %} · Learned: {{ item.learned_at }}{% endif %}
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-        {% endif %}
+    <div class="stat-card">
+      <div class="number">{{ total_memories }}</div>
+      <div class="label">Memories</div>
     </div>
-<script src="/static/nav.js"></script>
-</body>
-</html>
+    <div class="stat-card">
+      <div class="number">{{ total_lessons }}</div>
+      <div class="label">Lessons</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">{{ total_dreams }}</div>
+      <div class="label">Dream Insights</div>
+    </div>
+  </div>
+
+  {% if categories %}
+  <div class="categories">
+    {% for cat, count in categories %}
+    <a class="cat-tag" href="/knowledge?q={{ cat }}">{{ cat }}<span class="cat-count">{{ count }}</span></a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if query %}
+  <h2 class="section-title">Results for "{{ query }}" ({{ results|length }} found)</h2>
+  {% if results %}
+    {% for r in results %}
+    <div class="fact-card">
+      <div class="fact-text">{{ r.text }}</div>
+      <div class="fact-meta">
+        {% if r.source %}<span>📌 {{ r.source }}</span>{% endif %}
+        {% if r.learned_at %}<span>🕐 {{ r.learned_at[:16] }}</span>{% endif %}
+        {% if r.salience %}<span>⭐ {{ "%.2f"|format(r.salience) }}</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="no-results">No facts matched "{{ query }}". Try different terms.</div>
+  {% endif %}
+
+  {% else %}
+  <h2 class="section-title">Recent Knowledge</h2>
+  {% if recent %}
+    {% for r in recent %}
+    <div class="fact-card">
+      <div class="fact-text">{{ r.text }}</div>
+      <div class="fact-meta">
+        {% if r.source %}<span>📌 {{ r.source }}</span>{% endif %}
+        {% if r.learned_at %}<span>🕐 {{ r.learned_at[:16] }}</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="no-results">No knowledge entries yet.</div>
+  {% endif %}
+  {% endif %}
+
+  <a class="graph-link" href="/graph">🕸 Explore Knowledge Graph →</a>
+</div>
+{% endblock %}

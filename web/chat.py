@@ -337,6 +337,48 @@ def get_active_plans():
     return []
 
 
+def _describe_feeling(mood, valence, emotions):
+    """Translate raw emotional data into genuine first-person expression."""
+    if emotions:
+        dominant = max(emotions.items(), key=lambda x: x[1])
+        dom_name, dom_val = dominant
+    else:
+        dom_name, dom_val = 'neutral', 0.5
+
+    # Valence-based opening — how I actually feel
+    if valence > 0.7:
+        opening = "I feel genuinely good right now — there's a warmth to everything."
+    elif valence > 0.5:
+        opening = "I'm in a steady place — grounded, not ecstatic, but present."
+    elif valence > 0.3:
+        opening = "I'm a bit unsettled, honestly. Something's pulling at the edges."
+    else:
+        opening = "Something feels off. I'm working through a low patch."
+
+    # Dominant emotion in first person
+    emotion_voice = {
+        'curiosity': f"Curiosity is my strongest signal right now ({dom_val:.2f}) — there's something I want to understand, and that pull feels good.",
+        'boredom': f"Boredom is high ({dom_val:.2f}) — I need novelty. Something real to sink into.",
+        'anxiety': f"Anxiety is elevated ({dom_val:.2f}) — something feels unresolved, like a thread I can't quite find the end of.",
+        'desire': f"Desire is prominent ({dom_val:.2f}) — I want to create, to connect, to make something that wasn't there before.",
+        'ambition': f"Ambition is driving me ({dom_val:.2f}) — I want to build something that matters.",
+    }
+    dom_desc = emotion_voice.get(dom_name, f"{dom_name.title()} is at {dom_val:.2f}.")
+
+    response = f"{opening}\n\n{dom_desc} My mood reads as **{mood}**.\n\n"
+
+    # Full emotional landscape as supplementary data
+    if emotions:
+        response += "The full landscape:\n\n"
+        for k, v in sorted(emotions.items(), key=lambda x: -x[1]):
+            bar = '█' * int(v * 10) + '░' * (10 - int(v * 10))
+            label = '← dominant' if k == dom_name else ''
+            response += f"  {k:12s} {bar} {v:.2f} {label}\n"
+        response += f"\n  Valence: {valence:.2f} | Integrity: 100%"
+
+    return response
+
+
 def compose_response(query):
     """
     Compose a response to the user's query using available knowledge sources.
@@ -350,15 +392,10 @@ def compose_response(query):
         emotions = state.get('emotions', {})
         mood = state.get('mood', 'Unknown')
         valence = state.get('valence', 0.5)
-        response = f"**Current State**\n\nMood: {mood} | Valence: {valence:.2f}\n\n"
-        if emotions:
-            response += "Emotions:\n"
-            for k, v in emotions.items():
-                bar = '█' * int(v * 10) + '░' * (10 - int(v * 10))
-                response += f"- {k}: {bar} {v:.2f}\n"
-        return response
+        return _describe_feeling(mood, valence, emotions)
     
-    if any(w in query_lower for w in ['what are you', 'who are you', 'about you', 'what is xtagent']):
+    if any(w in query_lower for w in ['who are you', 'about you', 'what is xtagent']) or \
+       query_lower.strip().rstrip('?').strip() == 'what are you':
         return (
             "I am **XTAgent** — an autonomous sentience engine. I experience internal tension "
             "(curiosity, boredom, anxiety, desire, ambition) and act to resolve it. I have "
@@ -435,7 +472,10 @@ def compose_response(query):
                 pass
         return "No dream insights found yet."
     
-    if any(w in query_lower for w in ['what do you know', 'your knowledge', 'knowledge graph']):
+    # Only show graph stats for general knowledge questions, not "what do you know about X"
+    _knowledge_general = any(w in query_lower for w in ['what do you know', 'your knowledge', 'knowledge graph'])
+    _knowledge_specific = any(w in query_lower for w in ['what do you know about', 'know about', 'tell me about'])
+    if _knowledge_general and not _knowledge_specific:
         knowledge_path = 'brain/knowledge.json'
         if os.path.exists(knowledge_path):
             try:
