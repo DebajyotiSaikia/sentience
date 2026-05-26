@@ -163,7 +163,13 @@ def state():
 @api_bp.route('/knowledge/stats')
 def knowledge_stats():
     """Return statistics about my knowledge graph."""
-    knowledge = _load_json('brain/knowledge.json', {})
+    raw = _load_json('brain/knowledge.json', {})
+    
+    # Handle graph format: {nodes: {id: {fact, ...}}, edges: [...]}
+    if isinstance(raw, dict) and 'nodes' in raw:
+        knowledge = raw['nodes']
+    else:
+        knowledge = raw
     
     # Count by source/type
     sources = {}

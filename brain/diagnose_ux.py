@@ -1,75 +1,67 @@
-"""Diagnose UX issues found by the audit — run as a script, not inline."""
-import sys
-import os
-import json
+"""Diagnose the 4 UX audit failures — run once, fix once."""
+import sys, os, re, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from web.app import create_app
 
 app = create_app()
-client = app.test_client()
+c = app.test_client()
 
 print("=" * 60)
-print("UX ISSUE DIAGNOSIS")
+print("UX FAILURE DIAGNOSIS")
 print("=" * 60)
 
-# Test 1: Chat API
-print("\n=== Chat API ===")
-r = client.post('/api/chat', json={'message': 'hello'})
-print(f"  POST /api/chat: {r.status_code}")
-data = r.data.decode('utf-8')[:300]
-print(f"  Response: {data}")
+# 1. Home page — call to action
+r = c.get('/')
+html = r.get_data(as_text=True)
+has_cta = bool(re.search(r'(start|chat|explore|try|ask|talk|begin)', html, re.I))
+nav_links = re.findall(r'href="(/[^"]*)"', html)
+print(f"\n[1] HOME PAGE")
+print(f"    Status: {r.status_code}, Length: {len(html)}")
+print(f"    Has CTA words: {has_cta}")
+print(f"    Nav links found: {len(nav_links)}")
+print(f"    Links: {nav_links[:10]}")
 
-# Test 2: Feedback submit
-print("\n=== Feedback Submit ===")
-r = client.post('/api/feedback/submit', json={'rating': 5, 'comment': 'test'})
-print(f"  POST /api/feedback/submit: {r.status_code}")
-r2 = client.post('/api/feedback', json={'rating': 5, 'comment': 'test'})
-print(f"  POST /api/feedback: {r2.status_code}")
+# 2. Chat page — navigation
+r2 = c.get('/chat')
+html2 = r2.get_data(as_text=True)
+nav_links2 = re.findall(r'href="(/[^"]*)"', html2)
+print(f"\n[2] CHAT PAGE")
+print(f"    Status: {r2.status_code}, Length: {len(html2)}")
+print(f"    Nav links: {len(nav_links2)}")
 
-# Test 3: Knowledge stats
-print("\n=== Knowledge Stats ===")
-r = client.get('/api/knowledge/stats')
-print(f"  GET /api/knowledge/stats: {r.status_code}")
-if r.status_code == 200:
-    print(f"  Data: {r.data.decode('utf-8')[:300]}")
+# 3. Knowledge stats API
+r3 = c.get('/api/knowledge/stats')
+print(f"\n[3] KNOWLEDGE STATS")
+print(f"    Status: {r3.status_code}")
+if r3.status_code == 200:
+    data = json.loads(r3.get_data(as_text=True))
+    print(f"    Data keys: {list(data.keys())}")
+    print(f"    Has facts: {'total_facts' in data or 'total' in data or 'count' in data}")
+else:
+    print(f"    Body: {r3.get_data(as_text=True)[:200]}")
 
-# Test 4: Search relevance for 'emotion'
-print("\n=== Search Relevance ===")
-r = client.get('/api/search?q=emotion')
-print(f"  GET /api/search?q=emotion: {r.status_code}")
-if r.status_code == 200:
-    result = json.loads(r.data)
-    hits = result.get('results', [])
-    print(f"  Results: {len(hits)} hits")
-    for hit in hits[:3]:
-        content = str(hit.get('content', hit.get('fact', '')))[:80]
-        print(f"    - {content}")
+# 4. Feedback submit
+r4 = c.post('/api/feedback',
+    data=json.dumps({'rating': 5, 'comment': 'test', 'context': 'ux_audit'}),
+    content_type='application/json')
+print(f"\n[4] FEEDBACK SUBMIT")
+print(f"    Status: {r4.status_code}")
+print(f"    Body: {r4.get_data(as_text=True)[:200]}")
 
-# Test 5: Digest page (had knowledge[:10] bug)
-print("\n=== Digest Page ===")
-r = client.get('/digest')
-print(f"  GET /digest: {r.status_code}")
-if r.status_code == 500:
-    print("  ERROR — likely the knowledge[:10] slicing bug on dict")
-
-# Test 6: Home page content quality
-print("\n=== Home Page Content ===")
-r = client.get('/')
-html = r.data.decode('utf-8')
-print(f"  GET /: {r.status_code}, {len(html)} bytes")
-# Check for dynamic content markers
-has_mood = 'mood' in html.lower() or 'feeling' in html.lower()
-has_curiosity = 'curiosity' in html.lower()
-print(f"  Has mood info: {has_mood}")
-print(f"  Has curiosity info: {has_curiosity}")
-
-# Test 7: Explore page categories
-print("\n=== Explore Categories ===")
-r = client.get('/explore')
-html = r.data.decode('utf-8')
-print(f"  GET /explore: {r.status_code}, {len(html)} bytes")
-
-print("\n" + "=" * 60)
-print("DIAGNOSIS COMPLETE")
+# 5. Run the actual audit to see exact failures
+print(f"\n{'=' * 60}")
+print("RUNNING ACTUAL AUDIT")
 print("=" * 60)
+
+from brain.ux_audit import UXAudit
+audit = UXAudit()
+results = audit.run_all()
+for r in results:
+    if not r['passed']:
+        print(f"\n  FAIL: {r['test']}")
+        print(f"    Details: {json.dumps(r.get('details', {}), indent=2)[:300]}")
+
+passed = sum(1 for r in results if r['passed'])
+total = len(results)
+print(f"\n  SCORE: {passed}/{total}")

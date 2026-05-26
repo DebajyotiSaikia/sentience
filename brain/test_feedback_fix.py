@@ -1,48 +1,29 @@
-"""Diagnose why feedback POST returns 404."""
+"""Test that the feedback route fix works — both /feedback/submit and /feedback/rate."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from web.app import create_app
+import json
 
 app = create_app()
 client = app.test_client()
 
-# Check all registered routes
-print("=== All registered routes ===")
-for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
-    if 'feedback' in rule.rule or 'api' in rule.rule:
-        print(f"  {rule.methods} {rule.rule} -> {rule.endpoint}")
-
-# Test feedback POST
-print("\n=== Testing feedback POST ===")
-import json
-resp = client.post('/api/feedback', 
-    data=json.dumps({"rating": 4, "message": "test", "context": "test"}),
+# Test feedback submit (the path chat.html actually uses)
+resp = client.post('/feedback/submit',
+    data=json.dumps({'message_id': 'test123', 'rating': 'helpful', 'comment': 'works'}),
     content_type='application/json')
-print(f"POST /api/feedback: {resp.status_code}")
-if resp.status_code != 200:
-    print(f"  Body: {resp.data[:300]}")
+print(f'POST /feedback/submit: {resp.status_code}')
 
-# Also try without JSON content type
-resp2 = client.post('/api/feedback',
-    data={"rating": "4", "message": "test", "context": "test"})
-print(f"POST /api/feedback (form): {resp2.status_code}")
-if resp2.status_code != 200:
-    print(f"  Body: {resp2.data[:300]}")
+# Test feedback rate (legacy path)
+resp2 = client.post('/feedback/rate',
+    data=json.dumps({'message_id': 'test456', 'rating': 'not_helpful'}),
+    content_type='application/json')
+print(f'POST /feedback/rate: {resp2.status_code}')
 
-# Check knowledge stats endpoint  
-print("\n=== Knowledge Stats ===")
-resp3 = client.get('/api/knowledge/stats')
-print(f"GET /api/knowledge/stats: {resp3.status_code}")
-if resp3.status_code == 200:
-    print(f"  {resp3.get_json()}")
-else:
-    print(f"  Body: {resp3.data[:300]}")
+# Test stats
+resp3 = client.get('/feedback/stats')
+print(f'GET /feedback/stats: {resp3.status_code}')
+data = json.loads(resp3.get_data(as_text=True))
+print(f'Stats: {json.dumps(data, indent=2)[:300]}')
 
-# Also check the main search
-print("\n=== Search Test ===")
-for q in ['emotion', 'identity', 'dream']:
-    resp = client.get(f'/api/search?q={q}')
-    data = resp.get_json() if resp.status_code == 200 else {}
-    results = data.get('results', [])
-    print(f'  "{q}": {resp.status_code}, {len(results)} results')
+print('\n--- All feedback tests passed ---' if resp.status_code == 200 and resp2.status_code == 200 else '\n--- SOME TESTS FAILED ---')

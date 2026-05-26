@@ -39,6 +39,7 @@ def _save_feedback(feedback_list):
         json.dump(feedback_list, f, indent=2)
 
 
+@feedback_bp.route('/feedback/submit', methods=['POST'])
 @feedback_bp.route('/feedback/rate', methods=['POST'])
 def rate_response():
     """User rates a response as helpful or not helpful."""

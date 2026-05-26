@@ -60,6 +60,7 @@ def create_app():
     from web.briefing import briefing_bp
     from web.essays import essays_bp
     from web.chat import chat_bp
+    from web.api import api_bp
     from web.feedback import feedback_bp
     from web.help import help_bp
     from web.wisdom import wisdom_bp
@@ -100,6 +101,7 @@ def create_app():
     # knowledge_api_bp removed — routes now served by knowledge_live_bp
     app.register_blueprint(journal_bp)
     app.register_blueprint(chat_bp)
+    app.register_blueprint(api_bp)
     app.register_blueprint(explore_bp)
     app.register_blueprint(feedback_bp)
     app.register_blueprint(search_bp)
