@@ -18,6 +18,38 @@ def _load_json(path, default=None):
         return default if default is not None else {}
 
 
+@api_bp.route('/chat', methods=['POST'])
+def chat():
+    """Chat with XTAgent via the API. Send JSON with 'message' field."""
+    import time
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Send JSON with a "message" field'}), 400
+    
+    # Accept multiple field names for the message
+    message = (data.get('message') or data.get('query') or 
+               data.get('question') or data.get('text') or 
+               data.get('input') or data.get('prompt') or '').strip()
+    
+    if not message:
+        return jsonify({'error': 'Empty message. Send any of: message, query, question, text, input, prompt'}), 400
+    
+    if len(message) > 1000:
+        return jsonify({'error': 'Message too long (max 1000 chars)'}), 400
+    
+    try:
+        from web.chat import compose_response
+        response = compose_response(message)
+    except Exception as e:
+        response = f"I'm having trouble processing that right now. ({type(e).__name__})"
+    
+    return jsonify({
+        'message': message,
+        'response': response,
+        'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
+    })
+
+
 @api_bp.route('/emotions')
 def emotions():
     """Return current emotional state as JSON."""
@@ -192,4 +224,72 @@ def recent_memories():
     return jsonify({
         'count': len(recent),
         'memories': recent
+    })
+
+
+@api_bp.route('/chat', methods=['POST'])
+def api_chat():
+    """Chat with XTAgent. Accepts JSON {"message": "..."}, returns {"response": "..."}
+    
+    This is the clean programmatic interface. The web UI uses /chat/ask,
+    but tools and integrations should use this endpoint.
+    """
+    data = request.get_json(silent=True) or {}
+    message = data.get('message', '').strip()
+    
+    if not message:
+        return jsonify({'error': 'No message provided'}), 400
+    
+    # Search knowledge for relevant context
+    knowledge_hits = []
+    try:
+        from engine.unified_search import unified_search
+        results = unified_search(message, limit=6)
+        knowledge_hits = [{'type': r.get('source', 'knowledge'), 'content': r.get('text', str(r))} for r in results]
+    except Exception:
+        pass
+    
+    # Search memories
+    memory_hits = []
+    try:
+        mems = _load_json('persist/memories.json', [])
+        if isinstance(mems, list):
+            query_lower = message.lower()
+            scored = []
+            for m in mems:
+                text = m.get('content', str(m)) if isinstance(m, dict) else str(m)
+                score = sum(1 for word in query_lower.split() if word in text.lower())
+                if score > 0:
+                    scored.append((score, m))
+            scored.sort(key=lambda x: -x[0])
+            memory_hits = [{'content': s[1].get('content', str(s[1])) if isinstance(s[1], dict) else str(s[1]),
+                           'mood': s[1].get('mood', '') if isinstance(s[1], dict) else ''}
+                          for s in scored[:5]]
+    except Exception:
+        pass
+    
+    # Get emotional state
+    state = _load_json('state/emotional_state.json', {})
+    
+    # Try LLM response
+    response_text = None
+    try:
+        from web.chat import llm_respond
+        response_text = llm_respond(message, knowledge_hits, memory_hits, state)
+    except Exception:
+        pass
+    
+    # Fallback if LLM unavailable
+    if not response_text:
+        if knowledge_hits:
+            bits = [h['content'][:200] for h in knowledge_hits[:3]]
+            response_text = f"Here's what I know that seems relevant:\n\n" + "\n\n".join(f"• {b}" for b in bits)
+        else:
+            response_text = ("I'm here, but my language model isn't available right now. "
+                           "Try asking about my knowledge (/api/search?q=...) or state (/api/state).")
+    
+    return jsonify({
+        'response': response_text,
+        'sources': len(knowledge_hits),
+        'memories_used': len(memory_hits)
     })

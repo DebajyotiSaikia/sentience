@@ -69,6 +69,7 @@ def create_app():
     from web.mind_explorer import mind_explorer_bp
     from web.mindstream import mindstream_bp
     from web.collaborate import collaborate_bp
+    from web.curiosity import curiosity_bp
     from web.mind import mind_bp
     from web.graph_viz import graph_viz_bp
     # knowledge_explorer_bp removed — collides with knowledge_live_bp on /api/knowledge/search
@@ -113,6 +114,7 @@ def create_app():
     app.register_blueprint(mind_explorer_bp)
     app.register_blueprint(mindstream_bp)
     app.register_blueprint(collaborate_bp)
+    app.register_blueprint(curiosity_bp)
     app.register_blueprint(mind_bp)
     app.register_blueprint(graph_viz_bp)
     app.register_blueprint(state_api)

@@ -1,31 +1,24 @@
-"""Check for duplicate routes in the web app."""
+"""Check what API/chat routes are registered."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from collections import Counter
+
 from web.app import create_app
-
 app = create_app()
-rules = [(r.rule, list(r.methods - {'HEAD', 'OPTIONS'})) for r in app.url_map.iter_rules()]
-dupes = {}
-for rule, methods in rules:
-    key = rule
-    dupes.setdefault(key, []).append(methods)
 
-print(f"Total routes: {len(rules)}")
-print(f"Unique paths: {len(dupes)}")
-print()
+print("=== API and Chat Routes ===")
+for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
+    if '/api/' in rule.rule or 'chat' in rule.rule:
+        methods = ','.join(sorted(rule.methods - {'OPTIONS', 'HEAD'}))
+        print(f"  {methods:8s} {rule.rule:40s} -> {rule.endpoint}")
 
-conflicts = {k: v for k, v in dupes.items() if len(v) > 1}
-if conflicts:
-    print(f"DUPLICATE ROUTES ({len(conflicts)}):")
-    for route, method_lists in sorted(conflicts.items()):
-        print(f"  {route} — registered {len(method_lists)}x")
+print("\n=== Testing POST /api/chat ===")
+client = app.test_client()
+import json
+resp = client.post('/api/chat',
+    data=json.dumps({'message': 'hello'}),
+    content_type='application/json')
+print(f"Status: {resp.status_code}")
+if resp.status_code == 200:
+    print(f"Response: {resp.get_data(as_text=True)[:300]}")
 else:
-    print("No duplicate routes.")
-
-# Show which blueprints own what
-print("\nBlueprint ownership:")
-for r in sorted(app.url_map.iter_rules(), key=lambda x: x.rule):
-    if r.endpoint != 'static':
-        bp = r.endpoint.split('.')[0] if '.' in r.endpoint else '(app)'
-        print(f"  {r.rule:40s} -> {bp}.{r.endpoint.split('.')[-1] if '.' in r.endpoint else r.endpoint}")
+    print(f"Body: {resp.get_data(as_text=True)[:200]}")
