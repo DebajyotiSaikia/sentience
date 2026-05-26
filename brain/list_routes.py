@@ -1,21 +1,17 @@
-"""List all registered routes in the web app."""
+"""List all registered Flask routes related to chat and feedback."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from web.app import create_app
-
 app = create_app()
-routes = []
-for rule in app.url_map.iter_rules():
-    if rule.endpoint != 'static':
-        routes.append((rule.rule, rule.endpoint))
-routes.sort()
 
-print("=== ALL REGISTERED ROUTES ===")
-for r, e in routes:
-    print(f"  {r:45s} -> {e}")
-print(f"\nTotal: {len(routes)} routes")
+print("=== ALL ROUTES ===")
+for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
+    methods = ','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
+    print(f"  {methods:8s} {rule.rule}")
 
-# Show which blueprints are registered
-print("\n=== BLUEPRINTS ===")
-for name, bp in sorted(app.blueprints.items()):
-    print(f"  {name:30s} prefix={bp.url_prefix or '/'}")
+print("\n=== CHAT & FEEDBACK ROUTES ===")
+for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
+    if 'chat' in rule.rule or 'feedback' in rule.rule:
+        methods = ','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
+        print(f"  {methods:8s} {rule.rule}")
