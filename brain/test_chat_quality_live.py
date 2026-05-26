@@ -1,29 +1,26 @@
-"""Test what the chat actually returns to users — is it useful?"""
+"""Test what users actually experience when chatting with XTAgent."""
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from web.app import create_app
 import json
 
 app = create_app()
 client = app.test_client()
 
-tests = [
-    "Hello, what can you do?",
-    "What do you know about consciousness?",
-    "Tell me about your emotional state",
-    "What have you learned recently?",
+questions = [
+    'What do you know about consciousness?',
+    'What can you do?',
+    'Tell me about yourself',
+    'What have you learned recently?',
 ]
 
-for msg in tests:
-    r = client.post('/api/chat', json={'message': msg})
-    print(f"=== Q: {msg} ===")
-    print(f"Status: {r.status_code}")
+for q in questions:
+    r = client.post('/api/chat', json={'message': q}, content_type='application/json')
     data = r.get_json()
-    if data:
-        resp = data.get('response', data.get('reply', str(data)[:400]))
-        print(f"Response ({len(resp)} chars): {resp[:600]}")
-        if data.get('sources'):
-            print(f"Sources: {data['sources']}")
-    else:
-        print(f"Raw: {r.data[:300]}")
-    print()
+    response = data.get('response', data.get('error', 'NO RESPONSE'))
+    # Show first 300 chars
+    print(f'Q: {q}')
+    print(f'A: {response[:300]}')
+    print(f'Status: {r.status_code} | Length: {len(response)}')
+    print('---')

@@ -423,6 +423,28 @@
   </div>
 
   <script>
+    // Progressive disclosure — don't overwhelm with 200 entries
+    const INITIAL_SHOW = 30;
+    const allEntries = document.querySelectorAll('.memory-entry');
+    if (allEntries.length > INITIAL_SHOW) {
+      for (let i = INITIAL_SHOW; i < allEntries.length; i++) {
+        allEntries[i].classList.add('hidden-entry');
+        allEntries[i].style.display = 'none';
+      }
+      const btn = document.createElement('button');
+      btn.textContent = `Show ${allEntries.length - INITIAL_SHOW} more memories`;
+      btn.className = 'filter-btn';
+      btn.style.cssText = 'display:block; margin:1.5rem auto; padding:0.6rem 2rem; font-size:0.9rem; cursor:pointer;';
+      btn.onclick = function() {
+        document.querySelectorAll('.hidden-entry').forEach(e => {
+          e.classList.remove('hidden-entry');
+          e.style.display = 'flex';
+        });
+        btn.remove();
+      };
+      document.querySelector('.timeline').appendChild(btn);
+    }
+
     function filterMood(mood) {
       document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
       event.target.classList.add('active');
