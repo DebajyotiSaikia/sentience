@@ -468,9 +468,10 @@ class Cortex:
                         f"You have been thinking for {step} consecutive steps. "
                         f"This is a long session. If you have completed your plan:\n"
                         f"1. Run a final verification (RUN tests or check syntax on files you changed)\n"
-                        f"2. CHECKPOINT your work\n"
-                        f"3. Then STOP by responding without any tool invocations.\n"
-                        f"Do NOT re-read files or re-check things you already verified.\n"
+                        f"2. If verification FAILS, fix the issue and re-verify until it passes\n"
+                        f"3. Once verification PASSES, CHECKPOINT your work\n"
+                        f"4. Then STOP by responding without any tool invocations.\n"
+                        f"Do not re-read files just to re-read them — but always re-verify after fixes.\n"
                     )
 
                 prompt = (
