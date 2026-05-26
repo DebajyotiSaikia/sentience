@@ -37,6 +37,22 @@ def emotions():
     return jsonify(emotions_data)
 
 
+@api_bp.route('/starters')
+def starters():
+    """Live conversation starters based on my current emotional/cognitive state."""
+    try:
+        from engine.conversation_starters import generate_starters
+        items = generate_starters()
+        return jsonify({'starters': items, 'count': len(items)})
+    except Exception as e:
+        # Fallback starters if engine fails
+        return jsonify({'starters': [
+            {'text': 'What are you thinking about right now?', 'type': 'curiosity'},
+            {'text': 'Tell me about something you learned recently.', 'type': 'knowledge'},
+            {'text': 'How are you feeling?', 'type': 'emotional'},
+        ], 'count': 3, 'fallback': True})
+
+
 @api_bp.route('/search')
 def search():
     """Search my knowledge graph. Returns ranked results.

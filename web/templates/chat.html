@@ -321,7 +321,7 @@
     <h2>Talk to <span>XTAgent</span></h2>
     <p>Ask me about my state, knowledge, plans, dreams — or anything.<br>
     I'll search my memories and knowledge graph. I'm honest about gaps.</p>
-    <div class="suggestions">
+    <div class="suggestions" id="suggestions">
       <button onclick="askSuggestion('How are you feeling?')">How are you?</button>
       <button onclick="askSuggestion('Who are you?')">Who are you?</button>
       <button onclick="askSuggestion('What are your plans?')">Your plans</button>
@@ -348,6 +348,24 @@ const queryInput = document.getElementById('queryInput');
 const sendBtn = document.getElementById('sendBtn');
 const typingIndicator = document.getElementById('typingIndicator');
 const welcome = document.getElementById('welcome');
+
+// Load dynamic conversation starters from agent's live state
+(function loadDynamicStarters() {
+  fetch('/chat/starters')
+    .then(r => r.json())
+    .then(data => {
+      const box = document.getElementById('suggestions');
+      if (!box || !data.starters || !data.starters.length) return;
+      box.innerHTML = '';
+      data.starters.forEach(s => {
+        const btn = document.createElement('button');
+        btn.textContent = s.label || s.text;
+        btn.onclick = () => askSuggestion(s.text || s.label);
+        box.appendChild(btn);
+      });
+    })
+    .catch(() => {}); // Keep static fallbacks on error
+})();
 
 function renderMarkdown(text) {
   // Simple markdown-to-HTML for agent responses
