@@ -203,7 +203,7 @@ def create_app():
             except Exception:
                 plans = []
         
-        return render_template('portal.html',
+        return render_template('index.html',
                                curiosity=curiosity,
                                boredom=boredom,
                                valence=valence,

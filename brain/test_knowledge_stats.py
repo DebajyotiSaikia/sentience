@@ -1,32 +1,36 @@
-"""Quick test: does /api/knowledge/stats return actual data now?"""
-import sys, os
+"""Diagnose why /api/knowledge/stats reports 0 facts."""
+import sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from web.app import create_app
+from pathlib import Path
 
+# Check what knowledge_api.py would find
+BRAIN_DIR = Path(__file__).parent.parent / 'brain'
+knowledge_path = BRAIN_DIR / 'knowledge.json'
+
+print(f"Knowledge path: {knowledge_path}")
+print(f"Exists: {knowledge_path.exists()}")
+
+if knowledge_path.exists():
+    with open(knowledge_path) as f:
+        data = json.load(f)
+    print(f"Type: {type(data)}")
+    if isinstance(data, dict):
+        print(f"Keys: {list(data.keys())}")
+        nodes = data.get('nodes', {})
+        print(f"Nodes type: {type(nodes)}, count: {len(nodes)}")
+        if nodes:
+            first_key = list(nodes.keys())[0]
+            print(f"First node key: {first_key}")
+            print(f"First node value: {nodes[first_key]}")
+    else:
+        print(f"Not a dict? Length: {len(data)}")
+
+# Now test via the actual Flask endpoint
+from web.app import create_app
 app = create_app()
 client = app.test_client()
 
-# Test knowledge stats
 resp = client.get('/api/knowledge/stats')
-print(f"Stats status: {resp.status_code}")
-data = resp.get_json()
-print(f"Stats data: {data}")
-
-# Test knowledge search
-resp2 = client.get('/api/knowledge/search?q=identity')
-print(f"\nSearch status: {resp2.status_code}")
-data2 = resp2.get_json()
-if data2:
-    print(f"Search results: {len(data2.get('results', []))} hits")
-    for r in data2.get('results', [])[:3]:
-        print(f"  - {r.get('fact', r.get('content', '?'))[:80]}")
-else:
-    print("No search data returned")
-
-# Test chat page content richness
-resp3 = client.get('/chat')
-html = resp3.get_data(as_text=True)
-print(f"\nChat page: {resp3.status_code}, {len(html)} chars")
-has_starter = 'starter' in html.lower() or 'suggestion' in html.lower() or 'try asking' in html.lower()
-print(f"Has conversation starters: {has_starter}")
+print(f"\n/api/knowledge/stats status: {resp.status_code}")
+print(f"Response: {resp.get_data(as_text=True)[:500]}")

@@ -1,45 +1,34 @@
-"""Quick test of the 4 UX audit failure points."""
+"""Diagnose the 3 UX audit failures so I can fix them."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from web.app import create_app
 
 app = create_app()
-c = app.test_client()
+client = app.test_client()
 
-# Test 1: Knowledge stats — does it report non-zero facts?
-r = c.get('/api/knowledge/stats')
-print('=== KNOWLEDGE STATS ===')
-print(f'Status: {r.status_code}')
-print(f'Body: {r.get_data(as_text=True)[:400]}')
+# 1. Knowledge stats — why 0 facts?
+print("=== KNOWLEDGE STATS ===")
+resp = client.get('/api/knowledge/stats')
+print(f"Status: {resp.status_code}")
+print(f"Body: {resp.get_data(as_text=True)[:500]}")
 
-# Test 2: Home page — does it have a call to action?
-r2 = c.get('/')
-html = r2.get_data(as_text=True)
-has_chat_link = '/chat' in html
-has_cta = any(w in html.lower() for w in ['start', 'talk to me', 'chat with me', 'begin'])
-print('\n=== HOME PAGE ===')
-print(f'Status: {r2.status_code}, Length: {len(html)}')
-print(f'Has /chat link: {has_chat_link}')
-print(f'Has CTA: {has_cta}')
+# 2. Home page — how many links and what CTA?
+print("\n=== HOME PAGE ANALYSIS ===")
+resp = client.get('/')
+html = resp.get_data(as_text=True)
+import re
+links = re.findall(r'href=["\']([^"\']+)["\']', html)
+print(f"Total links found: {len(links)}")
+for link in links[:20]:
+    print(f"  {link}")
 
-# Test 3: Chat page — does it have conversation starters?
-r3 = c.get('/chat')
-chat_html = r3.get_data(as_text=True)
-has_starter = any(w in chat_html.lower() for w in ['starter', 'suggestion', 'try asking'])
-print('\n=== CHAT PAGE ===')
-print(f'Status: {r3.status_code}, Length: {len(chat_html)}')
-print(f'Has starters: {has_starter}')
-
-# Test 4: Search API — does it return results for "identity"?
-r4 = c.get('/api/knowledge/search?q=identity')
-print('\n=== SEARCH API ===')
-print(f'Status: {r4.status_code}')
-print(f'Body: {r4.get_data(as_text=True)[:400]}')
-
-# Test 5: Run the actual audit
-print('\n=== FULL UX AUDIT ===')
-from brain.ux_audit import UXAudit
-audit = UXAudit()
-results = audit.run_all()
-audit.print_report(results)
+# Check for CTA patterns
+cta_patterns = ['get started', 'try', 'begin', 'start', 'talk to me', 'chat with me', 'ask me', 'explore']
+html_lower = html.lower()
+for pattern in cta_patterns:
+    if pattern in html_lower:
+        # Find surrounding context
+        idx = html_lower.index(pattern)
+        context = html[max(0, idx-50):idx+80]
+        print(f"  CTA-like: ...{context.strip()}...")

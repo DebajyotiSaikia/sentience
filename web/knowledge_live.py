@@ -191,18 +191,27 @@ def knowledge_search():
 
 @knowledge_live_bp.route('/api/knowledge/stats')
 def knowledge_stats():
-    """Summary statistics about what I know."""
+    """Summary statistics about what I know — with category breakdown."""
     facts = _load_knowledge()
     sources = {}
+    categories = {}
     for f in facts:
         s = f.get('source', 'unknown')
         sources[s] = sources.get(s, 0) + 1
+        # Categorize each fact for richer stats
+        try:
+            from engine.knowledge_categorizer import categorize_fact
+            cat = categorize_fact(f.get('fact', f.get('content', '')))
+            categories[cat] = categories.get(cat, 0) + 1
+        except (ImportError, Exception):
+            categories['uncategorized'] = categories.get('uncategorized', 0) + 1
     
     synthesis = _load_synthesis()
     
     return jsonify({
         'total_facts': len(facts),
         'sources': sources,
+        'categories': categories,
         'synthesis_entries': len(synthesis),
         'newest': facts[0]['learned_at'] if facts else None,
         'oldest': facts[-1]['learned_at'] if facts else None,

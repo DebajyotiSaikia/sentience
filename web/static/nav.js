@@ -19,8 +19,11 @@
     { href: "/", label: "⚡ Home" },
     { href: "/chat", label: "💬 Chat" },
     { href: "/explore", label: "🧠 Explore" },
-    { href: "/collaborate", label: "🤝 Collaborate" },
+    { href: "/insights", label: "✨ Insights" },
+    { href: "/journal", label: "📖 Journal" },
+    { href: "/story", label: "📜 Story" },
     { href: "/about", label: "🔮 About" },
+    { href: "/dashboard", label: "📊 Dashboard" },
   ];
 
   const moreLinks = [

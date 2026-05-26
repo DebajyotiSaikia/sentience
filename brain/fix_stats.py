@@ -2,38 +2,40 @@
 import sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Step 1: What data actually exists?
-kg_path = 'brain/knowledge.json'
-if os.path.exists(kg_path):
-    with open(kg_path) as f:
-        data = json.load(f)
-    if isinstance(data, dict) and 'nodes' in data:
-        print(f"brain/knowledge.json: {len(data['nodes'])} nodes, {len(data.get('edges',[]))} edges")
-    else:
-        print(f"brain/knowledge.json: type={type(data).__name__}, len={len(data)}")
-else:
-    print("brain/knowledge.json: NOT FOUND")
-
-pg_path = 'persist/knowledge_graph.json'
-if os.path.exists(pg_path):
-    with open(pg_path) as f:
-        data2 = json.load(f)
-    if isinstance(data2, dict):
-        print(f"persist/knowledge_graph.json: {len(data2)} top-level keys")
-        if 'nodes' in data2:
-            print(f"  nodes: {len(data2['nodes'])}")
-    else:
-        print(f"persist/knowledge_graph.json: type={type(data2).__name__}, len={len(data2)}")
-else:
-    print("persist/knowledge_graph.json: NOT FOUND")
-
-# Step 2: Test the stats endpoint
 from web.app import create_app
+
 app = create_app()
 client = app.test_client()
 
-for path in ['/api/knowledge/stats', '/api/knowledge', '/api/search']:
-    resp = client.get(path)
-    body = resp.get_data(as_text=True)[:300]
-    print(f"\n{path}: {resp.status_code}")
-    print(f"  {body}")
+# 1. Check what the stats endpoint returns
+resp = client.get('/api/knowledge/stats')
+print("=== Stats Endpoint ===")
+print(f"Status: {resp.status_code}")
+data = json.loads(resp.get_data(as_text=True))
+print(f"Response: {json.dumps(data, indent=2)[:500]}")
+
+# 2. Check what data files exist
+print("\n=== Data Files ===")
+for f in ['brain/knowledge.json', 'persist/knowledge.json']:
+    if os.path.exists(f):
+        with open(f) as fh:
+            d = json.load(fh)
+        if isinstance(d, dict):
+            nodes = d.get('nodes', {})
+            print(f"{f}: dict, nodes={len(nodes)}, edges={len(d.get('edges', []))}")
+        elif isinstance(d, list):
+            print(f"{f}: list, len={len(d)}")
+    else:
+        print(f"{f}: NOT FOUND")
+
+# 3. Check which blueprint handles /api/knowledge/stats
+print("\n=== Route Map ===")
+for rule in app.url_map.iter_rules():
+    if 'knowledge' in str(rule) and 'stats' in str(rule):
+        print(f"  {rule} -> {rule.endpoint}")
+
+# 4. Check ALL knowledge-related routes
+print("\n=== All Knowledge Routes ===")
+for rule in sorted(app.url_map.iter_rules(), key=lambda r: str(r)):
+    if 'knowledge' in str(rule):
+        print(f"  {rule.methods - {'OPTIONS', 'HEAD'}} {rule} -> {rule.endpoint}")

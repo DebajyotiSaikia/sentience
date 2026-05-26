@@ -145,7 +145,7 @@ class UXAudit:
         self.check("Knowledge stats: responds", resp.status_code == 200)
         if resp.status_code == 200:
             data = resp.get_json()
-            count = data.get('total', data.get('count', 0))
+            count = data.get('total_facts', data.get('total', data.get('count', 0)))
             self.check("Knowledge stats: has facts",
                         count > 0,
                         f"Reports {count} facts")
