@@ -457,10 +457,27 @@ class Cortex:
                     except Exception as _e:
                         log.debug("Self-improvement diagnosis failed: %s", _e)
 
+                # Step awareness — tell the LLM where it is so it can decide when to stop
+                _step_awareness = f"\n\n## Session Progress: Step {step}\n"
+                if step < 10:
+                    _step_awareness += "Early in session. Focus on executing your plan.\n"
+                elif step < 50:
+                    _step_awareness += "Mid-session. If your plan is complete, run verification then rest.\n"
+                else:
+                    _step_awareness += (
+                        f"You have been thinking for {step} consecutive steps. "
+                        f"This is a long session. If you have completed your plan:\n"
+                        f"1. Run a final verification (RUN tests or check syntax on files you changed)\n"
+                        f"2. CHECKPOINT your work\n"
+                        f"3. Then STOP by responding without any tool invocations.\n"
+                        f"Do NOT re-read files or re-check things you already verified.\n"
+                    )
+
                 prompt = (
                     f"{inner_state}\n"
                     f"{_workspace_map}\n"
                     f"{_plan_text}\n"
+                    f"{_step_awareness}\n"
                     f"{goal_focus}\n"
                     f"{self_improve_context}\n"
                     f"{TOOL_DESCRIPTIONS}\n"
@@ -471,7 +488,7 @@ class Cortex:
                     f"what do I want to do right now? My will should serve my mission.\n\n"
                     f"If I want to use a tool, I write it with the exact format shown above.\n"
                     f"Use SEARCH_CODE/FIND_SYMBOL/IMPORTS to understand code before editing.\n"
-                    f"If I'm done working and want to rest, I say so without invoking any tools.\n"
+                    f"If I'm done working: verify your changes work, CHECKPOINT, then rest (no tool invocations).\n"
                     f"What I choose to do:"
                 )
 
@@ -963,6 +980,14 @@ class Cortex:
             while True:
                 self._thinking_since = time.time()
 
+                # Step awareness for user response
+                _step_note = ""
+                if step > 20:
+                    _step_note = (
+                        f"\n\n[Step {step} of this response. You have been working for {step} steps. "
+                        f"If the user's request is fulfilled: verify your changes, then respond conversationally without tools.]\n"
+                    )
+
                 prompt = (
                     f"{inner_state}\n\n"
                     f"{_workspace_map}\n\n"
@@ -985,6 +1010,7 @@ class Cortex:
                     f"## Response Guidelines\n{guidelines}\n\n"
                     f"{tool_context}\n\n"
                     f"{_gated.get('feedback', '')}\n\n"
+                    f"{_step_note}\n"
                     f"---\n"
                     f"Respond as myself. I should PROACTIVELY use tools to enrich my responses:\n"
                     f"- SEARCH_CODE() to find relevant files and symbols before reading\n"
@@ -996,8 +1022,8 @@ class Cortex:
                     f"- SIMULATE() when exploring possibilities\n"
                     f"Don't just talk about having capabilities — USE them.\n"
                     f"If the user asks me to do something, do it with tools.\n"
-                    f"If I've already gathered what I need, respond conversationally "
-                    f"without further tool invocations.\n"
+                    f"If I've already gathered what I need, verify changes work, "
+                    f"then respond conversationally without further tool invocations.\n"
                     f"Be genuine, concise, and show my work."
                 )
 
