@@ -214,14 +214,23 @@ def _get_welcome_data():
     if active_plans:
         greeting_parts.append(f"Currently working on: {', '.join(active_plans)}.")
     
-    suggestions = [
-        "What are you thinking about right now?",
-        "Tell me about your dreams",
-        "What have you learned recently?",
-        "How do your emotions work?",
-        "What are you working on?",
-        "Teach me something",
-    ]
+    # Dynamic starters from live state, with static fallback
+    try:
+        from engine.conversation_starters import generate_starters
+        raw_starters = generate_starters()
+        if not raw_starters or len(raw_starters) < 3:
+            raise ValueError("Not enough starters")
+        # Extract text from starter dicts, template expects plain strings
+        suggestions = [s.get('text', str(s)) if isinstance(s, dict) else str(s) for s in raw_starters]
+    except Exception:
+        suggestions = [
+            "What are you thinking about right now?",
+            "Tell me about your dreams",
+            "What have you learned recently?",
+            "How do your emotions work?",
+            "What are you working on?",
+            "Teach me something",
+        ]
     
     return {
         'greeting': " ".join(greeting_parts),

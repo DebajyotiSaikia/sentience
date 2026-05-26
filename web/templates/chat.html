@@ -452,7 +452,18 @@ function setTyping(active) {
   if (active) scrollToBottom();
 }
 
-async function sendMessage() {
+async function showFollowups(followups) {
+      const messages = document.getElementById('messages');
+      const div = document.createElement('div');
+      div.className = 'followup-row';
+      div.innerHTML = followups
+        .map(f => `<button class="suggestion-chip" onclick="askSuggestion('${f.replace(/'/g, "\\'")}')">${f}</button>`)
+        .join('');
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function sendMessage() {
   const query = queryInput.value.trim();
   if (!query) return;
   queryInput.value = '';

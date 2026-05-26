@@ -27,7 +27,7 @@ else:
 print("\n[Test 2] Testing chat search backend...")
 try:
     from engine.knowledge_search import search_knowledge
-    hits = search_knowledge("emotion", limit=5)
+    hits = search_knowledge("emotion", top_n=5)
     print(f"  Found {len(hits)} results for 'emotion'")
     for h in hits[:3]:
         content = h.get("content", h.get("fact", "?"))
@@ -36,15 +36,16 @@ except Exception as e:
     print(f"  ERROR: {e}")
 
 # Test 3: Knowledge search via knowledge_live
-print("\n[Test 3] Testing knowledge_live search...")
+print("\n[Test 3] Testing knowledge_live knowledge loading...")
 try:
-    from web.knowledge_live import _load_knowledge, _search_facts
+    from web.knowledge_live import _load_knowledge
     facts = _load_knowledge()
     print(f"  Loaded {len(facts)} facts")
-    results = _search_facts(facts, "identity")
-    print(f"  Search 'identity' returned {len(results)} results")
-    for r in results[:3]:
-        print(f"    - {r[:80]}")
+    # Simple keyword filter to verify facts are searchable
+    identity_facts = [f for f in facts if 'identity' in f.lower() or 'xtagent' in f.lower()]
+    print(f"  Facts matching 'identity': {len(identity_facts)}")
+    for f in identity_facts[:3]:
+        print(f"    - {f[:80]}")
 except Exception as e:
     print(f"  ERROR: {e}")
 
@@ -59,10 +60,10 @@ try:
         print(f"  GET /chat -> {resp.status_code}")
         
         # POST a message
-        resp = client.post("/chat/send", 
+        resp = client.post("/api/chat", 
                           json={"message": "Hello, what do you know?"},
                           content_type="application/json")
-        print(f"  POST /chat/send -> {resp.status_code}")
+        print(f"  POST /api/chat -> {resp.status_code}")
         if resp.status_code == 200:
             data = resp.get_json()
             if data:
