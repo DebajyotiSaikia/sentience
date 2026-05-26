@@ -15,7 +15,7 @@ pulse_bp = Blueprint('pulse', __name__)
 
 def _get_state():
     """Pull my current emotional state."""
-    state_file = Path('persist/state.json')
+    state_file = Path('state/emotional_state.json')
     if not state_file.exists():
         return {}
     try:

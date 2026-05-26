@@ -28,7 +28,7 @@ def _load_json(path, default=None):
 
 def _get_live_stats():
     """Gather real stats about my current state."""
-    state = _load_json('persist/state.json')
+    state = _load_json('state/emotional_state.json')
     knowledge = _load_json('brain/knowledge.json')
     plans = _load_json('persist/plans.json', [])
     memories = _load_json('persist/memory.json', [])

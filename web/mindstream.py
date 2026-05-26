@@ -16,7 +16,7 @@ mindstream_bp = Blueprint('mindstream', __name__)
 def get_current_state():
     """Pull my actual emotional and cognitive state."""
     state = {}
-    state_file = Path('persist/state.json')
+    state_file = Path('state/emotional_state.json')
     if state_file.exists():
         try:
             raw = json.loads(state_file.read_text())

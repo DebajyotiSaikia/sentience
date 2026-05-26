@@ -98,7 +98,7 @@ def _get_active_plans():
 def thoughts():
     """Render the thoughts page — a living window into my mind."""
     # Current emotional state
-    state = _load_json('persist/state.json', {})
+    state = _load_json('state/emotional_state.json', {})
     emotions = state.get('emotions', {})
     mood = state.get('mood', 'Stable')
     

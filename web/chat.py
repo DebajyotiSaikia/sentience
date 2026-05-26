@@ -8,6 +8,9 @@ import json
 import os
 import time
 import asyncio
+from web.conversation_memory import ConversationMemory
+
+_conv_memory = ConversationMemory()
 
 try:
     from engine.conversation_starters import generate_starters, get_greeting
@@ -23,7 +26,7 @@ except Exception:
     _user_engine = None
 
 
-def llm_respond(query, knowledge_hits, memory_hits, state):
+def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None):
     """Use CopilotLLM to generate a natural response grounded in retrieved context."""
     try:
         from engine.llm import CopilotLLM

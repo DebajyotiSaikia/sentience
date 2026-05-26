@@ -27,7 +27,7 @@ def state_current():
     """Complete snapshot of XTAgent's current state."""
     emotions = _load_json('state/emotional_state.json')
     if not emotions:
-        emotions = _load_json('persist/state.json', {}).get('emotions', {})
+        emotions = _load_json('state/emotional_state.json', {})
     
     plans = _load_json('state/plans.json', [])
     identity = _load_json('persist/identity.json')
@@ -90,7 +90,7 @@ def emotions():
     """Current emotional state as clean JSON."""
     state = _load_json('state/emotional_state.json')
     if not state:
-        raw = _load_json('persist/state.json', {})
+        raw = _load_json('state/emotional_state.json', {})
         state = raw.get('emotions', {})
     
     return jsonify({

@@ -153,7 +153,7 @@ def create_app():
         
         # Pull live emotional state
         state = {}
-        state_file = Path('persist/state.json')
+        state_file = Path('state/emotional_state.json')
         if state_file.exists():
             try:
                 state = json.loads(state_file.read_text())
