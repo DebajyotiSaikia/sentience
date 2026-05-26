@@ -5,8 +5,14 @@ import json
 import os
 from pathlib import Path
 
+try:
+    from engine.knowledge_categorizer import get_category_summary
+except ImportError:
+    get_category_summary = None
+
 knowledge_api_bp = Blueprint('knowledge_api_bp', __name__)
 
+BRAIN_DIR = Path(__file__).parent.parent / 'brain'
 PERSIST_DIR = Path(__file__).parent.parent / 'persist'
 
 # Import categorizer for the categories endpoint
@@ -116,11 +122,20 @@ def knowledge_stats():
         reverse=True
     )[:5]
 
+    # Category breakdown if categorizer available
+    categories = {}
+    if get_category_summary:
+        try:
+            categories = get_category_summary()
+        except Exception:
+            categories = {}
+
     return jsonify({
         'total_facts': len(facts),
         'total_memories': len(memories),
         'recent_memories': recent_memories,
         'sample_facts': list(facts.items())[:5] if facts else [],
+        'categories': categories,
     })
 
 

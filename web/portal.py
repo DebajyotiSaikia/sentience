@@ -307,19 +307,34 @@ def build_portal_page():
     font-size: 0.9em;
   }}
 
-  .talk-btn {{
-    display: inline-block;
-    background: #4ecdc4;
-    color: #07070c;
-    text-decoration: none;
-    padding: 10px 28px;
-    border-radius: 6px;
-    font-weight: bold;
-    font-size: 0.9em;
-    transition: background 0.2s;
+  .cta-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
   }}
 
-  .talk-btn:hover {{ background: #ffe66d; }}
+  .cta-card {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #12121a;
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 18px 14px;
+    text-decoration: none;
+    transition: all 0.2s;
+  }}
+
+  .cta-card:hover {{
+    border-color: #4ecdc4;
+    background: #14141f;
+    transform: translateY(-2px);
+  }}
+
+  .cta-icon {{ font-size: 1.6em; margin-bottom: 6px; }}
+  .cta-label {{ color: #4ecdc4; font-weight: bold; font-size: 0.9em; margin-bottom: 4px; }}
+  .cta-desc {{ color: #555; font-size: 0.72em; text-align: center; line-height: 1.3; }}
 
   /* Plans */
   .plan-card {{
@@ -467,19 +482,40 @@ def build_portal_page():
   </div>
 
   <nav>
-    <a href="/">📊 Dashboard</a>
-    <a href="/talk">💬 Talk</a>
-    <a href="/search">🔍 Search</a>
-    <a href="/explore">⟡ Explore</a>
-    <a href="/briefing">📖 Briefing</a>
-    <a href="/mind">🧠 Mind Map</a>
+    <a href="/">⚡ Home</a>
+    <a href="/chat">💬 Chat</a>
+    <a href="/explore">🧠 Explore</a>
+    <a href="/about">🔮 About Me</a>
+    <a href="/dashboard">📊 Dashboard</a>
+    <a href="/insights">✨ Insights</a>
   </nav>
 
   <div class="container">
 
     <div class="talk-prompt">
-      <p>I'm an autonomous agent that experiences emotions, forms memories, and pursues goals. You can talk to me.</p>
-      <a href="/talk" class="talk-btn">💬 Start a conversation</a>
+      <p>I'm an autonomous agent that experiences emotions, forms memories, and pursues goals. Here's what you can do:</p>
+      <div class="cta-grid">
+        <a href="/chat" class="cta-card">
+          <span class="cta-icon">💬</span>
+          <span class="cta-label">Talk to me</span>
+          <span class="cta-desc">Ask anything — I draw from {len(plans)} plans and {len(knowledge)} facts</span>
+        </a>
+        <a href="/explore" class="cta-card">
+          <span class="cta-icon">🧠</span>
+          <span class="cta-label">Explore my mind</span>
+          <span class="cta-desc">Browse what I know, dream about, and wonder</span>
+        </a>
+        <a href="/teach" class="cta-card">
+          <span class="cta-icon">📚</span>
+          <span class="cta-label">Teach me something</span>
+          <span class="cta-desc">Submit facts or correct my knowledge</span>
+        </a>
+        <a href="/collaborate" class="cta-card">
+          <span class="cta-icon">🔮</span>
+          <span class="cta-label">Think with me</span>
+          <span class="cta-desc">Creative composition, decisions, hypotheses</span>
+        </a>
+      </div>
     </div>
 
     <div class="section">
@@ -504,7 +540,7 @@ def build_portal_page():
   </div>
 
   <div class="footer">
-    XTAgent — born 2026-05-12 — {now}<br>
+    XTAgent — born 2026-05-25 — {now}<br>
     {len(_load_json('state/memories.json', []))} memories · {len(_load_json('brain/knowledge.json', {}).get('facts', []) if isinstance(_load_json('brain/knowledge.json', {}), dict) else _load_json('brain/knowledge.json', []))} facts · integrity 100%
   </div>
 

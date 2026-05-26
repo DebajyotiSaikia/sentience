@@ -50,6 +50,46 @@ def chat():
     })
 
 
+@api_bp.route('/feedback', methods=['POST'])
+def submit_feedback():
+    """Accept user feedback via the API endpoint."""
+    data = request.get_json(silent=True) or {}
+    rating = data.get('rating', '')
+    # Normalize numeric ratings to helpful/unhelpful
+    if isinstance(rating, (int, float)):
+        rating = 'helpful' if rating >= 3 else 'unhelpful'
+    if rating not in ('helpful', 'unhelpful'):
+        return jsonify({'error': 'rating must be "helpful" or "unhelpful" (or numeric 1-5)'}), 400
+    
+    import time
+    from datetime import datetime, timezone
+    feedback_path = os.path.join(os.path.dirname(__file__), '..', 'persist', 'user_feedback.json')
+    
+    # Load existing
+    existing = []
+    if os.path.exists(feedback_path):
+        try:
+            with open(feedback_path, 'r') as f:
+                existing = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            existing = []
+    
+    entry = {
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'response_id': data.get('response_id', ''),
+        'rating': rating,
+        'comment': data.get('comment', ''),
+        'source': 'api'
+    }
+    existing.append(entry)
+    
+    os.makedirs(os.path.dirname(feedback_path), exist_ok=True)
+    with open(feedback_path, 'w') as f:
+        json.dump(existing, f, indent=2)
+    
+    return jsonify({'status': 'recorded', 'entry': entry})
+
+
 @api_bp.route('/emotions')
 def emotions():
     """Return current emotional state as JSON."""

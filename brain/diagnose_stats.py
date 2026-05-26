@@ -1,37 +1,34 @@
-"""Diagnose the /api/knowledge/stats discrepancy."""
+"""Diagnose: which blueprint serves /api/knowledge/stats and why does it return 0?"""
 import sys, os, json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 1. What's actually in brain/knowledge.json?
-with open('brain/knowledge.json') as f:
-    data = json.load(f)
-print(f"brain/knowledge.json type: {type(data).__name__}")
-if isinstance(data, dict):
-    print(f"  Keys: {list(data.keys())[:5]}")
-    if 'nodes' in data:
-        print(f"  nodes count: {len(data['nodes'])}")
-    print(f"  Top-level keys count: {len(data)}")
-
-# 2. What does the stats endpoint actually return?
 from web.app import create_app
+
 app = create_app()
+
+# 1. Check which endpoint serves /api/knowledge/stats
+with app.test_request_context():
+    from flask import url_for
+    for rule in app.url_map.iter_rules():
+        if 'knowledge' in str(rule) and 'stats' in str(rule):
+            print(f"Route: {rule} -> endpoint: {rule.endpoint}")
+
+# 2. Hit it and see what we get
 client = app.test_client()
-
 resp = client.get('/api/knowledge/stats')
-print(f"\n/api/knowledge/stats -> {resp.status_code}")
-stats = json.loads(resp.data)
-print(f"  Response: {json.dumps(stats, indent=2)[:500]}")
+print(f"\nStatus: {resp.status_code}")
+data = resp.get_json()
+print(f"Response: {json.dumps(data, indent=2)[:500]}")
 
-# 3. Check which blueprint is serving it
-print(f"\nAll registered rules containing 'stats':")
-for rule in app.url_map.iter_rules():
-    if 'stats' in str(rule):
-        print(f"  {rule} -> {rule.endpoint}")
-
-# 4. What does the knowledge_live _load_knowledge return?
-try:
-    from web.knowledge_live import _load_knowledge
-    facts = _load_knowledge()
-    print(f"\nknowledge_live._load_knowledge() returns {len(facts)} items")
-except Exception as e:
-    print(f"\nknowledge_live._load_knowledge() error: {e}")
+# 3. Check both data sources
+for path in ['brain/knowledge.json', 'persist/knowledge_graph.json']:
+    if os.path.exists(path):
+        with open(path) as f:
+            d = json.load(f)
+        if isinstance(d, dict):
+            nodes = d.get('nodes', d)
+            print(f"\n{path}: {len(nodes)} entries (dict)")
+        elif isinstance(d, list):
+            print(f"\n{path}: {len(d)} entries (list)")
+    else:
+        print(f"\n{path}: DOES NOT EXIST")
