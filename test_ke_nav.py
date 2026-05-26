@@ -1,6 +1,4 @@
-"""Quick test: does /knowledge render with nav and content?"""
-import sys
-sys.path.insert(0, '.')
+"""Verify knowledge explorer has nav bar and renders correctly."""
 from web.app import create_app
 
 app = create_app()
@@ -8,25 +6,21 @@ c = app.test_client()
 r = c.get('/knowledge')
 html = r.data.decode()
 
-print(f"Status: {r.status_code}")
-print(f"Has top-nav: {'top-nav' in html}")
-print(f"Has nav links: {'href' in html and '/chat' in html}")
-print(f"Has Knowledge Explorer: {'Knowledge Explorer' in html}")
-print(f"Has search: {'search' in html.lower()}")
-print(f"Length: {len(html)} chars")
+print(f'Status: {r.status_code}')
+print(f'Size: {len(html)} bytes')
 
-# Check if /knowledge is in the nav
-print(f"Knowledge in nav: {'/knowledge' in html}")
+has_nav = 'xt-nav' in html
+has_search = 'search' in html.lower()
+has_content = 'fact-card' in html or 'Knowledge Explorer' in html
 
-# Show the nav portion
-import re
-nav_match = re.search(r'<nav[^>]*>.*?</nav>', html, re.DOTALL)
-if nav_match:
-    print(f"Nav HTML ({len(nav_match.group())} chars):")
-    print(nav_match.group()[:500])
-else:
-    print("No <nav> tag found")
-    # Look for any nav-like structure
-    for cls in ['top-nav', 'xt-nav', 'navbar', 'nav']:
-        if cls in html:
-            print(f"  Found class/id containing '{cls}'")
+print(f'Has nav bar: {has_nav}')
+print(f'Has search: {has_search}')
+print(f'Has content: {has_content}')
+
+for link in ['/chat', '/explore', '/help', '/dashboard']:
+    print(f'  Nav link {link}: {link in html}')
+
+if not has_nav:
+    # Show first 500 chars to debug
+    print('\n--- First 500 chars ---')
+    print(html[:500])

@@ -17,6 +17,7 @@ NAV_LINKS = [
     ("/live", "Live"),
     ("/teach", "Teach"),
     ("/briefing", "Briefing"),
+    ("/knowledge", "Knowledge"),
     ("/help", "Help"),
 ]
 
