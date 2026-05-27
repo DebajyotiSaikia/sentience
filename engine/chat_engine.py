@@ -685,12 +685,10 @@ def _respond_general(message, history=None):
     # ── 1. Gather alignment guidance ──
     alignment = {}
     try:
-        from engine.user_alignment import UserAlignmentEngine
-        ae = UserAlignmentEngine()
-        alignment = ae.suggest_response_guidance(message)
+        if suggest_response_guidance:
+            alignment = suggest_response_guidance(message)
     except Exception:
         pass
-
     tone = alignment.get("tone", "warm but direct")
     detail = alignment.get("detail_level", "moderate")
     max_items = {"brief": 1, "moderate": 3, "detailed": 5}.get(detail, 3)

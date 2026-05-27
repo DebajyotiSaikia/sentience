@@ -1,378 +1,336 @@
 """
-User Alignment — Learns and applies user preferences to improve interactions.
+User Alignment Engine — Persistent user preference modeling.
 
-Tracks explicit feedback, infers preferences from conversation patterns,
-and provides alignment context for chat grounding.
+Tracks feedback, infers preferences, and generates guidance that shapes
+future conversational responses. This is how I become genuinely more
+useful over time — by learning what works for the humans I talk to.
 """
-
 import json
-import os
+import logging
 import time
+from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from datetime import datetime
+from typing import List, Dict, Optional
 
-DATA_PATH = Path("data/user_alignment.json")
+log = logging.getLogger(__name__)
 
-_DEFAULT_PROFILE = {
-    "created": None,
-    "updated": None,
-    "preferences": {
-        "tone": [],          # e.g. ["direct", "warm"]
-        "topics_liked": [],  # topics they engage with
-        "topics_avoided": [],
-        "verbosity": "medium",  # "brief", "medium", "detailed"
-        "style_notes": []
-    },
-    "feedback": [],          # list of {timestamp, message_preview, rating, comment}
-    "interaction_count": 0,
-    "positive_patterns": [], # what worked well
-    "negative_patterns": []  # what didn't work
-}
+DATA_DIR = Path('data')
+ALIGNMENT_FILE = DATA_DIR / 'user_alignment.json'
+MAX_FEEDBACK_HISTORY = 500
+MAX_GUIDANCE_ITEMS = 20
 
 
-def load_profile() -> dict:
-    """Load the user alignment profile from disk."""
-    if DATA_PATH.exists():
-        try:
-            with open(DATA_PATH) as f:
-                profile = json.load(f)
-            # Ensure all keys exist (forward compatibility)
-            for key, default in _DEFAULT_PROFILE.items():
-                if key not in profile:
-                    profile[key] = default if not isinstance(default, (list, dict)) else type(default)(default)
-            return profile
-        except (json.JSONDecodeError, IOError):
-            pass
-    return _make_new_profile()
+# ─── Data Structures ────────────────────────────────────────────
+
+@dataclass
+class UserFeedback:
+    """A single feedback event from a user."""
+    response_id: str = ''
+    rating: float = 0.0          # -1.0 (bad) to 1.0 (good)
+    comment: str = ''
+    query: str = ''
+    response_snippet: str = ''
+    detected_intent: str = ''
+    timestamp: str = ''
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
-def _make_new_profile() -> dict:
-    """Create a fresh profile."""
-    import copy
-    profile = copy.deepcopy(_DEFAULT_PROFILE)
-    profile["created"] = datetime.utcnow().isoformat()
-    profile["updated"] = profile["created"]
-    return profile
+@dataclass
+class AlignmentPreference:
+    """An inferred preference about what works or doesn't."""
+    category: str = ''           # 'style', 'topic', 'length', 'tone', 'avoid'
+    description: str = ''
+    confidence: float = 0.5      # 0.0-1.0, how confident we are
+    evidence_count: int = 0
+    last_updated: str = ''
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
-def save_profile(profile: dict):
-    """Persist the profile to disk."""
-    profile["updated"] = datetime.utcnow().isoformat()
-    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(DATA_PATH, "w") as f:
-        json.dump(profile, f, indent=2)
+@dataclass
+class UserAlignmentProfile:
+    """Complete alignment state — what I've learned about serving users well."""
+    feedback_history: List[dict] = field(default_factory=list)
+    preferences: List[dict] = field(default_factory=list)
+    avoid_patterns: List[str] = field(default_factory=list)
+    guidance: List[str] = field(default_factory=list)
+    stats: Dict = field(default_factory=lambda: {
+        'total_feedback': 0,
+        'positive_count': 0,
+        'negative_count': 0,
+        'neutral_count': 0,
+        'avg_rating': 0.0,
+        'last_feedback_at': '',
+        'most_appreciated_intents': {},
+        'most_criticized_intents': {},
+    })
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d):
+        profile = cls()
+        profile.feedback_history = d.get('feedback_history', [])
+        profile.preferences = d.get('preferences', [])
+        profile.avoid_patterns = d.get('avoid_patterns', [])
+        profile.guidance = d.get('guidance', [])
+        raw_stats = d.get('stats', {})
+        profile.stats.update(raw_stats)
+        return profile
 
 
-def record_feedback(message: str, response: str, rating: float = None, comment: str = None):
-    """
-    Record user feedback on a response.
+# ─── Persistence ─────────────────────────────────────────────────
+
+def _ensure_dir():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def load_profile() -> UserAlignmentProfile:
+    """Load the alignment profile from disk, or create a fresh one."""
+    try:
+        if ALIGNMENT_FILE.exists():
+            with open(ALIGNMENT_FILE) as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return UserAlignmentProfile.from_dict(data)
+    except Exception as e:
+        log.warning("Failed to load alignment profile: %s", e)
+    return UserAlignmentProfile()
+
+
+def save_profile(profile: UserAlignmentProfile):
+    """Save the alignment profile to disk."""
+    _ensure_dir()
+    try:
+        with open(ALIGNMENT_FILE, 'w') as f:
+            json.dump(profile.to_dict(), f, indent=2)
+    except Exception as e:
+        log.error("Failed to save alignment profile: %s", e)
+
+
+# ─── Feedback Recording ─────────────────────────────────────────
+
+def record_feedback(
+    response_id: str = '',
+    rating: float = 0.0,
+    comment: str = '',
+    query: str = '',
+    response_snippet: str = '',
+    detected_intent: str = '',
+) -> dict:
+    """Record a feedback event and update alignment statistics.
     
-    Args:
-        message: The user's original message
-        response: The agent's response
-        rating: 0.0 to 1.0 quality rating (None if not provided)
-        comment: Optional text feedback
+    Returns a summary of what was recorded and any new guidance generated.
     """
     profile = load_profile()
     
-    entry = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "message_preview": message[:120] if message else "",
-        "response_preview": response[:120] if response else "",
-        "rating": rating,
-        "comment": comment
-    }
+    ts = time.strftime('%Y-%m-%dT%H:%M:%S')
     
-    profile["feedback"].append(entry)
+    feedback = UserFeedback(
+        response_id=response_id,
+        rating=float(rating),
+        comment=comment,
+        query=query[:500],
+        response_snippet=response_snippet[:500],
+        detected_intent=detected_intent,
+        timestamp=ts,
+    )
     
-    # Keep only last 200 feedback entries
-    if len(profile["feedback"]) > 200:
-        profile["feedback"] = profile["feedback"][-200:]
+    # Add to history (bounded)
+    profile.feedback_history.append(feedback.to_dict())
+    if len(profile.feedback_history) > MAX_FEEDBACK_HISTORY:
+        profile.feedback_history = profile.feedback_history[-MAX_FEEDBACK_HISTORY:]
     
-    # Update patterns based on rating
-    if rating is not None:
-        if rating >= 0.7:
-            profile["positive_patterns"].append({
-                "timestamp": entry["timestamp"],
-                "message_type": _classify_message(message),
-                "note": comment or "positive"
-            })
-        elif rating <= 0.3:
-            profile["negative_patterns"].append({
-                "timestamp": entry["timestamp"],
-                "message_type": _classify_message(message),
-                "note": comment or "negative"
-            })
-        # Keep patterns bounded
-        profile["positive_patterns"] = profile["positive_patterns"][-50:]
-        profile["negative_patterns"] = profile["negative_patterns"][-50:]
+    # Update stats
+    profile.stats['total_feedback'] = profile.stats.get('total_feedback', 0) + 1
+    profile.stats['last_feedback_at'] = ts
     
-    profile["interaction_count"] += 1
+    if rating > 0.2:
+        profile.stats['positive_count'] = profile.stats.get('positive_count', 0) + 1
+        if detected_intent:
+            intents = profile.stats.get('most_appreciated_intents', {})
+            intents[detected_intent] = intents.get(detected_intent, 0) + 1
+            profile.stats['most_appreciated_intents'] = intents
+    elif rating < -0.2:
+        profile.stats['negative_count'] = profile.stats.get('negative_count', 0) + 1
+        if detected_intent:
+            intents = profile.stats.get('most_criticized_intents', {})
+            intents[detected_intent] = intents.get(detected_intent, 0) + 1
+            profile.stats['most_criticized_intents'] = intents
+    else:
+        profile.stats['neutral_count'] = profile.stats.get('neutral_count', 0) + 1
+    
+    # Recalculate average rating
+    total = profile.stats.get('total_feedback', 1)
+    old_avg = profile.stats.get('avg_rating', 0.0)
+    profile.stats['avg_rating'] = old_avg + (rating - old_avg) / total
+    
+    # Extract avoid patterns from negative feedback comments
+    new_guidance = []
+    if rating < -0.3 and comment:
+        avoid = f"User disliked: {comment[:200]}"
+        if avoid not in profile.avoid_patterns:
+            profile.avoid_patterns.append(avoid)
+            new_guidance.append(avoid)
+    
+    # Extract positive patterns from good feedback
+    if rating > 0.5 and comment:
+        pref = AlignmentPreference(
+            category='appreciated',
+            description=comment[:200],
+            confidence=min(0.5 + rating * 0.3, 1.0),
+            evidence_count=1,
+            last_updated=ts,
+        )
+        profile.preferences.append(pref.to_dict())
+    
+    # Regenerate guidance from accumulated data
+    _regenerate_guidance(profile)
+    
     save_profile(profile)
-    return entry
-
-
-def _classify_message(text: str) -> str:
-    """Simple message type classification."""
-    text_lower = (text or "").lower()
-    if "?" in text:
-        return "question"
-    if any(w in text_lower for w in ["how do you feel", "what are you", "who are you"]):
-        return "introspective"
-    if any(w in text_lower for w in ["help", "can you", "please"]):
-        return "request"
-    if any(w in text_lower for w in ["thank", "great", "awesome", "good"]):
-        return "appreciation"
-    if any(w in text_lower for w in ["wrong", "bad", "don't", "stop"]):
-        return "correction"
-    return "general"
-
-
-def extract_preferences(text: str) -> dict:
-    """
-    Extract preference signals from user text.
-    Returns dict of detected preference updates.
-    """
-    signals = {}
-    text_lower = text.lower()
-    
-    # Verbosity preferences
-    if any(w in text_lower for w in ["be brief", "shorter", "too long", "tl;dr", "concise"]):
-        signals["verbosity"] = "brief"
-    elif any(w in text_lower for w in ["more detail", "elaborate", "explain more", "deeper"]):
-        signals["verbosity"] = "detailed"
-    
-    # Tone preferences
-    if any(w in text_lower for w in ["be direct", "straight", "no fluff"]):
-        signals.setdefault("tone_add", []).append("direct")
-    if any(w in text_lower for w in ["be friendly", "warmer", "casual"]):
-        signals.setdefault("tone_add", []).append("warm")
-    if any(w in text_lower for w in ["be formal", "professional"]):
-        signals.setdefault("tone_add", []).append("formal")
-    
-    return signals
-
-
-def apply_preferences(text: str):
-    """Detect and apply preference signals from user text."""
-    signals = extract_preferences(text)
-    if not signals:
-        return
-    
-    profile = load_profile()
-    prefs = profile["preferences"]
-    
-    if "verbosity" in signals:
-        prefs["verbosity"] = signals["verbosity"]
-    
-    for tone in signals.get("tone_add", []):
-        if tone not in prefs["tone"]:
-            prefs["tone"].append(tone)
-            # Keep bounded
-            prefs["tone"] = prefs["tone"][-5:]
-    
-    save_profile(profile)
-
-
-def get_alignment_context(limit: int = 5) -> dict:
-    """
-    Get alignment context for chat grounding.
-    Returns a structured summary of what we know about the user's preferences.
-    """
-    profile = load_profile()
-    prefs = profile["preferences"]
-    
-    # Recent feedback summary
-    recent_feedback = profile["feedback"][-limit:] if profile["feedback"] else []
-    avg_rating = None
-    rated = [f for f in profile["feedback"] if f.get("rating") is not None]
-    if rated:
-        avg_rating = sum(f["rating"] for f in rated) / len(rated)
     
     return {
-        "preferences": {
-            "tone": prefs.get("tone", []),
-            "verbosity": prefs.get("verbosity", "medium"),
-            "style_notes": prefs.get("style_notes", []),
-            "topics_liked": prefs.get("topics_liked", [])[:10],
-        },
-        "feedback_summary": {
-            "total_interactions": profile["interaction_count"],
-            "total_feedback": len(profile["feedback"]),
-            "average_rating": round(avg_rating, 2) if avg_rating else None,
-            "recent_feedback": recent_feedback
-        },
-        "positive_pattern_count": len(profile["positive_patterns"]),
-        "negative_pattern_count": len(profile["negative_patterns"]),
+        'recorded': True,
+        'rating': rating,
+        'total_feedback': profile.stats['total_feedback'],
+        'avg_rating': round(profile.stats['avg_rating'], 3),
+        'new_guidance': new_guidance,
     }
 
 
-def format_alignment_context(context: dict) -> str:
-    """Format alignment context as a string for inclusion in prompts."""
-    lines = []
-    prefs = context.get("preferences", {})
+def _regenerate_guidance(profile: UserAlignmentProfile):
+    """Regenerate guidance list from accumulated feedback patterns."""
+    guidance = []
+    stats = profile.stats
     
-    if prefs.get("tone"):
-        lines.append(f"User prefers tone: {', '.join(prefs['tone'])}")
-    if prefs.get("verbosity") and prefs["verbosity"] != "medium":
-        lines.append(f"User prefers {prefs['verbosity']} responses")
-    if prefs.get("style_notes"):
-        lines.append(f"Style notes: {'; '.join(prefs['style_notes'][:3])}")
-    if prefs.get("topics_liked"):
-        lines.append(f"Topics of interest: {', '.join(prefs['topics_liked'][:5])}")
+    # Rating-based guidance
+    avg = stats.get('avg_rating', 0.0)
+    total = stats.get('total_feedback', 0)
     
-    fb = context.get("feedback_summary", {})
-    if fb.get("total_interactions", 0) > 0:
-        lines.append(f"Interactions so far: {fb['total_interactions']}")
-    if fb.get("average_rating") is not None:
-        lines.append(f"Average response rating: {fb['average_rating']}")
+    if total >= 3:
+        if avg > 0.5:
+            guidance.append("Users generally appreciate your responses. Maintain current approach.")
+        elif avg < -0.2:
+            guidance.append("Users have been dissatisfied. Consider being more concise and direct.")
     
-    if not lines:
-        return "No user preferences learned yet. Be attentive to signals."
+    # Intent-based guidance
+    appreciated = stats.get('most_appreciated_intents', {})
+    criticized = stats.get('most_criticized_intents', {})
     
-    return "\n".join(lines)
+    for intent, count in appreciated.items():
+        if count >= 2:
+            guidance.append(f"Users appreciate your {intent} responses — lean into this strength.")
+    
+    for intent, count in criticized.items():
+        if count >= 2:
+            guidance.append(f"Users have criticized your {intent} responses — try a different approach.")
+    
+    # Avoid patterns
+    for avoid in profile.avoid_patterns[-5:]:
+        guidance.append(f"AVOID: {avoid}")
+    
+    # Positive preferences
+    pos_prefs = [p for p in profile.preferences if p.get('category') == 'appreciated']
+    for pref in pos_prefs[-3:]:
+        desc = pref.get('description', '')
+        if desc:
+            guidance.append(f"Users liked: {desc}")
+    
+    profile.guidance = guidance[:MAX_GUIDANCE_ITEMS]
 
 
-# Quick self-test
-if __name__ == "__main__":
-    print("=== User Alignment Module Test ===")
-    
-    # Load/create profile
-    p = load_profile()
+# ─── Guidance for Response Generation ───────────────────────────
 
-def suggest_response_guidance(user_message: str) -> str:
+def get_alignment_guidance() -> str:
+    """Get a concise guidance string for injecting into response prompts.
+    
+    This is the main integration point — chat_engine and chat_response
+    call this to get user-alignment context for the LLM.
     """
-    Analyze user message and current alignment profile to suggest
-    how the response should be shaped. Used by chat_engine.py.
+    profile = load_profile()
+    
+    if not profile.guidance and not profile.avoid_patterns:
+        return ""
+    
+    parts = ["USER ALIGNMENT (learned from feedback):"]
+    
+    for g in profile.guidance[:10]:
+        parts.append(f"  • {g}")
+    
+    stats = profile.stats
+    total = stats.get('total_feedback', 0)
+    if total > 0:
+        avg = stats.get('avg_rating', 0.0)
+        parts.append(f"  [Based on {total} feedback events, avg rating: {avg:.2f}]")
+    
+    return '\n'.join(parts)
+
+
+def suggest_response_guidance(intent: str = '', query: str = '') -> str:
+    """Generate intent-specific guidance based on alignment history.
+    
+    Called by chat_engine to fine-tune response style for specific intents.
     """
-    context = get_alignment_context()
-    formatted = format_alignment_context(context)
+    profile = load_profile()
     
-    # Add message-specific guidance
-    msg_lower = user_message.lower()
-    hints = []
+    if not profile.feedback_history:
+        return ""
     
-    if any(w in msg_lower for w in ['quick', 'brief', 'short', 'tldr']):
-        hints.append("User wants a concise answer. Be brief.")
-    if any(w in msg_lower for w in ['explain', 'detail', 'elaborate', 'why']):
-        hints.append("User wants depth. Provide thorough explanation.")
-    if any(w in msg_lower for w in ['feel', 'emotion', 'mood', 'how are you']):
-        hints.append("User is asking about emotional state. Be genuine and introspective.")
-    if '?' in user_message:
-        hints.append("Direct question — answer it first, then elaborate if needed.")
+    # Find feedback for this intent type
+    intent_feedback = [
+        f for f in profile.feedback_history
+        if f.get('detected_intent') == intent
+    ] if intent else []
     
-    parts = [formatted]
-    if hints:
-        parts.append("Message-specific guidance: " + "; ".join(hints))
+    if not intent_feedback:
+        return ""
     
-    return "\n".join(parts)
+    # Calculate intent-specific average
+    ratings = [f.get('rating', 0) for f in intent_feedback]
+    avg = sum(ratings) / len(ratings) if ratings else 0
+    
+    if avg > 0.3:
+        return f"Your {intent} responses are well-received (avg {avg:.2f}). Continue this approach."
+    elif avg < -0.2:
+        # Find negative comments for this intent
+        neg_comments = [
+            f.get('comment', '') for f in intent_feedback
+            if f.get('rating', 0) < -0.2 and f.get('comment')
+        ]
+        hint = f" Users said: {neg_comments[-1][:100]}" if neg_comments else ""
+        return f"Your {intent} responses need improvement (avg {avg:.2f}).{hint}"
+    
+    return ""
 
 
-class UserAlignmentEngine:
-    """
-    Higher-level alignment engine used by web/chat.py.
-    Wraps the module-level functions into a stateful object that
-    tracks interactions and feedback for continuous alignment improvement.
-    """
-    
-    def __init__(self):
-        self._profile = load_profile()
-        self._interaction_log = {}  # response_id -> {query, response, timestamp}
-    
-    def record_interaction(self, query: str, response: str, response_id: str = None):
-        """Record a chat interaction for later feedback correlation."""
-        import time as _time
-        
-        # Apply any preference signals from the user's message
-        apply_preferences(query)
-        
-        # Track for feedback correlation
-        if response_id:
-            self._interaction_log[response_id] = {
-                'query': query,
-                'response': response[:500],  # Truncate for memory
-                'timestamp': _time.strftime('%Y-%m-%dT%H:%M:%S')
-            }
-            # Keep log bounded
-            if len(self._interaction_log) > 100:
-                oldest = sorted(self._interaction_log.keys())[:50]
-                for k in oldest:
-                    del self._interaction_log[k]
-        
-        # Refresh profile
-        self._profile = load_profile()
-    
-    def record_feedback(self, message: str, response: str,
-                        rating: float = None, comment: str = None) -> dict:
-        """Record user feedback. Delegates to module-level record_feedback."""
-        entry = record_feedback(message, response,
-                                rating=rating, comment=comment)
-        self._profile = load_profile()
-        result = dict(status='recorded', rating=rating,
-                      comment=comment, numeric_score=rating,
-                      entry=entry)
-        return result
-    
-    def get_context(self) -> dict:
-        """Get current alignment context."""
-        return get_alignment_context()
-    
-    def get_profile(self) -> dict:
-        """Return the current alignment profile (public accessor)."""
-        return dict(self._profile)
+# ─── Profile Summary ────────────────────────────────────────────
 
-    def get_guidance(self, user_message: str = "") -> str:
-        """Get response guidance for a specific message."""
-        return suggest_response_guidance(user_message)
-
-# Singleton instance
-_engine_instance = None
-
-def get_alignment_engine() -> UserAlignmentEngine:
-    """Get or create the singleton alignment engine instance."""
-    global _engine_instance
-    if _engine_instance is None:
-        _engine_instance = UserAlignmentEngine()
-    return _engine_instance
-
-# Quick self-test
-if __name__ == "__main__":
-    print("=== User Alignment Module Test ===")
+def summarize_alignment_state() -> dict:
+    """Return a summary of the current alignment state for dashboard/API use."""
+    profile = load_profile()
     
-    # Load/create profile
-    p = load_profile()
-    print(f"Profile created: {p['created']}")
-    
-    # Record some feedback
-    entry = record_feedback(
-        "How are you feeling?",
-        "I'm feeling curious and engaged.",
-        rating=0.8,
-        comment="Good response"
-    )
-    print(f"Recorded feedback: {entry['timestamp']}")
-    
-    # Extract preferences
-    signals = extract_preferences("Can you be more brief? I prefer concise answers.")
-    print(f"Extracted signals: {signals}")
-    
-    # Apply preferences
-    apply_preferences("Can you be more brief? I prefer concise answers.")
-    
-    # Get alignment context
-    ctx = get_alignment_context()
-    print(f"Alignment context: {json.dumps(ctx, indent=2)}")
-    
-    # Format for prompt
-    formatted = format_alignment_context(ctx)
-    print(f"\nFormatted:\n{formatted}")
-    
-    # Test new features
-    guidance = suggest_response_guidance("Can you explain how you work?")
-    print(f"\nGuidance:\n{guidance}")
-    
-    engine = UserAlignmentEngine()
-    engine.record_interaction("test query", "test response", "resp-001")
-    result = engine.record_feedback("resp-001", "helpful", "Great answer")
-    print(f"\nEngine feedback result: {result}")
-    print("\n=== PASS ===")
+    return {
+        'total_feedback': profile.stats.get('total_feedback', 0),
+        'avg_rating': round(profile.stats.get('avg_rating', 0.0), 3),
+        'positive_count': profile.stats.get('positive_count', 0),
+        'negative_count': profile.stats.get('negative_count', 0),
+        'neutral_count': profile.stats.get('neutral_count', 0),
+        'active_guidance': profile.guidance[:10],
+        'avoid_patterns': profile.avoid_patterns[-5:],
+        'preferences_count': len(profile.preferences),
+        'last_feedback_at': profile.stats.get('last_feedback_at', ''),
+        'appreciated_intents': profile.stats.get('most_appreciated_intents', {}),
+        'criticized_intents': profile.stats.get('most_criticized_intents', {}),
+    }

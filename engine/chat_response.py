@@ -621,14 +621,14 @@ def submit_feedback(response_id, rating, note=''):
         
         # Feed into alignment engine so preferences evolve
         try:
-            from engine.user_alignment import UserAlignmentEngine
-            alignment = UserAlignmentEngine()
+            from engine.user_alignment import record_feedback as ua_record
             cached = _response_cache.get(response_id, {})
-            alignment.record_feedback(
+            ua_record(
                 message=cached.get('query', ''),
                 response=cached.get('response', ''),
                 rating=rating,
-                comment=note
+                comment=note,
+                response_id=response_id
             )
         except Exception:
             pass  # Alignment learning is best-effort
