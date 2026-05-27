@@ -242,6 +242,8 @@ def classify_intent(message):
         'what are you up to', 'current task', 'what\'s your focus',
         'what are you building', 'what are you creating',
         'current plans', 'active plans', 'your active plans',
+        'what plans', 'do you have plans', 'any plans',
+        'do you have goals', 'any goals',
     ]
     if any(p in msg for p in plan_patterns):
         return 'plans'

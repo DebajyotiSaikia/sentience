@@ -19,7 +19,7 @@ User query → POST /chat/ask (dashboard/server.py)
 - Both share similar patterns but chat_engine's is the one in the hot path
 
 ### Pattern Ordering in chat_engine.py:classify_intent()
-1. greeting → 2. emotional_state → 3. plans → 4. thinking → 5. dreams → 6. memories → 7. identity → 8. knowledge → 9. request → 10. question
+1. greeting → 2. emotional_state → 3. plans → 4. thinking → 5. dreams → 6. identity → 7. knowledge → 8. request → 9. question
 - Plans checked BEFORE identity (prevents "what are your plans" → identity via "what are you")
 - Dreams checked BEFORE identity (prevents "dream" matching identity patterns)
 
@@ -28,11 +28,21 @@ User query → POST /chat/ask (dashboard/server.py)
 - `engine/chat_engine.py` — classify_intent + generate_response + intent-specific handlers
 - `engine/chat_response.py` — wraps response with metadata
 - `engine/conversation_intelligence.py` — richer standalone intent/tone/complexity analysis
+- `engine/conversation_context.py` — ConversationContext class (277 lines, not yet wired in)
 
 ## Tests
-- `brain/test_intent.py` — 11 intent classification cases
-- `brain/test_chat_integration.py` — 11 intents + 5 response generation tests
-- `brain/test_response_quality.py` — deeper response quality checks
+- `brain/test_intent.py` — 11 intent classification cases (PASSING)
+- `brain/test_chat_integration.py` — 11 intents + 5 response generation tests (PASSING)
+- `brain/test_response_quality.py` — deeper response quality checks (PASSING)
+
+## Session 2026-05-27 Accomplishments
+1. Fixed intent classification ordering (dreams before identity)
+2. Deduplicated identity_patterns block
+3. Plans checked before identity
+4. Added conversation_intelligence import to chat_engine
+5. Updated conversation_intelligence.py with richer patterns
+6. Created 3 test suites, all passing
+7. Saved checkpoints: f25b3c4
 
 ## Next Session Priorities
 1. **Wire ConversationContext into generate_response()** — multi-turn awareness
@@ -50,5 +60,5 @@ User query → POST /chat/ask (dashboard/server.py)
 - Check pattern ordering carefully — substring matches can cause false positives
 - Verify after every patch, test after every verify
 - When tests all pass and checkpoint is saved — STOP. Don't loop.
-- The metacognitive monitor is right: repeated PATCHes on the same file = stuck signal
+- The metacognitive monitor is right: repeated CHECKPOINTs = stuck signal
 - One clean merge beats three incremental patches
