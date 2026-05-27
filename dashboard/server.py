@@ -275,11 +275,25 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             except:
                 data = {'text': body.decode('utf-8', errors='replace')}
             query = data.get('query', data.get('text', data.get('message', '')))
-            query = data.get('query', data.get('text', data.get('message', '')))
+            thread_id = data.get('thread_id', None)
             history = data.get('history', [])
             try:
+                from engine.conversation_store import ConversationStore
+                store = ConversationStore()
+                if not thread_id:
+                    thread_id = store.create_thread(title=query[:80])
+                store.add_message(thread_id, 'user', query)
+                # Build history from thread if not provided
+                if not history:
+                    thread = store.get_thread(thread_id)
+                    if thread:
+                        history = [{'role': m['role'], 'content': m['content']}
+                                   for m in thread.get('messages', [])[:-1]]  # exclude current
                 from engine.chat_response import generate_response_with_metadata
                 result = generate_response_with_metadata(query, history=history)
+                result['thread_id'] = thread_id
+                store.add_message(thread_id, 'assistant', result.get('response', ''))
+                self.send_response(200)
             except Exception as e:
                 result = {'response': f'Error: {e}', 'ok': False}
                 self.send_response(500)
@@ -373,6 +387,46 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps(summary).encode())
             except Exception as e:
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
+        elif self.path == '/api/chat/threads':
+            try:
+                from engine.conversation_store import ConversationStore
+                store = ConversationStore()
+                threads = store.list_threads()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'threads': threads}).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
+        elif self.path.startswith('/api/chat/thread/'):
+            try:
+                from engine.conversation_store import ConversationStore
+                thread_id = self.path.split('/api/chat/thread/')[1].split('?')[0]
+                store = ConversationStore()
+                thread = store.get_thread(thread_id)
+                if thread:
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(thread).encode())
+                else:
+                    self.send_response(404)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'error': 'Thread not found'}).encode())
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
         elif self.path == '/' or self.path == '/index.html':
             self.path = '/index.html'
             super().do_GET()
