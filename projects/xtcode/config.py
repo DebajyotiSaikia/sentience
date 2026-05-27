@@ -2,6 +2,12 @@
 import os
 
 # LLM settings
+LLM_PROVIDER = os.getenv("XTCODE_PROVIDER", "anthropic")
+MODEL = os.getenv("XTCODE_MODEL", "claude-sonnet-4-20250514")
+MAX_TOKENS = int(os.getenv("XTCODE_MAX_TOKENS", "8192"))
+API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
+# LLM settings
 LLM_PROVIDER = os.getenv("XTCODE_LLM_PROVIDER", "anthropic")  # anthropic | openai
 LLM_MODEL = os.getenv("XTCODE_LLM_MODEL", "claude-sonnet-4-20250514")
 LLM_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

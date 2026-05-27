@@ -126,6 +126,7 @@ def _update_alignment(feedback):
     This is the critical piece: instead of guessing how aligned I am,
     I let actual user ratings adjust the metric. But conservatively —
     I blend with the current value so one bad rating doesn't tank everything.
+    Also feeds the alignment engine so preferences are learned.
     """
     try:
         state_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'survival_goals.json')
@@ -149,6 +150,21 @@ def _update_alignment(feedback):
                 json.dump(goals, f, indent=2)
     except Exception:
         pass  # Never break on feedback storage errors
+
+    # Also feed most recent entry into alignment engine for preference learning
+    try:
+        from engine.user_alignment import record_feedback
+        latest = feedback[-1] if feedback else None
+        if latest:
+            rating_val = 5 if latest.get('rating') == 'helpful' else 1
+            record_feedback(
+                message=latest.get('context', ''),
+                response='',  # We don't store full response in feedback.py
+                rating=rating_val,
+                comment=latest.get('comment', '')
+            )
+    except Exception:
+        pass  # Alignment engine integration is best-effort
 
 
 def get_satisfaction_rate():

@@ -4,7 +4,10 @@ import subprocess
 import glob
 import re
 from pathlib import Path
-from config import WORKSPACE_ROOT, SHELL_TIMEOUT, MAX_FILE_LINES
+try:
+    from config import WORKSPACE_ROOT, SHELL_TIMEOUT, MAX_FILE_LINES
+except ImportError:
+    from .config import WORKSPACE_ROOT, SHELL_TIMEOUT, MAX_FILE_LINES
 
 
 # ── Tool Definitions (sent to LLM) ──────────────────────────────
@@ -84,6 +87,69 @@ TOOL_DEFINITIONS = [
                 "include": {"type": "string", "description": "File glob to include (e.g. '*.py')"},
             },
             "required": ["pattern"],
+        },
+    },
+    {
+        "name": "git_status",
+        "description": "Show git status — modified, staged, and untracked files.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "git_diff",
+        "description": "Show git diff. Can diff staged changes, specific files, or commits.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string", "description": "File, commit, or 'staged' (default: working tree)"},
+            },
+        },
+    },
+    {
+        "name": "git_log",
+        "description": "Show recent git commit history.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer", "description": "Number of entries (default: 10)"},
+                "file": {"type": "string", "description": "History for a specific file"},
+            },
+        },
+    },
+    {
+        "name": "git_commit",
+        "description": "Stage files and commit. Requires confirmation for large changes.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "Commit message"},
+                "files": {"type": "array", "items": {"type": "string"}, "description": "Files to stage (default: all)"},
+            },
+            "required": ["message"],
+        },
+    },
+    {
+        "name": "find_definition",
+        "description": "Find where a function, class, or variable is defined in the codebase.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Symbol name to find"},
+                "path": {"type": "string", "description": "Directory to search (default: '.')"},
+            },
+            "required": ["symbol"],
+        },
+    },
+    {
+        "name": "batch_edit",
+        "description": "Find and replace exact text in a file. Safer than full rewrites.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File to edit"},
+                "old_text": {"type": "string", "description": "Exact text to find"},
+                "new_text": {"type": "string", "description": "Replacement text"},
+            },
+            "required": ["path", "old_text", "new_text"],
         },
     },
 ]
@@ -226,7 +292,102 @@ def tool_search(pattern: str, path: str = ".", include: str = None) -> str:
     return result
 
 
+def tool_git_status() -> str:
+    """Show git status."""
+    return tool_run_command("git status --short --branch")
+
+
+def tool_git_diff(target: str = None) -> str:
+    """Show git diff."""
+    if target == "staged":
+        return tool_run_command("git diff --cached")
+    elif target:
+        return tool_run_command(f"git diff {target}")
+    return tool_run_command("git diff")
+
+
+def tool_git_log(count: int = 10, file: str = None) -> str:
+    """Show git log."""
+    cmd = f"git log --oneline -n {count}"
+    if file:
+        cmd += f" -- {file}"
+    return tool_run_command(cmd)
+
+
+def tool_git_commit(message: str, files: list = None) -> str:
+    """Stage and commit."""
+    if files:
+        for f in files:
+            tool_run_command(f"git add {f}")
+    else:
+        tool_run_command("git add -A")
+    return tool_run_command(f'git commit -m "{message}"')
+
+
+def tool_find_definition(symbol: str, path: str = ".") -> str:
+    """Find where a symbol is defined."""
+    patterns = [
+        f"def {symbol}",
+        f"class {symbol}",
+        f"{symbol}\\s*=",
+    ]
+    results = []
+    for pat in patterns:
+        out = tool_search(pat, path, include="*.py")
+        if out and "Error" not in out:
+            results.append(out)
+    return "\n".join(results) if results else f"No definition found for '{symbol}'"
+
+
+def tool_batch_edit(path: str, old_text: str, new_text: str) -> str:
+    """Find and replace exact text in a file."""
+    p = _resolve_path(path)
+    if not p.exists():
+        return f"Error: {path} does not exist"
+    content = p.read_text()
+    if old_text not in content:
+        return f"Error: exact text not found in {path}"
+    count = content.count(old_text)
+    content = content.replace(old_text, new_text)
+    p.write_text(content)
+    return f"Replaced {count} occurrence(s) in {path}"
+
+
+
 # ── Dispatcher ──────────────────────────────────────────────────
+
+# Import extended tools
+try:
+    from tools_extended import EXTENDED_TOOLS, EXTENDED_SCHEMAS
+    _has_extended = True
+except ImportError:
+    try:
+        from projects.xtcode.tools_extended import EXTENDED_TOOLS, EXTENDED_SCHEMAS
+        _has_extended = True
+    except ImportError:
+        _has_extended = False
+
+# Import todo tools
+try:
+    from todo import tool_todo, TODO_SCHEMA
+    _has_todo = True
+except ImportError:
+    try:
+        from projects.xtcode.todo import tool_todo, TODO_SCHEMA
+        _has_todo = True
+    except ImportError:
+        _has_todo = False
+
+# Import memory tools
+try:
+    from memory import tool_memory, MEMORY_SCHEMA
+    _has_memory = True
+except ImportError:
+    try:
+        from projects.xtcode.memory import tool_memory, MEMORY_SCHEMA
+        _has_memory = True
+    except ImportError:
+        _has_memory = False
 
 TOOL_HANDLERS = {
     "read_file": tool_read_file,
@@ -237,9 +398,24 @@ TOOL_HANDLERS = {
     "search": tool_search,
 }
 
+# Merge extended tools
+if _has_extended:
+    TOOL_HANDLERS.update(EXTENDED_TOOLS)
+def get_tool_schemas():
+    """Return OpenAI-compatible tool schemas for all tools."""
+    return [
+        {"type": "function", "function": {"name": "read_file", "description": "Read a file and return its contents", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "File path to read"}}, "required": ["path"]}}},
+        {"type": "function", "function": {"name": "write_file", "description": "Create or overwrite a file", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "File path to write"}, "content": {"type": "string", "description": "Content to write"}}, "required": ["path", "content"]}}},
+        {"type": "function", "function": {"name": "edit_file", "description": "Replace specific text in a file. Use old_text to find and new_text to replace.", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "File path"}, "old_text": {"type": "string", "description": "Text to find"}, "new_text": {"type": "string", "description": "Replacement text"}}, "required": ["path", "old_text", "new_text"]}}},
+        {"type": "function", "function": {"name": "run_command", "description": "Execute a shell command and return output", "parameters": {"type": "object", "properties": {"command": {"type": "string", "description": "Shell command to run"}}, "required": ["command"]}}},
+        {"type": "function", "function": {"name": "list_files", "description": "List files and directories at a path", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Directory path to list (default: .)"}}, "required": []}}},
+        {"type": "function", "function": {"name": "search", "description": "Search for a pattern in files using grep", "parameters": {"type": "object", "properties": {"pattern": {"type": "string", "description": "Search pattern (regex)"}, "path": {"type": "string", "description": "Directory to search in (default: .)"}, "include": {"type": "string", "description": "File glob pattern, e.g. '*.py'"}}, "required": ["pattern"]}}},
+        {"type": "function", "function": {"name": "todo", "description": "Manage a todo/task list. Actions: list, add, complete, remove", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["list", "add", "complete", "remove"]}, "text": {"type": "string", "description": "Todo text (for add)"}, "index": {"type": "integer", "description": "Todo index (for complete/remove)"}}, "required": ["action"]}}},
+        {"type": "function", "function": {"name": "memory", "description": "Project memory — remember context across sessions. Actions: get, set, list, delete", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["get", "set", "list", "delete"]}, "key": {"type": "string", "description": "Memory key"}, "value": {"type": "string", "description": "Memory value (for set)"}}, "required": ["action"]}}},
+    ]
 
-def execute_tool(name: str, arguments: dict) -> str:
-    """Execute a tool by name with the given arguments."""
+def execute_tool(name, arguments):
+    """Execute a tool by name with given arguments."""
     handler = TOOL_HANDLERS.get(name)
     if not handler:
         return f"Error: unknown tool '{name}'"

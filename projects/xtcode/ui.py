@@ -161,6 +161,40 @@ def format_assistant_text(text: str) -> str:
     return "\n".join(f"{prefix}{line}" for line in lines)
 
 
+# Aliases for main.py compatibility
+def print_banner():
+    print(banner())
+
+def print_info(text: str):
+    print(info_msg(text))
+
+def print_error(text: str):
+    print(error_msg(text))
+
+def print_warning(text: str):
+    print(warning_msg(text))
+
+def print_assistant(text: str):
+    print(format_assistant_text(text))
+
+def print_tool_call(name: str, args: dict):
+    print(tool_header(name, args))
+
+def print_tool_result(name: str, result: str):
+    print(tool_result_summary(name, result))
+
+class Colors:
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    GRAY = "\033[90m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RESET = "\033[0m"
+
 def error_msg(text: str) -> str:
     return _c(BOLD + RED, f"✗ {text}")
 

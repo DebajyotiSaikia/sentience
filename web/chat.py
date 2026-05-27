@@ -65,6 +65,7 @@ except ImportError:
 
 
 # Helpfulness engine — user-aligned response generation
+try:
     from engine.helpfulness import analyze_user_need, build_helpful_response, format_context_for_llm
     _has_helpfulness = True
 except ImportError:

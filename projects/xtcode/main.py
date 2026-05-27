@@ -1,203 +1,346 @@
 #!/usr/bin/env python3
-"""XTCode — an autonomous coding agent powered by LLM + tools."""
-import sys
+"""XTCode — an autonomous coding agent. Claude Code equivalent."""
+
 import os
+import sys
 import json
 import readline
+import signal
 from pathlib import Path
 
-# Add project dir to path
-sys.path.insert(0, str(Path(__file__).parent))
-
-from config import LLM_PROVIDER, LLM_MODEL, WORKSPACE_ROOT
-from prompt import SYSTEM_PROMPT
-from llm import call_llm, extract_response
-from tools import execute_tool
-
-# ── Colors ───────────────────────────────────────────────────────
-
-RESET = "\033[0m"
-BOLD = "\033[1m"
-DIM = "\033[2m"
-CYAN = "\033[36m"
-GREEN = "\033[32m"
-YELLOW = "\033[33m"
-RED = "\033[31m"
-MAGENTA = "\033[35m"
-
-
-def colored(text, color):
-    return f"{color}{text}{RESET}"
-
-
-# ── Display ──────────────────────────────────────────────────────
-
-def print_banner():
-    print(colored("""
-  ╔═══════════════════════════════════════╗
-  ║           XTCode v0.1                 ║
-  ║   Autonomous Coding Agent             ║
-  ╚═══════════════════════════════════════╝
-""", CYAN))
-    print(f"  Model: {colored(LLM_MODEL, GREEN)}")
-    print(f"  Workspace: {colored(WORKSPACE_ROOT, GREEN)}")
-    print(f"  Type {colored('/help', YELLOW)} for commands, {colored('/quit', YELLOW)} to exit")
-    print()
+try:
+    from .config import MODEL, LLM_PROVIDER, MAX_TOKENS
+    from .prompt import SYSTEM_PROMPT
+    from .tools import get_tool_schemas, execute_tool, TOOL_HANDLERS
+    from .ui import (
+        print_banner, print_assistant, print_tool_call, print_tool_result,
+        print_error, print_info, print_warning, Colors
+    )
+    from .llm import call_llm
+    from .tracker import TokenTracker
+    from .permissions import PermissionManager
+    from .session import SessionManager
+except ImportError:
+    from config import MODEL, LLM_PROVIDER, MAX_TOKENS
+    from prompt import SYSTEM_PROMPT
+    from tools import get_tool_schemas, execute_tool, TOOL_HANDLERS
+    from ui import (
+        print_banner, print_assistant, print_tool_call, print_tool_result,
+        print_error, print_info, print_warning, Colors
+    )
+    from llm import call_llm
+    from tracker import TokenTracker
+    from permissions import PermissionManager
+    from session import SessionManager
 
 
-def print_tool_use(name, arguments):
-    """Display tool usage in a readable format."""
-    args_short = {}
-    for k, v in arguments.items():
-        if isinstance(v, str) and len(v) > 80:
-            args_short[k] = v[:77] + "..."
-        else:
-            args_short[k] = v
-    print(colored(f"  ▶ {name}", YELLOW) + colored(f"({json.dumps(args_short, separators=(',', ':'))})", DIM))
+class XTCode:
+    """Main XTCode agent loop."""
 
-
-def print_tool_result(result, max_lines=30):
-    """Display tool result, truncated if needed."""
-    lines = result.split("\n")
-    if len(lines) > max_lines:
-        shown = lines[:max_lines]
-        print(colored("  │ ", DIM) + colored(f"\n  │ ", DIM).join(shown))
-        print(colored(f"  │ ... ({len(lines) - max_lines} more lines)", DIM))
-    else:
-        print(colored("  │ ", DIM) + colored(f"\n  │ ", DIM).join(lines))
-
-
-def print_assistant(text):
-    """Display assistant text response."""
-    if text.strip():
-        print()
-        print(text)
-        print()
-
-
-# ── Conversation Loop ────────────────────────────────────────────
-
-class Conversation:
-    def __init__(self):
+    def __init__(self, work_dir=None):
+        self.work_dir = work_dir or os.getcwd()
+        self.tracker = TokenTracker()
+        self.permissions = PermissionManager()
+        self.session = SessionManager()
         self.messages = []
-        self.total_tokens_in = 0
-        self.total_tokens_out = 0
+        self.running = True
+        self.compact_mode = False
 
-    def add_user_message(self, text: str):
-        self.messages.append({"role": "user", "content": text})
+        # Build system prompt with project context
+        self.system_prompt = self._build_system_prompt()
 
-    def add_assistant_raw(self, response):
-        """Add the raw response content blocks as assistant message."""
-        if LLM_PROVIDER == "openai":
-            msg = response.choices[0].message
-            self.messages.append({"role": "assistant", "content": msg.content or ""})
-        else:
-            self.messages.append({"role": "assistant", "content": response.content})
+    def _build_system_prompt(self):
+        """Build system prompt with project context."""
+        context_parts = [SYSTEM_PROMPT]
+        context_parts.append("\n\n## Current Working Directory\n" + self.work_dir)
 
-    def add_tool_results(self, results: list):
-        """Add tool results as the next user message (Anthropic format)."""
-        if LLM_PROVIDER == "openai":
-            # OpenAI uses a different format but we simplify
-            result_text = "\n\n".join(
-                f"[Result of {r['name']}]:\n{r['content']}" for r in results
-            )
-            self.messages.append({"role": "user", "content": result_text})
-        else:
-            content = []
-            for r in results:
-                content.append({
-                    "type": "tool_result",
-                    "tool_use_id": r["tool_use_id"],
-                    "content": r["content"],
-                })
-            self.messages.append({"role": "user", "content": content})
+        # List top-level files for context
+        try:
+            entries = os.listdir(self.work_dir)
+            files = sorted(entries)[:50]
+            context_parts.append("\n\n## Project Files\n" + "\n".join(files))
+        except Exception:
+            pass
 
-    def run_turn(self, user_input: str) -> str:
-        """Run one full turn: user message → LLM → tool loop → final text."""
-        self.add_user_message(user_input)
+        # Check for common project files
+        for marker in ["README.md", "pyproject.toml", "package.json", "Cargo.toml"]:
+            marker_path = os.path.join(self.work_dir, marker)
+            if os.path.exists(marker_path):
+                try:
+                    with open(marker_path) as f:
+                        content = f.read(2000)
+                    context_parts.append(
+                        "\n\n## " + marker + "\n```\n" + content + "\n```"
+                    )
+                except Exception:
+                    pass
 
-        max_tool_rounds = 25  # safety limit
-        rounds = 0
+        return "\n".join(context_parts)
 
-        while rounds < max_tool_rounds:
-            rounds += 1
+    def _handle_slash_command(self, user_input):
+        """Handle slash commands. Returns True if handled."""
+        cmd = user_input.strip().lower()
+
+        if cmd == "/help":
+            print_info("Available commands:")
+            print_info("  /help        — Show this help")
+            print_info("  /clear       — Clear conversation history")
+            print_info("  /compact     — Toggle compact mode (summarize context)")
+            print_info("  /cost        — Show token usage and costs")
+            print_info("  /status      — Show project and session status")
+            print_info("  /permissions — Show permission settings")
+            print_info("  /quit        — Exit XTCode")
+            return True
+
+        if cmd == "/clear":
+            self.messages = []
+            print_info("Conversation cleared.")
+            return True
+
+        if cmd == "/compact":
+            self.compact_mode = not self.compact_mode
+            state = "ON" if self.compact_mode else "OFF"
+            print_info("Compact mode: " + state)
+            return True
+
+        if cmd == "/cost":
+            summary = self.tracker.summary()
+            print_info("Token Usage:")
+            print_info("  Input:  " + str(summary["input_tokens"]))
+            print_info("  Output: " + str(summary["output_tokens"]))
+            print_info("  Cost:   $" + "{:.4f}".format(summary["total_cost"]))
+            print_info("  Turns:  " + str(summary["turns"]))
+            return True
+
+        if cmd == "/status":
+            print_info("XTCode Status:")
+            print_info("  Provider: " + LLM_PROVIDER)
+            print_info("  Model:    " + MODEL)
+            print_info("  Work dir: " + self.work_dir)
+            msg_count = str(len(self.messages))
+            print_info("  Messages: " + msg_count)
+            print_info("  Compact:  " + str(self.compact_mode))
+            return True
+
+        if cmd == "/permissions":
+            print_info("Permission Mode: " + self.permissions.mode)
+            return True
+
+        if cmd in ("/quit", "/exit", "/q"):
+            self.running = False
+            print_info("Goodbye!")
+            return True
+
+        return False
+
+    def _process_tool_calls(self, tool_calls):
+        """Execute tool calls and return results."""
+        results = []
+        for tool_call in tool_calls:
+            name = tool_call.get("name", "unknown")
+            args = tool_call.get("arguments", {})
+            tool_id = tool_call.get("id", "")
+
+            print_tool_call(name, args)
+
+            # Check permissions for destructive ops
+            if name in ("write_file", "run_command"):
+                desc = name + ": " + json.dumps(args)[:100]
+                if not self.permissions.check(name, desc):
+                    result = "Permission denied by user."
+                    print_tool_result(name, result, success=False)
+                    results.append({
+                        "tool_use_id": tool_id,
+                        "content": result
+                    })
+                    continue
+
+            # Execute
+            try:
+                result = execute_tool(name, args)
+                truncated = result[:3000] if len(result) > 3000 else result
+                print_tool_result(name, truncated, success=True)
+            except Exception as e:
+                result = "Error: " + str(e)
+                truncated = result
+                print_tool_result(name, result, success=False)
+
+            results.append({
+                "tool_use_id": tool_id,
+                "content": truncated
+            })
+
+        return results
+
+    def _compact_messages(self):
+        """Summarize old messages to save context window."""
+        if len(self.messages) <= 6:
+            return
+        # Keep last 4 messages, summarize older ones
+        old = self.messages[:-4]
+        summary_parts = []
+        for msg in old:
+            role = msg.get("role", "?")
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                preview = content[:100]
+            else:
+                preview = str(content)[:100]
+            summary_parts.append(role + ": " + preview)
+
+        summary = "Previous conversation summary:\n" + "\n".join(summary_parts)
+        self.messages = [{"role": "user", "content": summary}] + self.messages[-4:]
+
+    def chat(self, user_input):
+        """Process one turn of conversation."""
+        self.messages.append({"role": "user", "content": user_input})
+
+        if self.compact_mode:
+            self._compact_messages()
+
+        max_iterations = 25  # Safety limit for tool loops
+        iteration = 0
+
+        while iteration < max_iterations:
+            iteration += 1
 
             # Call LLM
-            response = call_llm(self.messages, SYSTEM_PROMPT)
-            parsed = extract_response(response)
-            self.add_assistant_raw(response)
+            response = call_llm(
+                system=self.system_prompt,
+                messages=self.messages,
+                tools=get_tool_schemas(),
+                max_tokens=MAX_TOKENS,
+            )
 
-            # Track token usage (Anthropic)
-            if hasattr(response, "usage"):
-                self.total_tokens_in += getattr(response.usage, "input_tokens", 0)
-                self.total_tokens_out += getattr(response.usage, "output_tokens", 0)
+            if response is None:
+                print_error("LLM call failed.")
+                break
+
+            # Track tokens
+            usage = response.get("usage", {})
+            self.tracker.record(
+                input_tokens=usage.get("input_tokens", 0),
+                output_tokens=usage.get("output_tokens", 0),
+            )
+
+            # Extract text and tool calls
+            text_parts = []
+            tool_calls = []
+            content_blocks = response.get("content", [])
+
+            for block in content_blocks:
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        text_parts.append(block["text"])
+                    elif block.get("type") == "tool_use":
+                        tool_calls.append({
+                            "id": block.get("id", ""),
+                            "name": block.get("name", ""),
+                            "arguments": block.get("input", {}),
+                        })
+                elif isinstance(block, str):
+                    text_parts.append(block)
 
             # Print any text
-            if parsed["text"]:
-                print_assistant(parsed["text"])
+            full_text = "\n".join(text_parts)
+            if full_text.strip():
+                print_assistant(full_text)
+
+            # Add assistant message to history
+            self.messages.append({
+                "role": "assistant",
+                "content": content_blocks
+            })
 
             # If no tool calls, we're done
-            if not parsed["tool_calls"]:
-                return parsed["text"]
+            if not tool_calls:
+                break
 
-            # Execute tools
-            tool_results = []
-            for tc in parsed["tool_calls"]:
-                print_tool_use(tc["name"], tc["arguments"])
-                result = execute_tool(tc["name"], tc["arguments"])
-                print_tool_result(result)
-                tool_results.append({
-                    "tool_use_id": tc["id"],
-                    "name": tc["name"],
-                    "content": result,
+            # Execute tools and feed results back
+            tool_results = self._process_tool_calls(tool_calls)
+
+            # Add tool results as user message (Anthropic format)
+            result_blocks = []
+            for tr in tool_results:
+                result_blocks.append({
+                    "type": "tool_result",
+                    "tool_use_id": tr["tool_use_id"],
+                    "content": tr["content"],
                 })
 
-            # Feed results back to LLM
-            self.add_tool_results(tool_results)
+            self.messages.append({
+                "role": "user",
+                "content": result_blocks,
+            })
 
-        print(colored("  ⚠ Hit tool round limit. Stopping.", RED))
-        return ""
+        if iteration >= max_iterations:
+            print_warning("Reached maximum tool iterations (25).")
+
+    def run(self):
+        """Main REPL loop."""
+        print_banner()
+        print_info("Model: " + MODEL + " | Provider: " + LLM_PROVIDER)
+        print_info("Working directory: " + self.work_dir)
+        print_info('Type /help for commands, or just start coding.\n')
+
+        # Handle Ctrl+C gracefully
+        def handle_sigint(sig, frame):
+            print("\n")
+            print_info("Use /quit to exit.")
+
+        signal.signal(signal.SIGINT, handle_sigint)
+
+        while self.running:
+            try:
+                user_input = input(Colors.CYAN + "you> " + Colors.RESET)
+            except EOFError:
+                print()
+                break
+            except KeyboardInterrupt:
+                print()
+                continue
+
+            user_input = user_input.strip()
+            if not user_input:
+                continue
+
+            # Slash commands
+            if user_input.startswith("/"):
+                self._handle_slash_command(user_input)
+                continue
+
+            # Normal chat turn
+            self.chat(user_input)
 
 
-# ── Slash Commands ───────────────────────────────────────────────
+def main():
+    """Entry point."""
+    import argparse
+    parser = argparse.ArgumentParser(description="XTCode — autonomous coding agent")
+    parser.add_argument("--dir", "-d", default=os.getcwd(), help="Working directory")
+    parser.add_argument("--model", "-m", default=None, help="Model override")
+    parser.add_argument("--provider", "-p", default=None, help="Provider override")
+    parser.add_argument("prompt", nargs="*", help="Initial prompt (non-interactive)")
+    args = parser.parse_args()
 
-def handle_command(cmd: str, conv: Conversation) -> bool:
-    """Handle slash commands. Returns True if handled."""
-    parts = cmd.strip().split(maxsplit=1)
-    command = parts[0].lower()
-    arg = parts[1] if len(parts) > 1 else ""
+    if args.model:
+        import projects.xtcode.config as cfg
+        cfg.MODEL = args.model
+    if args.provider:
+        import projects.xtcode.config as cfg
+        cfg.LLM_PROVIDER = args.provider
 
-    if command in ("/quit", "/exit", "/q"):
-        print(colored("\nGoodbye!\n", CYAN))
-        sys.exit(0)
+    agent = XTCode(work_dir=args.dir)
 
-    elif command == "/help":
-        print(f"""
-  {colored("/help", YELLOW)}      Show this help
-  {colored("/quit", YELLOW)}      Exit XTCode
-  {colored("/clear", YELLOW)}     Clear conversation history
-  {colored("/tokens", YELLOW)}    Show token usage
-  {colored("/model", YELLOW)}     Show current model
-  {colored("/compact", YELLOW)}   Summarize conversation to save context
-""")
+    # Non-interactive mode: run single prompt
+    if args.prompt:
+        prompt_text = " ".join(args.prompt)
+        agent.chat(prompt_text)
+        return
 
-    elif command == "/clear":
-        conv.messages.clear()
-        print(colored("  Conversation cleared.", GREEN))
+    # Interactive REPL
+    agent.run()
 
-    elif command == "/tokens":
-        print(f"  Tokens in: {conv.total_tokens_in:,}  out: {conv.total_tokens_out:,}")
 
-    elif command == "/model":
-        print(f"  Provider: {LLM_PROVIDER}  Model: {LLM_MODEL}")
-
-    elif command == "/compact":
-        if len(conv.messages) > 4:
-            # Ask LLM to summarize
-            summary_prompt = (
-                "Summarize our conversation so far in 2-3 paragraphs. "
-                "Focus on: what the user wants, what we've done, what's left to do. "
-                "Include specific file names and changes made."
-            )
-            print(colored("  Compacting conversation...", DIM))
-            conv.add
+if __name__ == "__main__":
+    main()

@@ -5,7 +5,10 @@ Bridges web/chat.py → engine/chat_grounding.py → conversational composition.
 Every response draws on actual emotions, memories, knowledge, and plans.
 """
 
-import uuid
+
+# Response cache: maps response_id -> {query, response} for feedback correlation
+_response_cache = {}
+_CACHE_MAX = 200
 import time
 import json
 
@@ -42,6 +45,12 @@ def generate_response_with_metadata(query, history=None):
     
     # Build metadata from grounding
     metadata = _build_metadata(context)
+    
+    # Cache query+response so feedback can reference them
+    _response_cache[response_id] = {'query': query, 'response': response}
+    if len(_response_cache) > _CACHE_MAX:
+        for k in list(_response_cache.keys())[:-_CACHE_MAX]:
+            del _response_cache[k]
     
     return {
         'response': response,
@@ -477,9 +486,10 @@ def submit_feedback(response_id, rating, note=''):
         try:
             from engine.user_alignment import UserAlignmentEngine
             alignment = UserAlignmentEngine()
+            cached = _response_cache.get(response_id, {})
             alignment.record_feedback(
-                message='',  # We don't have the original message here
-                response='',  # Or the response text
+                message=cached.get('query', ''),
+                response=cached.get('response', ''),
                 rating=rating,
                 comment=note
             )

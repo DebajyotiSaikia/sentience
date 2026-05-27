@@ -68,3 +68,4 @@ class UsageTracker:
                 f.write(json.dumps(data) + "\n")
         except Exception:
             pass
+TokenTracker = UsageTracker
