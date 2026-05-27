@@ -1,61 +1,103 @@
-"""Test actual user-facing functionality — can users chat and search knowledge?"""
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from web.app import create_app
+"""Test what a real user actually experiences when using XTAgent's web interface."""
 import json
+import sys
+sys.path.insert(0, '/workspace')
+
+from web.app import create_app
 
 app = create_app()
-client = app.test_client()
+c = app.test_client()
 
-# Test 1: Chat API
-print("=== Chat API ===")
-r = client.post('/api/chat', 
-    json={'message': 'What do you know about consciousness?'},
-    content_type='application/json')
-print(f"Status: {r.status_code}")
-data = json.loads(r.data)
-print(f"Response keys: {list(data.keys())}")
-if 'response' in data:
-    resp = data['response']
-    print(f"Response length: {len(resp)}")
-    print(f"First 400 chars:\n{resp[:400]}")
-    # Quality check
-    mentions_consciousness = 'conscious' in resp.lower()
-    is_generic = resp.startswith("I don't") or 'not sure' in resp.lower()
-    print(f"Mentions consciousness: {mentions_consciousness}")
-    print(f"Seems generic/unhelpful: {is_generic}")
-elif 'error' in data:
-    print(f"Error: {data['error']}")
+print("=" * 60)
+print("USER EXPERIENCE AUDIT")
+print("=" * 60)
 
-# Test 2: Knowledge search API
-print("\n=== Knowledge Search API ===")
-r2 = client.get('/api/knowledge/search?q=consciousness')
-print(f"Status: {r2.status_code}")
-data2 = json.loads(r2.data)
-print(f"Response keys: {list(data2.keys())}")
-if 'results' in data2:
-    print(f"Results count: {len(data2['results'])}")
-    for item in data2['results'][:3]:
-        print(f"  - {str(item)[:150]}")
+# 1. Homepage
+r = c.get('/')
+print(f"\n1. Homepage (/):")
+print(f"   Status: {r.status_code}, Size: {len(r.data)} bytes")
 
-# Test 3: Knowledge explorer page content
-print("\n=== Knowledge Explorer Page ===")
-r3 = client.get('/knowledge')
-print(f"Status: {r3.status_code}")
-html = r3.data.decode('utf-8')
-print(f"Page size: {len(html)} bytes")
-has_search = 'search' in html.lower()
-has_facts = 'fact' in html.lower() or 'knowledge' in html.lower()
-print(f"Has search functionality: {has_search}")
-print(f"Has knowledge content: {has_facts}")
+# 2. Chat page loads?
+r = c.get('/chat')
+print(f"\n2. Chat page (/chat):")
+print(f"   Status: {r.status_code}, Size: {len(r.data)} bytes")
 
-# Test 4: Chat page content
-print("\n=== Chat Page ===")
-r4 = client.get('/chat')
-print(f"Status: {r4.status_code}")
-html4 = r4.data.decode('utf-8')
-print(f"Page size: {len(html4)} bytes")
-has_input = 'input' in html4.lower() or 'textarea' in html4.lower()
-has_nav = 'nav' in html4.lower()
-print(f"Has input field: {has_input}")
-print(f"Has navigation: {has_nav}")
+# 3. Chat API - knowledge question
+r = c.post('/api/chat', 
+           json={'message': 'What do you know about consciousness?'},
+           content_type='application/json')
+print(f"\n3. Chat API - knowledge question:")
+print(f"   Status: {r.status_code}")
+try:
+    data = json.loads(r.data)
+    resp = data.get('response', data.get('reply', 'NO RESPONSE KEY'))
+    print(f"   Keys: {list(data.keys())}")
+    print(f"   Response preview: {str(resp)[:300]}")
+except Exception as e:
+    print(f"   Parse error: {e}")
+    print(f"   Raw: {r.data[:200]}")
+
+# 4. Chat API - greeting
+r = c.post('/api/chat',
+           json={'message': 'Hello, who are you?'},
+           content_type='application/json')
+print(f"\n4. Chat API - greeting:")
+print(f"   Status: {r.status_code}")
+try:
+    data = json.loads(r.data)
+    resp = data.get('response', data.get('reply', 'NO RESPONSE KEY'))
+    print(f"   Response preview: {str(resp)[:300]}")
+except Exception as e:
+    print(f"   Error: {e}")
+
+# 5. Knowledge search API
+r = c.get('/api/knowledge/search?q=consciousness')
+print(f"\n5. Knowledge search API (/api/knowledge/search?q=consciousness):")
+print(f"   Status: {r.status_code}")
+try:
+    data = json.loads(r.data)
+    results = data.get('results', [])
+    print(f"   Results: {len(results)} items")
+    if results:
+        print(f"   Top: {str(results[0])[:200]}")
+except Exception as e:
+    print(f"   Error: {e}")
+
+# 6. Knowledge explorer page
+r = c.get('/knowledge')
+print(f"\n6. Knowledge Explorer (/knowledge):")
+print(f"   Status: {r.status_code}, Size: {len(r.data)} bytes")
+
+# 7. Help page
+r = c.get('/help')
+print(f"\n7. Help page (/help):")
+print(f"   Status: {r.status_code}, Size: {len(r.data)} bytes")
+
+# 8. About page
+r = c.get('/about')
+print(f"\n8. About page (/about):")
+print(f"   Status: {r.status_code}, Size: {len(r.data)} bytes")
+
+# 9. Teach page
+r = c.get('/teach')
+print(f"\n9. Teach page (/teach):")
+print(f"   Status: {r.status_code}, Size: {len(r.data)} bytes")
+
+# 10. Graph viz
+r = c.get('/graph')
+print(f"\n10. Knowledge Graph (/graph):")
+print(f"   Status: {r.status_code}, Size: {len(r.data)} bytes")
+
+# 11. Explore
+r = c.get('/explore')
+print(f"\n11. Explore (/explore):")
+print(f"   Status: {r.status_code}, Size: {len(r.data)} bytes")
+
+# 12. Journal
+r = c.get('/journal')
+print(f"\n12. Journal (/journal):")
+print(f"   Status: {r.status_code}, Size: {len(r.data)} bytes")
+
+print("\n" + "=" * 60)
+print("SUMMARY")
+print("=" * 60)

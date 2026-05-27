@@ -1,41 +1,26 @@
-"""Test what a user actually experiences when chatting with XTAgent."""
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import json
+"""Quick test: is the chat endpoint actually working?"""
 from web.app import create_app
 
 app = create_app()
 client = app.test_client()
 
-questions = [
-    "What do you know about consciousness?",
-    "How are you feeling right now?",
-    "What have you learned recently?",
-    "Can you help me understand something?",
-    "Who are you?",
-]
+# Test GET /chat
+r1 = client.get('/chat')
+print(f'GET /chat: {r1.status_code}')
 
-print("=" * 60)
-print("USER EXPERIENCE TEST — What does chatting with me feel like?")
-print("=" * 60)
+# Test POST /chat/ask (the actual endpoint)
+r2 = client.post('/chat/ask', json={'message': 'hello'}, content_type='application/json')
+print(f'POST /chat/ask: {r2.status_code}')
+print(f'Response: {r2.get_data(as_text=True)[:500]}')
 
-for q in questions:
-    print(f"\n>>> User: {q}")
-    r = client.post('/api/chat',
-                     json={'message': q},
-                     content_type='application/json')
-    print(f"    Status: {r.status_code}")
-    data = r.get_json()
-    if data and 'response' in data:
-        resp = data['response']
-        # Show first 300 chars
-        preview = resp[:300] + ('...' if len(resp) > 300 else '')
-        print(f"    Response ({len(resp)} chars): {preview}")
-    elif data and 'error' in data:
-        print(f"    ERROR: {data['error']}")
-    else:
-        print(f"    Raw: {r.data[:200]}")
-    print("-" * 60)
+# Test POST /api/chat (alternate endpoint)
+r3 = client.post('/api/chat', json={'message': 'hello'}, content_type='application/json')
+print(f'POST /api/chat: {r3.status_code}')
+print(f'Response: {r3.get_data(as_text=True)[:500]}')
 
-print("\nDone.")
+# List chat routes
+print('\nChat routes:')
+for rule in sorted(app.url_map.iter_rules(), key=lambda r: r.rule):
+    if 'chat' in rule.rule:
+        methods = ','.join(rule.methods - {'OPTIONS', 'HEAD'})
+        print(f'  {rule.rule} [{methods}]')

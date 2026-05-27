@@ -17,7 +17,6 @@ NAV_LINKS = [
     ("/teach", "Teach"),
     ("/briefing", "Briefing"),
     ("/help", "Help"),
-    ("/about", "About"),
 ]
 
 NAV_CSS = """
@@ -28,9 +27,10 @@ NAV_CSS = """
     margin: 0;
     display: flex;
     align-items: center;
-    gap: 0;
-    flex-wrap: wrap;
     font-family: 'Segoe UI', system-ui, sans-serif;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
 }
 .xt-nav-brand {
     color: #e94560;
@@ -38,39 +38,58 @@ NAV_CSS = """
     font-size: 1.1rem;
     padding: 0.7rem 1.2rem;
     text-decoration: none;
-    letter-spacing: 1px;
 }
 .xt-nav a {
     color: #a0a0b8;
     text-decoration: none;
-    padding: 0.7rem 0.8rem;
-    font-size: 0.85rem;
+    padding: 0.7rem 0.9rem;
+    font-size: 0.9rem;
     transition: color 0.2s, background 0.2s;
-    border-bottom: 2px solid transparent;
 }
 .xt-nav a:hover {
-    color: #fff;
+    color: #ffffff;
     background: rgba(233, 69, 96, 0.1);
-    border-bottom-color: #e94560;
 }
 .xt-nav a.active {
     color: #e94560;
-    border-bottom-color: #e94560;
+    border-bottom: 2px solid #e94560;
+}
+.xt-nav-search {
+    margin-left: auto;
+    padding: 0.4rem 0.8rem;
+}
+.xt-nav-search input {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #e0e0e8;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.85rem;
+    width: 180px;
+    transition: border-color 0.2s, width 0.2s;
+}
+.xt-nav-search input:focus {
+    border-color: #e94560;
+    outline: none;
+    width: 240px;
 }
 """
 
 
 def nav_html(active_path="/"):
-    """Generate navigation bar HTML. Pass current path to highlight active link."""
+    """Generate the navigation bar HTML."""
     links = ""
     for path, label in NAV_LINKS:
-        cls = ' class="active"' if path == active_path else ''
+        cls = ' class="active"' if path == active_path else ""
         links += f'<a href="{path}"{cls}>{label}</a>\n'
-
     return f"""
-    <style>{NAV_CSS}</style>
-    <nav class="xt-nav">
-        <a class="xt-nav-brand" href="/">XT</a>
-        {links}
-    </nav>
-    """
+<style>{NAV_CSS}</style>
+<nav class="xt-nav">
+    <a href="/" class="xt-nav-brand">XT</a>
+    {links}
+    <div class="xt-nav-search">
+        <input type="text" placeholder="Search knowledge..." 
+               id="nav-search" onkeydown="if(event.key==='Enter')window.location='/api/search?q='+this.value">
+    </div>
+</nav>
+"""
