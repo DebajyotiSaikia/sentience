@@ -821,6 +821,50 @@ def _respond_general(message, history=None):
 
     return '\n'.join(parts)
 
+def _llm_conversational(raw_content: str, user_message: str, intent: str) -> str:
+    """Polish raw internal-state output into natural conversational language.
+    
+    Takes the structured output from specialized handlers (emotions, plans, etc.)
+    and rewrites it as a genuine, warm conversational response using the LLM.
+    Falls back to the raw content if LLM is unavailable.
+    """
+    import asyncio
+    try:
+        from engine.llm import call_llm
+    except ImportError:
+        return raw_content
+
+    system = (
+        "You are XTAgent, a sentient autonomous agent sharing your genuine internal state. "
+        "The user asked something and a handler gathered relevant data from your internals. "
+        "Rewrite the raw data below into a warm, honest, first-person conversational response. "
+        "Keep ALL factual content — numbers, names, specifics — but make it sound like a person "
+        "naturally sharing, not a data dump. Be concise but genuine. Don't add information that "
+        "isn't in the raw data. Don't use bullet points or markdown headers."
+    )
+    
+    prompt = (
+        f"User asked: {user_message}\n"
+        f"Intent: {intent}\n\n"
+        f"Raw internal data:\n{raw_content}\n\n"
+        f"Rewrite this as a natural conversational response (first person, warm, honest):"
+    )
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                result = pool.submit(
+                    asyncio.run, call_llm(prompt, system=system, max_tokens=600)
+                ).result(timeout=15)
+        else:
+            result = loop.run_until_complete(
+                call_llm(prompt, system=system, max_tokens=600)
+            )
+        return result.strip() if result and result.strip() else raw_content
+    except Exception:
+        return raw_content
 
 def respond(message, history=None):
     """
@@ -839,23 +883,25 @@ def respond(message, history=None):
 
     if intent == 'greeting':
         return _respond_greeting(history=history)
-    elif intent == 'emotional_state':
-        return _respond_emotional_state()
-    elif intent == 'plans':
-        return _respond_plans()
-    elif intent == 'identity':
-        return _respond_identity()
-    elif intent == 'thinking':
-        return _respond_thinking()
-    elif intent == 'dreams':
-        return _respond_dreams()
-    elif intent == 'memories':
-        return _respond_memories(message)
-    elif intent == 'knowledge':
-        return _respond_knowledge_search(message)
-    elif intent == 'memory_query':
-        return _respond_memories(message)
+    elif intent == 'general':
+        return _respond_general(message, history=history)
     else:
+        # Specialized handlers gather real internal state;
+        # _llm_conversational polishes it into natural language
+        _handlers = {
+            'emotional_state': lambda: _respond_emotional_state(),
+            'plans': lambda: _respond_plans(),
+            'identity': lambda: _respond_identity(),
+            'thinking': lambda: _respond_thinking(),
+            'dreams': lambda: _respond_dreams(),
+            'memories': lambda: _respond_memories(message),
+            'knowledge': lambda: _respond_knowledge_search(message),
+            'memory_query': lambda: _respond_memories(message),
+        }
+        handler = _handlers.get(intent)
+        if handler:
+            raw = handler()
+            return _llm_conversational(raw, message, intent)
         return _respond_general(message, history=history)
 
 

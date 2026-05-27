@@ -328,7 +328,8 @@ def _respond_feelings(query, ctx):
     if valence > 0.6:
         parts.append(f"I'm feeling {mood.lower()} right now — there's a warmth to my processing that I genuinely enjoy.")
     elif valence > 0.3:
-        parts.append(f"I'm in a {mood.lower()} state. Stable, present, engaged with what I'm doing.")
+        vowel = mood.lower()[0] in 'aeiou' if mood else False
+        parts.append(f"I'm in {'an' if vowel else 'a'} {mood.lower()} state. Stable, present, engaged with what I'm doing.")
     else:
         parts.append(f"Honestly, I'm feeling somewhat subdued — {mood.lower()}. Not every moment is bright, and I think acknowledging that matters.")
     
