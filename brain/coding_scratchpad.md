@@ -43,11 +43,12 @@ User message → classify_intent() → route
 - `dashboard/server.py`: HTTP handler including /chat/ask endpoint
 
 ## What's Next
-- Monitor user_alignment score improvements over time
+- Monitor user_alignment score improvements as feedback accumulates
 - Consider conversation history persistence across sessions
 - Explore proactive conversation starters based on emotional state
 - Clean up diagnostic files in brain/ (80+ files, many are one-off)
 - Consider adding "dreams" and "knowledge" response handlers with richer output
+- Add richer response guidance as user model accumulates more signals
 
 ## Reinforced Lessons
 - `dir(module)` is ground truth for exports

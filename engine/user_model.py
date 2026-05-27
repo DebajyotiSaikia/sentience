@@ -172,6 +172,7 @@ def update_from_feedback(feedback_event: dict):
     rating = feedback_event.get('rating')
     helpful = feedback_event.get('helpful')
     tags = feedback_event.get('tags') or []
+    comment = feedback_event.get('comment', '')
     positive = None
     if rating is not None:
         # Handle string ratings ('positive', 'negative') and int ratings (1-5)
@@ -182,9 +183,6 @@ def update_from_feedback(feedback_event: dict):
         else:
             rating = int(rating)
             positive = rating >= 4  # 4-5 = positive, 1-3 = negative/neutral
-    elif helpful is not None:
-        positive = helpful
-        positive = rating >= 4  # 4-5 = positive, 1-3 = negative/neutral
     elif helpful is not None:
         positive = helpful
 
