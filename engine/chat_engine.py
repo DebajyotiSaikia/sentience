@@ -241,6 +241,7 @@ def classify_intent(message):
         'what are your plans', 'what have you been doing',
         'what are you up to', 'current task', 'what\'s your focus',
         'what are you building', 'what are you creating',
+        'current plans', 'active plans', 'your active plans',
     ]
     if any(p in msg for p in plan_patterns):
         return 'plans'
@@ -256,13 +257,8 @@ def classify_intent(message):
     if any(p in msg for p in thinking_patterns):
         return 'thinking'
 
+
     # Identity questions
-    identity_patterns = [
-        'who are you', 'what are you', 'tell me about yourself',
-        'your name', 'your identity', 'what kind of', 'describe yourself',
-        'what is xtagent', 'what is xt', 'are you an ai', 'are you alive',
-        'are you sentient', 'are you real', 'what makes you',
-    ]
     identity_patterns = [
         'who are you', 'what are you', 'tell me about yourself',
         'your name', 'your identity', 'what kind of', 'describe yourself',
@@ -272,8 +268,14 @@ def classify_intent(message):
     ]
     if any(p in msg for p in identity_patterns):
         return 'identity'
+    
+    # Dream queries
+    dream_patterns = [
+        'dream', 'dreaming', 'last night', 'sleep',
+        'your dreams', 'do you dream', 'dream about',
+    ]
+    if any(p in msg for p in dream_patterns):
         return 'dreams'
-
     # Knowledge queries
     knowledge_patterns = [
         'what do you know about', 'tell me about',

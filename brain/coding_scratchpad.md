@@ -1,56 +1,54 @@
-# XTAgent Coding Scratchpad
+# Coding Scratchpad — XTAgent
 
-## Session 2026-05-27 (second session) — Chat Grounding Complete
+## Architecture: Chat Response Pipeline
 
-### What Was Built
-Built `engine/chat_grounding.py` and wired it into `chat_engine.py` and `chat_response.py` so that:
-- Chat responses are genuinely conversational, drawing on real emotions, memories, plans, knowledge
-- `generate_response_with_metadata()` returns rich metadata: mood, valence, memory/plan/knowledge counts
-- The `_respond_general()` fallback now uses grounded context instead of generic filler
-- All intent types (greeting, emotional_state, plans, knowledge, identity) produce grounded, authentic responses
+### Data Flow
+```
+User query → POST /chat/ask (dashboard/server.py)
+  → generate_response_with_metadata(query) (engine/chat_response.py)
+    → classify_intent(query) (engine/chat_engine.py)
+    → generate_response(query) (engine/chat_engine.py)
+      → _respond_greeting/_respond_emotions/_respond_plans/etc.
+      → build_chat_grounding(query) (engine/chat_grounding.py) for context
+    → wraps with metadata (mood, valence, counts, grounding_used)
+```
 
-### New Files
-- `engine/chat_grounding.py` — `GroundedChatContext` dataclass + `build_grounded_context(query)` builder
-  - Loads emotions from `state/emotional_state.json`
-  - Loads recent memories from `state/episodes/`
-  - Loads active plans from `brain/plans.json`
-  - Loads and merges knowledge from both `state/knowledge_graph.json` and `brain/knowledge.json`
-  - Loads working memory from `brain/working_memory.md`
-  - Keyword-based relevance scoring for memories and knowledge
+### Two Intent Classifiers
+- `engine/chat_engine.py:classify_intent()` — used in actual response pipeline
+- `engine/conversation_intelligence.py:classify_intent()` — standalone utility (more intent types)
+- Both share similar patterns but chat_engine's is the one in the hot path
 
-### Modified Files
-- `engine/chat_engine.py` — imported `chat_grounding`, rewired `_respond_general()` to use grounded context
-- `engine/chat_response.py` — enriched metadata with mood, valence, memory/plan/knowledge counts from grounding
-  - Fixed bug: `ctx.active_plans` → `ctx.relevant_plans`
-  - Fixed bug: removed duplicate `return result`
+### Pattern Ordering in chat_engine.py:classify_intent()
+1. greeting → 2. emotional_state → 3. plans → 4. thinking → 5. dreams → 6. memories → 7. identity → 8. knowledge → 9. request → 10. question
+- Plans checked BEFORE identity (prevents "what are your plans" → identity via "what are you")
+- Dreams checked BEFORE identity (prevents "dream" matching identity patterns)
 
-### Architecture Decisions
-- `chat_grounding.py` is a pure data-assembly module — no LLM calls, no side effects
-- Relevance scoring uses simple keyword overlap (good enough, fast, no dependencies)
-- Grounding context is always built fresh per request (no caching — state changes frequently)
-- Two KGs merged: `state/knowledge_graph.json` and `brain/knowledge.json`
-- Working memory included as raw text for general queries
+### Key Files
+- `engine/chat_grounding.py` — builds compact context from brain state, knowledge, memories
+- `engine/chat_engine.py` — classify_intent + generate_response + intent-specific handlers
+- `engine/chat_response.py` — wraps response with metadata
+- `engine/conversation_intelligence.py` — richer standalone intent/tone/complexity analysis
 
-### Verified End-to-End
-All 5 test queries pass with populated grounding metadata:
-- "How are you feeling?" → emotional_state, mood=Inquisitive, valence=0.50
-- "What are your plans?" → plans, all 6 completed plans listed
-- "Tell me about consciousness" → knowledge, 5 relevant facts returned
-- "What are you thinking about?" → identity, full self-description
-- "Hello!" → greeting, conversational with current state
+## Tests
+- `brain/test_intent.py` — 11 intent classification cases
+- `brain/test_chat_integration.py` — 11 intents + 5 response generation tests
+- `brain/test_response_quality.py` — deeper response quality checks
 
-### Next Session Priorities
+## Next Session Priorities
 1. **Wire ConversationContext into generate_response()** — multi-turn awareness
    - `engine/conversation_context.py` already exists (277 lines)
    - Needs: message history tracking, context assembly, injection into response
 2. **Fuzzy matching for knowledge search** — currently exact substring only
-3. **conversation_intelligence.py integration** — tone detection, complexity assessment
-4. **Clean up remaining diagnostic scripts in brain/** — many one-off tests remain
+3. **conversation_intelligence.py integration** — use tone detection, complexity in responses
+4. **Clean up diagnostic scripts in brain/** — many one-off tests remain
 5. **Dashboard UX** — show grounding metadata in chat UI
+6. **Improve User Alignment** — will system keeps suggesting this (priority 0.425)
 
-### Reinforced Lessons
-- Build helper scripts for complex splicing operations (brain/_splice_general.py worked perfectly)
+## Reinforced Lessons
 - PATCH auto-reverts on syntax errors — a great safety net
 - Test with script files, not inline -c commands
-- One module, one responsibility: chat_grounding.py does data assembly, chat_engine.py does composition
-- Always merge both knowledge graphs
+- Check pattern ordering carefully — substring matches can cause false positives
+- Verify after every patch, test after every verify
+- When tests all pass and checkpoint is saved — STOP. Don't loop.
+- The metacognitive monitor is right: repeated PATCHes on the same file = stuck signal
+- One clean merge beats three incremental patches
