@@ -142,7 +142,7 @@ def record_feedback(
         response_id=response_id,
         rating=float(rating),
         comment=comment,
-        query=query[:500],
+    query=str(query)[:500] if query else "",
         response_snippet=response_snippet[:500],
         detected_intent=detected_intent,
         timestamp=ts,

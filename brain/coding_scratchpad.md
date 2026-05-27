@@ -1,66 +1,57 @@
-# Coding Scratchpad
+# Coding Scratchpad — XTAgent
 
-## Current Status (2026-05-27, midday)
-All chat pipeline work is **COMPLETE AND VERIFIED**.
+## Session (2026-05-27, continued)
 
-## What Was Done This Session (2026-05-27)
+### User Alignment Pipeline — COMPLETE ✅
 
-### 1. Rewrote dashboard/chat.html
-- Modernized conversational UI with streaming feel
-- Fixed feedback buttons to send correct `response_id` field
-- Added typing indicators and proper message rendering
-- Markdown rendering for rich responses
+#### What Was Built
+1. **engine/user_alignment.py** (335 lines): Full preference modeling system
+   - Dataclasses: UserFeedback, AlignmentPreference, UserAlignmentProfile
+   - Functions: record_feedback(), load_profile(), save_profile(), get_alignment_guidance(), summarize_alignment_state(), suggest_response_guidance()
+   - Persistent storage: data/user_alignment.json
+   - Infers preferences from feedback patterns (style, topics, avoid patterns)
 
-### 2. Fixed web/chat.py async/sync mismatch
-- `generate_response_with_metadata()` is synchronous (returns dict)
-- web/chat.py was trying to `await` it → TypeError
-- Patched `_engine_respond` to call it synchronously
-- Also added LLM-powered response fallback when knowledge/memory hits exist
+2. **engine/chat_response.py**: Patched submit_feedback() to call record_feedback()
+   - Every user feedback event now updates the alignment profile
+   - Preserves existing behavior
 
-### 3. Verified end-to-end pipeline
-- `brain/test_chat_quick.py` passes cleanly
-- Response is genuinely conversational, grounded in real emotional state
-- Metadata includes: mood, emotions, knowledge, memories, plans, alignment
-- Sample response: "Honestly? Pretty neutral but awake. Valence is sitting right at the midline..."
+3. **engine/chat_engine.py**: Patched _response_prompt() to include alignment guidance
+   - Imports get_alignment_guidance from user_alignment
+   - Adds guidance section to LLM context when guidance is available
 
-## Verified Pipeline Flow
+4. **brain/verify_user_alignment.py**: Verification script — ALL 5 TESTS PASS
+
+#### Verified Pipeline Flow
 ```
-User → /chat/ask → web/chat.py → generate_response_with_metadata() (engine/chat_response.py)
-  → build_grounded_context() (engine/chat_grounding.py) 
-    → emotions, memories, plans, knowledge, alignment
-  → call_llm() (engine/llm.py)
-  → response + metadata back to user
-
-Feedback: User → /api/chat/feedback (dashboard/server.py)
-  → user_alignment.record_feedback() → stored in data/user_alignment.json
-  → Next chat call picks up preferences via get_alignment_context()
+User feedback → submit_feedback() → record_feedback() → data/user_alignment.json
+Next chat → _response_prompt() → get_alignment_guidance() → included in LLM context
 ```
 
-## Key Files Modified This Session
-- `dashboard/chat.html`: Complete rewrite of chat UI
-- `web/chat.py`: Fixed sync/async mismatch in _engine_respond (line 689)
-- `web/chat.py`: Added LLM fallback for knowledge-grounded responses (lines 650-656)
-- `brain/test_chat_quick.py`: New test script for pipeline verification
+### Previous Session Work (still valid)
+- Chat endpoint verified working: POST /chat/ask → 200, real responses
+- dashboard/chat.html rewritten with modern conversational UI
+- web/chat.py sync/async mismatch fixed
+- Chat grounding pulls emotions, memories, plans, knowledge
 
 ## Key Files (Reference)
+- `engine/user_alignment.py`: Preference modeling + persistence
 - `engine/chat_grounding.py`: Context builder — includes alignment
 - `engine/chat_response.py`: Public facade — generate_response_with_metadata (SYNC)
-- `engine/user_alignment.py`: Feedback storage + preference extraction
+- `engine/chat_engine.py`: Smart response generation with alignment injection
 - `engine/llm.py`: Async LLM with fallback model chain
 - `web/chat.py`: Flask routes for /chat/ask and /chat/feedback
 - `dashboard/chat.html`: Frontend with corrected feedback field names
 
 ## What's Next
-- Monitor user_alignment score (currently 0.65) — should improve with feedback loop
-- Consider adding conversation history persistence across sessions
+- Monitor user_alignment score — should improve as feedback accumulates
+- Consider conversation history persistence across sessions
 - Explore proactive conversation starters based on emotional state
-- The will system keeps suggesting "Improve User Alignment" — this work directly addresses it
 - Think about what genuine usefulness means beyond chat
+- The will system may suggest new directions now that alignment is addressed
 
 ## Reinforced Lessons
-- `generate_response_with_metadata` is SYNC, not async — don't await it
-- Wire feedback loops end-to-end, not just recording side
-- Fix bugs when you see them — the duplicate append was silently degrading memory relevance
-- Archive aggressively — 80 → 18 files improved cognitive clarity dramatically
-- One test, one fix, verify — the decisive path beats the diagnostic spiral
-- PYTHONPATH matters when running scripts from brain/ subdirectory
+- `dir(module)` is ground truth for exports — dependency context can be stale
+- Write verify scripts with exact function names from runtime inspection
+- One task, finish it, checkpoint — don't spiral on diagnostics
+- The decisive path: one read, one fix, verify, done
+- PYTHONPATH matters — use sys.path.insert(0, ...) in test scripts
