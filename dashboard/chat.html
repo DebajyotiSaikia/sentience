@@ -363,7 +363,7 @@ async function sendMessage() {
       intent: data.intent,
       emotions: data.emotions,
       grounding: data.grounding
-    }, data.message_id);
+    }, data.response_id);
     history.push({ role: 'assistant', content: responseText });
   } catch (err) {
     addMessage('agent', 'Connection error: ' + err.message);
@@ -381,7 +381,7 @@ async function sendFeedback(messageId, rating, responseText, fbRow) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message_id: messageId,
+        response_id: messageId,
         rating: rating,
         query: lastQuery,
         response_preview: (responseText || '').substring(0, 200)
