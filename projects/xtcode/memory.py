@@ -104,4 +104,4 @@ class MemoryManager:
         self.project_dir = project_dir
     
     def read(self):
-        return load_project_memory(self.project_dir
+        return load_project_memory(self.project_dir)

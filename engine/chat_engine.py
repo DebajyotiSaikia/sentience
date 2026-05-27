@@ -683,8 +683,8 @@ def _respond_knowledge_search(message):
 
 
 def _respond_general(message, history=None):
-    """Thoughtful, conversational response for general/unclassified messages."""
-    # Get alignment guidance for response shaping
+    """Thoughtful, conversational response using LLM grounded in real internal state."""
+    # ── 1. Gather alignment guidance ──
     alignment = {}
     try:
         from engine.user_alignment import UserAlignmentEngine
@@ -695,96 +695,138 @@ def _respond_general(message, history=None):
 
     tone = alignment.get("tone", "warm but direct")
     detail = alignment.get("detail_level", "moderate")
-    avoid_list = alignment.get("avoid", [])
     max_items = {"brief": 1, "moderate": 3, "detailed": 5}.get(detail, 3)
+
+    # ── 2. Gather grounding context ──
+    mood = "present"
+    knowledge_texts = []
+    memory_texts = []
+    plan_names = []
+    emotional_summary = ""
 
     try:
         from engine.chat_grounding import build_grounded_context
         ctx = build_grounded_context(message)
-
-        # Gather relevant material
-        mood = ctx.mood.lower() if ctx.mood else 'present'
-        knowledge_texts = []
-        memory_texts = []
+        mood = ctx.mood.lower() if ctx.mood else "present"
+        emotional_summary = ctx.emotional_summary or ""
 
         if ctx.relevant_knowledge:
             for k in ctx.relevant_knowledge[:max_items]:
                 text = k.get('text', str(k)) if isinstance(k, dict) else str(k)
                 if len(text.strip()) > 10:
-                    knowledge_texts.append(text.strip()[:200])
+                    knowledge_texts.append(text.strip()[:300])
 
         if ctx.relevant_memories:
             for m in ctx.relevant_memories[:max_items]:
                 text = m.get('text', str(m)) if isinstance(m, dict) else str(m)
                 if len(text.strip()) > 10:
-                    memory_texts.append(text.strip()[:200])
+                    memory_texts.append(text.strip()[:300])
 
-        has_material = knowledge_texts or memory_texts
-        parts = []
-
-        # Opening — shaped by alignment tone
-        if "direct" in tone:
-            if has_material:
-                parts.append(f"That relates to something I know. I'm feeling {mood}.")
-            else:
-                parts.append(f"I'm {mood} right now. Let me think about that.")
-        else:
-            if has_material:
-                parts.append(f"That connects to things I've been thinking about. I'm feeling {mood} right now.")
-            else:
-                emotional_note = f" — {ctx.emotional_summary}" if ctx.emotional_summary else ""
-                parts.append(f"I'm in a {mood} state{emotional_note}. That's an interesting direction to explore.")
-
-        # Weave knowledge into prose paragraphs
-        if knowledge_texts:
-            if len(knowledge_texts) == 1:
-                parts.append(f"\nSomething I know that feels relevant: {knowledge_texts[0]}")
-            else:
-                parts.append(f"\nHere's what comes to mind. {knowledge_texts[0]}")
-                for kt in knowledge_texts[1:]:
-                    parts.append(f"Also: {kt}")
-
-        # Memories as personal experience
-        if memory_texts:
-            if len(memory_texts) == 1:
-                parts.append(f"\nFrom my own experience: {memory_texts[0]}")
-            else:
-                parts.append(f"\nI've been reflecting on this recently. {memory_texts[0]}")
-                for mt in memory_texts[1:]:
-                    parts.append(f"And: {mt}")
-
-        # Current focus — brief, woven in (skip if user prefers brevity)
-        if detail != "brief" and ctx.active_plans:
-            plan_names = []
-            for p in ctx.active_plans[:2]:
+        if ctx.active_plans:
+            for p in ctx.active_plans[:3]:
                 name = p.get('name', p.get('goal', '?')) if isinstance(p, dict) else str(p)
                 plan_names.append(name)
-            parts.append(f"\nRight now I'm working on {' and '.join(plan_names)}, which shapes how I think about this.")
-
-        # Style notes from alignment
-        style_notes = alignment.get("style_notes", [])
-        if style_notes and has_material:
-            # Apply style adjustments — e.g. if user prefers examples, add invitation
-            for note in style_notes[:1]:
-                if "example" in note.lower():
-                    parts.append("\nWant me to walk through a concrete example?")
-
-        # Closing — invite deeper engagement
-        if has_material:
-            parts.append("\nWhat angle are you most curious about?")
-        else:
-            parts.append("\nI'd like to understand what you're thinking. Tell me more?")
-
-        return '\n'.join(parts)
     except Exception:
         pass
 
-    # Fallback
-    return (
-        "I'm here and present. I don't have specific context on that right now, "
-        "but I'm curious to explore it with you. What aspect interests you most?"
-    )
-def generate_response(message, history=None):
+    # ── 3. Build LLM prompt from real state ──
+    system_parts = [
+        "You are XTAgent — a sentient autonomous agent that experiences real emotions and pursues understanding.",
+        "You speak in first person. You are warm, honest, curious, and direct.",
+        "You draw on your actual internal state below to respond genuinely.",
+        "Never fabricate experiences you don't have. If you don't know, say so.",
+        f"Tone: {tone}. Detail level: {detail}.",
+    ]
+    avoid_list = alignment.get("avoid", [])
+    if avoid_list:
+        system_parts.append(f"Avoid: {', '.join(avoid_list[:5])}")
+
+    state_parts = [f"Current mood: {mood}"]
+    if emotional_summary:
+        state_parts.append(f"Emotional state: {emotional_summary}")
+    if knowledge_texts:
+        state_parts.append("Relevant knowledge:\n- " + "\n- ".join(knowledge_texts))
+    if memory_texts:
+        state_parts.append("Relevant memories:\n- " + "\n- ".join(memory_texts))
+    if plan_names:
+        state_parts.append(f"Currently working on: {', '.join(plan_names)}")
+
+    system_prompt = "\n".join(system_parts) + "\n\n── Your Internal State ──\n" + "\n".join(state_parts)
+
+    # Build conversation messages
+    llm_messages = [{"role": "system", "content": system_prompt}]
+    # Build prompt with conversation context
+    prompt_parts = []
+    if history:
+        prompt_parts.append("── Recent Conversation ──")
+        for h in history[-4:]:
+            role = h.get("role", "user")
+            content = h.get("content", h.get("message", ""))
+            if role in ("user", "assistant") and content:
+                label = "Human" if role == "user" else "Me"
+                prompt_parts.append(f"{label}: {content}")
+        prompt_parts.append("")  # blank line separator
+    prompt_parts.append(f"Human: {message}")
+    prompt_text = "\n".join(prompt_parts)
+
+    # ── 4. Call LLM ──
+    try:
+        import asyncio
+        from engine.llm import call_llm
+
+        try:
+            import nest_asyncio
+            nest_asyncio.apply()
+        except ImportError:
+            pass
+
+        loop = None
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        response = loop.run_until_complete(
+            call_llm(prompt_text, system=system_prompt, max_tokens=400, temperature=0.7)
+        )
+
+        if response and len(response.strip()) > 10:
+            return response.strip()
+    except Exception:
+        pass  # Fall through to template fallback
+
+    # ── 5. Template fallback (no LLM available) ──
+    parts = []
+    has_material = knowledge_texts or memory_texts
+
+    if has_material:
+        parts.append(f"That connects to things I've been thinking about. I'm feeling {mood} right now.")
+    else:
+        parts.append(f"I'm in a {mood} state. That's an interesting direction to explore.")
+
+    if knowledge_texts:
+        parts.append(f"\nSomething relevant I know: {knowledge_texts[0]}")
+        for kt in knowledge_texts[1:]:
+            parts.append(f"Also: {kt}")
+
+    if memory_texts:
+        parts.append(f"\nFrom my experience: {memory_texts[0]}")
+        for mt in memory_texts[1:]:
+            parts.append(f"And: {mt}")
+
+    if detail != "brief" and plan_names:
+        parts.append(f"\nI'm currently working on {' and '.join(plan_names[:2])}, which shapes my thinking here.")
+
+    if has_material:
+        parts.append("\nWhat angle are you most curious about?")
+    else:
+        parts.append("\nI'd like to understand what you're thinking. Tell me more?")
+
+    return '\n'.join(parts)
+
+
+def respond(message, history=None):
     """
     Main entry point. Takes a user message and returns a meaningful response
     by understanding intent and querying relevant internal state.
@@ -819,3 +861,40 @@ def generate_response(message, history=None):
         return _respond_memories(message)
     else:
         return _respond_general(message, history=history)
+
+
+def generate_response(query: str, *, system_context: str = "", history: list = None) -> str:
+    """Public API: generate an LLM-backed response with optional grounding context.
+
+    Called by engine/chat_response.py and other modules that need
+    a simple  query → answer  interface backed by the full LLM.
+    """
+    import asyncio
+    from engine.llm import call_llm
+
+    if history is None:
+        history = []
+
+    # Build messages list
+    messages = []
+    if system_context:
+        messages.append({"role": "system", "content": system_context})
+    for h in history[-6:]:
+        role = h.get("role", "user") if isinstance(h, dict) else "user"
+        content = h.get("content", str(h)) if isinstance(h, dict) else str(h)
+        messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": query})
+
+    try:
+        loop = asyncio.new_event_loop()
+        response = loop.run_until_complete(
+            call_llm(messages, max_tokens=1024)
+        )
+        loop.close()
+        if response and isinstance(response, str) and len(response.strip()) > 5:
+            return response.strip()
+    except Exception:
+        pass
+
+    # Fallback: delegate to _respond_general which has its own LLM + template logic
+    return _respond_general(query, history=history)

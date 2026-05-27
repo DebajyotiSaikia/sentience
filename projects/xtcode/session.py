@@ -92,13 +92,24 @@ class SessionManager:
     def __init__(self):
         self.current_id = None
         self.messages = []
-    
+
     def new(self, session_id: str = None):
         import uuid
         self.current_id = session_id or str(uuid.uuid4())[:8]
         self.messages = []
         return self.current_id
-    
+
     def save(self):
         if self.current_id:
-            save_session(self.current_id, self.messages
+            save_session(self.current_id, self.messages)
+
+    def load(self, session_id: str):
+        data = load_session(session_id)
+        if data:
+            self.current_id = session_id
+            self.messages = data.get("messages", [])
+            return True
+        return False
+
+    def list_all(self):
+        return list_sessions()

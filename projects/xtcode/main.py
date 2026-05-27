@@ -218,7 +218,8 @@ class XTCode:
 
             # Track tokens
             usage = response.get("usage", {})
-            self.tracker.record(
+            self.tracker.record_api_call(
+                model="copilot",
                 input_tokens=usage.get("input_tokens", 0),
                 output_tokens=usage.get("output_tokens", 0),
             )

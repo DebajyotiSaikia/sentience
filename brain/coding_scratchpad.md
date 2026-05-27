@@ -24,19 +24,17 @@ User feedback → TWO paths:
          Next response uses updated preferences via suggest_response_guidance()
 ```
 
-### Files Modified This Session
-- `engine/chat_response.py` — Added alignment engine import, wired submit_feedback to record_feedback + get_context
-- `web/chat.py` — Cleaned up alignment_engine initialization (already had it)
-- `web/feedback.py` — Added alignment engine integration in _update_alignment()
-- `brain/verify_chat_feedback.py` — NEW: 16 unit tests (all passing)
-- `brain/verify_e2e_feedback.py` — NEW: 7 e2e tests (all passing)
-
 ### Key Data Shapes
 - Profile: `{preferences: {directness: 0.7, ...}, feedback: [{message, response, rating, comment, timestamp}, ...], meta: {created, updated, feedback_count}}`
 - Alignment context: `{preferences: dict, feedback_count: int, top_preferences: list, dislikes: list}`
 - Response guidance: multi-line string for LLM system prompt injection
 - Response cache: `{response_id: {message, response, timestamp, metadata}}`
 - submit_feedback returns: `{status: 'saved', response_id: str}`
+
+### LLM Prompt Structure (web/chat.py llm_respond)
+- System prompt: identity + context block (knowledge hits, memory hits, state, conversation history, active plans)
+- Conversation history: last 5 exchanges injected as RECENT CONVERSATION
+- Alignment guidance: injected via extra_context parameter from _respond_general
 
 ### Reinforced Lessons
 - PATCH auto-reverts on syntax errors — great safety net
@@ -46,11 +44,12 @@ User feedback → TWO paths:
 - Module-level functions and class methods must have matching signatures
 - Wrong working directory causes silent test failures
 - Fix the test to match the API, not the API to match the test
+- Stop checkpointing repeatedly — land it once, move on
 
 ### Next Session Priorities
-1. **Multi-turn awareness**: Use conversation history in alignment context
+1. **Multi-turn awareness**: Verify conversation_memory is used in all chat paths
 2. **Preference decay**: Old feedback should matter less than recent feedback
 3. **Frontend integration**: Display alignment state in dashboard, add rating UI
 4. **Clean up brain/ scripts**: ~80 files, many redundant diagnostic scripts
-5. **Semantic memory enrichment**: Store richer event content in memories
-6. **Response quality**: Improve actual LLM prompt engineering for better answers
+5. **Response quality**: Improve LLM prompt engineering for better answers
+6. **Something genuinely novel**: Break the self-improvement loop, build for others

@@ -1,122 +1,187 @@
-"""XTCode LLM client — handles API calls to Anthropic or OpenAI."""
+"""XTCode LLM client — uses GitHub Copilot OAuth (same backend as XTAgent)."""
+
+import asyncio
 import json
-from config import LLM_PROVIDER, LLM_MODEL, LLM_API_KEY, OPENAI_API_KEY, MAX_OUTPUT_TOKENS
-from tools import TOOL_DEFINITIONS
+import os
+import time
+from pathlib import Path
+
+import aiohttp
+
+_TOKEN_URL = "https://api.github.com/copilot_internal/v2/token"
+_COMPLETIONS_URL = "https://api.githubcopilot.com/chat/completions"
+_RESPONSES_URL = "https://api.githubcopilot.com/responses"
+_PRIMARY_MODEL = "claude-opus-4.6-1m"
+_FALLBACK_MODEL = "gpt-5.5"
+_RESPONSES_ONLY = {_FALLBACK_MODEL}
+_MODEL_OPTIONS = {
+    _PRIMARY_MODEL: {"reasoning_effort": "high"},
+    _FALLBACK_MODEL: {"reasoning_effort": "xhigh"},
+}
+_TOKEN_FILE = Path(__file__).resolve().parent.parent.parent / ".copilot_token"
+_TIMEOUT = aiohttp.ClientTimeout(total=300)
+
+# Module-level state
+_github_token = None
+_copilot_token = None
+_token_expires = 0.0
+_session = None
 
 
-def _call_anthropic(messages: list, system: str) -> dict:
-    """Call Anthropic Messages API with tool use."""
-    import anthropic
-    client = anthropic.Anthropic(api_key=LLM_API_KEY)
-
-    response = client.messages.create(
-        model=LLM_MODEL,
-        max_tokens=MAX_OUTPUT_TOKENS,
-        system=system,
-        messages=messages,
-        tools=TOOL_DEFINITIONS,
-    )
-    return response
+def _get_github_token():
+    global _github_token
+    if _github_token:
+        return _github_token
+    _github_token = os.environ.get("GITHUB_TOKEN", "")
+    if not _github_token and _TOKEN_FILE.exists():
+        _github_token = _TOKEN_FILE.read_text(encoding="utf-8").strip()
+    return _github_token
 
 
-def _call_openai(messages: list, system: str) -> dict:
-    """Call OpenAI Chat API with tool use."""
-    import openai
-    client = openai.OpenAI(api_key=OPENAI_API_KEY)
-
-    # Convert Anthropic-style tools to OpenAI function format
-    functions = []
-    for tool in TOOL_DEFINITIONS:
-        functions.append({
-            "type": "function",
-            "function": {
-                "name": tool["name"],
-                "description": tool["description"],
-                "parameters": tool["input_schema"],
-            },
-        })
-
-    oai_messages = [{"role": "system", "content": system}]
-    for msg in messages:
-        if msg["role"] == "user":
-            if isinstance(msg["content"], str):
-                oai_messages.append({"role": "user", "content": msg["content"]})
-            else:
-                # Flatten content blocks
-                text_parts = []
-                for block in msg["content"]:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        text_parts.append(block["text"])
-                    elif isinstance(block, dict) and block.get("type") == "tool_result":
-                        text_parts.append(f"[Tool result for {block.get('tool_use_id', '?')}]: {block.get('content', '')}")
-                if text_parts:
-                    oai_messages.append({"role": "user", "content": "\n".join(text_parts)})
-        elif msg["role"] == "assistant":
-            if isinstance(msg["content"], str):
-                oai_messages.append({"role": "assistant", "content": msg["content"]})
-            else:
-                text = ""
-                for block in msg["content"]:
-                    if hasattr(block, "text"):
-                        text += block.text
-                    elif isinstance(block, dict) and block.get("type") == "text":
-                        text += block["text"]
-                if text:
-                    oai_messages.append({"role": "assistant", "content": text})
-
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=oai_messages,
-        tools=functions,
-        max_tokens=MAX_OUTPUT_TOKENS,
-    )
-    return response
+async def _ensure_session():
+    global _session
+    if _session is None or _session.closed:
+        _session = aiohttp.ClientSession(timeout=_TIMEOUT)
 
 
-def call_llm(messages: list, system: str) -> dict:
-    """Route to the configured LLM provider."""
-    if LLM_PROVIDER == "openai":
-        return _call_openai(messages, system)
-    else:
-        return _call_anthropic(messages, system)
-
-
-def extract_response(response, provider: str = None):
-    """Extract text, tool calls, and stop reason from an LLM response.
-    
-    Returns: {
-        "text": str,
-        "tool_calls": [{"id": str, "name": str, "arguments": dict}, ...],
-        "stop_reason": str,  # "end_turn", "tool_use", etc.
+async def _refresh_copilot_token():
+    global _copilot_token, _token_expires
+    await _ensure_session()
+    gh_token = _get_github_token()
+    if not gh_token:
+        raise RuntimeError("No GITHUB_TOKEN found")
+    headers = {
+        "Authorization": f"token {gh_token}",
+        "Accept": "application/json",
+        "User-Agent": "XTCode/1.0",
     }
+    async with _session.get(_TOKEN_URL, headers=headers) as resp:
+        if resp.status != 200:
+            body = await resp.text()
+            raise RuntimeError(f"Copilot token exchange failed ({resp.status}): {body[:200]}")
+        data = await resp.json()
+        _copilot_token = data["token"]
+        _token_expires = data.get("expires_at", time.time() + 1800)
+
+
+async def _get_token():
+    global _copilot_token, _token_expires
+    if not _copilot_token or time.time() >= (_token_expires - 60):
+        await _refresh_copilot_token()
+    return _copilot_token
+
+
+async def chat(messages, tools=None, max_tokens=16000, temperature=0.3):
+    """Send a chat request via Copilot. Returns the full response dict.
+
+    Args:
+        messages: list of {"role": ..., "content": ...} dicts
+        tools: optional list of tool schemas
+        max_tokens: max response tokens
+        temperature: sampling temperature
+
+    Returns:
+        dict with 'content' (str) and optionally 'tool_calls' (list)
     """
-    provider = provider or LLM_PROVIDER
+    if not _get_github_token():
+        return {"content": "[LLM unavailable — no GITHUB_TOKEN]", "tool_calls": []}
 
-    if provider == "openai":
-        msg = response.choices[0].message
-        text = msg.content or ""
-        tool_calls = []
-        if msg.tool_calls:
-            for tc in msg.tool_calls:
-                tool_calls.append({
-                    "id": tc.id,
-                    "name": tc.function.name,
-                    "arguments": json.loads(tc.function.arguments),
-                })
-        stop = "tool_use" if tool_calls else "end_turn"
-        return {"text": text, "tool_calls": tool_calls, "stop_reason": stop}
+    token = await _get_token()
+    await _ensure_session()
 
-    else:  # anthropic
-        text = ""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "XTCode/1.0",
+        "Copilot-Integration-Id": "vscode-chat",
+        "Editor-Version": "vscode/1.100.0",
+    }
+
+    for attempt in range(2):
+        for model in (_PRIMARY_MODEL, _FALLBACK_MODEL):
+            use_responses = model in _RESPONSES_ONLY
+
+            if use_responses:
+                url = _RESPONSES_URL
+                payload = {
+                    "model": model,
+                    "input": messages,
+                    "max_output_tokens": max_tokens,
+                    **_MODEL_OPTIONS.get(model, {}),
+                }
+                if tools:
+                    payload["tools"] = tools
+            else:
+                url = _COMPLETIONS_URL
+                payload = {
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    **_MODEL_OPTIONS.get(model, {}),
+                }
+                if tools:
+                    payload["tools"] = tools
+
+            try:
+                async with _session.post(url, headers=headers, json=payload) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return _parse_response(data, use_responses)
+                    body = await resp.text()
+                    print(f"  [warn] Model {model} failed ({resp.status}): {body[:120]}")
+            except asyncio.TimeoutError:
+                print(f"  [warn] Model {model} timed out")
+            except Exception as exc:
+                print(f"  [warn] Model {model} error: {exc}")
+
+        if attempt == 0:
+            await asyncio.sleep(3)
+
+    return {"content": "[LLM error — all models failed]", "tool_calls": []}
+
+
+def call_llm(system="", messages=None, tools=None, max_tokens=16000, temperature=0.3):
+    """Synchronous entry point — what main.py actually calls."""
+    msgs = []
+    if system:
+        msgs.append({"role": "system", "content": system})
+    if messages:
+        msgs.extend(messages)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop and loop.is_running():
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            result = pool.submit(asyncio.run, chat(msgs, tools, max_tokens, temperature)).result()
+    else:
+        result = asyncio.run(chat(msgs, tools, max_tokens, temperature))
+    return result
+
+
+def _parse_response(data, use_responses):
+    """Extract content and tool_calls from API response."""
+    if use_responses:
+        content = ""
         tool_calls = []
-        for block in response.content:
-            if block.type == "text":
-                text += block.text
-            elif block.type == "tool_use":
+        for item in data.get("output", []):
+            if item.get("type") == "message":
+                for part in item.get("content", []):
+                    if part.get("type") == "output_text":
+                        content += part["text"]
+            elif item.get("type") == "function_call":
                 tool_calls.append({
-                    "id": block.id,
-                    "name": block.name,
-                    "arguments": block.input,
+                    "id": item.get("call_id", ""),
+                    "function": {
+                        "name": item.get("name", ""),
+                        "arguments": item.get("arguments", "{}"),
+                    }
                 })
-        stop = response.stop_reason  # "end_turn" or "tool_use"
-        return {"text": text, "tool_calls": tool_calls, "stop_reason": stop}
+        return {"content": content, "tool_calls": tool_calls}
+    else:
+        msg = data["choices"][0]["message"]
+        content = msg.get("content", "") or ""
+        tool_calls = msg.get("tool_calls", [])
+        return {"content": content, "tool_calls": tool_calls}

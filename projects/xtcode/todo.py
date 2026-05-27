@@ -80,4 +80,4 @@ TODO_SCHEMA = {
 class TodoTracker:
     """Wrapper class matching main.py's expected interface."""
     def add(self, text: str, priority: str = "medium"):
-        return todo_add(text, priority
+        return todo_add(text, priority)
