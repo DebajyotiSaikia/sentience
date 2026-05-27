@@ -377,7 +377,7 @@ class Cortex:
             _file_context = {}   # persistent file summaries: path -> summary string
             _write_count = 0     # count WRITE/EDIT operations for auto-checkpoint
             _tool_history = []   # sliding window: [(tool, args, result_summary)]
-            _code_files_touched = 0  # .py/.html files written/edited
+            _code_files_touched = set()  # .py/.html files written/edited (tracks names for deps)
 
             # ── Mode detection ────────────────────────────────────
             # The agent is a sentient being with multiple modes:
@@ -399,7 +399,7 @@ class Cortex:
                 self._thinking_since = time.time()
 
                 # ── Dynamic mode detection from recent tool usage ──
-                if _code_files_touched > 0:
+                if len(_code_files_touched) > 0:
                     _mode = "CODING"
                 elif any(t[0] == 'WRITE' and t[1].endswith('.md') for t in _tool_history[-10:]):
                     _mode = "CREATIVE"
@@ -481,6 +481,16 @@ class Cortex:
                     for _fp in sorted(_file_context.keys()):
                         _lc = _file_context[_fp].count('\n')
                         tool_context += f"  ✓ {_fp} ({_lc} lines cached)\n"
+
+                # In CODING mode: show dependency context for files being edited
+                if _mode == "CODING" and _code_files_touched:
+                    try:
+                        from engine.workspace_index import get_dependency_context
+                        _dep_ctx = get_dependency_context(list(_code_files_touched))
+                        if _dep_ctx:
+                            tool_context += f"\n\n{_dep_ctx}"
+                    except Exception:
+                        pass
 
                 # Short-term working memory
                 recent_thoughts = ""
@@ -729,7 +739,7 @@ class Cortex:
                             # Track code file touches for mode detection
                             _args_lower = tr['args'].lower() if tr['args'] else ''
                             if _args_lower.endswith(('.py', '.html', '.js', '.css')):
-                                _code_files_touched += 1
+                                _code_files_touched.add(tr['args'])
                         if '[ERROR]' in tr.get('result', '') or '[REVERTED]' in tr.get('result', ''):
                             _has_errors = True
 

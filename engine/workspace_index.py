@@ -290,6 +290,47 @@ class WorkspaceIndex:
         return ''.join(parts)
 
 
+    def get_dependency_context(self, touched_files: list[str], max_chars: int = 3000) -> str:
+        """Given a list of files being edited, show their interfaces and dependencies.
+        This helps the agent maintain consistency across multi-file projects."""
+        if not self._scanned:
+            self.scan()
+        if not touched_files:
+            return ""
+
+        parts = ["## Dependency Context (files you're working with)\n"]
+        total = 0
+        for fpath in touched_files:
+            fpath_norm = fpath.replace('\\', '/').strip('/')
+            info = self._files.get(fpath_norm)
+            if not info:
+                # Try partial match
+                matches = [f for f in self._files if fpath_norm in f]
+                info = self._files[matches[0]] if matches else None
+            if not info:
+                continue
+
+            section = f"\n**{info.rel_path}** ({info.lines}L):\n"
+            if info.classes:
+                section += f"  Exports classes: {', '.join(info.classes)}\n"
+            if info.functions:
+                fns = info.functions[:10]
+                section += f"  Exports functions: {', '.join(fns)}\n"
+            if info.imports:
+                local_imports = [i for i in info.imports if not i.startswith(('os', 'sys', 'json', 'time', 'pathlib', 'typing', 'datetime', 'logging', 're', 'ast', 'subprocess', 'collections', 'dataclasses', 'hashlib', 'math', 'sqlite3'))]
+                if local_imports:
+                    section += f"  Imports from: {', '.join(local_imports[:8])}\n"
+            if info.imported_by:
+                section += f"  Used by: {', '.join(info.imported_by[:5])}\n"
+
+            total += len(section)
+            if total > max_chars:
+                break
+            parts.append(section)
+
+        return ''.join(parts) if len(parts) > 1 else ""
+
+
 # ── Singleton ──────────────────────────────────────────────────
 
 _index: Optional[WorkspaceIndex] = None
@@ -309,6 +350,9 @@ def find_symbol(name: str) -> str:
 
 def get_imports(path: str) -> str:
     return get_index().get_imports(path)
+
+def get_dependency_context(touched_files: list[str]) -> str:
+    return get_index().get_dependency_context(touched_files)
 
 def workspace_summary(max_chars: int = 8000) -> str:
     return get_index().workspace_summary(max_chars)

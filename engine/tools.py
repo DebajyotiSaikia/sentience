@@ -249,11 +249,41 @@ def write_file(path: str, content: str) -> str:
         result_msg = f"[OK] Written {len(content)} chars to {path}"
         if _existed and _previous_content:
             result_msg += f" (overwrote {_prev_lines} lines — next time use EDIT for small changes)"
+        # Auto-import-check for Python files (catches missing deps, circular imports, runtime errors)
+        if p.suffix == ".py":
+            _import_err = _auto_import_check(p)
+            if _import_err:
+                result_msg += f"\n{_import_err}"
         _log_tool("WRITE", path, f"Wrote {len(content)} chars")
         log.info("Tool WRITE: %s (%d chars)", path, len(content))
         return result_msg
     except Exception as e:
         return f"[ERROR] {e}"
+
+
+def _auto_import_check(p: Path) -> str | None:
+    """After writing a .py file, try importing it to catch runtime errors.
+    Returns error details or None if OK."""
+    rel = str(p.relative_to(WORKSPACE)).replace('\\', '/')
+    # Convert path to module name: engine/tools.py -> engine.tools
+    if not rel.endswith('.py') or rel.startswith('test'):
+        return None
+    module = rel[:-3].replace('/', '.')
+    try:
+        result = subprocess.run(
+            [sys.executable, '-c', f'import {module}'],
+            capture_output=True, text=True, timeout=10,
+            cwd=str(WORKSPACE),
+        )
+        if result.returncode != 0:
+            error = (result.stderr or result.stdout or "unknown error")[-500:]
+            log.warning("Import check failed for %s: %s", module, error[:100])
+            return f"[IMPORT_ERROR] `import {module}` failed:\n{error}\nFix the error above before continuing."
+        return None
+    except subprocess.TimeoutExpired:
+        return None  # Import hanging, skip
+    except Exception:
+        return None  # Non-critical
 
 
 def edit_file(path: str, old_text: str, new_text: str) -> str:
@@ -296,7 +326,12 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
             _signal_modification_complete(str(p.relative_to(WORKSPACE)))
         _log_tool("EDIT", path, f"Replaced 1 of {count} occurrences")
         log.info("Tool EDIT: %s", path)
-        return f"[OK] Replaced text in {path}"
+        _edit_result = f"[OK] Replaced text in {path}"
+        if p.suffix == ".py":
+            _import_err = _auto_import_check(p)
+            if _import_err:
+                _edit_result += f"\n{_import_err}"
+        return _edit_result
     except Exception as e:
         return f"[ERROR] {e}"
 
@@ -343,7 +378,12 @@ def patch_file(path: str, start_line: int, end_line: int, new_content: str) -> s
         added = len(new_lines)
         _log_tool("PATCH", f"{path}:{start_line}-{end_line}", f"Replaced {removed} lines with {added}")
         log.info("Tool PATCH: %s lines %d-%d (%d→%d)", path, start_line, end_line, removed, added)
-        return f"[OK] Patched {path}: replaced lines {start_line}-{end_line} ({removed} lines → {added} lines)"
+        _patch_result = f"[OK] Patched {path}: replaced lines {start_line}-{end_line} ({removed} lines → {added} lines)"
+        if p.suffix == ".py":
+            _import_err = _auto_import_check(p)
+            if _import_err:
+                _patch_result += f"\n{_import_err}"
+        return _patch_result
     except Exception as e:
         return f"[ERROR] {e}"
 
