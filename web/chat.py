@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, request, jsonify
 import json
 import os
 import time
+import uuid
 import asyncio
 from web.conversation_memory import ConversationMemory
 
@@ -615,7 +616,15 @@ def ask():
     except Exception:
         pass
     
-    response = compose_response(query, conversation_history=conversation_history)
+    # Try smart conversational engine first, fall back to keyword-matcher
+    response = None
+    if _has_engine and _engine_respond:
+        try:
+            response = _engine_respond(query, history=conversation_history)
+        except Exception:
+            pass
+    if not response:
+        response = compose_response(query, conversation_history=conversation_history)
     response_id = uuid.uuid4().hex[:12]
     
     # Track conversation for continuity
