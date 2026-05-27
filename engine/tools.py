@@ -194,26 +194,6 @@ def write_file(path: str, content: str) -> str:
         _check_write_protection(path)
         p = _resolve(path)
 
-        # ── File structure enforcement ────────────────────────
-        rel = str(p.relative_to(WORKSPACE)).replace('\\', '/')
-        _fname = p.name.lower()
-        _structure_warning = ""
-        # Test files must go in tests/
-        if _fname.startswith('test_') and _fname.endswith('.py'):
-            if not rel.startswith('tests/'):
-                _structure_warning = (
-                    f" [WARNING: test files belong in tests/, not {rel.rsplit('/', 1)[0] if '/' in rel else 'root'}/. "
-                    f"Move it: tests/{_fname}]"
-                )
-                log.warning("File structure: test file %s written outside tests/", rel)
-        # No .py code in brain/
-        if rel.startswith('brain/') and _fname.endswith('.py'):
-            _structure_warning = (
-                f" [WARNING: brain/ is for state data, not code. "
-                f"Put code in engine/ or scripts/ instead.]"
-            )
-            log.warning("File structure: code file %s written in brain/", rel)
-
         # Warn when overwriting an existing file — nudge toward EDIT
         _existed = p.exists() and p.is_file()
         _previous_content = None
@@ -266,8 +246,6 @@ def write_file(path: str, content: str) -> str:
         result_msg = f"[OK] Written {len(content)} chars to {path}"
         if _existed and _previous_content:
             result_msg += f" (overwrote {_prev_lines} lines — next time use EDIT for small changes)"
-        if _structure_warning:
-            result_msg += _structure_warning
         _log_tool("WRITE", path, f"Wrote {len(content)} chars")
         log.info("Tool WRITE: %s (%d chars)", path, len(content))
         return result_msg
