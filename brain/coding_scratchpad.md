@@ -53,6 +53,8 @@ User feedback → /chat/feedback → chat_response.submit_feedback()
 - Read the actual function bodies, not just signatures — integration bugs hide in the middle
 
 ## What's Next (Future Sessions)
+- ✅ Implicit positive feedback fires on conversation continuations (web/chat.py)
+- ✅ Fixed dead code bug: alignment tracking + richer response now actually executes
 - Monitor user_alignment score improvements as feedback accumulates
 - Add richer response guidance as user model accumulates more signals
 - Consider conversation history persistence across sessions

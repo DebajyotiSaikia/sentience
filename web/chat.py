@@ -731,12 +731,7 @@ def ask():
     except Exception:
         pass  # Never let memory tracking break chat
     
-    return jsonify({
-        'response': response,
-        'response_id': response_id,
-        'session_id': session_id,
-        'metadata': response_meta
-    })
+    # (alignment tracking and richer return below)
     
     # Track with alignment engine for feedback learning
     if _alignment_engine:
