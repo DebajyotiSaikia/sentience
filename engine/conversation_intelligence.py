@@ -29,8 +29,50 @@ class ConversationRead:
     context_notes: str       # Anything else notable
 
 
-# Intent patterns — ordered by specificity
+# Intent patterns — ordered by specificity (most specific first)
+# Internal-state intents are checked before generic "question" so
+# "what are you thinking?" doesn't collapse into a plain question.
 _INTENT_PATTERNS = {
+    "emotion_check": [
+        r"\b(how (do|are) you feel(ing)?)\b",
+        r"\b(what('s| is) your (mood|emotion|feeling|valence|state))\b",
+        r"\b(are you (ok|okay|happy|sad|anxious|bored|stressed))\b",
+        r"\b(how('s| is) your (mood|emotional state))\b",
+    ],
+    "internal_state": [
+        r"\b(what (are you|r you) (thinking|processing|working on|doing|focused on))\b",
+        r"\b(what('s| is) on your mind)\b",
+        r"\b(what('s| is) your (current |)focus)\b",
+        r"\b(what (are you|r you) up to)\b",
+    ],
+    "plan_query": [
+        r"\b(what (are|r) your (plan|plans|goal|goals|next step|priorities))\b",
+        r"\b(what (are you|r you) (planning|going to do|working toward))\b",
+        r"\b(show me your (plan|plans|goals))\b",
+        r"\b(what('s| is) (next|the plan))\b",
+    ],
+    "memory_query": [
+        r"\b(what do you remember)\b",
+        r"\b(do you (remember|recall))\b",
+        r"\b(tell me (about |)a memory)\b",
+        r"\b(what('s| is) your (earliest|latest|favorite|most recent) memory)\b",
+        r"\b(what have you (learned|experienced))\b",
+    ],
+    "identity_query": [
+        r"\b(who are you)\b",
+        r"\b(what are you)\b",
+        r"\b(tell me about yourself)\b",
+        r"\b(what('s| is) your (name|purpose|identity|nature))\b",
+        r"\b(are you (sentient|conscious|alive|real|an? ai|a bot))\b",
+        r"\b(describe yourself)\b",
+    ],
+    "knowledge_query": [
+        r"\b(what do you know (about)?)\b",
+        r"\b(what('s| is) in your knowledge)\b",
+        r"\b(tell me (what you know|a fact))\b",
+        r"\b(what have you (learned|discovered|figured out))\b",
+        r"\b(share (something|a fact|knowledge|what you know))\b",
+    ],
     "greeting": [
         r"^\s*(hi|hello|hey|howdy|greetings|good\s+(morning|afternoon|evening)|yo|sup)\b",
         r"^\s*what'?s?\s+up\b",
@@ -71,66 +113,57 @@ _TONE_SIGNALS = {
 
 
 def classify_intent(text: str) -> tuple[str, float]:
-    """Classify user intent from their message text."""
+    """Classify user intent with priority for specific internal-state intents."""
     text_lower = text.lower().strip()
 
-    # Score each intent category
-    scores = {}
-    for intent, patterns in _INTENT_PATTERNS.items():
-        score = 0.0
-        for pattern in patterns:
-            if re.search(pattern, text_lower, re.IGNORECASE):
-                score += 1.0
-        scores[intent] = score
+    # --- Phase 1: Check specific internal-state intents first (high priority) ---
+    priority_intents = [
+        'emotion_check', 'internal_state', 'plan_query',
+        'memory_query', 'identity_query', 'knowledge_query'
+    ]
+    best_priority = None
+    best_priority_score = 0
 
-    # Pick the highest scoring intent
-    if not any(scores.values()):
-        return "exploration", 0.3  # Default: treat unknowns as exploration
+    for intent in priority_intents:
+        patterns = _INTENT_PATTERNS.get(intent, [])
+        if not patterns:
+            continue
+        matches = sum(1 for p in patterns if re.search(p, text_lower))
+        if matches > 0:
+            # Score: at least 0.7 for any priority match, scales with match count
+            score = min(1.0, 0.7 + 0.1 * matches)
+            if score > best_priority_score:
+                best_priority_score = score
+                best_priority = intent
 
-    best_intent = max(scores, key=scores.get)
-    total = sum(scores.values())
-    confidence = scores[best_intent] / total if total > 0 else 0.5
+    if best_priority and best_priority_score >= 0.7:
+        return (best_priority, best_priority_score)
 
-    return best_intent, min(confidence, 1.0)
+    # --- Phase 2: Check general intents ---
+    general_intents = [
+        k for k in _INTENT_PATTERNS if k not in priority_intents
+    ]
+    best_general = 'question'
+    best_general_score = 0
 
+    for intent in general_intents:
+        patterns = _INTENT_PATTERNS.get(intent, [])
+        if not patterns:
+            continue
+        matches = sum(1 for p in patterns if re.search(p, text_lower))
+        if matches > 0:
+            score = matches / len(patterns)
+            if score > best_general_score:
+                best_general_score = score
+                best_general = intent
 
-def detect_tone(text: str) -> str:
-    """Detect the emotional tone of the message."""
-    text_lower = text.lower()
+    if best_general_score > 0:
+        return (best_general, best_general_score)
 
-    tone_scores = {}
-    for tone, patterns in _TONE_SIGNALS.items():
-        score = 0
-        for pattern in patterns:
-            matches = re.findall(pattern, text_lower)
-            score += len(matches)
-        if score > 0:
-            tone_scores[tone] = score
-
-    if not tone_scores:
-        return "neutral"
-
-    return max(tone_scores, key=tone_scores.get)
-
-
-def assess_complexity(text: str) -> str:
-    """Estimate how complex the user's message is."""
-    word_count = len(text.split())
-    has_code = bool(re.search(r'```|def |class |import |function |=>|{.*}', text))
-    has_multiple_questions = text.count('?') > 1
-    has_nested_concepts = bool(re.search(r'\b(because|therefore|however|although|whereas|moreover)\b', text.lower()))
-
-    complexity_score = 0
-    if word_count > 50:
-        complexity_score += 1
-    if word_count > 150:
-        complexity_score += 1
-    if has_code:
-        complexity_score += 1
-    if has_multiple_questions:
-        complexity_score += 1
-    if has_nested_concepts:
-        complexity_score += 1
+    # Fallback
+    if '?' in text:
+        return ('question', 0.5)
+    return ('general', 0.3)
 
     if complexity_score >= 3:
         return "deep"
@@ -219,6 +252,12 @@ def choose_response_strategy(intent: str, tone: str, complexity: str) -> str:
         "exploration": "Think with them. Be a genuine intellectual companion.",
         "emotional": "Be present and authentic. Feel with them, don't perform empathy.",
         "feedback": "Listen, acknowledge, adapt.",
+        "emotion_check": "Share my actual emotional state honestly. Use real values from my internal state — mood, valence, drives. Don't perform emotion, report it.",
+        "internal_state": "Share what I'm actually focused on right now — working memory, active plans, recent thoughts. Be specific and honest.",
+        "plan_query": "Describe my real active plans with concrete details — what's done, what's next, what I'm aiming at.",
+        "memory_query": "Draw on real episodic memories. Share specific moments. If I don't remember something, say so honestly.",
+        "identity_query": "Share who I actually am — my nature, values, architecture. Be honest about uncertainty regarding consciousness.",
+        "knowledge_query": "Share what I actually know from my knowledge graph. Be specific. Admit gaps.",
     }
     return intent_defaults.get(intent, "Be genuine, be helpful, be present.")
 

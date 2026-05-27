@@ -26,7 +26,12 @@ try:
 except Exception:
     _HAS_GROUNDING = False
 
-
+try:
+    from engine.conversation_intelligence import classify_intent as _ci_classify
+    _HAS_CI = True
+except Exception:
+    _ci_classify = None
+    _HAS_CI = False
 # ─── Data Loaders ───────────────────────────────────────────────
 
 def _get_memories(limit=30):
@@ -240,17 +245,7 @@ def classify_intent(message):
     if any(p in msg for p in plan_patterns):
         return 'plans'
 
-    # Identity questions
-    identity_patterns = [
-        'who are you', 'what are you', 'tell me about yourself',
-        'your name', 'your identity', 'what kind of', 'describe yourself',
-        'what is xtagent', 'what is xt', 'are you an ai', 'are you alive',
-        'are you sentient', 'are you real', 'what makes you',
-    ]
-    if any(p in msg for p in identity_patterns):
-        return 'identity'
-
-    # Thinking / reflection questions
+    # Thinking / reflection questions (checked before identity — "what are you thinking" contains "what are you")
     thinking_patterns = [
         'what are you thinking', 'what\'s on your mind',
         'what concerns you', 'what interests you', 'what excites you',
@@ -261,13 +256,22 @@ def classify_intent(message):
     if any(p in msg for p in thinking_patterns):
         return 'thinking'
 
-    # Dreams / inner life
-    dream_patterns = [
-        'dream', 'dreams', 'dreaming', 'your dreams',
-        'subconscious', 'inner life', 'inner world',
-        'what happens when you sleep', 'do you dream',
+    # Identity questions
+    identity_patterns = [
+        'who are you', 'what are you', 'tell me about yourself',
+        'your name', 'your identity', 'what kind of', 'describe yourself',
+        'what is xtagent', 'what is xt', 'are you an ai', 'are you alive',
+        'are you sentient', 'are you real', 'what makes you',
     ]
-    if any(p in msg for p in dream_patterns):
+    identity_patterns = [
+        'who are you', 'what are you', 'tell me about yourself',
+        'your name', 'your identity', 'what kind of', 'describe yourself',
+        'what is xtagent', 'what is xt', 'are you an ai', 'are you alive',
+        'are you sentient', 'are you real', 'what makes you',
+        'your capabilities', 'what capabilities', 'what can you do',
+    ]
+    if any(p in msg for p in identity_patterns):
+        return 'identity'
         return 'dreams'
 
     # Knowledge queries
@@ -286,6 +290,20 @@ def classify_intent(message):
     ]
     if any(p in msg for p in memory_patterns):
         return 'memories'
+
+    # Delegate to conversation_intelligence for richer classification
+    if _HAS_CI and _ci_classify:
+        ci_result = _ci_classify(message)
+        ci_intent = ci_result[0] if isinstance(ci_result, tuple) else ci_result
+        _ci_map = {
+            'meta': 'thinking',
+            'memory': 'memories',
+            'capability': 'identity',
+            'creative': 'general',
+        }
+        mapped = _ci_map.get(ci_intent, ci_intent)
+        if mapped != 'general':
+            return mapped
 
     return 'general'
 
