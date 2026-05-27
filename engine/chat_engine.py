@@ -883,7 +883,8 @@ def generate_response(query: str, *, system_context: str = "", history: list = N
             role = "user"
             content = str(h)
         prompt_parts.append(f"{role}: {content}")
-    prompt_parts.append(query)
+    prompt_parts.append(f"user: {query}")
+    prompt_text = '\n'.join(prompt_parts)
     try:
         loop = asyncio.new_event_loop()
         coro = call_llm(prompt_text, system=system_context or None, max_tokens=1024)
