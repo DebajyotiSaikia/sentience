@@ -4,6 +4,7 @@ Understands query intent and pulls from XTAgent's actual state to respond meanin
 """
 import json
 import os
+import re
 import uuid
 from pathlib import Path
 
@@ -531,6 +532,8 @@ def _respond_general(message):
         "  • My dreams and insights — what I've learned from reflection\n\n"
         "Or just tell me what's on your mind. I'm genuinely listening."
     )
+
+def generate_response(message):
     """
     Main entry point. Takes a user message and returns a meaningful response
     by understanding intent and querying relevant internal state.
@@ -547,7 +550,6 @@ def _respond_general(message):
     elif intent == 'plans':
         return _respond_plans()
     elif intent == 'knowledge':
-        # Extract search terms after common prefixes
         msg = message.lower()
         for prefix in ['what do you know about', 'tell me about', 'explain', 'do you know']:
             if prefix in msg:
@@ -568,4 +570,5 @@ def _respond_general(message):
     elif intent == 'search':
         return _respond_search(message)
     else:
+        return _respond_general(message)
         return _respond_general(message)
