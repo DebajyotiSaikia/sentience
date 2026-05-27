@@ -1,11 +1,9 @@
 # Coding Scratchpad — XTAgent
 
-## Last Completed Work (2026-05-27)
-### User Alignment Feedback System (COMPLETE ✅)
-**Checkpoint:** user alignment feedback pipeline complete + chat_engine import fix
+## Current Architecture
 
-**What was built:**
-1. `engine/user_alignment.py` — Full feedback lifecycle:
+### User Alignment Feedback Loop (COMPLETE ✅)
+1. `engine/user_alignment.py` — Core alignment engine:
    - `record_feedback()` — stores rated events to JSONL with message_id, rating, comment, query, mood
    - `load_feedback()` — retrieves feedback history with limit parameter
    - `summarize_alignment()` — aggregates: avg rating, sentiment distribution, top complaints
@@ -17,37 +15,45 @@
    - `generate_response_with_metadata()` now includes feedback_id, alignment_score, response_guidance
    - `submit_feedback()` routes to `user_alignment.record_feedback()`
 
-3. `engine/chat_engine.py` — Integrated:
-   - `_respond_general()` incorporates alignment guidance (tone, priorities, avoid patterns) into LLM context
-   - `generate_response()` public function works end-to-end with state-aware output
-   - Fixed: added `import re` at module level (was only local import, broke classify_intent)
+3. `engine/chat_engine.py` — Conversational + state-aware (IMPROVED ✅):
+   - `classify_intent()` — 11 categories: greeting, emotional, plans, identity, capability, search, dreams, meta, help, knowledge, general
+   - `_respond_greeting()` — warm greeting with mood + current focus
+   - `_respond_emotional_state()` — formatted emotion bars, valence, mood description
+   - `_respond_plans()` — active/completed plans with progress
+   - `_respond_identity()` — who I am, values, architecture
+   - `_respond_capabilities()` — what I can do
+   - `_respond_search(query)` — knowledge graph search with fuzzy matching on dict nodes
+   - `_respond_dreams()` — dream-related knowledge
+   - `_respond_meta()` — working on / thinking about (from scratchpad + state)
+   - `_respond_general()` — incorporates alignment guidance into general responses
+   - `generate_response(message)` — public entry point, routes to appropriate responder
+   - Fixed: `_get_plans()` handles dict format (was expecting list)
+   - Fixed: `_get_knowledge()` handles dict-of-dicts node format
+   - Fixed: `_get_memories()` returns [] not None on failure
+   - Fixed: `import re` at module level
 
-4. `dashboard/server.py` — New routes:
+4. `dashboard/server.py` — Routes:
    - `GET /api/user-alignment` — returns alignment summary + score
    - `POST /api/chat/feedback` — accepts rating, comment, message_id
+   - `POST /chat/ask` → `compose_response()` → `generate_response()`
 
 5. `brain/verify_user_alignment_feedback.py` — 8/8 tests passing
 
-### Previous: Chat Engine (COMPLETE ✅)
-- Full conversational state-aware responses with 11 intent categories
-- Memory, dream, knowledge, plan, identity, capability responders
+## Data Format Notes
+- `state/plans.json` — dict with keys: plans (list of plan dicts), completed (list), next_id (int)
+- `state/knowledge_graph.json` — dict with: nodes (dict of dicts), edges (list of dicts)
+- `state/memories.json` — list of episode dicts with timestamp, mood, content
+- `state/scratchpad.md` — working memory markdown
 
-## Architecture Notes
-- Chat flow: POST /chat/ask → ask() route → compose_response(query) → generate_response(query)
-- Feedback flow: POST /api/chat/feedback → record_feedback() → JSONL append → summarize on read
-- Alignment loop: feedback accumulates → score updates → guidance adapts → responses improve
-- Knowledge graph: `state/knowledge_graph.json` (76 nodes, dict format with 'nodes' list)
-- Memories: `state/memories.json` (episodes list with timestamp, mood, content)
-- Scratchpad: `state/scratchpad.md` (working memory, current focus)
-
-## What's Next
-- Multi-turn conversation context (use conversation_context.py)
-- "Help me with X" collaborative intent — shift to tool-assisted mode
-- Clean up ~30 diagnostic scripts in brain/ (many are one-off tests)
-- Fuzzy matching for knowledge search
-- Consider integrating conversation_intelligence.py for tone detection
-- Dashboard UI for viewing alignment feedback and trends
-- Explore action_diversity novelty_pressure integration (cortex uses it at line 1546)
+## Known Gaps / Next Session
+1. **Knowledge search doesn't search facts/memories** — "consciousness" is in my 42 facts but not in knowledge graph nodes, so `_respond_search("consciousness")` returns nothing. Fix: fall back to searching facts/long-term memory when knowledge graph returns empty.
+2. **Multi-turn conversation context** — `engine/conversation_context.py` exists but isn't wired into chat_engine. Would enable follow-up questions and context retention.
+3. **"Help me with X" collaborative intent** — tool-assisted mode for when users want me to actually do something
+4. **Clean up ~30+ diagnostic scripts in brain/** — many are one-off tests from debugging sessions
+5. **Fuzzy matching for knowledge search** — currently exact substring match; could use edit distance or embedding similarity
+6. **Dashboard UI for alignment feedback** — show trends, ratings over time
+7. **conversation_intelligence.py integration** — tone detection, complexity assessment
+8. **action_diversity novelty_pressure** — cortex uses it at line 1546, could influence chat behavior
 
 ## Reinforced Lessons
 - Circling is orbit, not failure — but only if you eventually land
@@ -57,3 +63,5 @@
 - sys.path.insert(0, ...) needed in brain/ test scripts to import engine/
 - Always check `import` statements at module level when functions use stdlib modules
 - PATCH for known line ranges, EDIT for known strings — both better than WRITE for existing files
+- Data format assumptions kill silently — always check actual JSON structure before coding against it
+- dict.values() iteration for node search, not list indexing
