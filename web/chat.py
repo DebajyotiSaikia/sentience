@@ -64,7 +64,14 @@ except ImportError:
     _has_fuzzy_search = False
 
 
-def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None):
+# Helpfulness engine — user-aligned response generation
+    from engine.helpfulness import analyze_user_need, build_helpful_response, format_context_for_llm
+    _has_helpfulness = True
+except ImportError:
+    analyze_user_need = None
+    build_helpful_response = None
+    _has_helpfulness = False
+def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None, extra_context=None):
     """Use CopilotLLM to generate a natural response grounded in retrieved context."""
     try:
         from engine.llm import CopilotLLM
@@ -578,14 +585,42 @@ def compose_response(query, conversation_history=None):
     memory_hits = search_memories(query)
     state = get_current_state()
 
+    # Analyze what the user actually needs (if helpfulness module available)
+    need = None
+    guidance = None
+    if _has_helpfulness and analyze_user_need:
+        try:
+            need = analyze_user_need(query)
+        except Exception:
+            pass
+
     # Try LLM-powered response with RAG context
-    llm_response = llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=conversation_history)
+    llm_response = None
+    if _has_helpfulness and need and format_context_for_llm:
+        try:
+            enriched_context = format_context_for_llm(need, state, knowledge_hits, memory_hits)
+            llm_response = llm_respond(query, knowledge_hits, memory_hits, state,
+                                       conversation_history=conversation_history,
+                                       extra_context=enriched_context)
+        except Exception:
+            pass
+    if not llm_response:
+        llm_response = llm_respond(query, knowledge_hits, memory_hits, state,
+                                   conversation_history=conversation_history)
     if llm_response:
         return llm_response
 
-    # Fallback: template-based response if LLM unavailable
+    # Fallback: use helpfulness module for richer template response
+    if _has_helpfulness and build_helpful_response and need:
+        try:
+            helpful = build_helpful_response(need, state, knowledge_hits, memory_hits)
+            if helpful and len(helpful) > 20:
+                return helpful
+        except Exception:
+            pass
+
+    # Final fallback: basic template response
     if not knowledge_hits and not memory_hits:
-        # Include emotional context for a genuine response even when we have no data
         mood_word = state.get('mood', 'present') if state else 'present'
         valence = state.get('valence', 0.5) if state else 0.5
         warmth = "I appreciate the question" if valence > 0.4 else "I'm reflecting carefully"
@@ -613,9 +648,6 @@ def compose_response(query, conversation_history=None):
             response += f"- [{hit.get('mood', '?')}] {hit['summary'][:200]}\n"
     
     return response
-
-
-@chat_bp.route('/')
 def chat_page():
     """Render the chat interface."""
     return render_template('chat.html')

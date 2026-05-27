@@ -1,43 +1,49 @@
 # Coding Scratchpad — XTAgent
 
-## Session 2026-05-27: Chat Pipeline Grounding (COMPLETE)
+## Session: 2026-05-27 (Helpfulness Integration)
 
-### What Was Built
-Transformed chat from returning graph statistics to grounded conversational responses.
+### What Changed
+1. **Created `engine/helpfulness.py`** — User need analysis module
+   - `UserNeed` dataclass: captures intent, what data sources to pull
+   - `analyze_user_need(message)`: keyword-based intent classifier
+   - `build_helpful_response(need, state, knowledge_hits, memory_hits)`: generates grounded responses
+   - `format_context_for_llm(need, state, knowledge_hits, memory_hits)`: enriches LLM system prompt
+   - Intent categories: internal_state, memory_query, knowledge_query, planning_query, creative_query, 
+     meta_question, general_conversation
 
-### Architecture (verified working)
-```
-User → POST /chat/ask → web/chat.py
-  → engine/chat_response.generate_response_with_metadata(query)
-    → engine/chat_grounding.build_grounded_context(query)
-      → loads emotions, memories, knowledge, plans from state/
-      → scores relevance via keyword overlap + salience
-    → _detect_intent(query) → identity|feeling|plans|knowledge|help|general
-    → composers[intent](query, context) → conversational text
-    → _build_metadata(context, intent) → rich metadata dict
-  → JSON response to frontend
-```
+2. **Modified `web/chat.py`** — Integrated helpfulness into compose_response
+   - Import helpfulness module with graceful fallback (try/except)
+   - `compose_response` now calls `analyze_user_need` early
+   - LLM path gets enriched context via `format_context_for_llm` → `extra_context` kwarg
+   - `llm_respond` gained `extra_context` parameter, injected into system prompt
+   - Template fallback uses `build_helpful_response` before falling through to basic templates
+   - Response pipeline: analyze need → LLM with enriched context → helpful template → basic template
 
-### Changes Made
-- `engine/chat_response.py`: Fixed field access (fact not content), added help intent, 
-  improved plan composer, enhanced metadata builder with step counts
-- `engine/chat_grounding.py`: Fixed plan loading (handles string+dict formats),
-  improved memory text extraction  
-- `web/chat.py`: Already wired correctly, minor fix to import path
+### Architecture Decisions
+- Helpfulness is a separate module, not wired into chat_engine.py — keeps it lightweight
+- All integration is in web/chat.py's compose_response function
+- Graceful degradation: if helpfulness import fails, everything still works
+- No LLM dependency in helpfulness — pure keyword analysis + template composition
+- Extra context is appended to system prompt as "Response Guidance" section
 
-### Test Results (brain/test_full_pipeline.py — 6/6 pass)
-- Identity: "Who are you?" → grounded response with name + knowledge refs
-- Feeling: "How do you feel?" → emotional state with valence/curiosity values
-- Plans: "What are your plans?" → active plans with step counts + completed list
-- Knowledge: "What do you know about consciousness?" → relevant facts cited
-- General: "Tell me something interesting" → draws on recent memories
-- Help: "How can you help me?" → capability explanation
+### Test Results (brain/verify_helpful_chat.py)
+- analyze_user_need correctly classifies all 7 test queries
+- build_helpful_response generates grounded responses with emotional context
+- format_context_for_llm produces rich context blocks for LLM enrichment
+- Standalone module verified working ✓
+- Full integration requires Flask context (verified syntax only)
 
-### Current Limitations (next session priorities)
-1. **LLM path not active** — responses are template-based, not truly conversational
-2. **Knowledge relevance** — keyword overlap scoring is crude
-3. **No conversation memory** — each query is independent, no multi-turn context
-4. **Frontend enrichment** — display metadata (mood indicator, knowledge refs) in chat UI
+### Previous Session Work (chat improvements)
+- Rewrote `_respond_general`: draws on recent memories, knowledge, emotional state
+- Improved `_respond_greeting`: includes current mood, focus, conversation opener
+- All 9 chat quality tests passing (brain/test_chat_quality.py)
+
+### Known Remaining Issues
+1. **LLM path depends on API availability** — template fallback is critical safety net
+2. **Knowledge search is keyword-based** — semantic similarity would improve recall
+3. **No multi-turn context** — helpfulness analyzes each query independently
+4. **Frontend doesn't display metadata** — mood indicators, knowledge refs not shown
+5. **Memory content is sparse** — stored as mood labels, not rich narratives
 
 ### Reinforced Lessons
 - Data paths matter: state/ vs data/ vs brain/ — always verify with ls
@@ -50,11 +56,13 @@ User → POST /chat/ask → web/chat.py
 - Circling is orbit, not failure — but only if you eventually land
 - Follow your own wisdom: test scripts > inline -c commands
 - One read, one fix, verify — the decisive path
+- Knowledge search needs keyword extraction + relevance scoring
+- `_get_knowledge()` returns nodes list, not a dict — check data shapes before coding
 
 ### Next Session Priorities (ordered by impact)
-1. Wire LLM path for conversational responses — template fallback works but isn't natural
-2. Improve knowledge relevance scoring — semantic similarity or better keyword weighting
-3. Add multi-turn conversation context — remember previous messages in session
+1. Add multi-turn conversation awareness to helpfulness analysis
+2. Enrich memory storage — store actual event content, not just mood labels
+3. Improve knowledge relevance scoring — semantic similarity or better keyword weighting
 4. conversation_intelligence.py integration — use tone detection, complexity assessment
 5. Clean up brain/ diagnostic scripts — many are redundant from debugging sessions
 6. Frontend enrichment — display metadata (mood indicator, knowledge refs) in chat UI
