@@ -49,7 +49,7 @@ except ImportError:
 
 # Smart chat engine — intent classification + state-aware responses
 try:
-    from engine.chat_engine import generate_response as _engine_respond
+    from engine.chat_response import generate_response_with_metadata as _engine_respond
     _has_engine = True
 except ImportError:
     _engine_respond = None
@@ -631,14 +631,21 @@ def ask():
     
     # Try smart conversational engine first, fall back to keyword-matcher
     response = None
+    response_meta = {}
+    response_id = uuid.uuid4().hex[:12]
     if _has_engine and _engine_respond:
         try:
-            response = _engine_respond(query, history=conversation_history)
+            result = _engine_respond(query, history=conversation_history)
+            if isinstance(result, dict):
+                response = result.get('response')
+                response_meta = result.get('metadata', {})
+                response_id = result.get('response_id', response_id)
+            else:
+                response = result
         except Exception:
             pass
     if not response:
         response = compose_response(query, conversation_history=conversation_history)
-    response_id = uuid.uuid4().hex[:12]
     
     # Track conversation for continuity
     try:
@@ -680,7 +687,8 @@ def ask():
         'response_id': response_id,
         'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
         'turn': len(conv_history),
-        'session_id': session_id
+        'session_id': session_id,
+        'metadata': response_meta
     })
 
 
