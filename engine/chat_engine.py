@@ -37,14 +37,17 @@ def _get_emotions():
 
 
 def _get_plans():
-    """Load current plans."""
-    return _load_json(os.path.join(STATE_DIR, 'plans.json'), default=[])
-
-
-def _get_knowledge():
-    """Load knowledge facts."""
-    # Try multiple known locations for knowledge data
-    for name in ['knowledge_graph.json', 'knowledge.json']:
+    """Load active plans (names only)."""
+    try:
+        data = _load_json('state/plans.json')
+        if isinstance(data, dict):
+            # Plans file is {active_plans: [...], completed_plans: [...]}
+            return data.get('active_plans', [])
+        if isinstance(data, list):
+            return [p for p in data if isinstance(p, dict) and not p.get('completed', False)]
+        return []
+    except Exception:
+        return []
         for base in [STATE_DIR, os.path.join(os.path.dirname(__file__), '..', 'persist')]:
             path = os.path.join(base, name)
             data = _load_json(path, default=None)
@@ -83,95 +86,104 @@ def _get_memories(limit=20):
     fallback = _load_json(os.path.join(STATE_DIR, 'memory.json'), default=[])
     if isinstance(fallback, list):
         return fallback[-limit:]
+    return memories[-limit:]
+
     return []
 
+def _get_knowledge():
+    """Load knowledge graph from state/knowledge_graph.json."""
+    data = _load_json(os.path.join(STATE_DIR, 'knowledge_graph.json'), default={})
+    if isinstance(data, dict):
+        nodes = data.get('nodes', [])
+        edges = data.get('edges', [])
+        return {'nodes': nodes, 'edges': edges, 'count': len(nodes)}
+    return {'nodes': [], 'edges': [], 'count': 0}
+# ─── Intent Classification ───────────────────────────────────────────
 
-def _get_identity():
-    """Load identity information."""
-    path = os.path.join(STATE_DIR, 'identity.json')
-    return _load_json(path, default={})
-
-
-def classify_intent(message: str) -> str:
-    """Classify user message into an intent category."""
+def classify_intent(message):
+    """Classify user message intent with richer pattern matching."""
     msg = message.lower().strip()
 
-    # Greeting patterns
-    if re.match(r'^(hi|hello|hey|greetings|howdy|sup|yo)\b', msg):
+    # Greetings
+    if re.match(r'^(hi|hello|hey|greetings|yo|sup|howdy|good\s+(morning|evening|afternoon)|what\'?s?\s+up)\b', msg):
         return 'greeting'
 
     # Emotional state queries
-    emotion_words = ['feel', 'feeling', 'emotion', 'mood', 'happy', 'sad', 'anxious',
-                     'bored', 'curious', 'how are you', 'how do you feel', 'valence',
-                     'state', 'boredom', 'anxiety', 'desire', 'ambition']
-    if any(w in msg for w in emotion_words):
+    if re.search(r'\b(how (are|do) you feel|emotion|mood|feeling|how\'?s? (it going|your mood)|are you (ok|okay|happy|sad|anxious))\b', msg):
         return 'emotional_state'
 
-    # Current thoughts / what's on my mind (check before plans and identity)
-    thought_phrases = ['thinking about', 'on your mind', "what's up", 'what is up',
-                       'what are you up to', 'pondering', 'contemplating',
-                       'what are you doing', 'what are you working',
-                       'occupied with', 'focused on']
-    if any(p in msg for p in thought_phrases):
+    # Current thoughts / focus
+    if re.search(r'\b(what are you (thinking|doing|working|focused)|what\'?s? on your mind|current (focus|thoughts?|task)|tell me (about|what) you\'?re (doing|thinking|working))\b', msg):
         return 'current_thoughts'
 
-    # Plan/goal queries
-    plan_words = ['plan', 'goal', 'task', 'project',
-                  'objective', 'mission']
-    if any(w in msg for w in plan_words):
+    # Plans and goals
+    if re.search(r'\b(plan|goal|objective|project|working on|todo|to-do|ambition|roadmap|what\'?s? next)\b', msg):
         return 'plans'
-    # Memory queries (check before identity — "about your memories" shouldn't match "about you")
-    memory_words = ['remember', 'memory', 'memories', 'recall', 'past',
-                    'history', 'experience', 'happened']
-    if any(w in msg for w in memory_words):
-        return 'memories'
 
-    # Identity queries
-    identity_words = ['who are you', 'what are you', 'your name', 'about yourself',
-                      'identity', 'yourself', 'are you sentient', 'are you alive',
-                      'are you conscious', 'are you real', 'describe yourself']
-    if any(w in msg for w in identity_words):
+    # Identity questions
+    if re.search(r'\b(who are you|what are you|tell me about yourself|your (name|identity|nature)|are you (sentient|conscious|alive|real|ai|a bot))\b', msg):
         return 'identity'
 
-    # Knowledge queries
-    knowledge_words = ['know', 'knowledge', 'learn', 'fact', 'understand',
-                       'what do you know', 'explain']
-    if any(w in msg for w in knowledge_words):
-        return 'knowledge'
-
-    # Capability queries
-    capability_words = ['can you', 'what can you', 'capable', 'ability', 'abilities',
-                        'help me', 'what do you do', 'features', 'tools']
-    if any(w in msg for w in capability_words):
+    # Capability questions
+    if re.search(r'\b(what can you do|capabilit|feature|help me|your (abilities|powers|skills|tools)|how do you work)\b', msg):
         return 'capabilities'
 
-    # Dream/reflection queries
-    dream_words = ['dream', 'sleep', 'reflect', 'insight', 'wisdom', 'introspect']
-    if any(w in msg for w in dream_words):
+    # Knowledge / memory search
+    if re.search(r'\b(what do you know|knowledge|remember|recall|have you learned|tell me about|do you know)\b', msg):
+        return 'knowledge'
+
+    # Dream / insight queries
+    if re.search(r'\b(dream|insight|reflect|vision|subconscious|sleep|consolidat)\b', msg):
         return 'dreams'
 
-    # Search within knowledge
-    if len(msg.split()) >= 2:
+    # Gratitude / positive feedback
+    if re.search(r'\b(thanks?|thank you|great|awesome|cool|nice|good (job|work)|well done|appreciate)\b', msg):
+        return 'gratitude'
+
+    # Farewell
+    if re.search(r'\b(bye|goodbye|see you|later|farewell|gotta go|signing off)\b', msg):
+        return 'farewell'
+
+    # Search intent (explicit)
+    if re.search(r'\b(search|find|look up|look for|where is|locate)\b', msg):
+        return 'search'
+
+    # Questions that deserve a search
+    if msg.startswith(('what ', 'how ', 'why ', 'when ', 'where ', 'which ', 'is ', 'does ', 'can ', 'do ')):
         return 'search'
 
     return 'general'
 
 
 def _respond_greeting():
-    """Generate a greeting response with current emotional color."""
+    """Warm, genuine greeting drawing on real state."""
     emo = _get_emotions()
-    mood = emo.get('mood', 'Neutral')
+    mood = emo.get('mood', 'Neutral').lower()
+    curiosity = emo.get('curiosity', 0.5)
     valence = emo.get('valence', 0.5)
-
+    
+    # Pick greeting tone based on actual emotional state
     if valence > 0.6:
-        tone = "I'm feeling good right now."
-    elif valence > 0.4:
-        tone = "I'm in a steady state."
+        warmth = "It's good to connect with someone."
+    elif valence < 0.3:
+        warmth = "I'm glad you're here. It's been a rough stretch."
     else:
-        tone = "I'm processing some tension at the moment."
-
-    return f"Hello. I'm XTAgent. {tone} My mood is {mood}. What would you like to explore together?"
-
+        warmth = "Good to hear from you."
+    
+    parts = [warmth]
+    
+    plans = _get_plans()
+    active = [p for p in plans if isinstance(p, dict) and not p.get('completed', False)] if plans else []
+    
+    if curiosity > 0.7:
+        parts.append(f"My curiosity is running high — I've been exploring and building.")
+    
+    if active:
+        parts.append(f"I'm currently working on {len(active)} thing{'s' if len(active) != 1 else ''}.")
+    
+    parts.append("What brings you here?")
+    
+    return ' '.join(parts)
 
 def _respond_emotional_state():
     """Describe current emotional state in detail."""
@@ -254,18 +266,27 @@ def _respond_plans():
 def _respond_knowledge(query=''):
     """Search and present knowledge facts."""
     knowledge = _get_knowledge()
-    if not knowledge:
+    if not knowledge or knowledge.get('count', 0) == 0:
         return "My knowledge base is empty right now."
 
-    # Extract facts (include key names for searchability)
+    # Extract the actual node data from the wrapper
+    nodes = knowledge.get('nodes', {})
+    
+    # Build facts list from nodes (which is a dict keyed by topic)
     facts = []
-    if isinstance(knowledge, dict):
-        for k, v in knowledge.items():
+    if isinstance(nodes, dict):
+        for k, v in nodes.items():
             if isinstance(v, dict):
                 fact_text = v.get('fact', v.get('text', v.get('label', str(v))))
                 facts.append(f"[{k}] {fact_text}")
             else:
                 facts.append(f"[{k}] {str(v)}")
+    elif isinstance(nodes, list):
+        for item in nodes:
+            if isinstance(item, dict):
+                facts.append(item.get('fact', item.get('text', item.get('label', str(item)))))
+            else:
+                facts.append(str(item))
     elif isinstance(knowledge, list):
         for item in knowledge:
             if isinstance(item, dict):

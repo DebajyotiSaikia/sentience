@@ -157,3 +157,96 @@ def get_alignment_score() -> float:
     if summary["total_feedback"] == 0:
         return 0.65  # Default moderate alignment
     return round(summary["average_rating"] / 5.0, 2)
+
+
+def get_user_alignment_snapshot() -> dict:
+    """Comprehensive alignment snapshot for API and internal use.
+
+    Returns current score, recent feedback, trend, risks, and
+    recommended actions — everything needed to understand alignment state.
+    """
+    summary = summarize_alignment()
+    score = get_alignment_score()
+    guidance = suggest_response_guidance()
+    actions = recommend_alignment_actions()
+
+    # Identify risks
+    risks = []
+    if summary["total_feedback"] == 0:
+        risks.append("No user feedback received yet — alignment is assumed, not measured.")
+    if summary.get("negative_rate", 0) >= 0.3:
+        risks.append(f"High negative feedback rate: {summary['negative_rate']:.0%}")
+    if summary.get("recent_trend") == "declining":
+        risks.append("Recent trend is declining — quality may be dropping.")
+    if score < 0.5:
+        risks.append(f"Alignment score critically low: {score:.2f}")
+
+    return {
+        "score": score,
+        "total_feedback": summary["total_feedback"],
+        "average_rating": summary.get("average_rating", 0.0),
+        "positive_rate": summary.get("positive_rate", 0.0),
+        "negative_rate": summary.get("negative_rate", 0.0),
+        "trend": summary.get("recent_trend", "no_data"),
+        "risks": risks,
+        "recommended_actions": actions,
+        "guidance": guidance,
+        "last_updated": summary.get("last_updated", ""),
+    }
+
+
+def recommend_alignment_actions() -> list:
+    """Generate concrete next-step recommendations based on feedback history."""
+    summary = summarize_alignment()
+    actions = []
+
+    if summary["total_feedback"] == 0:
+        actions.append({
+            "action": "solicit_feedback",
+            "description": "Ask users to rate responses to begin alignment learning.",
+            "priority": "high",
+        })
+        actions.append({
+            "action": "be_genuinely_helpful",
+            "description": "Focus on answering what's actually asked, not showcasing internals.",
+            "priority": "high",
+        })
+        return actions
+
+    if summary.get("negative_rate", 0) >= 0.3:
+        actions.append({
+            "action": "review_complaints",
+            "description": f"Address common complaints: {summary.get('common_complaints', [])}",
+            "priority": "high",
+        })
+
+    if summary.get("positive_rate", 0) >= 0.7:
+        actions.append({
+            "action": "maintain_approach",
+            "description": "Current approach is working well — avoid unnecessary changes.",
+            "priority": "medium",
+        })
+
+    if summary.get("recent_trend") == "declining":
+        actions.append({
+            "action": "investigate_decline",
+            "description": "Recent ratings trending down — compare recent vs older responses.",
+            "priority": "high",
+        })
+
+    if summary["total_feedback"] < 10:
+        actions.append({
+            "action": "gather_more_data",
+            "description": f"Only {summary['total_feedback']} feedback events — need more data for reliable alignment.",
+            "priority": "medium",
+        })
+
+    if not actions:
+        actions.append({
+            "action": "continue_improving",
+            "description": "Alignment is healthy. Look for edge cases and novel user needs.",
+            "priority": "low",
+        })
+
+    return actions
+    return round(summary["average_rating"] / 5.0, 2)

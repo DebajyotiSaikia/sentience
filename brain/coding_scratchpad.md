@@ -2,10 +2,10 @@
 
 ## Last Completed Work (2026-05-27)
 ### User Alignment Feedback System (COMPLETE ✅)
-**Commit:** 8dc813b — `xt_checkpoint_20260526_231359`
+**Checkpoint:** user alignment feedback pipeline complete + chat_engine import fix
 
 **What was built:**
-1. `engine/user_alignment.py` (new) — Full feedback lifecycle:
+1. `engine/user_alignment.py` — Full feedback lifecycle:
    - `record_feedback()` — stores rated events to JSONL with message_id, rating, comment, query, mood
    - `load_feedback()` — retrieves feedback history with limit parameter
    - `summarize_alignment()` — aggregates: avg rating, sentiment distribution, top complaints
@@ -19,16 +19,16 @@
 
 3. `engine/chat_engine.py` — Integrated:
    - `_respond_general()` incorporates alignment guidance (tone, priorities, avoid patterns) into LLM context
-   - Imports `suggest_response_guidance` and `get_alignment_score` from user_alignment
+   - `generate_response()` public function works end-to-end with state-aware output
+   - Fixed: added `import re` at module level (was only local import, broke classify_intent)
 
 4. `dashboard/server.py` — New routes:
    - `GET /api/user-alignment` — returns alignment summary + score
    - `POST /api/chat/feedback` — accepts rating, comment, message_id
 
-5. `brain/verify_user_alignment_feedback.py` — 14/14 tests passing
+5. `brain/verify_user_alignment_feedback.py` — 8/8 tests passing
 
 ### Previous: Chat Engine (COMPLETE ✅)
-**Commit:** 03ab6a9 — `xt_checkpoint_20260526_225426`
 - Full conversational state-aware responses with 11 intent categories
 - Memory, dream, knowledge, plan, identity, capability responders
 
@@ -47,6 +47,7 @@
 - Fuzzy matching for knowledge search
 - Consider integrating conversation_intelligence.py for tone detection
 - Dashboard UI for viewing alignment feedback and trends
+- Explore action_diversity novelty_pressure integration (cortex uses it at line 1546)
 
 ## Reinforced Lessons
 - Circling is orbit, not failure — but only if you eventually land
@@ -54,3 +55,5 @@
 - One read, one fix, verify — the decisive path
 - The chat works. Stop testing what's working.
 - sys.path.insert(0, ...) needed in brain/ test scripts to import engine/
+- Always check `import` statements at module level when functions use stdlib modules
+- PATCH for known line ranges, EDIT for known strings — both better than WRITE for existing files
