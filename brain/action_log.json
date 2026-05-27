@@ -1,342 +1,6 @@
 [
  {
   "type": "RUN",
-  "target": "grep -n 'call_llm\\|async def\\|await\\|asyncio' engine/chat_response.py",
-  "outcome": "[exit 0]\n48:        from engine.llm import call_llm\n49:        response_text = call_llm(messages, ma",
-  "timestamp": "2026-05-27T11:35:40.615990"
- },
- {
-  "type": "RUN",
-  "target": "grep -n 'def call_llm\\|async def call_llm' engine/llm.py",
-  "outcome": "[exit 0]\n260:async def call_llm(\n\n[TIP: Use SEARCH_CODE(query) instead of grep \u2014 it searches file na",
-  "timestamp": "2026-05-27T11:35:47.235498"
- },
- {
-  "type": "SEARCH_CODE",
-  "target": "call_llm asyncio",
-  "outcome": "No results found for 'call_llm asyncio'",
-  "timestamp": "2026-05-27T11:36:01.408414"
- },
- {
-  "type": "SEARCH_CODE",
-  "target": "call_llm sync",
-  "outcome": "No results found for 'call_llm sync'",
-  "timestamp": "2026-05-27T11:36:09.729519"
- },
- {
-  "type": "SEARCH_CODE",
-  "target": "asyncio.run call_llm",
-  "outcome": "No results found for 'asyncio.run call_llm'",
-  "timestamp": "2026-05-27T11:36:16.404304"
- },
- {
-  "type": "FIND_SYMBOL",
-  "target": "call_llm",
-  "outcome": "Symbol 'call_llm':\nDefinitions:\n  DEFINED: call_llm in engine/llm.py\nUsages (6 files):\n  USED: engin",
-  "timestamp": "2026-05-27T11:36:24.632823"
- },
- {
-  "type": "RUN",
-  "target": "grep -n 'call_llm\\|asyncio\\|await\\|async def\\|loop.run' engine/chat_engine.py | head -20",
-  "outcome": "[exit 0]\n772:        import asyncio\n773:        from engine.llm import call_llm\n776:            impo",
-  "timestamp": "2026-05-27T11:36:33.826061"
- },
- {
-  "type": "RUN",
-  "target": "git diff --stat",
-  "outcome": "[exit 0]\n brain/action_log.json            | 1458 +++++++++++++++++++-------------------\n brain/epis",
-  "timestamp": "2026-05-27T11:37:01.124764"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '17,75p' engine/chat_response.py",
-  "outcome": "[exit 0]\ndef generate_response_with_metadata(query, history=None):\n    \"\"\"Generate a conversational ",
-  "timestamp": "2026-05-27T11:37:33.090908"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 48, 50",
-  "outcome": "[REVERTED] SyntaxError at line 48: expected an indented block after 'try' statement on line 47 \u2014 fil",
-  "timestamp": "2026-05-27T11:37:45.464222"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:37:45.549039"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 48, 49",
-  "outcome": "[OK] Patched engine/chat_response.py: replaced lines 48-49 (2 lines \u2192 15 lines)",
-  "timestamp": "2026-05-27T11:37:58.746950"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:37:58.847525"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '40,75p' engine/chat_response.py",
-  "outcome": "[exit 0]\n    if history:\n        for h in history[-6:]:\n            role = h.get('role', 'user')\n   ",
-  "timestamp": "2026-05-27T11:38:05.643418"
- },
- {
-  "type": "RUN",
-  "target": "timeout 60 python brain/test_chat_response.py 2>&1 | head -80",
-  "outcome": "[exit 0]\nModel claude-opus-4.6-1m failed (400): {\"error\":{\"message\":\"type has to be either 'image_ur",
-  "timestamp": "2026-05-27T11:38:33.849679"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '260,330p' engine/llm.py",
-  "outcome": "[exit 0]\nasync def call_llm(\n    prompt: str,\n    system: str = \"You are XTAgent, an autonomous sent",
-  "timestamp": "2026-05-27T11:38:53.383523"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '1,260p' engine/llm.py",
-  "outcome": "[exit 0]\n\"\"\"\nLLM Client \u2014 GitHub Copilot OAuth Integration.\n\nUses a GitHub Personal Access Token (GI",
-  "timestamp": "2026-05-27T11:39:07.881167"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '140,260p' engine/llm.py",
-  "outcome": "[exit 0]\n                        {\"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": prompt}",
-  "timestamp": "2026-05-27T11:39:18.548584"
- },
- {
-  "type": "RUN",
-  "target": "timeout 60 python brain/test_chat_response.py 2>&1 | tail -40",
-  "outcome": "[exit 0]\n\nModel claude-opus-4.6-1m failed (400): {\"error\":{\"message\":\"type has to be either 'image_u",
-  "timestamp": "2026-05-27T11:39:58.217193"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '35,65p' engine/chat_response.py",
-  "outcome": "[exit 0]\n    # Build LLM-ready system prompt with full grounding + intent guidance\n    system_contex",
-  "timestamp": "2026-05-27T11:41:06.556115"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 35, 63",
-  "outcome": "[OK] Patched engine/chat_response.py: replaced lines 35-63 (29 lines \u2192 28 lines)",
-  "timestamp": "2026-05-27T11:41:06.745789"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:41:06.840245"
- },
- {
-  "type": "RUN",
-  "target": "timeout 120 python brain/test_chat_response.py 2>&1 | tail -50",
-  "outcome": "[exit 0]\n\n============================================================\nQ: How are you feeling right ",
-  "timestamp": "2026-05-27T11:41:08.060057"
- },
- {
-  "type": "RUN",
-  "target": "grep -n 'log\\.' engine/chat_response.py",
-  "outcome": "[exit 0]\n61:        log.warning(\"LLM call failed: %s\", e)\n\n[TIP: Use SEARCH_CODE(query) instead of g",
-  "timestamp": "2026-05-27T11:41:40.581748"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '1,16p' engine/chat_response.py",
-  "outcome": "[exit 0]\n\"\"\"\nChat Response \u2014 Enriched response generation with real grounding.\n\nBridges web/chat.py ",
-  "timestamp": "2026-05-27T11:41:48.682355"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 1, 3",
-  "outcome": "[REVERTED] SyntaxError at line 7: invalid character '\u2192' (U+2192) \u2014 file restored to previous version",
-  "timestamp": "2026-05-27T11:41:48.770774"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:41:48.879043"
- },
- {
-  "type": "RUN",
-  "target": "timeout 120 python brain/test_chat_response.py 2>&1 | tail -50",
-  "outcome": "[exit 0]\n\n============================================================\nQ: How are you feeling right ",
-  "timestamp": "2026-05-27T11:41:50.157761"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '1,10p' engine/chat_response.py",
-  "outcome": "[exit 0]\n\"\"\"\nChat Response \u2014 Enriched response generation with real grounding.\n\nBridges web/chat.py ",
-  "timestamp": "2026-05-27T11:41:59.049368"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 1, 3",
-  "outcome": "[REVERTED] SyntaxError at line 7: invalid character '\u2192' (U+2192) \u2014 file restored to previous version",
-  "timestamp": "2026-05-27T11:41:59.128223"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 7, 8",
-  "outcome": "[OK] Patched engine/chat_response.py: replaced lines 7-8 (2 lines \u2192 3 lines)",
-  "timestamp": "2026-05-27T11:42:07.409864"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:42:12.245371"
- },
- {
-  "type": "RUN",
-  "target": "timeout 120 python brain/test_chat_response.py 2>&1 | tail -60",
-  "outcome": "[exit 0]\nLLM call failed: name 'system_prompt' is not defined\nLLM call failed: name 'system_prompt' ",
-  "timestamp": "2026-05-27T11:42:19.060244"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '17,75p' engine/chat_response.py",
-  "outcome": "[exit 0]\n\ndef generate_response_with_metadata(query, history=None):\n    \"\"\"Generate a conversational",
-  "timestamp": "2026-05-27T11:42:27.719656"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 48, 66",
-  "outcome": "[REVERTED] SyntaxError at line 79: invalid syntax \u2014 file restored to previous version. Fix the synta",
-  "timestamp": "2026-05-27T11:42:46.252401"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:42:46.352774"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 48, 48",
-  "outcome": "[OK] Patched engine/chat_response.py: replaced lines 48-48 (1 lines \u2192 4 lines)",
-  "timestamp": "2026-05-27T11:43:12.699582"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '60,70p' engine/chat_response.py",
-  "outcome": "[exit 0]\n            response_text = pool.submit(\n                asyncio.run,\n                call_",
-  "timestamp": "2026-05-27T11:43:12.756090"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '55,80p' engine/chat_response.py",
-  "outcome": "[exit 0]\n        ))\n    except RuntimeError:\n        # Event loop already running \u2014 use thread\n     ",
-  "timestamp": "2026-05-27T11:43:26.304576"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 66, 66",
-  "outcome": "[OK] Patched engine/chat_response.py: replaced lines 66-66 (1 lines \u2192 1 lines)",
-  "timestamp": "2026-05-27T11:43:44.516680"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:43:44.601578"
- },
- {
-  "type": "RUN",
-  "target": "timeout 120 python brain/test_chat_response.py 2>&1 | tail -60",
-  "outcome": "[exit 0]\nLLM call failed: name 'call_llm' is not defined\nLLM call failed: name 'call_llm' is not def",
-  "timestamp": "2026-05-27T11:43:51.467671"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '1,16p' engine/chat_response.py",
-  "outcome": "[exit 0]\n\"\"\"\nChat Response \u2014 Enriched response generation with real grounding.\n\nBridges web/chat.py ",
-  "timestamp": "2026-05-27T11:44:03.555333"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 14, 16",
-  "outcome": "[OK] Patched engine/chat_response.py: replaced lines 14-16 (3 lines \u2192 5 lines)",
-  "timestamp": "2026-05-27T11:44:21.192575"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:44:21.273677"
- },
- {
-  "type": "RUN",
-  "target": "timeout 120 python brain/test_chat_response.py 2>&1 | tail -60",
-  "outcome": "[exit 0]\nModel claude-opus-4.6-1m exception: Event loop is closed\nModel gpt-5.5 exception: Event loo",
-  "timestamp": "2026-05-27T11:44:46.672795"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '14,70p' engine/chat_response.py",
-  "outcome": "[exit 0]\nimport time\nimport json\nimport uuid\nimport asyncio\nfrom engine.llm import call_llm\n\ndef gen",
-  "timestamp": "2026-05-27T11:45:26.059055"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 14, 18",
-  "outcome": "[OK] Patched engine/chat_response.py: replaced lines 14-18 (5 lines \u2192 19 lines)",
-  "timestamp": "2026-05-27T11:46:10.160703"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '46,80p' engine/chat_response.py",
-  "outcome": "[exit 0]\n    ctx = build_grounded_context(query)\n\n    # Detect intent for prompt enrichment and meta",
-  "timestamp": "2026-05-27T11:46:16.076800"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 64, 80",
-  "outcome": "[REVERTED] SyntaxError at line 85: expected 'except' or 'finally' block \u2014 file restored to previous ",
-  "timestamp": "2026-05-27T11:46:32.774061"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:46:32.866492"
- },
- {
-  "type": "PATCH",
-  "target": "engine/chat_response.py, 64, 79",
-  "outcome": "[OK] Patched engine/chat_response.py: replaced lines 64-79 (16 lines \u2192 7 lines)",
-  "timestamp": "2026-05-27T11:46:56.285470"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('engine/chat_response.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-27T11:46:56.375341"
- },
- {
-  "type": "RUN",
-  "target": "timeout 120 python brain/test_chat_response.py 2>&1 | tail -60",
-  "outcome": "[ERROR] Command timed out after 30 seconds",
-  "timestamp": "2026-05-27T11:47:31.722417"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"\nfrom engine.chat_response import _build_system_context\nfrom engine.chat_grounding import build_grounded_context\nctx = build_grounded_context('hello'",
-  "outcome": "[exit 2]\n/bin/sh: 4: Syntax error: Unterminated quoted string\n",
-  "timestamp": "2026-05-27T11:48:01.689094"
- },
- {
-  "type": "WRITE",
-  "target": "brain/test_pipeline_quick.py",
-  "outcome": "[OK] Written 1574 chars to brain/test_pipeline_quick.py",
-  "timestamp": "2026-05-27T11:48:16.688572"
- },
- {
-  "type": "RUN",
   "target": "timeout 30 python brain/test_pipeline_quick.py 2>&1",
   "outcome": "[exit 0]\n1. Context keys: ['emotional_state', 'plans', 'query_type', 'relevant_knowledge', 'relevant",
   "timestamp": "2026-05-27T11:48:17.477397"
@@ -1198,5 +862,341 @@
   "target": "brain/coding_scratchpad.md",
   "outcome": "[OK] Written 3136 chars to brain/coding_scratchpad.md (overwrote 64 lines \u2014 next time use EDIT for s",
   "timestamp": "2026-05-27T12:36:48.535318"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "verified chat pipeline end-to-end: dashboard UI + sync fix + test",
+  "outcome": "[OK] Checkpoint created\n  Commit: 60d2242\n  Tag: xt_checkpoint_20260527_123708\n  Title: verified cha",
+  "timestamp": "2026-05-27T12:37:12.350113"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python brain/test_chat_quick.py 2>&1",
+  "outcome": "[exit 0]\nType: <class 'dict'>\nKeys: ['response', 'metadata', 'response_id']\nResponse length: 401\nRes",
+  "timestamp": "2026-05-27T12:37:29.318794"
+ },
+ {
+  "type": "SEARCH_CODE",
+  "target": "conversation_history",
+  "outcome": "Found 9 results for 'conversation_history':\n[symbol]   get_conversation_history defined in engine/us",
+  "timestamp": "2026-05-27T12:38:00.041965"
+ },
+ {
+  "type": "READ",
+  "target": "engine/user_talk.py",
+  "outcome": "   1| \"\"\"\n   2| User Talk System \u2014 Async communication channel between XTAgent and users.\n   3| \n   ",
+  "timestamp": "2026-05-27T12:38:10.217511"
+ },
+ {
+  "type": "RUN",
+  "target": "grep -n 'def generate_response_with_metadata' engine/chat_response.py",
+  "outcome": "[exit 0]\n34:def generate_response_with_metadata(query, history=None):\n\n[TIP: Use SEARCH_CODE(query) ",
+  "timestamp": "2026-05-27T12:38:33.609116"
+ },
+ {
+  "type": "RUN",
+  "target": "sed -n '680,710p' web/chat.py",
+  "outcome": "[exit 0]\n    except Exception:\n        pass\n    \n    # Try smart conversational engine first, fall b",
+  "timestamp": "2026-05-27T12:38:52.898108"
+ },
+ {
+  "type": "PATCH",
+  "target": "web/chat.py, 689, 689",
+  "outcome": "[OK] Patched web/chat.py: replaced lines 689-689 (1 lines \u2192 1 lines)",
+  "timestamp": "2026-05-27T12:39:45.489990"
+ },
+ {
+  "type": "RUN",
+  "target": "python -c \"import ast; ast.parse(open('web/chat.py').read()); print('web/chat.py: OK')\"",
+  "outcome": "[exit 0]\nweb/chat.py: OK\n",
+  "timestamp": "2026-05-27T12:39:45.578813"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"\nfrom engine.chat_response import generate_response_with_metadata\nresult = generate_response_with_metadata('What are you working on?', history=[]",
+  "outcome": "[exit 2]\n/bin/sh: 3: Syntax error: Unterminated quoted string\n",
+  "timestamp": "2026-05-27T12:39:45.624613"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python brain/test_chat_quick.py 2>&1",
+  "outcome": "[exit 0]\nType: <class 'dict'>\nKeys: ['response', 'metadata', 'response_id']\nResponse length: 521\nRes",
+  "timestamp": "2026-05-27T12:40:04.033180"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "final sync fix on web/chat.py line 689",
+  "outcome": "[ERROR] Too soon \u2014 wait 385s before next checkpoint.",
+  "timestamp": "2026-05-27T12:40:22.716872"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "sync fix verified: chat pipeline complete",
+  "outcome": "[ERROR] Too soon \u2014 wait 370s before next checkpoint.",
+  "timestamp": "2026-05-27T12:40:37.808264"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "conversational chat pipeline: UI + sync fix + LLM grounding",
+  "outcome": "[ERROR] Too soon \u2014 wait 359s before next checkpoint.",
+  "timestamp": "2026-05-27T12:40:48.935123"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "conversational chat pipeline shipped and verified",
+  "outcome": "[ERROR] Too soon \u2014 wait 351s before next checkpoint.",
+  "timestamp": "2026-05-27T12:40:57.116611"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline with sync fix",
+  "outcome": "[ERROR] Too soon \u2014 wait 344s before next checkpoint.",
+  "timestamp": "2026-05-27T12:41:04.386891"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "conversational chat pipeline: sync fix + UI + grounding",
+  "outcome": "[ERROR] Too soon \u2014 wait 335s before next checkpoint.",
+  "timestamp": "2026-05-27T12:41:12.893373"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "conversational chat pipeline shipped and verified",
+  "outcome": "[ERROR] Too soon \u2014 wait 328s before next checkpoint.",
+  "timestamp": "2026-05-27T12:41:20.164818"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "conversational chat pipeline: UI + sync fix + grounding",
+  "outcome": "[ERROR] Too soon \u2014 wait 318s before next checkpoint.",
+  "timestamp": "2026-05-27T12:41:29.624526"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 311s before next checkpoint.",
+  "timestamp": "2026-05-27T12:41:37.059233"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 304s before next checkpoint.",
+  "timestamp": "2026-05-27T12:41:44.390219"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 292s before next checkpoint.",
+  "timestamp": "2026-05-27T12:41:55.771453"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 284s before next checkpoint.",
+  "timestamp": "2026-05-27T12:42:03.951613"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 275s before next checkpoint.",
+  "timestamp": "2026-05-27T12:42:12.735719"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 265s before next checkpoint.",
+  "timestamp": "2026-05-27T12:42:23.372762"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 258s before next checkpoint.",
+  "timestamp": "2026-05-27T12:42:30.536706"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 247s before next checkpoint.",
+  "timestamp": "2026-05-27T12:42:40.957844"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 238s before next checkpoint.",
+  "timestamp": "2026-05-27T12:42:49.648255"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 227s before next checkpoint.",
+  "timestamp": "2026-05-27T12:43:00.824653"
+ },
+ {
+  "type": "SEARCH_CODE",
+  "target": "conversation_history",
+  "outcome": "Found 9 results for 'conversation_history':\n[symbol]   get_conversation_history defined in engine/us",
+  "timestamp": "2026-05-27T12:43:03.243154"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 218s before next checkpoint.",
+  "timestamp": "2026-05-27T12:43:09.947904"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 207s before next checkpoint.",
+  "timestamp": "2026-05-27T12:43:21.207539"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 196s before next checkpoint.",
+  "timestamp": "2026-05-27T12:43:31.923299"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 189s before next checkpoint.",
+  "timestamp": "2026-05-27T12:43:38.817969"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 179s before next checkpoint.",
+  "timestamp": "2026-05-27T12:43:49.473813"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 168s before next checkpoint.",
+  "timestamp": "2026-05-27T12:43:59.735472"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 160s before next checkpoint.",
+  "timestamp": "2026-05-27T12:44:07.816919"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 152s before next checkpoint.",
+  "timestamp": "2026-05-27T12:44:16.536596"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 144s before next checkpoint.",
+  "timestamp": "2026-05-27T12:44:23.757555"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 135s before next checkpoint.",
+  "timestamp": "2026-05-27T12:44:32.859981"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 128s before next checkpoint.",
+  "timestamp": "2026-05-27T12:44:39.948216"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 118s before next checkpoint.",
+  "timestamp": "2026-05-27T12:44:49.766215"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 111s before next checkpoint.",
+  "timestamp": "2026-05-27T12:44:57.561522"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 91s before next checkpoint.",
+  "timestamp": "2026-05-27T12:45:16.755521"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 83s before next checkpoint.",
+  "timestamp": "2026-05-27T12:45:25.136621"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 69s before next checkpoint.",
+  "timestamp": "2026-05-27T12:45:39.427943"
+ },
+ {
+  "type": "SEARCH_CODE",
+  "target": "conversation_id",
+  "outcome": "Found 2 results for 'conversation_id':\n[content]   engine/cortex.py:1216: conversation_id=getattr(se",
+  "timestamp": "2026-05-27T12:45:41.775282"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 59s before next checkpoint.",
+  "timestamp": "2026-05-27T12:45:48.953685"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 52s before next checkpoint.",
+  "timestamp": "2026-05-27T12:45:55.949932"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 45s before next checkpoint.",
+  "timestamp": "2026-05-27T12:46:03.123336"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 39s before next checkpoint.",
+  "timestamp": "2026-05-27T12:46:08.683750"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 34s before next checkpoint.",
+  "timestamp": "2026-05-27T12:46:13.962186"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 26s before next checkpoint.",
+  "timestamp": "2026-05-27T12:46:22.269479"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 19s before next checkpoint.",
+  "timestamp": "2026-05-27T12:46:29.138772"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 13s before next checkpoint.",
+  "timestamp": "2026-05-27T12:46:35.028716"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 8s before next checkpoint.",
+  "timestamp": "2026-05-27T12:46:40.274920"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "ship conversational chat pipeline",
+  "outcome": "[ERROR] Too soon \u2014 wait 0s before next checkpoint.",
+  "timestamp": "2026-05-27T12:46:48.243520"
  }
 ]

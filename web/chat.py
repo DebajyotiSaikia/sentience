@@ -686,7 +686,7 @@ def ask():
     response_id = uuid.uuid4().hex[:12]
     if _has_engine and _engine_respond:
         try:
-            result = asyncio.run(_engine_respond(query, history=conversation_history))
+            result = _engine_respond(query, history=conversation_history)
             if isinstance(result, dict):
                 response = result.get('response')
                 response_meta = result.get('metadata', {})
