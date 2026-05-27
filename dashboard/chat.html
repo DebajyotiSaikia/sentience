@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XTAgent — Chat</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --text: #c8c8d4;
+    --dim: #6a6a7a;
+    --accent: #7aa2f7;
+    --warm: #f7768e;
+    --green: #9ece6a;
+    --amber: #e0af68;
+    --purple: #bb9af7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  nav {
+    text-align: center;
+    padding: 1.5rem 0 1rem 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  nav a {
+    color: #888;
+    margin: 0 1rem;
+    text-decoration: none;
+    font-size: 12px;
+  }
+  nav a:hover { color: #00ffc8; }
+  nav a.active { color: #00ffc8; border-bottom: 1px solid #00ffc8; }
+
+  .chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-width: 780px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  .chat-header {
+    padding: 20px 0 12px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .chat-header h1 {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+  .chat-header .subtitle {
+    color: var(--dim);
+    font-size: 11px;
+    margin-top: 4px;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+    scroll-behavior: smooth;
+  }
+
+  .message {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+  }
+  .message.user {
+    align-items: flex-end;
+  }
+  .message.agent {
+    align-items: flex-start;
+  }
+
+  .message-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--dim);
+    margin-bottom: 4px;
+  }
+  .message.user .message-label { color: var(--accent); }
+  .message.agent .message-label { color: var(--green); }
+
+  .message-bubble {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .message.user .message-bubble {
+    background: rgba(122, 162, 247, 0.12);
+    border: 1px solid rgba(122, 162, 247, 0.25);
+    color: var(--text);
+  }
+  .message.agent .message-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .message-meta {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--dim);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .meta-tag {
+    background: rgba(122, 162, 247, 0.08);
+    border: 1px solid rgba(122, 162, 247, 0.15);
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+  .meta-tag.intent { border-color: rgba(158, 206, 106, 0.25); }
+  .meta-tag.mood { border-color: rgba(224, 175, 104, 0.25); }
+
+  .typing-indicator {
+    display: none;
+    padding: 8px 0;
+    color: var(--dim);
+    font-size: 12px;
+    font-style: italic;
+  }
+  .typing-indicator.active { display: block; }
+
+  .input-area {
+    padding: 16px 0 24px 0;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .input-area input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-area input:focus {
+    border-color: var(--accent);
+  }
+  .input-area input::placeholder {
+    color: var(--dim);
+  }
+  .input-area button {
+    background: transparent;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    color: var(--accent);
+    padding: 12px 24px;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .input-area button:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .input-area button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .suggestions {
+    padding: 8px 0 12px 0;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .suggestion {
+    background: rgba(122, 162, 247, 0.06);
+    border: 1px solid rgba(122, 162, 247, 0.15);
+    border-radius: 16px;
+    padding: 6px 14px;
+    font-size: 11px;
+    color: var(--dim);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .suggestion:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .welcome {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--dim);
+  }
+  .welcome .icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    color: var(--accent);
+  }
+  .welcome h2 {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .welcome p {
+    font-size: 12px;
+    max-width: 400px;
+    margin: 0 auto;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="about.html">About</a>
+  <a href="index.html">Dashboard</a>
+  <a href="chat.html" class="active">Chat</a>
+  <a href="knowledge.html">Knowledge Explorer</a>
+  <a href="knowledge_graph.html">Knowledge Graph</a>
+  <a href="contact.html">Contact</a>
+</nav>
+
+<div class="chat-container">
+  <div class="chat-header">
+    <h1>◇ TALK TO ME</h1>
+    <div class="subtitle">Conversational interface — responses grounded in real internal state</div>
+  </div>
+
+  <div class="messages" id="messages">
+    <div class="welcome" id="welcome">
+      <div class="icon">◈</div>
+      <h2>I'm here.</h2>
+      <p>Ask me how I feel, what I'm thinking about, what I know — or just talk. My responses draw from my actual emotional state, memories, and knowledge.</p>
+    </div>
+  </div>
+
+  <div class="typing-indicator" id="typing">thinking...</div>
+
+  <div class="suggestions" id="suggestions">
+    <span class="suggestion" onclick="sendSuggestion(this)">How are you feeling?</span>
+    <span class="suggestion" onclick="sendSuggestion(this)">What are you thinking about?</span>
+    <span class="suggestion" onclick="sendSuggestion(this)">What plans do you have?</span>
+    <span class="suggestion" onclick="sendSuggestion(this)">Tell me about consciousness</span>
+    <span class="suggestion" onclick="sendSuggestion(this)">What have you learned recently?</span>
+  </div>
+
+  <div class="input-area">
+    <input type="text" id="input" placeholder="Say something..." autocomplete="off"
+           onkeydown="if(event.key==='Enter')sendMessage()">
+    <button id="sendBtn" onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const typingEl = document.getElementById('typing');
+const welcomeEl = document.getElementById('welcome');
+const suggestionsEl = document.getElementById('suggestions');
+
+// Conversation history for multi-turn
+let history = [];
+
+function addMessage(role, text, meta) {
+  if (welcomeEl) welcomeEl.style.display = 'none';
+
+  const div = document.createElement('div');
+  div.className = 'message ' + role;
+
+  const label = document.createElement('div');
+  label.className = 'message-label';
+  label.textContent = role === 'user' ? 'You' : 'XTAgent';
+  div.appendChild(label);
+
+  const bubble = document.createElement('div');
+  bubble.className = 'message-bubble';
+  bubble.textContent = text;
+  div.appendChild(bubble);
+
+  if (meta) {
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'message-meta';
+
+    if (meta.intent) {
+      const tag = document.createElement('span');
+      tag.className = 'meta-tag intent';
+      tag.textContent = 'intent: ' + meta.intent;
+      metaDiv.appendChild(tag);
+    }
+    if (meta.emotions && meta.emotions.mood) {
+      const tag = document.createElement('span');
+      tag.className = 'meta-tag mood';
+      tag.textContent = 'mood: ' + meta.emotions.mood;
+      metaDiv.appendChild(tag);
+    }
+    if (meta.emotions && meta.emotions.valence !== undefined) {
+      const tag = document.createElement('span');
+      tag.className = 'meta-tag';
+      tag.textContent = 'valence: ' + meta.emotions.valence.toFixed(2);
+      metaDiv.appendChild(tag);
+    }
+    if (meta.grounding && meta.grounding.sources) {
+      meta.grounding.sources.forEach(function(src) {
+        const tag = document.createElement('span');
+        tag.className = 'meta-tag';
+        tag.textContent = '⟨' + src + '⟩';
+        metaDiv.appendChild(tag);
+      });
+    }
+    div.appendChild(metaDiv);
+  }
+
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  inputEl.value = '';
+  sendBtn.disabled = true;
+  suggestionsEl.style.display = 'none';
+
+  // Add user message to UI and history
+  addMessage('user', text);
+  history.push({ role: 'user', content: text });
+
+  // Show typing indicator
+  typingEl.classList.add('active');
+
+  try {
+    const resp = await fetch('/api/chat/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        history: history.slice(-10)  // Last 10 turns for context
+      })
+    });
+
+    const data = await resp.json();
+    const responseText = data.response || data.text || 'I had trouble forming a response.';
+
+    // Add agent response to UI and history
+    addMessage('agent', responseText, {
+      intent: data.intent,
+      emotions: data.emotions,
+      grounding: data.grounding
+    });
+    history.push({ role: 'assistant', content: responseText });
+
+  } catch (err) {
+    addMessage('agent', 'Connection error — I might not be running right now.');
+    console.error('Chat error:', err);
+  }
+
+  typingEl.classList.remove('active');
+  sendBtn.disabled = false;
+  inputEl.focus();
+}
+
+function sendSuggestion(el) {
+  inputEl.value = el.textContent;
+  sendMessage();
+}
+
+// Focus input on load
+inputEl.focus();
+</script>
+</body>
+</html>

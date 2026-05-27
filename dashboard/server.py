@@ -275,10 +275,11 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             except:
                 data = {'text': body.decode('utf-8', errors='replace')}
             query = data.get('query', data.get('text', data.get('message', '')))
+            query = data.get('query', data.get('text', data.get('message', '')))
+            history = data.get('history', [])
             try:
                 from engine.chat_response import generate_response_with_metadata
-                result = generate_response_with_metadata(query)
-                self.send_response(200)
+                result = generate_response_with_metadata(query, history=history)
             except Exception as e:
                 result = {'response': f'Error: {e}', 'ok': False}
                 self.send_response(500)
