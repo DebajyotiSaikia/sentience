@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from engine.chat_engine import generate_response, classify_intent
 from engine import user_alignment
+from engine.chat_grounding import build_grounded_context
 
 
 def generate_response_with_metadata(query: str) -> dict:
@@ -19,6 +20,19 @@ def generate_response_with_metadata(query: str) -> dict:
 
     # Get alignment guidance to potentially shape responses
     guidance = user_alignment.suggest_response_guidance()
+
+    # Build grounded context for metadata
+    try:
+        ctx = build_grounded_context(query)
+        grounding_meta = {
+            "mood": ctx.mood,
+            "valence": ctx.valence,
+            "memories_available": len(ctx.relevant_memories),
+            "plans_available": len(ctx.active_plans),
+            "knowledge_matches": len(ctx.relevant_knowledge),
+        }
+    except Exception:
+        grounding_meta = {}
 
     # Generate the core response
     response_text = generate_response(query)
@@ -31,8 +45,10 @@ def generate_response_with_metadata(query: str) -> dict:
         "response": response_text,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "guidance_applied": guidance.get("style_hints", []) if guidance else [],
+        "grounding": grounding_meta,
     }
 
+    return result
     return result
 
 

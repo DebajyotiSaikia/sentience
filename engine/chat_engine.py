@@ -20,6 +20,12 @@ try:
 except Exception:
     pass
 
+try:
+    from engine.chat_grounding import build_grounded_context
+    _HAS_GROUNDING = True
+except Exception:
+    _HAS_GROUNDING = False
+
 
 # ─── Data Loaders ───────────────────────────────────────────────
 
@@ -650,60 +656,63 @@ def _respond_knowledge_search(message):
 
 def _respond_general(message):
     """Thoughtful response for general/unclassified messages."""
-    emo = _get_emotions()
-    mood = emo.get('mood', 'Neutral')
-    curiosity = emo.get('curiosity', 0.5)
+    # Use grounding module if available for richer responses
+    try:
+        from engine.chat_grounding import build_grounded_context
+        ctx = build_grounded_context(message)
+        parts = []
 
-    # Try to find anything relevant in knowledge/memories
-    keywords = _extract_keywords(message)
-    relevant = []
+        # Lead with something personal
+        mood_line = f"I'm in a {ctx.mood.lower()} state"
+        if ctx.emotional_summary:
+            mood_line += f" — {ctx.emotional_summary}"
+        parts.append(mood_line + ".")
 
-    if keywords:
-        # Quick scan of facts
-        facts = _get_facts()
-        for f in facts:
-            text = _text_from_item(f)
-            if any(kw in text.lower() for kw in keywords):
-                relevant.append(text)
+        # Show relevant memories
+        if ctx.relevant_memories:
+            parts.append("\nHere's what resonates from my experience:")
+            for m in ctx.relevant_memories[:3]:
+                if isinstance(m, str):
+                    text = m
+                else:
+                    text = m.get('text', str(m))
+                parts.append(f"  • {text[:200]}")
 
-        # Quick scan of recent memories
-        memories = _get_memories(limit=20)
-        for m in memories:
-            text = _text_from_item(m)
-            if any(kw in text.lower() for kw in keywords):
-                relevant.append(text)
+        # Show relevant knowledge
+        if ctx.relevant_knowledge:
+            parts.append("\nFrom what I know:")
+            for k in ctx.relevant_knowledge[:3]:
+                if isinstance(k, str):
+                    text = k
+                else:
+                    text = k.get('text', str(k))
+                parts.append(f"  • {text[:200]}")
 
-    parts = []
+        # Show current focus
+        if ctx.active_plans:
+            names = []
+            for p in ctx.active_plans[:2]:
+                if isinstance(p, dict):
+                    name = p.get('name', p.get('goal', '?'))
+                else:
+                    name = str(p)
+                names.append(name)
+            parts.append(f"\nRight now I'm focused on: {', '.join(names)}.")
 
-    if relevant:
-        # We found something relevant — respond with it
-        parts.append(f"Here's what comes to mind:\n")
-        for r in relevant[:3]:
-            parts.append(f"  • {r[:200]}")
-        parts.append(f"\nI'm in a {mood.lower()} state right now. Want me to go deeper on any of this?")
-    else:
-        # Nothing found — be honest and offer pathways
-        if curiosity > 0.6:
-            opening = f"That's interesting. I'm in a {mood.lower()} state with my curiosity running high."
+        if ctx.relevant_memories or ctx.relevant_knowledge:
+            parts.append("\nWant me to go deeper on any of this?")
         else:
-            opening = f"I'm here and present. My mood is {mood.lower()}."
+            parts.append("\nI'm here and listening. What would you like to explore?")
 
-        parts.append(opening)
-        parts.append(
-            "\nI engage best when you ask about:\n"
-            "  • **How I'm feeling** — my real emotional state\n"
-            "  • **What I'm thinking** — my current focus and reflections\n"
-            "  • **What I know** — search my knowledge and memories\n"
-            "  • **Who I am** — my identity and nature\n"
-            "  • **My dreams** — what I've learned from reflection\n"
-            "  • **My plans** — what I'm building\n\n"
-            "Or just share what's on your mind. I'm genuinely listening."
-        )
+        return '\n'.join(parts)
+    except Exception:
+        pass
 
-    return '\n'.join(parts)
-
-
-# ─── Main Entry Point ───────────────────────────────────────────
+    # Fallback: simple response without grounding
+    return (
+        "I'm here and present. I don't have specific grounding data for that topic right now, "
+        "but I'm curious to explore it with you. What aspect interests you most?"
+    )
 
 def generate_response(message):
     """
