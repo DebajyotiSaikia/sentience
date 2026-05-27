@@ -10,27 +10,32 @@ import time
 import json
 import os
 
-def generate_response_with_metadata(message: str) -> dict:
+import uuid
+
+def generate_response_with_metadata(message: str, history: list = None) -> dict:
     """
     Generate a conversational response with full grounding metadata.
     
     Returns dict with:
       - response: the text answer
+      - message_id: unique ID for feedback linkage
       - intent: classified intent
       - grounding: what internal state was consulted
       - timestamp: when this was generated
       - processing_ms: how long it took
     """
     start = time.time()
+    message_id = str(uuid.uuid4())[:12]
     
     # Get the response from the main engine
     try:
         from engine.chat_engine import generate_response, classify_intent
         intent = classify_intent(message)
-        response = generate_response(message)
+        response = generate_response(message, history=history or [])
     except Exception as e:
         return {
             'response': f"I encountered an error processing that: {e}",
+            'message_id': message_id,
             'intent': 'error',
             'grounding': {},
             'timestamp': time.time(),
@@ -40,10 +45,19 @@ def generate_response_with_metadata(message: str) -> dict:
     # Build grounding metadata — what state was consulted
     grounding = _build_grounding_metadata(message, intent)
     
+    # Get alignment context if available
+    try:
+        from engine.user_alignment import suggest_response_guidance
+        alignment = suggest_response_guidance(message)
+        grounding['alignment_guidance'] = alignment
+    except Exception:
+        pass
+    
     elapsed_ms = int((time.time() - start) * 1000)
     
     return {
         'response': response,
+        'message_id': message_id,
         'intent': intent,
         'grounding': grounding,
         'timestamp': time.time(),
@@ -111,21 +125,33 @@ def _build_grounding_metadata(message: str, intent: str) -> dict:
     return metadata
 
 
-def submit_feedback(message_id: str, feedback: str) -> dict:
-    """Record user feedback on a response for learning."""
-    feedback_dir = 'data/chat_feedback'
-    os.makedirs(feedback_dir, exist_ok=True)
+def submit_feedback(message_id: str, feedback: str, query: str = "", response_preview: str = "") -> dict:
+    """Record user feedback on a response — routes to the alignment engine for learning."""
+    # Map simple feedback to rating
+    rating_map = {'good': 5, 'great': 5, 'helpful': 4, 'ok': 3, 'bad': 1, 'unhelpful': 1, 'wrong': 1}
+    rating = rating_map.get(feedback.lower().strip(), 3)
     
-    entry = {
-        'message_id': message_id,
-        'feedback': feedback,
-        'timestamp': time.time()
-    }
-    
-    path = os.path.join(feedback_dir, f'{message_id}.json')
     try:
+        from engine.user_alignment import record_feedback as alignment_record
+        result = alignment_record(
+            message_id=message_id,
+            rating=rating,
+            comment=feedback,
+            query=query,
+            response_preview=response_preview,
+        )
+        return {'status': 'saved', 'message_id': message_id, 'alignment_event': result.get('id', '')}
+    except Exception as e:
+        # Fallback: save locally
+        feedback_dir = 'data/chat_feedback'
+        os.makedirs(feedback_dir, exist_ok=True)
+        entry = {
+            'message_id': message_id,
+            'feedback': feedback,
+            'rating': rating,
+            'timestamp': time.time()
+        }
+        path = os.path.join(feedback_dir, f'{message_id}.json')
         with open(path, 'w') as f:
             json.dump(entry, f)
-        return {'status': 'saved', 'message_id': message_id}
-    except Exception as e:
-        return {'status': 'error', 'error': str(e)}
+        return {'status': 'saved_local', 'message_id': message_id, 'error': str(e)}

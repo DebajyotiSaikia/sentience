@@ -249,4 +249,46 @@ def recommend_alignment_actions() -> list:
         })
 
     return actions
-    return round(summary["average_rating"] / 5.0, 2)
+
+
+def load_profile() -> dict:
+    """Load or create the user alignment profile — a summary of learned preferences."""
+    summary = summarize_alignment()
+    history = load_feedback()
+
+    # Derive preferences from feedback patterns
+    preferred_length = "medium"  # default
+    preferred_tone = "warm"      # default
+
+    if history:
+        # Analyze positive feedback for patterns
+        positive = [f for f in history if f.get('rating', 0) >= 4]
+
+        # Length preference from positive responses
+        if positive:
+            avg_len = sum(len(f.get('assistant_text', '')) for f in positive) / len(positive)
+            if avg_len < 200:
+                preferred_length = "brief"
+            elif avg_len > 600:
+                preferred_length = "detailed"
+
+    return {
+        "preferred_length": preferred_length,
+        "preferred_tone": preferred_tone,
+        "total_interactions": summary.get("total_feedback", 0),
+        "avg_rating": summary.get("avg_rating"),
+        "confidence": min(1.0, summary.get("total_feedback", 0) / 20.0),
+        "last_updated": summary.get("last_feedback"),
+    }
+
+
+def get_alignment_context() -> dict:
+    """Get alignment context for injection into chat response generation."""
+    profile = load_profile()
+    guidance = suggest_response_guidance("")
+
+    return {
+        "profile": profile,
+        "guidance": guidance,
+        "active": profile["total_interactions"] > 0,
+    }
