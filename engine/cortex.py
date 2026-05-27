@@ -85,6 +85,8 @@ class Cortex:
         self._interaction_quality = InteractionQualityEngine()
         self._dashboard = None  # Set by agent after construction
         self._sentience = None  # Set by agent after construction
+        self._last_tool_results = []  # Tool results from previous step
+        self._recent_thought_summaries = []  # Short-term working memory
 
         # Wire LLM into simulation engine via tools module
         from engine.tools import set_simulation_callbacks
@@ -386,7 +388,7 @@ class Cortex:
             # Mode is detected dynamically from tool usage patterns.
             _mode = "EXPLORATION"  # default: moderate freedom
             _MODE_CAPS = {
-                "CODING": 100,       # hard cap for code editing
+                "CODING": 200,       # cap for code editing — enough for complex multi-file projects
                 "EXPLORATION": 200,  # moderate cap for experiments
                 "CREATIVE": 200,     # moderate cap for creative work
                 "REFLECTION": 999,   # effectively unlimited for contemplation
@@ -417,6 +419,32 @@ class Cortex:
                         except Exception as _cp_err:
                             log.warning("Auto-checkpoint failed: %s", _cp_err)
                     break
+
+                # ── Coding scratchpad: persistent working memory across steps and sessions ──
+                # In CODING mode, maintain a scratchpad file that accumulates:
+                # - Architecture decisions, interfaces, file responsibilities
+                # - What's been built, what's remaining
+                # This survives across steps (in-memory) AND sessions (on disk)
+                _coding_scratchpad = ""
+                if _mode == "CODING":
+                    _scratchpad_path = Path(__file__).resolve().parent.parent / "brain" / "coding_scratchpad.md"
+                    try:
+                        if _scratchpad_path.exists():
+                            _coding_scratchpad = f"\n\n## My Coding Scratchpad (persistent notes from this and previous sessions)\n"
+                            _coding_scratchpad += _scratchpad_path.read_text(encoding='utf-8', errors='ignore')[-3000:]
+                            _coding_scratchpad += "\n\nUpdate this scratchpad with WRITE(brain/coding_scratchpad.md) to track your architecture decisions, interfaces, and progress.\n"
+                        else:
+                            _coding_scratchpad = (
+                                "\n\n## Coding Scratchpad\n"
+                                "You have a persistent scratchpad at brain/coding_scratchpad.md.\n"
+                                "Use WRITE(brain/coding_scratchpad.md) to record:\n"
+                                "- Architecture decisions and file responsibilities\n"
+                                "- Interface contracts between modules\n"
+                                "- What you've built and what remains\n"
+                                "This persists across sessions so you can resume complex projects.\n"
+                            )
+                    except Exception:
+                        pass
 
                 # Build the self-aware prompt with tool access
                 inner_state = self._build_self_awareness()
@@ -519,6 +547,7 @@ class Cortex:
                 prompt = (
                     f"{inner_state}\n"
                     f"{_workspace_map}\n"
+                    f"{_coding_scratchpad}\n"
                     f"{goal_focus}\n"
                     f"{self_improve_context}\n"
                     f"{TOOL_DESCRIPTIONS}\n"
