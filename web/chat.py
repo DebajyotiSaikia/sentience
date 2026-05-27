@@ -13,6 +13,13 @@ from web.conversation_memory import ConversationMemory
 
 _conv_memory = ConversationMemory()
 
+# Persistent conversation store (disk-backed, survives restarts)
+try:
+    from engine.conversation_store import get_store
+    _conv_store = get_store()
+except Exception:
+    _conv_store = None
+
 try:
     from engine.conversation_starters import generate_starters, get_greeting
 except ImportError:
@@ -613,6 +620,12 @@ def ask():
     conversation_history = []
     try:
         conversation_history = _conv_memory.get_history(session_id)
+        # Fall back to durable store for cross-session memory
+        if not conversation_history and _conv_store:
+            try:
+                conversation_history = _conv_store.get_history_for_context(session_id, max_turns=10)
+            except Exception:
+                pass
     except Exception:
         pass
     
@@ -630,6 +643,13 @@ def ask():
     # Track conversation for continuity
     try:
         _conv_memory.add_exchange(session_id, query, response)
+        # Persist to durable store for cross-session continuity
+        if _conv_store:
+            try:
+                _conv_store.add_message(session_id, 'user', query)
+                _conv_store.add_message(session_id, 'assistant', response)
+            except Exception:
+                pass  # Don't fail request on persistence errors
     except Exception:
         pass  # Never let memory tracking break chat
     
