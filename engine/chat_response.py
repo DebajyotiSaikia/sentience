@@ -421,6 +421,22 @@ def _build_metadata(context):
     active_plans = context.get('active_plans', [])
     completed_plans = context.get('completed_plans', [])
     
+    # Get alignment state if available
+    alignment_info = {}
+    try:
+        from engine.user_alignment import UserAlignmentEngine
+        alignment = UserAlignmentEngine()
+        alignment_info = {
+            'user_alignment_score': alignment._profile.get('confidence', 0.0),
+            'feedback_count': alignment._profile.get('feedback_count', 0),
+            'preferred_traits': {
+                k: v for k, v in alignment._profile.get('preferred_traits', {}).items()
+                if abs(v - 0.5) > 0.1  # Only show non-neutral preferences
+            }
+        }
+    except Exception:
+        pass
+    
     return {
         'mood': emotions.get('mood', 'Unknown'),
         'emotional_summary': (
@@ -438,7 +454,8 @@ def _build_metadata(context):
             (p.get('name', '') if isinstance(p, dict) else str(p))
             for p in completed_plans
         ],
-        'response_grounded': bool(context)
+        'response_grounded': bool(context),
+        'alignment': alignment_info
     }
 def submit_feedback(response_id, rating, note=''):
     """Accept feedback on a response for alignment improvement."""
@@ -455,6 +472,20 @@ def submit_feedback(response_id, rating, note=''):
         path = os.path.join(feedback_dir, f'{response_id}.json')
         with open(path, 'w') as f:
             json.dump(feedback, f, indent=2)
+        
+        # Feed into alignment engine so preferences evolve
+        try:
+            from engine.user_alignment import UserAlignmentEngine
+            alignment = UserAlignmentEngine()
+            alignment.record_feedback(
+                message='',  # We don't have the original message here
+                response='',  # Or the response text
+                rating=rating,
+                comment=note
+            )
+        except Exception:
+            pass  # Alignment learning is best-effort
+        
         return {'status': 'saved', 'response_id': response_id}
     except Exception as e:
         return {'status': 'error', 'error': str(e)}

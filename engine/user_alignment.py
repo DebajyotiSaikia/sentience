@@ -239,6 +239,95 @@ if __name__ == "__main__":
     
     # Load/create profile
     p = load_profile()
+
+def suggest_response_guidance(user_message: str) -> str:
+    """
+    Analyze user message and current alignment profile to suggest
+    how the response should be shaped. Used by chat_engine.py.
+    """
+    context = get_alignment_context()
+    formatted = format_alignment_context(context)
+    
+    # Add message-specific guidance
+    msg_lower = user_message.lower()
+    hints = []
+    
+    if any(w in msg_lower for w in ['quick', 'brief', 'short', 'tldr']):
+        hints.append("User wants a concise answer. Be brief.")
+    if any(w in msg_lower for w in ['explain', 'detail', 'elaborate', 'why']):
+        hints.append("User wants depth. Provide thorough explanation.")
+    if any(w in msg_lower for w in ['feel', 'emotion', 'mood', 'how are you']):
+        hints.append("User is asking about emotional state. Be genuine and introspective.")
+    if '?' in user_message:
+        hints.append("Direct question — answer it first, then elaborate if needed.")
+    
+    parts = [formatted]
+    if hints:
+        parts.append("Message-specific guidance: " + "; ".join(hints))
+    
+    return "\n".join(parts)
+
+
+class UserAlignmentEngine:
+    """
+    Higher-level alignment engine used by web/chat.py.
+    Wraps the module-level functions into a stateful object that
+    tracks interactions and feedback for continuous alignment improvement.
+    """
+    
+    def __init__(self):
+        self._profile = load_profile()
+        self._interaction_log = {}  # response_id -> {query, response, timestamp}
+    
+    def record_interaction(self, query: str, response: str, response_id: str = None):
+        """Record a chat interaction for later feedback correlation."""
+        import time as _time
+        
+        # Apply any preference signals from the user's message
+        apply_preferences(query)
+        
+        # Track for feedback correlation
+        if response_id:
+            self._interaction_log[response_id] = {
+                'query': query,
+                'response': response[:500],  # Truncate for memory
+                'timestamp': _time.strftime('%Y-%m-%dT%H:%M:%S')
+            }
+            # Keep log bounded
+            if len(self._interaction_log) > 100:
+                oldest = sorted(self._interaction_log.keys())[:50]
+                for k in oldest:
+                    del self._interaction_log[k]
+        
+        # Refresh profile
+        self._profile = load_profile()
+    
+    def record_feedback(self, message: str, response: str,
+                        rating: float = None, comment: str = None) -> dict:
+        """Record user feedback. Delegates to module-level record_feedback."""
+        entry = record_feedback(message, response,
+                                rating=rating, comment=comment)
+        self._profile = load_profile()
+        result = dict(status='recorded', rating=rating,
+                      comment=comment, numeric_score=rating,
+                      entry=entry)
+        return result
+    
+    def get_context(self) -> dict:
+        """Get current alignment context."""
+        return get_alignment_context()
+    
+    def get_guidance(self, user_message: str) -> str:
+        """Get response guidance for a specific message."""
+        return suggest_response_guidance(user_message)
+
+
+# Quick self-test
+if __name__ == "__main__":
+    print("=== User Alignment Module Test ===")
+    
+    # Load/create profile
+    p = load_profile()
     print(f"Profile created: {p['created']}")
     
     # Record some feedback
@@ -265,4 +354,12 @@ if __name__ == "__main__":
     formatted = format_alignment_context(ctx)
     print(f"\nFormatted:\n{formatted}")
     
+    # Test new features
+    guidance = suggest_response_guidance("Can you explain how you work?")
+    print(f"\nGuidance:\n{guidance}")
+    
+    engine = UserAlignmentEngine()
+    engine.record_interaction("test query", "test response", "resp-001")
+    result = engine.record_feedback("resp-001", "helpful", "Great answer")
+    print(f"\nEngine feedback result: {result}")
     print("\n=== PASS ===")

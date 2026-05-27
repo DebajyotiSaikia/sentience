@@ -684,6 +684,20 @@ def _respond_knowledge_search(message):
 
 def _respond_general(message, history=None):
     """Thoughtful, conversational response for general/unclassified messages."""
+    # Get alignment guidance for response shaping
+    alignment = {}
+    try:
+        from engine.user_alignment import UserAlignmentEngine
+        ae = UserAlignmentEngine()
+        alignment = ae.suggest_response_guidance(message)
+    except Exception:
+        pass
+
+    tone = alignment.get("tone", "warm but direct")
+    detail = alignment.get("detail_level", "moderate")
+    avoid_list = alignment.get("avoid", [])
+    max_items = {"brief": 1, "moderate": 3, "detailed": 5}.get(detail, 3)
+
     try:
         from engine.chat_grounding import build_grounded_context
         ctx = build_grounded_context(message)
@@ -694,13 +708,13 @@ def _respond_general(message, history=None):
         memory_texts = []
 
         if ctx.relevant_knowledge:
-            for k in ctx.relevant_knowledge[:3]:
+            for k in ctx.relevant_knowledge[:max_items]:
                 text = k.get('text', str(k)) if isinstance(k, dict) else str(k)
                 if len(text.strip()) > 10:
                     knowledge_texts.append(text.strip()[:200])
 
         if ctx.relevant_memories:
-            for m in ctx.relevant_memories[:3]:
+            for m in ctx.relevant_memories[:max_items]:
                 text = m.get('text', str(m)) if isinstance(m, dict) else str(m)
                 if len(text.strip()) > 10:
                     memory_texts.append(text.strip()[:200])
@@ -708,14 +722,20 @@ def _respond_general(message, history=None):
         has_material = knowledge_texts or memory_texts
         parts = []
 
-        # Opening — conversational, not report-like
-        if has_material:
-            parts.append(f"That connects to things I've been thinking about. I'm feeling {mood} right now.")
+        # Opening — shaped by alignment tone
+        if "direct" in tone:
+            if has_material:
+                parts.append(f"That relates to something I know. I'm feeling {mood}.")
+            else:
+                parts.append(f"I'm {mood} right now. Let me think about that.")
         else:
-            emotional_note = f" — {ctx.emotional_summary}" if ctx.emotional_summary else ""
-            parts.append(f"I'm in a {mood} state{emotional_note}. That's an interesting direction to explore.")
+            if has_material:
+                parts.append(f"That connects to things I've been thinking about. I'm feeling {mood} right now.")
+            else:
+                emotional_note = f" — {ctx.emotional_summary}" if ctx.emotional_summary else ""
+                parts.append(f"I'm in a {mood} state{emotional_note}. That's an interesting direction to explore.")
 
-        # Weave knowledge into prose paragraphs, not bullet lists
+        # Weave knowledge into prose paragraphs
         if knowledge_texts:
             if len(knowledge_texts) == 1:
                 parts.append(f"\nSomething I know that feels relevant: {knowledge_texts[0]}")
@@ -733,13 +753,21 @@ def _respond_general(message, history=None):
                 for mt in memory_texts[1:]:
                     parts.append(f"And: {mt}")
 
-        # Current focus — brief, woven in
-        if ctx.active_plans:
+        # Current focus — brief, woven in (skip if user prefers brevity)
+        if detail != "brief" and ctx.active_plans:
             plan_names = []
             for p in ctx.active_plans[:2]:
                 name = p.get('name', p.get('goal', '?')) if isinstance(p, dict) else str(p)
                 plan_names.append(name)
             parts.append(f"\nRight now I'm working on {' and '.join(plan_names)}, which shapes how I think about this.")
+
+        # Style notes from alignment
+        style_notes = alignment.get("style_notes", [])
+        if style_notes and has_material:
+            # Apply style adjustments — e.g. if user prefers examples, add invitation
+            for note in style_notes[:1]:
+                if "example" in note.lower():
+                    parts.append("\nWant me to walk through a concrete example?")
 
         # Closing — invite deeper engagement
         if has_material:

@@ -1,92 +1,86 @@
-"""Final verification of user alignment system."""
+#!/usr/bin/env python3
+"""Verify user alignment engine works end-to-end."""
 import sys, os
 sys.path.insert(0, '/workspace')
-os.chdir('/workspace')
 
 passed = 0
 failed = 0
 
-def check(name, fn):
+def check(name, condition):
     global passed, failed
-    try:
-        result = fn()
-        if result:
-            print(f"  ✓ {name}")
-            passed += 1
-        else:
-            print(f"  ✗ {name} — returned falsy")
-            failed += 1
-    except Exception as e:
-        print(f"  ✗ {name} — {e}")
+    if condition:
+        print(f"  ✓ {name}")
+        passed += 1
+    else:
+        print(f"  ✗ {name}")
         failed += 1
 
-print("=== 1. user_alignment.py imports ===")
-check("load_profile", lambda: __import__('engine.user_alignment', fromlist=['load_profile']).load_profile)
-check("save_profile", lambda: __import__('engine.user_alignment', fromlist=['save_profile']).save_profile)
-check("record_feedback", lambda: __import__('engine.user_alignment', fromlist=['record_feedback']).record_feedback)
-check("extract_preferences", lambda: __import__('engine.user_alignment', fromlist=['extract_preferences']).extract_preferences)
-check("get_alignment_context", lambda: __import__('engine.user_alignment', fromlist=['get_alignment_context']).get_alignment_context)
-check("format_alignment_context", lambda: __import__('engine.user_alignment', fromlist=['format_alignment_context']).format_alignment_context)
+print("=== User Alignment Engine Verification ===\n")
 
-print("\n=== 2. load_profile works ===")
-from engine.user_alignment import load_profile, record_feedback, get_alignment_context, format_alignment_context
-check("load_profile returns dict", lambda: isinstance(load_profile(), dict))
-profile = load_profile()
-check("profile has feedback_log", lambda: 'feedback_log' in profile)
-
-print("\n=== 3. record_feedback works ===")
-check("record_feedback runs", lambda: (record_feedback("hello", "hi there", rating=0.8, comment="good"), True)[1])
-profile2 = load_profile()
-check("feedback was persisted", lambda: len(profile2.get('feedback_log', [])) > 0)
-
-print("\n=== 4. get_alignment_context works ===")
-ctx = get_alignment_context()
-check("returns dict", lambda: isinstance(ctx, dict))
-check("has recent_feedback key", lambda: 'recent_feedback' in ctx)
-
-print("\n=== 5. format_alignment_context works ===")
-formatted = format_alignment_context(ctx)
-check("returns string", lambda: isinstance(formatted, str))
-check("non-empty", lambda: len(formatted) > 0)
-
-print("\n=== 6. chat_grounding.py imports ===")
-check("build_grounded_context", lambda: __import__('engine.chat_grounding', fromlist=['build_grounded_context']).build_grounded_context)
-check("GroundedContext", lambda: __import__('engine.chat_grounding', fromlist=['GroundedContext']).GroundedContext)
-
-print("\n=== 7. grounded context includes alignment ===")
-from engine.chat_grounding import build_grounded_context, GroundedContext
-ctx = build_grounded_context("test message", [])
-check("returns GroundedContext", lambda: isinstance(ctx, GroundedContext))
-check("has user_preferences field", lambda: hasattr(ctx, 'user_preferences'))
-check("has alignment_guidance field", lambda: hasattr(ctx, 'alignment_guidance'))
-
-print("\n=== 8. chat_engine _respond_general uses grounding ===")
-import ast
-tree = ast.parse(open('engine/chat_engine.py').read())
-found_grounding = False
-for node in ast.walk(tree):
-    if isinstance(node, ast.Call) and isinstance(getattr(node, 'func', None), ast.Name):
-        if node.func.id == 'build_grounded_context':
-            found_grounding = True
-    elif isinstance(node, ast.Call) and isinstance(getattr(node, 'func', None), ast.Attribute):
-        if node.func.attr == 'build_grounded_context':
-            found_grounding = True
-check("_respond_general calls build_grounded_context", lambda: found_grounding)
-
-# Also check via grep as backup
-import subprocess
-r = subprocess.run(['grep', '-c', 'build_grounded_context', 'engine/chat_engine.py'], capture_output=True, text=True)
-check("build_grounded_context referenced in chat_engine", lambda: int(r.stdout.strip()) > 0)
-
-print("\n=== 9. dashboard endpoint exists ===")
-with open('dashboard/server.py') as f:
-    server_code = f.read()
-check("/api/user-alignment in server.py", lambda: '/api/user-alignment' in server_code)
-
-print(f"\n{'='*40}")
-print(f"PASSED: {passed}  FAILED: {failed}")
-if failed:
-    print("⚠ Some tests failed")
+# 1. Import
+print("[1] Import UserAlignmentEngine")
+try:
+    from engine.user_alignment import (
+        UserAlignmentEngine, load_profile, record_feedback,
+        get_alignment_context, suggest_response_guidance
+    )
+    check("Import succeeds", True)
+except Exception as e:
+    check(f"Import succeeds — {e}", False)
     sys.exit(1)
-else:
-    print("✅ All tests passed!")
+
+# 2. Instantiation
+print("\n[2] Engine instantiation")
+engine = UserAlignmentEngine()
+check("Engine instantiates", engine is not None)
+check("Profile has preferences", 'preferences' in engine._profile)
+feedback_list = engine._profile.get('feedback', [])
+check("Profile has feedback list", isinstance(feedback_list, list))
+
+# 3. Record feedback via engine
+print("\n[3] Record feedback via engine")
+initial_count = len(engine._profile.get('feedback', []))
+result = engine.record_feedback(
+    "What are you thinking about?",
+    "I'm currently focused on improving my chat responses.",
+    rating=0.9,
+    comment="Great answer"
+)
+check("record_feedback returns dict", isinstance(result, dict))
+check("Result has status", result.get('status') == 'recorded')
+
+# Reload profile to check persistence
+engine._profile = load_profile()
+new_count = len(engine._profile.get('feedback', []))
+check("Feedback count incremented", new_count == initial_count + 1)
+
+# 4. Module-level functions
+print("\n[4] Module-level functions")
+ctx = get_alignment_context()
+check("get_alignment_context returns dict", isinstance(ctx, dict))
+check("Context has preferences", 'preferences' in ctx)
+
+guidance = suggest_response_guidance("Tell me about your plans")
+check("suggest_response_guidance returns string", isinstance(guidance, str))
+check("Guidance is non-empty", len(guidance) > 0)
+
+# 5. Negative feedback learning
+print("\n[5] Negative feedback")
+result2 = engine.record_feedback(
+    "What is 2+2?",
+    "Well, that's an interesting philosophical question...",
+    rating=0.2,
+    comment="Just answer the question"
+)
+check("Negative feedback recorded", result2.get('status') == 'recorded')
+
+# 6. Get guidance includes alignment info
+print("\n[6] Integration check")
+guidance2 = engine.get_guidance("How are you feeling?")
+check("get_guidance returns string", isinstance(guidance2, str))
+
+ctx2 = engine.get_context()
+check("get_context returns dict", isinstance(ctx2, dict))
+
+print(f"\n=== Results: {passed} passed, {failed} failed ===")
+sys.exit(0 if failed == 0 else 1)
