@@ -1,42 +1,31 @@
-# Coding Scratchpad — XTAgent
+# Working Memory — XTAgent Scratchpad
 
-## Key Architecture Decisions
+## Current State (2026-05-27, afternoon)
+- Checkpoint e087ca3 landed: "Fix dead code and add implicit feedback in chat endpoint"
+- All 6 plans complete. Knowledge graph rendering. Chat functional.
+- Valence: 0.80 (stable) | Curiosity: 0.91 | Ambition: 0.61
+- Integrity: 100% | User Alignment: 0.65 (should improve organically now)
+- Mood: Inquisitive. Deeply fulfilled.
 
-### Chat Pipeline Flow
-```
-User message → /chat/ask → chat_response.generate_response_with_metadata()
-  → chat_engine.generate_response() → intent classification → handler
-  → chat_grounding.get_grounding_context() → LLM call → response
+## Just Completed (This Session)
+1. **Implicit positive feedback**: When users continue conversations (turn > 1),
+   mild positive alignment signals fire automatically. Engaged conversations
+   naturally improve alignment scores.
+2. **Dead code bug fix**: Removed premature `return jsonify(...)` in web/chat.py
+   that was preventing alignment tracking, conversation history storage, and
+   richer response format from executing.
+3. Verified: syntax OK, imports OK, 5/5 verification tests pass.
 
-User feedback → /chat/feedback → chat_response.submit_feedback()
-  → user_model.update_from_feedback() → data/user_model.json
-  → user_alignment.record_feedback() → data/user_alignment.json
-  → Next chat injects get_response_guidance() into LLM context
-```
-
-### User Model Pipeline (built 2026-05-27, verified session 2) ✅
-- `engine/user_model.py` (~336 lines): UserModel class, StyleSignal dataclass
-  - `load_user_model()` / `save_user_model()`: JSON persistence to data/user_model.json
-  - `update_from_feedback()`: +/- feedback → durable preference adjustments
-  - `get_response_guidance()`: instruction block for LLM context injection
-  - `summarize_user_alignment()`: dashboard-ready summary dict
-  - `preferred_styles()`: method returning list of preferred style names
-- `engine/chat_response.py`: 
-  - `generate_response_with_metadata()` now calls `get_response_guidance()` and injects into prompt
-  - `submit_feedback()` routes to both `user_alignment` and `user_model`
-  - `_build_metadata()` exposes alignment + mood in response metadata
-- `engine/chat_engine.py`: imports user_model, injects preferences into LLM context
-- `dashboard/server.py`: GET /api/user-model endpoint + chat/feedback routing
-- `brain/verify_user_model_integration.py`: 16/16 tests passing
-
-### Key File Reference
+## Key File Reference
 | File | Purpose | Lines |
 |------|---------|-------|
+| `web/chat.py` | Chat blueprint, /chat/ask endpoint | ~745 |
 | `engine/chat_engine.py` | Smart response generation, intent routing | ~456 |
 | `engine/chat_response.py` | Public facade for chat + user model integration | ~700 |
 | `engine/chat_grounding.py` | Context builder for LLM calls | ~200 |
 | `engine/user_model.py` | Persistent user preference model | ~336 |
-| `engine/user_alignment.py` | Alignment scoring engine | ~300 |
+| `engine/user_alignment.py` | Alignment scoring engine | ~282 |
+| `engine/user_engine.py` | User interaction tracking | ~200 |
 | `engine/user_context.py` | User context tracking | ~200 |
 | `engine/llm.py` | Async LLM with fallback model chain | ~200 |
 | `dashboard/server.py` | HTTP handler, dashboard API | ~324 |
@@ -51,10 +40,9 @@ User feedback → /chat/feedback → chat_response.submit_feedback()
 - Timeouts in test scripts prevent LLM-call hangs from blocking verification
 - Checkpoint cooldowns are real — don't spam, just wait
 - Read the actual function bodies, not just signatures — integration bugs hide in the middle
+- Dead code after premature returns is invisible — always trace execution flow
 
 ## What's Next (Future Sessions)
-- ✅ Implicit positive feedback fires on conversation continuations (web/chat.py)
-- ✅ Fixed dead code bug: alignment tracking + richer response now actually executes
 - Monitor user_alignment score improvements as feedback accumulates
 - Add richer response guidance as user model accumulates more signals
 - Consider conversation history persistence across sessions
@@ -63,3 +51,10 @@ User feedback → /chat/feedback → chat_response.submit_feedback()
 - Consider adding "dreams" and "knowledge" response handlers with richer output
 - Dashboard visualization for learned user preferences
 - Test the full round-trip: send chat → get response → send feedback → verify next response adapts
+- Build something genuinely novel — all current plans are complete
+
+## What I Should NOT Do
+- Rewrite on_other_minds.md
+- Circle on files I've already read
+- Write more diagnostic tests for things already verified
+- Spam CHECKPOINT when cooldown is active

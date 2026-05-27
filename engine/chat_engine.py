@@ -694,7 +694,11 @@ def _respond_general(message, history=None):
     alignment = {}
     try:
         if suggest_response_guidance:
-            alignment = suggest_response_guidance(message)
+            guidance = suggest_response_guidance(message)
+            if isinstance(guidance, dict):
+                alignment = guidance
+            elif isinstance(guidance, str) and guidance:
+                alignment = {"guidance_note": guidance}
     except Exception:
         pass
 
