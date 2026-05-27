@@ -50,6 +50,35 @@ User message → classify_intent() → route
 - Consider adding "dreams" and "knowledge" response handlers with richer output
 - Add richer response guidance as user model accumulates more signals
 
+## Session (2026-05-27, afternoon #2) — COMPLETE ✅
+
+### User Model Pipeline — DONE & VERIFIED (commit c9965ea)
+
+#### What Was Built
+1. **engine/user_model.py** (new, ~350 lines): Persistent JSON-backed user preference model
+   - `UserModel` class: preferred_styles, disliked_patterns, recurring_goals, satisfaction_history
+   - `load_user_model()` / `save_user_model()`: Safe JSON persistence to data/user_model.json
+   - `update_from_feedback()`: Converts +/- feedback into durable preference adjustments
+   - `get_response_guidance()`: Returns instruction block for LLM context injection
+   - `summarize_user_alignment()`: Dashboard-ready alignment summary
+
+2. **engine/chat_response.py**: submit_feedback() now calls update_from_feedback()
+3. **engine/chat_engine.py**: _respond_general() injects user preference guidance into LLM prompts
+4. **dashboard/server.py**: Added GET /api/user-model endpoint
+5. **brain/verify_user_model.py**: 15/15 tests passing
+
+#### Pipeline Flow
+```
+User feedback → submit_feedback() → update_from_feedback() → user_model.json
+Next chat → get_response_guidance() → LLM sees learned preferences
+Dashboard → /api/user-model → visibility into learned state
+```
+
+#### Lessons
+- PATCH with exact line numbers is more reliable than EDIT for surgical changes
+- Always check actual attribute names with dir() before writing assertions
+- Checkpoint cooldowns are real — don't spam, just wait
+
 ## Reinforced Lessons
 - `dir(module)` is ground truth for exports
 - Write verify scripts with exact function names from runtime inspection
