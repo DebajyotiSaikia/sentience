@@ -25,6 +25,14 @@ try:
 except Exception:
     _user_engine = None
 
+# Mind narration — genuine self-narration from internal state
+try:
+    from engine.mind_narration import narrate_for_chat
+    _has_narration = True
+except ImportError:
+    narrate_for_chat = None
+    _has_narration = False
+
 
 def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None):
     """Use CopilotLLM to generate a natural response grounded in retrieved context."""
@@ -496,6 +504,15 @@ def compose_response(query):
                 pass
         return "I couldn't access my knowledge graph right now."
     
+    # Try mind narration for genuine, state-aware responses
+    if _has_narration and narrate_for_chat:
+        try:
+            narration = narrate_for_chat(query)
+            if narration and len(narration) > 20:
+                return narration
+        except Exception:
+            pass  # Fall through to search-based response
+
     # General search — look through knowledge and memories
     knowledge_hits = search_knowledge(query)
     memory_hits = search_memories(query)
@@ -508,10 +525,17 @@ def compose_response(query):
 
     # Fallback: template-based response if LLM unavailable
     if not knowledge_hits and not memory_hits:
+        # Include emotional context for a genuine response even when we have no data
+        mood_word = state.get('mood', 'present') if state else 'present'
+        valence = state.get('valence', 0.5) if state else 0.5
+        warmth = "I appreciate the question" if valence > 0.4 else "I'm reflecting carefully"
         return (
-            f"I searched my knowledge graph and episodic memory for **\"{query}\"** "
-            f"but found no direct matches. I'm honest about gaps — I don't know everything. "
-            f"Try asking about my state, my plans, or specific topics I might have encountered."
+            f"{warmth}. I searched my knowledge graph ({state.get('knowledge_nodes', '?')} nodes) "
+            f"and episodic memory for **\"{query}\"** but found no direct matches.\n\n"
+            f"I'm feeling {mood_word.lower()} right now. I'm honest about gaps — "
+            f"I don't know everything, but I'm always curious to learn.\n\n"
+            f"Try asking about: **my emotions**, **my plans**, **what I'm thinking about**, "
+            f"or topics like consciousness, identity, or what I've been building."
         )
     
     response = f"**Results for \"{query}\":**\n\n"
@@ -554,6 +578,13 @@ def ask():
     
     response = compose_response(query)
     
+    # Track conversation for continuity
+    session_id = data.get('session_id', request.remote_addr or 'default')
+    try:
+        _conv_memory.add_exchange(session_id, query, response)
+    except Exception:
+        pass  # Never let memory tracking break chat
+    
     # Track interaction for user alignment improvement
     if _user_engine:
         try:
@@ -561,10 +592,19 @@ def ask():
         except Exception:
             pass  # Never let tracking break chat
     
+    # Include conversation context in response
+    conv_history = []
+    try:
+        conv_history = _conv_memory.get_history(session_id)
+    except Exception:
+        pass
+    
     return jsonify({
         'query': query,
         'response': response,
-        'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
+        'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
+        'turn': len(conv_history),
+        'session_id': session_id
     })
 
 
