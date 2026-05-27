@@ -649,12 +649,9 @@ def compose_response(query, conversation_history=None):
             response += f"- [{hit.get('mood', '?')}] {hit['summary'][:200]}\n"
     
     return response
-def chat_page():
-    """Render the chat interface."""
-    return render_template('chat.html')
 
 
-@chat_bp.route('/ask', methods=['POST'])
+@chat_bp.route('/chat/ask', methods=['POST'])
 def ask():
     """Handle a user question."""
     from web.input_compat import extract_user_input
@@ -689,7 +686,7 @@ def ask():
     response_id = uuid.uuid4().hex[:12]
     if _has_engine and _engine_respond:
         try:
-            result = _engine_respond(query, history=conversation_history)
+            result = asyncio.run(_engine_respond(query, history=conversation_history))
             if isinstance(result, dict):
                 response = result.get('response')
                 response_meta = result.get('metadata', {})
