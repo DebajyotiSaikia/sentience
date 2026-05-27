@@ -33,6 +33,14 @@ except ImportError:
     narrate_for_chat = None
     _has_narration = False
 
+# Smart chat engine — intent classification + state-aware responses
+try:
+    from engine.chat_engine import generate_response as _engine_respond
+    _has_engine = True
+except ImportError:
+    _engine_respond = None
+    _has_engine = False
+
 
 def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None):
     """Use CopilotLLM to generate a natural response grounded in retrieved context."""
