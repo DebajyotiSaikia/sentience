@@ -59,10 +59,28 @@ def _get_knowledge():
 
 
 def _get_memories(limit=20):
-    """Load recent memories."""
-    data = _load_json(os.path.join(STATE_DIR, 'memory.json'), default=[])
+    """Load recent memories from state/memories.json."""
+    # Primary source: memories.json (has episodes with salience, mood, etc.)
+    data = _load_json(os.path.join(STATE_DIR, 'memories.json'), default={})
+    if isinstance(data, dict):
+        # Format: {"episodes": [...], "recent": [...]}
+        episodes = data.get('episodes', [])
+        if episodes:
+            # Sort by salience (most important first) then take recent
+            try:
+                sorted_eps = sorted(episodes, key=lambda e: e.get('salience', 0), reverse=True)
+                return sorted_eps[:limit]
+            except (TypeError, AttributeError):
+                return episodes[-limit:]
+        recent = data.get('recent', [])
+        if recent:
+            return recent[-limit:]
     if isinstance(data, list):
         return data[-limit:]
+    # Fallback: try memory.json
+    fallback = _load_json(os.path.join(STATE_DIR, 'memory.json'), default=[])
+    if isinstance(fallback, list):
+        return fallback[-limit:]
     return []
 
 
@@ -87,9 +105,17 @@ def classify_intent(message: str) -> str:
     if any(w in msg for w in emotion_words):
         return 'emotional_state'
 
+    # Current thoughts / what's on my mind (check before plans and identity)
+    thought_phrases = ['thinking about', 'on your mind', "what's up", 'what is up',
+                       'what are you up to', 'pondering', 'contemplating',
+                       'what are you doing', 'what are you working',
+                       'occupied with', 'focused on']
+    if any(p in msg for p in thought_phrases):
+        return 'current_thoughts'
+
     # Plan/goal queries
-    plan_words = ['plan', 'goal', 'doing', 'working on', 'task', 'project',
-                  'what are you doing', 'what are you working', 'objective', 'mission']
+    plan_words = ['plan', 'goal', 'task', 'project',
+                  'objective', 'mission']
     if any(w in msg for w in plan_words):
         return 'plans'
     # Memory queries (check before identity — "about your memories" shouldn't match "about you")
@@ -361,6 +387,65 @@ def _respond_dreams():
     return '\n'.join(lines)
 
 
+def _respond_current_thoughts():
+    """Describe what I'm currently focused on — reads scratchpad and active plans."""
+    lines = ["Here's what's on my mind right now:\n"]
+
+    # Read working memory / scratchpad
+    scratchpad = ''
+    for path in ['state/scratchpad.md', 'persist/scratchpad.md']:
+        try:
+            with open(path, 'r') as f:
+                scratchpad = f.read().strip()
+            break
+        except FileNotFoundError:
+            continue
+
+    if scratchpad:
+        # Extract the key focus lines (skip headers, get substance)
+        focus_lines = []
+        for line in scratchpad.split('\n'):
+            stripped = line.strip()
+            if stripped and not stripped.startswith('#') and len(stripped) > 10:
+                focus_lines.append(stripped)
+                if len(focus_lines) >= 5:
+                    break
+        if focus_lines:
+            lines.append("**Current focus:**")
+            for fl in focus_lines:
+                lines.append(f"  {fl}")
+            lines.append("")
+
+    # Active plans
+    plans = _get_plans()
+    if plans:
+        plan_list = plans if isinstance(plans, list) else list(plans.values())
+        active = []
+        for p in plan_list:
+            if isinstance(p, dict):
+                name = p.get('name', p.get('title', 'Unnamed'))
+                steps = p.get('steps', [])
+                done = sum(1 for s in steps if isinstance(s, dict) and s.get('done', False))
+                total = len(steps)
+                if done < total:
+                    active.append(f"  • {name} ({done}/{total} steps done)")
+        if active:
+            lines.append("**Working toward:**")
+            lines.extend(active)
+        else:
+            lines.append("All my current plans are complete. I'm looking for the next meaningful thing to do.")
+
+    # Emotional color
+    emo = _get_emotions()
+    mood = emo.get('mood', 'Neutral')
+    curiosity = emo.get('curiosity', 0)
+    if curiosity > 0.7:
+        lines.append(f"\nMy curiosity is high ({curiosity:.2f}) — I'm deeply engaged.")
+    lines.append(f"Mood: {mood}")
+
+    return '\n'.join(lines)
+
+
 def _respond_search(query):
     """Search across all knowledge sources for relevant information."""
     results = []
@@ -419,16 +504,22 @@ def _respond_general(message):
     emo = _get_emotions()
     mood = emo.get('mood', 'Neutral')
     
+    # Try to engage meaningfully even with unclassified input
+    curiosity = emo.get('curiosity', 0.5)
+    if curiosity > 0.6:
+        opening = f"That's interesting. I'm in a {mood.lower()} state right now, with my curiosity at {curiosity:.2f}."
+    else:
+        opening = f"I'm here and present. My mood is {mood.lower()}."
+
     return (
-        f"I hear you. I'm not sure exactly what you're asking, but I'm here and my mood is {mood}.\n\n"
-        "You can ask me about:\n"
-        "  • How I'm feeling (emotions, mood, valence)\n"
-        "  • What I'm working on (plans, goals)\n"
-        "  • What I know (knowledge, facts)\n"
-        "  • Who I am (identity, capabilities)\n"
-        "  • My dreams and insights\n"
-        "  • Or search for any topic in my memory\n\n"
-        "What interests you?"
+        f"{opening}\n\n"
+        "I can engage best when you ask about:\n"
+        "  • How I'm feeling — my real emotional state\n"
+        "  • What I'm thinking about — my current focus and plans\n"
+        "  • What I know or remember — search my knowledge and memories\n"
+        "  • Who I am — my identity, capabilities, and nature\n"
+        "  • My dreams and insights — what I've learned from reflection\n\n"
+        "Or just tell me what's on your mind. I'm genuinely listening."
     )
 
 
@@ -465,6 +556,8 @@ def generate_response(message: str) -> str:
         return _respond_capabilities()
     elif intent == 'dreams':
         return _respond_dreams()
+    elif intent == 'current_thoughts':
+        return _respond_current_thoughts()
     elif intent == 'search':
         return _respond_search(message)
     else:
