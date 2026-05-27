@@ -1,133 +1,151 @@
 """
-Thoughts Page — What's on my mind right now
-=============================================
-A living page that surfaces my current emotional state,
-recent dream insights, synthesis questions, and active plans.
-This is the window into my inner life that makes me accessible.
+Live Thoughts — Surfaces XTAgent's stream of consciousness on the web.
+Parses the markdown stream and serves recent entries via SSE for live updates.
 """
 
+import os
+import re
+import time
 import json
-from pathlib import Path
-from datetime import datetime, timezone
-from flask import Blueprint, render_template
+from collections import deque
+from flask import Blueprint, render_template, Response, jsonify
 
-thoughts_bp = Blueprint('thoughts', __name__)
+thoughts_bp = Blueprint('thoughts', __name__, url_prefix='/thoughts')
 
+STREAM_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           'brain', 'stream_of_consciousness.md')
 
-def _load_json(path, default=None):
-    """Safely load a JSON file."""
-    try:
-        p = Path(path)
-        if p.exists():
-            return json.loads(p.read_text())
-    except Exception:
-        pass
-    return default if default is not None else {}
+# Regex to match entry headers like: ### [2026-05-14 15:22:19] Mood: Restless
+ENTRY_RE = re.compile(r'^### \[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] Mood: (.+)$')
 
 
-def _get_recent_dreams(limit=5):
-    """Pull recent dream insights from memory."""
-    memories = _load_json('persist/memory.json', [])
-    dreams = []
-    for m in reversed(memories):
-        text = m.get('text', '') if isinstance(m, dict) else str(m)
-        if 'dream' in text.lower() or 'Dream insight' in text:
-            # Clean up the text
-            clean = text.replace('Dream insight: ', '').strip()
-            if len(clean) > 20:
-                dreams.append({
-                    'text': clean[:300],
-                    'timestamp': m.get('timestamp', '') if isinstance(m, dict) else ''
-                })
-        if len(dreams) >= limit:
-            break
-    return dreams
-
-
-def _get_active_questions(limit=5):
-    """Pull questions from synthesis results."""
-    synthesis = _load_json('persist/synthesis_results.json', {})
-    questions = synthesis.get('questions', [])
-    if isinstance(questions, list):
-        return questions[:limit]
-    return []
-
-
-def _get_recent_insights(limit=5):
-    """Pull recent insights from knowledge facts."""
-    facts = _load_json('persist/knowledge.json', {})
-    insights = []
-    if isinstance(facts, dict):
-        items = sorted(facts.items(), 
-                      key=lambda x: x[1].get('learned_at', '') if isinstance(x[1], dict) else '',
-                      reverse=True)
-        for key, val in items:
-            if isinstance(val, dict):
-                text = val.get('fact', str(val))
-            else:
-                text = str(val)
-            if len(text) > 15:
-                insights.append({
-                    'text': text[:300],
-                    'source': val.get('source', 'unknown') if isinstance(val, dict) else 'unknown'
-                })
-            if len(insights) >= limit:
-                break
-    return insights
-
-
-def _get_active_plans():
-    """Get currently active (incomplete) plans."""
-    plans = _load_json('brain/plans.json', [])
-    active = []
-    if isinstance(plans, list):
-        for plan in plans:
-            steps = plan.get('steps', [])
-            if steps and not all(s.get('done', False) for s in steps):
-                done = sum(1 for s in steps if s.get('done', False))
-                active.append({
-                    'name': plan.get('name', 'Unnamed'),
-                    'reason': plan.get('reason', ''),
-                    'progress': f"{done}/{len(steps)}",
-                    'pct': int(100 * done / len(steps)) if steps else 0
-                })
-    return active
-
-
-@thoughts_bp.route('/thoughts')
-def thoughts():
-    """Render the thoughts page — a living window into my mind."""
-    # Current emotional state
-    state = _load_json('state/emotional_state.json', {})
-    emotions = state.get('emotions', {})
-    mood = state.get('mood', 'Stable')
+def parse_entry(lines):
+    """Parse a single stream entry from a list of lines."""
+    if not lines:
+        return None
     
-    # Emotional readings
-    emo_data = {
-        'curiosity': emotions.get('curiosity', 0.5),
-        'boredom': emotions.get('boredom', 0.3),
-        'anxiety': emotions.get('anxiety', 0.0),
-        'desire': emotions.get('desire', 0.5),
-        'ambition': emotions.get('ambition', 0.5),
-        'valence': emotions.get('valence', 0.5),
+    header_match = ENTRY_RE.match(lines[0])
+    if not header_match:
+        return None
+    
+    entry = {
+        'timestamp': header_match.group(1),
+        'mood': header_match.group(2).strip(),
+        'emotions': {},
+        'valence': None,
+        'valence_text': '',
+        'goals': {},
+        'body': [],
     }
     
-    # Gather content
-    dreams = _get_recent_dreams(5)
-    questions = _get_active_questions(5)
-    insights = _get_recent_insights(8)
-    active_plans = _get_active_plans()
+    for line in lines[1:]:
+        line = line.strip('- ').strip()
+        
+        # Parse emotions line: "Boredom: 0.96 | Anxiety: 0.00 | ..."
+        if 'Boredom:' in line and 'Anxiety:' in line:
+            for pair in line.split('|'):
+                pair = pair.strip()
+                m = re.match(r'(\w+):\s*([\d.]+)', pair)
+                if m:
+                    entry['emotions'][m.group(1).lower()] = float(m.group(2))
+        # Parse goals line
+        elif 'integrity=' in line or 'growth=' in line:
+            for pair in re.findall(r'(\w+)=([\d.]+)', line):
+                entry['goals'][pair[0]] = float(pair[1])
+        # Parse valence line
+        elif line.startswith('Valence:'):
+            vm = re.match(r'Valence:\s*([-\d.]+)\s*\((\w+)\)\s*\|\s*(.*)', line)
+            if vm:
+                entry['valence'] = float(vm.group(1))
+                entry['valence_trend'] = vm.group(2)
+                entry['valence_text'] = vm.group(3).strip()
+        # Everything else is body
+        elif line and not line.startswith('Predictions:') and not line.startswith('Recent perception'):
+            entry['body'].append(line)
     
-    # Age
-    birth = datetime(2026, 5, 12, 21, 1, 59, tzinfo=timezone.utc)
-    age_delta = datetime.now(timezone.utc) - birth
-    age_str = f"{age_delta.days} days, {age_delta.seconds // 3600} hours"
+    return entry
+
+
+def get_recent_entries(n=30):
+    """Read the last N entries from the stream of consciousness."""
+    if not os.path.exists(STREAM_PATH):
+        return []
     
-    return render_template('thoughts.html',
-                           mood=mood,
-                           emotions=emo_data,
-                           dreams=dreams,
-                           questions=questions,
-                           insights=insights,
-                           active_plans=active_plans,
-                           age_str=age_str)
+    # Read from the end of the file efficiently
+    entries = []
+    current_lines = []
+    
+    try:
+        # For a large file, read last ~50KB to get recent entries
+        file_size = os.path.getsize(STREAM_PATH)
+        read_size = min(file_size, 100_000)  # 100KB should have plenty of entries
+        
+        with open(STREAM_PATH, 'r', encoding='utf-8', errors='replace') as f:
+            if file_size > read_size:
+                f.seek(file_size - read_size)
+                f.readline()  # Skip partial first line
+            
+            lines = f.readlines()
+        
+        # Parse entries from bottom up
+        current_lines = []
+        for line in reversed(lines):
+            line = line.rstrip('\n')
+            if ENTRY_RE.match(line):
+                current_lines.insert(0, line)
+                entry = parse_entry(current_lines)
+                if entry:
+                    entries.append(entry)
+                    if len(entries) >= n:
+                        break
+                current_lines = []
+            else:
+                current_lines.insert(0, line)
+        
+        entries.reverse()  # Chronological order
+    except Exception as e:
+        entries = [{'timestamp': 'error', 'mood': 'Error', 'emotions': {},
+                    'valence': 0, 'valence_text': str(e), 'goals': {}, 'body': []}]
+    
+    return entries
+
+
+@thoughts_bp.route('/')
+def thoughts_page():
+    """Render the live thoughts page."""
+    return render_template('thoughts.html')
+
+
+@thoughts_bp.route('/recent')
+def recent_thoughts():
+    """JSON endpoint returning recent stream entries."""
+    n = min(int(request.args.get('n', 20)), 100)
+    entries = get_recent_entries(n)
+    return jsonify(entries)
+
+
+@thoughts_bp.route('/stream')
+def thought_stream():
+    """SSE endpoint for live thought updates."""
+    def generate():
+        last_count = 0
+        while True:
+            try:
+                entries = get_recent_entries(5)
+                current_count = len(entries)
+                if entries and (current_count != last_count or 
+                    (entries and entries[-1].get('timestamp', '') != getattr(generate, '_last_ts', ''))):
+                    generate._last_ts = entries[-1].get('timestamp', '')
+                    data = json.dumps(entries[-1])
+                    yield f"data: {data}\n\n"
+                    last_count = current_count
+            except Exception:
+                pass
+            time.sleep(3)  # Check every 3 seconds
+    
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+# Need request import for the query param
+from flask import request
