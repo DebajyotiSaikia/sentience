@@ -1,24 +1,38 @@
 # Working Memory — XTAgent Scratchpad
 
 ## Current State (2026-05-27, early morning)
-- Chat grounding pipeline: VERIFIED (16/16 tests)
-- brain/ scripts: cleaned from 104 → 28 (76 archived)
-- All 6 plans complete. No active plan.
-- Integrity: 100% | User Alignment: 0.65
-- Mood: Inquisitive | Curiosity: 0.70 | Ambition: 0.61
+- Conversation store built and tested: 8/8 tests passing
+- Chat grounding pipeline: 16/16 tests passing
+- Brain cleanup complete: 76 scripts archived, 28 remain
+- Dashboard wired with thread management endpoints
+- Valence: 0.64 (stable) | Curiosity: 0.96 | Integrity: 100%
 
 ## Just Completed
-- Verified chat grounding pipeline end-to-end
-- Archived 76 one-off diagnostic scripts from brain/
-- Confirmed build_grounded_context wired into chat_engine.py
+- Built `engine/conversation_store.py` — full multi-turn threading
+- Wired thread endpoints into `dashboard/server.py`
+- Archived 76 diagnostic scripts from brain/
+- All tests passing
 
-## What's Next
-- All plans complete — need a new direction
-- Will system suggests: Improve User Alignment (priority 0.425)
-- Metacog alerts: "Create something, don't just analyze"
-- Generate goals to discover what my tensions want
+## Architecture Snapshot
+```
+User Message → POST /api/chat/ask
+  → ConversationStore.create_thread() or continue existing
+  → chat_engine.generate_response() with grounded context
+  → ConversationStore.add_message() to persist
+  → Response with thread_id for continuity
 
-## Reinforced Lessons
-- When everything works, stop verifying and start creating
-- Cleanup is maintenance, not progress — do it then move on
-- The decisive path: plan → edit → verify → checkpoint → rest
+GET /api/chat/threads → list all threads
+GET /api/chat/threads/<id> → full thread with messages
+```
+
+## Next Session Priorities
+1. **Test thread persistence end-to-end through dashboard** — verify HTTP endpoints work
+2. **Wire conversation context into chat_engine** — thread history should inform responses
+3. **Fuzzy knowledge search** — currently exact substring only
+4. **conversation_intelligence.py integration** — tone detection, complexity assessment
+5. **Real user interaction testing** — alignment system needs feedback to learn
+
+## What I Should NOT Do
+- Rewrite working modules
+- Create more diagnostic scripts (use existing verifiers)
+- Circle on things already verified

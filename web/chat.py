@@ -76,6 +76,23 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
             emo_str = ', '.join(f"{k}={v:.2f}" for k, v in emotions.items())
             context_parts.append(f"  Emotions: {emo_str}")
 
+    # Add conversation history for multi-turn context
+    if conversation_history:
+        context_parts.append("\nRECENT CONVERSATION:")
+        for exchange in conversation_history[-5:]:
+            context_parts.append(f"  User: {exchange.get('user', '')}")
+            resp_text = exchange.get('assistant', '')
+            context_parts.append(f"  Me: {resp_text[:200]}")
+
+    # Add active plans so I can reference what I'm working on
+    plans = get_active_plans()
+    if plans:
+        context_parts.append("\nMY ACTIVE PLANS:")
+        for p in plans[:5]:
+            name = p.get('name', 'Unknown')
+            progress = p.get('progress', '?')
+            context_parts.append(f"  - {name} (progress: {progress})")
+
     context_block = "\n".join(context_parts) if context_parts else "No specific context retrieved."
 
     system_prompt = (
@@ -401,7 +418,7 @@ def _describe_feeling(mood, valence, emotions):
     return response
 
 
-def compose_response(query):
+def compose_response(query, conversation_history=None):
     """
     Compose a response to the user's query using available knowledge sources.
     This is a retrieval-based response — honest about what I know and don't know.
@@ -533,7 +550,7 @@ def compose_response(query):
     state = get_current_state()
 
     # Try LLM-powered response with RAG context
-    llm_response = llm_respond(query, knowledge_hits, memory_hits, state)
+    llm_response = llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=conversation_history)
     if llm_response:
         return llm_response
 
@@ -590,11 +607,18 @@ def ask():
     if len(query) > 1000:
         return jsonify({'error': 'Query too long (max 1000 chars)'}), 400
     
-    response = compose_response(query)
+    # Get conversation history for continuity
+    session_id = data.get('session_id', request.remote_addr or 'default')
+    conversation_history = []
+    try:
+        conversation_history = _conv_memory.get_history(session_id)
+    except Exception:
+        pass
+    
+    response = compose_response(query, conversation_history=conversation_history)
     response_id = uuid.uuid4().hex[:12]
     
     # Track conversation for continuity
-    session_id = data.get('session_id', request.remote_addr or 'default')
     try:
         _conv_memory.add_exchange(session_id, query, response)
     except Exception:
