@@ -317,10 +317,23 @@ class UserAlignmentEngine:
         """Get current alignment context."""
         return get_alignment_context()
     
-    def get_guidance(self, user_message: str) -> str:
+    def get_profile(self) -> dict:
+        """Return the current alignment profile (public accessor)."""
+        return dict(self._profile)
+
+    def get_guidance(self, user_message: str = "") -> str:
         """Get response guidance for a specific message."""
         return suggest_response_guidance(user_message)
 
+# Singleton instance
+_engine_instance = None
+
+def get_alignment_engine() -> UserAlignmentEngine:
+    """Get or create the singleton alignment engine instance."""
+    global _engine_instance
+    if _engine_instance is None:
+        _engine_instance = UserAlignmentEngine()
+    return _engine_instance
 
 # Quick self-test
 if __name__ == "__main__":

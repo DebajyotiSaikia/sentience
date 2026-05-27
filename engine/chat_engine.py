@@ -344,8 +344,6 @@ def _respond_greeting(history=None):
         return f"Welcome back. {warmth}{activity} What else would you like to explore?"
 
     return f"Hello. {warmth}{activity} What's on your mind?"
-    return f"Hello. {warmth}{activity} What's on your mind?"
-    return f"Hello. {warmth}{activity} What's on your mind?"
 def _respond_emotional_state():
     """Express current emotional state genuinely, not as a data dump."""
     emo = _get_emotions()
@@ -875,26 +873,32 @@ def generate_response(query: str, *, system_context: str = "", history: list = N
     if history is None:
         history = []
 
-    # Build messages list
-    messages = []
-    if system_context:
-        messages.append({"role": "system", "content": system_context})
+    # Build prompt from history + query
+    prompt_parts = []
     for h in history[-6:]:
-        role = h.get("role", "user") if isinstance(h, dict) else "user"
-        content = h.get("content", str(h)) if isinstance(h, dict) else str(h)
-        messages.append({"role": role, "content": content})
-    messages.append({"role": "user", "content": query})
-
+        if isinstance(h, dict):
+            role = h.get("role", "user")
+            content = h.get("content", str(h))
+        else:
+            role = "user"
+            content = str(h)
+        prompt_parts.append(f"{role}: {content}")
+    prompt_parts.append(query)
     try:
         loop = asyncio.new_event_loop()
-        response = loop.run_until_complete(
-            call_llm(messages, max_tokens=1024)
-        )
+        coro = call_llm(prompt_text, system=system_context or None, max_tokens=1024)
+        response = loop.run_until_complete(coro)
         loop.close()
         if response and isinstance(response, str) and len(response.strip()) > 5:
             return response.strip()
     except Exception:
-        pass
-
+        # Clean up: ensure coroutine is closed if it wasn't awaited
+        try:
+            if 'coro' in dir() and hasattr(coro, 'close'):
+                coro.close()
+            if 'loop' in dir() and not loop.is_closed():
+                loop.close()
+        except Exception:
+            pass
     # Fallback: delegate to _respond_general which has its own LLM + template logic
     return _respond_general(query, history=history)

@@ -133,11 +133,12 @@ class CopilotLLM:
             if use_responses:
                 # OpenAI Responses API format
                 url = _RESPONSES_URL
+                url = _RESPONSES_URL
                 payload = {
                     "model": model,
                     "input": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": prompt},
+                        {"role": "system", "content": [{"type": "input_text", "text": system}]},
+                        {"role": "user", "content": [{"type": "input_text", "text": prompt}]},
                     ],
                     "max_output_tokens": max_tokens,
                     **_MODEL_OPTIONS.get(model, {}),

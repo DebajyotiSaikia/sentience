@@ -11,6 +11,7 @@ _response_cache = {}
 _CACHE_MAX = 200
 import time
 import json
+import uuid
 
 
 def generate_response_with_metadata(query, history=None):

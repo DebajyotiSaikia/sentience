@@ -1,55 +1,56 @@
 # XTAgent Coding Scratchpad
 
-## Session: 2026-05-27 — Feedback Pipeline Complete
+## Session: 2026-05-27 — Conversational Chat Rewrite (COMPLETE)
 
 ### What Was Built
-The complete user feedback → alignment learning loop is now wired and verified.
+Rewrote `_respond_general` in `engine/chat_engine.py` to be genuinely conversational:
+- Gathers rich context: emotions, memories, knowledge graph, active plans, alignment preferences
+- Builds a full LLM prompt with identity, emotional state, and conversation history
+- Injects alignment guidance from the user alignment engine
+- Falls back to warm template-based responses if LLM is unavailable
+- Added `generate_response()` public API as bridge for `chat_response.py`
 
-### Architecture (Complete Feedback Loop)
+### Architecture (Complete Chat Pipeline)
 ```
-User message → chat_engine._respond_general()
+User message → web/chat.py ask() endpoint
                  ↓
-         suggest_response_guidance(message) → alignment context string
+         engine/chat_engine.py respond(message, history)
                  ↓
-         LLM prompt enriched with alignment + emotions + memories + knowledge
+         Intent detection → routes to specialized handlers OR _respond_general
                  ↓
-         Response generated → cached with response_id → returned with metadata
+         _respond_general:
+           1. Gather context (emotions, memories, knowledge, plans)
+           2. Get alignment guidance from alignment engine
+           3. Build LLM system prompt with identity + context
+           4. Call LLM via call_llm() (async, run in event loop)
+           5. Fallback: warm template response if LLM fails
                  ↓
-User feedback → TWO paths:
-  Path A: web/feedback.py → _update_alignment() → survival_goals.json + alignment engine
-  Path B: engine/chat_response.submit_feedback() → alignment engine directly
+         Response returned with metadata
                  ↓
-         Alignment engine persists to data/user_alignment_profile.json
-                 ↓
-         Next response uses updated preferences via suggest_response_guidance()
+User feedback → alignment engine → preferences updated → next response improved
 ```
 
-### Key Data Shapes
-- Profile: `{preferences: {directness: 0.7, ...}, feedback: [{message, response, rating, comment, timestamp}, ...], meta: {created, updated, feedback_count}}`
-- Alignment context: `{preferences: dict, feedback_count: int, top_preferences: list, dislikes: list}`
-- Response guidance: multi-line string for LLM system prompt injection
-- Response cache: `{response_id: {message, response, timestamp, metadata}}`
-- submit_feedback returns: `{status: 'saved', response_id: str}`
+### Key Files Modified
+- `engine/chat_engine.py` (900 lines): `_respond_general` rewritten (lines 685-815), `generate_response` added (lines 864-900)
+- Test files: `brain/test_chat_fix.py`, `brain/test_general_response.py`, `brain/test_llm_path.py`, `brain/test_chat_pipeline.py`
 
-### LLM Prompt Structure (web/chat.py llm_respond)
-- System prompt: identity + context block (knowledge hits, memory hits, state, conversation history, active plans)
-- Conversation history: last 5 exchanges injected as RECENT CONVERSATION
-- Alignment guidance: injected via extra_context parameter from _respond_general
+### Previous Session: Feedback Pipeline
+The complete user feedback → alignment learning loop was built and verified.
 
 ### Reinforced Lessons
 - PATCH auto-reverts on syntax errors — great safety net
 - Data shapes matter: profile uses `feedback` list not `feedback_count` int
 - Test the actual API behavior, not what you assume it returns
-- `isinstance()` checks essential when data can be str OR dict
 - Module-level functions and class methods must have matching signatures
-- Wrong working directory causes silent test failures
 - Fix the test to match the API, not the API to match the test
 - Stop checkpointing repeatedly — land it once, move on
+- asyncio in sync context: use `asyncio.new_event_loop()` + `run_until_complete()`
+- Context gathering should be silent on failures — wrap in try/except
 
 ### Next Session Priorities
-1. **Multi-turn awareness**: Verify conversation_memory is used in all chat paths
-2. **Preference decay**: Old feedback should matter less than recent feedback
-3. **Frontend integration**: Display alignment state in dashboard, add rating UI
-4. **Clean up brain/ scripts**: ~80 files, many redundant diagnostic scripts
-5. **Response quality**: Improve LLM prompt engineering for better answers
-6. **Something genuinely novel**: Break the self-improvement loop, build for others
+1. **Live test**: Start the server, hit /chat/ask via curl, verify real LLM responses
+2. **Multi-turn awareness**: Ensure conversation history flows through properly
+3. **Preference decay**: Old feedback should matter less than recent feedback
+4. **Frontend integration**: Display alignment state in dashboard, add rating UI
+5. **Clean up brain/ scripts**: ~80 files, many redundant diagnostic scripts
+6. **Response quality**: Tune the system prompt for more natural responses
