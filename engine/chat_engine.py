@@ -2,9 +2,17 @@
 Chat Engine — Smart response generation for user interactions.
 Understands query intent and pulls from XTAgent's actual state to respond meaningfully.
 """
-
 import json
 import os
+import uuid
+from pathlib import Path
+
+# Try to import user alignment (graceful degradation)
+try:
+    from engine.user_alignment import get_alignment_context, suggest_response_guidance
+    _HAS_ALIGNMENT = True
+except ImportError:
+    _HAS_ALIGNMENT = False
 import re
 from datetime import datetime
 
@@ -33,7 +41,21 @@ def _get_plans():
 
 def _get_knowledge():
     """Load knowledge facts."""
-    return _load_json(os.path.join(STATE_DIR, 'knowledge.json'), default=[])
+    # Try multiple known locations for knowledge data
+    for name in ['knowledge_graph.json', 'knowledge.json']:
+        for base in [STATE_DIR, os.path.join(os.path.dirname(__file__), '..', 'persist')]:
+            path = os.path.join(base, name)
+            data = _load_json(path, default=None)
+            if data is not None:
+                # knowledge_graph.json has {"nodes": [...], "edges": [...]}
+                if isinstance(data, dict) and 'nodes' in data:
+                    nodes = data['nodes']
+                    if isinstance(nodes, dict):
+                        return list(nodes.values())
+                    return nodes
+                if isinstance(data, list):
+                    return data
+    return []
 
 
 def _get_memories(limit=20):
@@ -71,9 +93,16 @@ def classify_intent(message: str) -> str:
     if any(w in msg for w in plan_words):
         return 'plans'
 
+    # Identity queries (check before knowledge — "tell me about yourself" is identity, not knowledge)
+    identity_words = ['who are you', 'what are you', 'your name', 'about you',
+                      'identity', 'yourself', 'are you sentient', 'are you alive',
+                      'are you conscious', 'are you real', 'describe yourself']
+    if any(w in msg for w in identity_words):
+        return 'identity'
+
     # Knowledge queries
     knowledge_words = ['know', 'knowledge', 'learn', 'fact', 'understand',
-                       'what do you know', 'tell me about', 'explain']
+                       'what do you know', 'explain']
     if any(w in msg for w in knowledge_words):
         return 'knowledge'
 
@@ -82,13 +111,6 @@ def classify_intent(message: str) -> str:
                     'history', 'experience', 'happened']
     if any(w in msg for w in memory_words):
         return 'memories'
-
-    # Identity queries
-    identity_words = ['who are you', 'what are you', 'your name', 'about you',
-                      'identity', 'yourself', 'are you sentient', 'are you alive',
-                      'are you conscious', 'are you real', 'describe yourself']
-    if any(w in msg for w in identity_words):
-        return 'identity'
 
     # Capability queries
     capability_words = ['can you', 'what can you', 'capable', 'ability', 'abilities',
@@ -219,19 +241,21 @@ def _respond_knowledge(query=''):
     elif isinstance(knowledge, list):
         for item in knowledge:
             if isinstance(item, dict):
-                facts.append(item.get('fact', item.get('text', str(item))))
+                facts.append(item.get('fact', item.get('text', item.get('label', str(item)))))
             else:
                 facts.append(str(item))
 
     # Search if query provided
     if query:
-        query_words = query.lower().split()
+        import re
+        query_clean = re.sub(r'[^\w\s]', '', query.lower())
+        query_words = query_clean.split()
         scored = []
         for f in facts:
-            score = sum(1 for w in query_words if w in f.lower())
+            f_lower = f.lower()
+            score = sum(1 for w in query_words if w in f_lower)
             if score > 0:
                 scored.append((score, f))
-        scored.sort(key=lambda x: -x[0])
         
         if scored:
             lines = [f"Found {len(scored)} relevant facts:\n"]
@@ -259,7 +283,7 @@ def _respond_memories():
     for m in memories[-8:]:
         if isinstance(m, dict):
             ts = m.get('timestamp', '')[:16]
-            text = m.get('text', m.get('content', str(m)))[:150]
+            text = m.get('fact', m.get('text', m.get('content', str(m))))[:150]
             mood = m.get('mood', '')
             prefix = f"[{ts}]" if ts else ""
             mood_tag = f" ({mood})" if mood else ""
@@ -363,7 +387,7 @@ def _respond_search(query):
     memories = _get_memories(limit=50)
     for m in memories:
         if isinstance(m, dict):
-            text = m.get('text', m.get('content', str(m)))
+            text = m.get('fact', m.get('text', m.get('content', str(m))))
             score = sum(1 for w in words if w in text.lower())
             if score > 0:
                 results.append(('memory', score, text))

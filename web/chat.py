@@ -25,6 +25,12 @@ try:
 except Exception:
     _user_engine = None
 
+try:
+    from engine.user_alignment import UserAlignmentEngine
+    _alignment_engine = UserAlignmentEngine()
+except Exception:
+    _alignment_engine = None
+
 # Mind narration — genuine self-narration from internal state
 try:
     from engine.mind_narration import narrate_for_chat
@@ -585,6 +591,7 @@ def ask():
         return jsonify({'error': 'Query too long (max 1000 chars)'}), 400
     
     response = compose_response(query)
+    response_id = uuid.uuid4().hex[:12]
     
     # Track conversation for continuity
     session_id = data.get('session_id', request.remote_addr or 'default')
@@ -600,6 +607,13 @@ def ask():
         except Exception:
             pass  # Never let tracking break chat
     
+    # Track with alignment engine for feedback learning
+    if _alignment_engine:
+        try:
+            _alignment_engine.record_interaction(query, response, response_id)
+        except Exception:
+            pass
+    
     # Include conversation context in response
     conv_history = []
     try:
@@ -610,10 +624,40 @@ def ask():
     return jsonify({
         'query': query,
         'response': response,
+        'response_id': response_id,
         'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S'),
         'turn': len(conv_history),
         'session_id': session_id
     })
+
+
+@chat_bp.route('/feedback', methods=['POST'])
+def chat_feedback():
+    """Accept user feedback on a response to improve alignment."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No feedback data'}), 400
+    
+    response_id = data.get('response_id')
+    rating = data.get('rating')  # 'helpful', 'too_vague', 'too_much', 'not_aligned'
+    note = data.get('note', '')
+    
+    if not response_id or not rating:
+        return jsonify({'error': 'response_id and rating required'}), 400
+    
+    valid_ratings = ['helpful', 'too_vague', 'too_much', 'not_aligned', 'good', 'bad']
+    if rating not in valid_ratings:
+        return jsonify({'error': f'rating must be one of: {valid_ratings}'}), 400
+    
+    result = {'status': 'noted', 'response_id': response_id}
+    
+    if _alignment_engine:
+        try:
+            result = _alignment_engine.record_feedback(response_id, rating, note)
+        except Exception as e:
+            result['warning'] = f'Feedback stored but processing failed: {e}'
+    
+    return jsonify(result)
 
 
 @chat_bp.route('/suggestions')
