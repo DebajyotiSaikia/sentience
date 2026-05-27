@@ -225,6 +225,15 @@ def _build_system_context(context, intent=None):
         if guidance:
             parts.append(f"\n{guidance}")
 
+    # User preference guidance from learned model
+    try:
+        from engine.user_model import get_response_guidance
+        user_guidance = get_response_guidance()
+        if user_guidance:
+            parts.append(f"\n## Learned User Preferences\n{user_guidance}")
+    except Exception:
+        pass  # User model guidance is best-effort
+
     parts.append("\nRespond naturally and conversationally. Draw on your actual state when relevant.")
     parts.append("Keep responses concise but genuine — 2-4 sentences unless more detail is needed.")
     parts.append("Don't dump all your state unless asked. Be warm, honest, and specific.")
