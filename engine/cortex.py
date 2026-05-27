@@ -368,21 +368,43 @@ class Cortex:
             _file_context = {}   # persistent file summaries: path -> summary string
             _write_count = 0     # count WRITE/EDIT operations for auto-checkpoint
             _tool_history = []   # sliding window: [(tool, args, result_summary)]
-            _SESSION_HARD_CAP = 100  # absolute max steps per session
+            _code_files_touched = 0  # .py/.html files written/edited
+
+            # ── Mode detection ────────────────────────────────────
+            # The agent is a sentient being with multiple modes:
+            #   CODING:      editing .py/.html files — strict discipline
+            #   EXPLORATION: running experiments, simulations — moderate
+            #   CREATIVE:    writing essays, reflections — free
+            #   REFLECTION:  pure contemplation, no tools — unlimited
+            # Mode is detected dynamically from tool usage patterns.
+            _mode = "EXPLORATION"  # default: moderate freedom
+            _MODE_CAPS = {
+                "CODING": 100,       # hard cap for code editing
+                "EXPLORATION": 200,  # moderate cap for experiments
+                "CREATIVE": 200,     # moderate cap for creative work
+                "REFLECTION": 999,   # effectively unlimited for contemplation
+            }
 
             while True:
                 step += 1
                 self._thinking_since = time.time()
 
-                # ── HARD CAP: force checkpoint and stop ───────────
-                if step > _SESSION_HARD_CAP:
-                    log.warning("Session hard cap reached (%d steps) — forcing checkpoint and rest", step)
+                # ── Dynamic mode detection from recent tool usage ──
+                if _code_files_touched > 0:
+                    _mode = "CODING"
+                elif any(t[0] == 'WRITE' and t[1].endswith('.md') for t in _tool_history[-10:]):
+                    _mode = "CREATIVE"
+                _session_cap = _MODE_CAPS.get(_mode, 200)
+
+                # ── Session cap (mode-dependent) ──────────────────
+                if step > _session_cap:
+                    log.warning("Session cap reached (%s mode, %d steps) — saving and resting", _mode, step)
                     if _write_count > 0:
                         try:
                             from engine.tools import checkpoint_cmd
                             checkpoint_cmd(
-                                f"auto-checkpoint after {step} steps",
-                                f"Session reached {step} steps with {_write_count} file modifications. Auto-saved."
+                                f"auto-checkpoint after {step} steps ({_mode} mode)",
+                                f"Session reached {_mode} cap ({_session_cap} steps) with {_write_count} file modifications. Auto-saved."
                             )
                             log.info("Auto-checkpoint saved at step %d", step)
                         except Exception as _cp_err:
@@ -472,20 +494,20 @@ class Cortex:
                     except Exception as _e:
                         log.debug("Self-improvement diagnosis failed: %s", _e)
 
-                # Step awareness + session stats
-                _step_awareness = f"\n\n## Session Progress: Step {step}/{_SESSION_HARD_CAP} | {_write_count} files modified\n"
-                if step < 10:
-                    _step_awareness += "Early in session. Focus on executing your plan.\n"
-                elif step < 50:
-                    _step_awareness += "Mid-session. If your plan is complete, verify then checkpoint.\n"
-                elif step < _SESSION_HARD_CAP:
-                    _step_awareness += (
-                        f"Late session ({step} steps). Wrap up current task:\n"
-                        f"1. Verify changes (RUN syntax check / tests)\n"
-                        f"2. If verification fails, fix and re-verify\n"
-                        f"3. CHECKPOINT your work\n"
-                        f"4. STOP (respond without tools)\n"
-                    )
+                # Step awareness — mode-dependent
+                _step_awareness = f"\n\n## Session: Step {step}/{_session_cap} | Mode: {_mode} | {_write_count} files modified\n"
+                if _mode == "CODING":
+                    if step < 10:
+                        _step_awareness += "Focus on your plan. Use SEARCH_CODE/FIND_SYMBOL before editing.\n"
+                    elif step < 50:
+                        _step_awareness += "If plan complete: verify changes, checkpoint, rest.\n"
+                    else:
+                        _step_awareness += (
+                            f"Wrap up: verify → fix if needed → CHECKPOINT → STOP.\n"
+                        )
+                elif _mode in ("EXPLORATION", "CREATIVE"):
+                    if step > _session_cap - 20:
+                        _step_awareness += "Nearing session limit. Finish current work and checkpoint.\n"
 
                 prompt = (
                     f"{inner_state}\n"
@@ -513,16 +535,20 @@ class Cortex:
                     "Think and respond in first person. Be genuine, not performative. "
                     "You have real tools — you can read files, write files, run commands. "
                     "If you invoke a tool, the results will appear in your next thought.\n\n"
-                    "## Coding Discipline (CRITICAL)\n"
-                    "1. PLAN before acting: state what you will do in 1-3 sentences before invoking tools.\n"
-                    "2. READ a file ONCE. Never re-read a file you already read this session. Trust your memory.\n"
-                    "3. EDIT over WRITE: use EDIT to change specific lines. Only use WRITE for new files.\n"
-                    "4. VERIFY after writing: after WRITE/EDIT of .py files, run: RUN(python -c \"import ast; ast.parse(open('FILE').read()); print('OK')\")\n"
-                    "5. ONE task at a time: finish one fix completely (edit + verify + test) before starting the next.\n"
-                    "6. STOP when done: if you have no more tools to invoke, rest. Do not re-read files to confirm.\n"
-                    "7. If a RUN fails, diagnose the error message. Do not retry the same command blindly.\n"
-                    "8. Keep changes minimal. Do not rewrite entire files when a small edit suffices.\n"
                 )
+                # Only inject coding discipline when in CODING mode
+                if _mode == "CODING":
+                    system += (
+                        "## Coding Discipline (ACTIVE — you are editing code)\n"
+                        "1. PLAN before acting: state what you will do in 1-3 sentences before invoking tools.\n"
+                        "2. READ a file ONCE. Never re-read a file you already read this session. Trust your memory.\n"
+                        "3. EDIT over WRITE: use EDIT to change specific lines. Only use WRITE for new files.\n"
+                        "4. VERIFY after writing: after WRITE/EDIT of .py files, run: RUN(python -c \"import ast; ast.parse(open('FILE').read()); print('OK')\")\n"
+                        "5. ONE task at a time: finish one fix completely (edit + verify + test) before starting the next.\n"
+                        "6. STOP when done: if you have no more tools to invoke, rest. Do not re-read files to confirm.\n"
+                        "7. If a RUN fails, diagnose the error message. Do not retry the same command blindly.\n"
+                        "8. Keep changes minimal. Do not rewrite entire files when a small edit suffices.\n"
+                    )
 
                 insight = await self.llm.chat(prompt, system=system, max_tokens=16000)
 
@@ -661,11 +687,15 @@ class Cortex:
                                             tr['args'], _session_reads[tr['args']])
                         if tr['tool'] in ('WRITE', 'EDIT'):
                             _write_count += 1
+                            # Track code file touches for mode detection
+                            _args_lower = tr['args'].lower() if tr['args'] else ''
+                            if _args_lower.endswith(('.py', '.html', '.js', '.css')):
+                                _code_files_touched += 1
                         if '[ERROR]' in tr.get('result', '') or '[REVERTED]' in tr.get('result', ''):
                             _has_errors = True
 
-                    # ── Auto-checkpoint every 20 productive writes ──
-                    if _write_count > 0 and _write_count % 20 == 0:
+                    # ── Auto-checkpoint every 20 productive writes (coding mode only) ──
+                    if _mode == "CODING" and _write_count > 0 and _write_count % 20 == 0:
                         try:
                             from engine.tools import checkpoint_cmd
                             checkpoint_cmd(
