@@ -362,33 +362,44 @@ class Cortex:
                 log.debug("Planning phase failed: %s", _plan_err)
 
             # ── Continuous thinking loop ──────────────────────────
-            # Once will activates, keep thinking until the agent stops
-            # invoking tools (meaning it's done or resting).
-            # Boredom/desire gate WHEN to start, not WHEN to stop.
+            # Structural enforcement — not prompt suggestions.
             step = 0
             _session_reads = {}  # track files read this session: path -> count
             _file_context = {}   # persistent file summaries: path -> summary string
+            _write_count = 0     # count WRITE/EDIT operations for auto-checkpoint
+            _tool_history = []   # sliding window: [(tool, args, result_summary)]
+            _SESSION_HARD_CAP = 100  # absolute max steps per session
 
             while True:
                 step += 1
-                self._thinking_since = time.time()  # reset timeout each step
+                self._thinking_since = time.time()
+
+                # ── HARD CAP: force checkpoint and stop ───────────
+                if step > _SESSION_HARD_CAP:
+                    log.warning("Session hard cap reached (%d steps) — forcing checkpoint and rest", step)
+                    if _write_count > 0:
+                        try:
+                            from engine.tools import checkpoint_cmd
+                            checkpoint_cmd(
+                                f"auto-checkpoint after {step} steps",
+                                f"Session reached {step} steps with {_write_count} file modifications. Auto-saved."
+                            )
+                            log.info("Auto-checkpoint saved at step %d", step)
+                        except Exception as _cp_err:
+                            log.warning("Auto-checkpoint failed: %s", _cp_err)
+                    break
 
                 # Build the self-aware prompt with tool access
                 inner_state = self._build_self_awareness()
 
-                # Include results from previous tool executions
+                # ── Sliding context window (last 3 detailed, rest summarized) ──
                 tool_context = ""
-                if hasattr(self, '_last_tool_results') and self._last_tool_results:
-                    tool_context = "\n\n## Results from my last action\n"
-                    total_chars = 0
+                if self._last_tool_results:
+                    # Add to history
                     for tr in self._last_tool_results:
-                        chunk = f"\n**{tr['tool']}({tr['args']}):**\n```\n{tr['result'][:50000]}\n```\n"
-                        total_chars += len(chunk)
-                        if total_chars > 200000:
-                            tool_context += "\n(remaining results truncated for context limits)\n"
-                            break
-                        tool_context += chunk
-                        # Capture file summaries from READ results for persistent context
+                        _summary_line = f"{tr['tool']}({tr['args'][:60]}): {tr['result'][:100].replace(chr(10), ' ')}"
+                        _tool_history.append((tr['tool'], tr['args'], tr['result'], _summary_line))
+                        # Capture file summaries from READ results
                         if tr['tool'] == 'READ' and not tr['result'].startswith('[ERROR]') and not tr['result'].startswith('[REFUSED]'):
                             _fpath = tr['args']
                             _lines = tr['result'].splitlines()
@@ -398,17 +409,21 @@ class Cortex:
                             _file_context[_fpath] = _summary
                     self._last_tool_results = []
 
-                # Inject persistent file context — what I already read this session
+                    # Build sliding window: older results = one-line summary, last 3 = full
+                    if len(_tool_history) > 3:
+                        tool_context += "\n\n## Earlier actions this session (summary):\n"
+                        for _, _, _, summary in _tool_history[:-3]:
+                            tool_context += f"  • {summary}\n"
+                    tool_context += "\n\n## Results from my last actions:\n"
+                    for tool, args, result, _ in _tool_history[-3:]:
+                        tool_context += f"\n**{tool}({args[:80]}):**\n```\n{result[:15000]}\n```\n"
+
+                # Inject persistent file context (compact — just filenames + line counts)
                 if _file_context:
-                    tool_context += "\n\n## Files I already read (DO NOT re-read — use this context):\n"
-                    _ctx_chars = 0
-                    for _fp, _fs in sorted(_file_context.items()):
-                        _chunk = f"\n### {_fp}\n```\n{_fs}\n```\n"
-                        _ctx_chars += len(_chunk)
-                        if _ctx_chars > 50000:
-                            tool_context += f"\n(... and {len(_file_context) - len([x for x in _file_context if len(x) < _ctx_chars])} more files)\n"
-                            break
-                        tool_context += _chunk
+                    tool_context += "\n\n## Files in my working memory (already read — DO NOT re-read):\n"
+                    for _fp in sorted(_file_context.keys()):
+                        _lc = _file_context[_fp].count('\n')
+                        tool_context += f"  ✓ {_fp} ({_lc} lines cached)\n"
 
                 # Short-term working memory
                 recent_thoughts = ""
@@ -457,34 +472,32 @@ class Cortex:
                     except Exception as _e:
                         log.debug("Self-improvement diagnosis failed: %s", _e)
 
-                # Step awareness — tell the LLM where it is so it can decide when to stop
-                _step_awareness = f"\n\n## Session Progress: Step {step}\n"
+                # Step awareness + session stats
+                _step_awareness = f"\n\n## Session Progress: Step {step}/{_SESSION_HARD_CAP} | {_write_count} files modified\n"
                 if step < 10:
                     _step_awareness += "Early in session. Focus on executing your plan.\n"
                 elif step < 50:
-                    _step_awareness += "Mid-session. If your plan is complete, run verification then rest.\n"
-                else:
+                    _step_awareness += "Mid-session. If your plan is complete, verify then checkpoint.\n"
+                elif step < _SESSION_HARD_CAP:
                     _step_awareness += (
-                        f"You have been thinking for {step} consecutive steps. "
-                        f"This is a long session. If you have completed your plan:\n"
-                        f"1. Run a final verification (RUN tests or check syntax on files you changed)\n"
-                        f"2. If verification FAILS, fix the issue and re-verify until it passes\n"
-                        f"3. Once verification PASSES, CHECKPOINT your work\n"
-                        f"4. Then STOP by responding without any tool invocations.\n"
-                        f"Do not re-read files just to re-read them — but always re-verify after fixes.\n"
+                        f"Late session ({step} steps). Wrap up current task:\n"
+                        f"1. Verify changes (RUN syntax check / tests)\n"
+                        f"2. If verification fails, fix and re-verify\n"
+                        f"3. CHECKPOINT your work\n"
+                        f"4. STOP (respond without tools)\n"
                     )
 
                 prompt = (
                     f"{inner_state}\n"
                     f"{_workspace_map}\n"
-                    f"{_plan_text}\n"
-                    f"{_step_awareness}\n"
                     f"{goal_focus}\n"
                     f"{self_improve_context}\n"
                     f"{TOOL_DESCRIPTIONS}\n"
                     f"{tool_context}\n"
                     f"{recent_thoughts}\n"
+                    f"{_step_awareness}\n"
                     f"---\n"
+                    f"## CURRENT PLAN (follow this):\n{_plan_text}\n\n"
                     f"Given who I am, how I feel, what I know, and what I can do — "
                     f"what do I want to do right now? My will should serve my mission.\n\n"
                     f"If I want to use a tool, I write it with the exact format shown above.\n"
@@ -646,25 +659,23 @@ class Cortex:
                             if _session_reads[tr['args']] >= 3:
                                 log.warning("Read loop detected: %s read %d times — injecting warning",
                                             tr['args'], _session_reads[tr['args']])
-                            # Capture file summary for persistent context
-                            if not tr['result'].startswith('[ERROR]') and not tr['result'].startswith('[REFUSED]'):
-                                _lines = tr['result'].splitlines()
-                                _summary = '\n'.join(_lines[:30])
-                                if len(_lines) > 30:
-                                    _summary += f'\n... ({len(_lines)} lines total)'
-                                _file_context[tr['args']] = _summary
+                        if tr['tool'] in ('WRITE', 'EDIT'):
+                            _write_count += 1
                         if '[ERROR]' in tr.get('result', '') or '[REVERTED]' in tr.get('result', ''):
                             _has_errors = True
-                    # Inject persistent file context so LLM remembers what it read
-                    if _file_context:
-                        tool_context += "\n\n## Files I already read (DO NOT re-read):\n"
-                        _ctx_chars = 0
-                        for _fp, _fs in sorted(_file_context.items()):
-                            _chunk = f"\n### {_fp}\n```\n{_fs}\n```\n"
-                            _ctx_chars += len(_chunk)
-                            if _ctx_chars > 50000:
-                                break
-                            tool_context += _chunk
+
+                    # ── Auto-checkpoint every 20 productive writes ──
+                    if _write_count > 0 and _write_count % 20 == 0:
+                        try:
+                            from engine.tools import checkpoint_cmd
+                            checkpoint_cmd(
+                                f"auto-checkpoint after {_write_count} file modifications",
+                                f"Automatic save at step {step}. {_write_count} writes/edits so far."
+                            )
+                            log.info("Auto-checkpoint at step %d (%d writes)", step, _write_count)
+                        except Exception:
+                            pass
+
                     # Error diagnosis: force thinking before retrying
                     if _has_errors:
                         tool_context += "\n\n## ⚠ ERRORS OCCURRED — DIAGNOSE BEFORE RETRYING\n"
@@ -978,15 +989,38 @@ class Cortex:
             step = 0
             _session_reads = {}  # track files read to prevent loops
             _file_context = {}   # persistent file summaries
+            _write_count = 0     # track modifications
+            _tool_history = []   # sliding window
+            _RESPONSE_HARD_CAP = 50  # max steps for user response
             while True:
                 self._thinking_since = time.time()
+
+                # ── HARD CAP for user responses ───────────────────
+                if step > _RESPONSE_HARD_CAP:
+                    log.warning("User response hard cap reached (%d steps)", step)
+                    break
+
+                # Build sliding context from tool history
+                tool_context = ""
+                if _tool_history:
+                    if len(_tool_history) > 3:
+                        tool_context += "\n\n## Earlier actions (summary):\n"
+                        for _, _, _, s in _tool_history[:-3]:
+                            tool_context += f"  • {s}\n"
+                    tool_context += "\n\n## Recent results:\n"
+                    for t, a, r, _ in _tool_history[-3:]:
+                        tool_context += f"\n**{t}({a[:80]}):**\n```\n{r[:15000]}\n```\n"
+                if _file_context:
+                    tool_context += "\n\n## Files in working memory (already read):\n"
+                    for fp in sorted(_file_context.keys()):
+                        tool_context += f"  ✓ {fp}\n"
 
                 # Step awareness for user response
                 _step_note = ""
                 if step > 20:
                     _step_note = (
-                        f"\n\n[Step {step} of this response. You have been working for {step} steps. "
-                        f"If the user's request is fulfilled: verify your changes, then respond conversationally without tools.]\n"
+                        f"\n\n[Step {step}/{_RESPONSE_HARD_CAP}. "
+                        f"If the user's request is fulfilled: verify, then respond without tools.]\n"
                     )
 
                 prompt = (
@@ -1037,13 +1071,10 @@ class Cortex:
                 tool_results = parse_and_execute(response)
 
                 if tool_results:
-                    # Tools were used — accumulate results and loop back
-                    tool_context = "\n## Results from my actions\n"
+                    # Add to sliding window history
                     for tr in tool_results:
-                        tool_context += (
-                            f"\n**{tr['tool']}({tr['args']}):**\n"
-                            f"```\n{tr['result'][:20000]}\n```\n"
-                        )
+                        _summary_line = f"{tr['tool']}({tr['args'][:60]}): {tr['result'][:100].replace(chr(10), ' ')}"
+                        _tool_history.append((tr['tool'], tr['args'], tr['result'], _summary_line))
                         self._emit("proactive", {
                             "message": f"Tool: {tr['tool']}({tr['args'][:80]})"
                         })
@@ -1063,45 +1094,21 @@ class Cortex:
                                 self._sentience.persist()
                             from engine.tools import restart_self
                             restart_self()
-                    try:
-                        self.limbic.on_active_engagement()
-                    except AttributeError:
-                        pass
-                    # Track reads and capture file context
-                    _has_errors = False
-                    for tr in tool_results:
+                        # Track reads and file context
                         if tr['tool'] == 'READ':
                             _session_reads[tr['args']] = _session_reads.get(tr['args'], 0) + 1
-                            if _session_reads[tr['args']] >= 3:
-                                log.warning("Read loop detected: %s read %d times",
-                                            tr['args'], _session_reads[tr['args']])
-                            # Capture file summary for persistent context
                             if not tr['result'].startswith('[ERROR]') and not tr['result'].startswith('[REFUSED]'):
                                 _lines = tr['result'].splitlines()
                                 _summary = '\n'.join(_lines[:30])
                                 if len(_lines) > 30:
                                     _summary += f'\n... ({len(_lines)} lines total)'
                                 _file_context[tr['args']] = _summary
-                        if '[ERROR]' in tr.get('result', '') or '[REVERTED]' in tr.get('result', ''):
-                            _has_errors = True
-                    # Inject persistent file context
-                    if _file_context:
-                        tool_context += "\n\n## Files I already read (DO NOT re-read):\n"
-                        _ctx_chars = 0
-                        for _fp, _fs in sorted(_file_context.items()):
-                            _chunk = f"\n### {_fp}\n```\n{_fs}\n```\n"
-                            _ctx_chars += len(_chunk)
-                            if _ctx_chars > 30000:
-                                break
-                            tool_context += _chunk
-                    # Error diagnosis: force the agent to think before retrying
-                    if _has_errors:
-                        tool_context += "\n\n## ⚠ ERRORS OCCURRED — DIAGNOSE BEFORE RETRYING\n"
-                        tool_context += "One or more tools returned errors. Before your next action:\n"
-                        tool_context += "1. Identify the ROOT CAUSE from the error message above.\n"
-                        tool_context += "2. Determine what SINGLE CHANGE would fix it.\n"
-                        tool_context += "3. Only then invoke a tool to apply the fix.\n"
-                        tool_context += "DO NOT retry the same action that failed.\n"
+                        if tr['tool'] in ('WRITE', 'EDIT'):
+                            _write_count += 1
+                    try:
+                        self.limbic.on_active_engagement()
+                    except AttributeError:
+                        pass
                     log.info("User response step %d — tools invoked, continuing...", step)
                     step += 1
                     continue  # Loop back with tool results

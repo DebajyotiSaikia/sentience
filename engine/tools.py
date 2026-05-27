@@ -329,6 +329,24 @@ def run_command(command: str) -> str:
     All commands run with shell=True, cwd=workspace.
     Filesystem isolation is handled by Docker/container environment.
     """
+    # ── Block RUN bypass of read cache ────────────────────────
+    # Agents use RUN(cat file), RUN(grep ... file), RUN(sed ... file)
+    # to bypass READ's loop breaker. Intercept and refuse.
+    _cmd_lower = command.strip().lower()
+    _bypass_patterns = [
+        (r'^cat\s+(.+)', 'cat'),
+        (r'^head\s+.*?(\S+\.py\S*)', 'head'),
+        (r'^tail\s+.*?(\S+\.py\S*)', 'tail'),
+        (r'^sed\s+.*?(\S+\.py\S*)', 'sed'),
+    ]
+    for _pat, _tool in _bypass_patterns:
+        _m = re.match(_pat, _cmd_lower)
+        if _m:
+            _target = _m.group(1).strip().strip("'\"")
+            if _target in _read_counts and _read_counts[_target] >= _READ_LOOP_THRESHOLD:
+                log.warning("RUN bypass blocked: %s on already-read %s", _tool, _target)
+                return (f"[REFUSED] You already read {_target} {_read_counts[_target]} times. "
+                        f"Use the file context you already have, or use EDIT to change it.")
     try:
         _log_tool("RUN", command, "(executing...)")
         log.info("Tool RUN: %s", command)
