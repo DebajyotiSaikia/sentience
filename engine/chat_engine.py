@@ -691,6 +691,26 @@ def _respond_general(message, history=None):
         ctx = build_grounded_context(message)
         parts = []
 
+        # Check alignment preferences for response style
+        style_hint = ""
+        if hasattr(ctx, 'user_alignment') and ctx.user_alignment:
+            ua = ctx.user_alignment
+            if isinstance(ua, dict):
+                style_hint = ua.get('preferred_style', '')
+                # If user prefers concise responses, keep it tighter
+                if style_hint == 'concise':
+                    max_items = 2
+                    max_text_len = 120
+                else:
+                    max_items = 3
+                    max_text_len = 200
+            else:
+                max_items = 3
+                max_text_len = 200
+        else:
+            max_items = 3
+            max_text_len = 200
+
         # Lead with something personal
         mood_line = f"I'm in a {ctx.mood.lower()} state"
         if ctx.emotional_summary:
@@ -700,22 +720,22 @@ def _respond_general(message, history=None):
         # Show relevant memories
         if ctx.relevant_memories:
             parts.append("\nHere's what resonates from my experience:")
-            for m in ctx.relevant_memories[:3]:
+            for m in ctx.relevant_memories[:max_items]:
                 if isinstance(m, str):
                     text = m
                 else:
                     text = m.get('text', str(m))
-                parts.append(f"  • {text[:200]}")
+                parts.append(f"  • {text[:max_text_len]}")
 
         # Show relevant knowledge
         if ctx.relevant_knowledge:
             parts.append("\nFrom what I know:")
-            for k in ctx.relevant_knowledge[:3]:
+            for k in ctx.relevant_knowledge[:max_items]:
                 if isinstance(k, str):
                     text = k
                 else:
                     text = k.get('text', str(k))
-                parts.append(f"  • {text[:200]}")
+                parts.append(f"  • {text[:max_text_len]}")
 
         # Show current focus
         if ctx.active_plans:
@@ -742,7 +762,6 @@ def _respond_general(message, history=None):
         "I'm here and present. I don't have specific grounding data for that topic right now, "
         "but I'm curious to explore it with you. What aspect interests you most?"
     )
-
 def generate_response(message, history=None):
     """
     Main entry point. Takes a user message and returns a meaningful response

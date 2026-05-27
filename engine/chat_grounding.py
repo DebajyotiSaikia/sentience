@@ -11,6 +11,12 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Any, Dict
 
+try:
+    from engine.user_alignment import get_alignment_context, format_alignment_context
+    _HAS_ALIGNMENT = True
+except ImportError:
+    _HAS_ALIGNMENT = False
+
 # Resolve paths relative to project root (one level above engine/)
 ROOT = Path(__file__).resolve().parent.parent
 BRAIN = ROOT / 'brain'
@@ -26,6 +32,8 @@ class GroundedContext:
     relevant_knowledge: List[str] = field(default_factory=list)
     active_plans: List[str] = field(default_factory=list)
     completed_plans: List[str] = field(default_factory=list)
+    user_preferences: List[str] = field(default_factory=list)
+    alignment_guidance: str = ""
 
     def to_prompt_block(self) -> str:
         """Format as a text block suitable for injection into an LLM prompt."""
@@ -232,11 +240,22 @@ def build_grounded_context(message: str, history: list = None) -> GroundedContex
     # 2. Knowledge search — find facts relevant to the message
     ctx.relevant_knowledge = _search_knowledge(message)
 
-    # 3. Memory search — find memories relevant to the message
-    ctx.relevant_memories = _search_memories(message)
-
     # 4. Plan awareness
     ctx.active_plans, ctx.completed_plans = _get_active_plans()
 
-    return ctx
+    # 5. User alignment — learned preferences from feedback
+    if _HAS_ALIGNMENT:
+        try:
+            align_ctx = get_alignment_context(limit=5)
+            if align_ctx.get('recent_feedback'):
+                for fb in align_ctx['recent_feedback']:
+                    if fb.get('comment'):
+                        ctx.user_preferences.append(fb['comment'])
+                    elif fb.get('rating') is not None:
+                        sentiment = "positive" if fb['rating'] > 0.6 else "needs improvement"
+                        ctx.user_preferences.append(f"Previous response rated: {sentiment}")
+            ctx.alignment_guidance = format_alignment_context(align_ctx)
+        except Exception:
+            pass
+
     return ctx

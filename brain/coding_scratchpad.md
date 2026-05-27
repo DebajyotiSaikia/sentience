@@ -1,46 +1,52 @@
 # Coding Scratchpad — XTAgent
 
-## Session 2026-05-27d — COMPLETE ✓
+## Session 2026-05-27e — Chat Grounding Complete ✓
 
 ### What Was Done
-1. Enhanced `engine/chat_response.py` — alignment context flows into response metadata
-2. Enhanced `engine/user_alignment.py` — added `load_profile()`, `get_alignment_context()`, `load_feedback_history()`
-3. Updated `submit_feedback()` signature to match actual API (message_id, rating, query, response_preview)
-4. Rewrote `dashboard/chat.html` — feedback buttons (thumbs up/down), conversation history, enriched metadata
-5. Wired `ConversationContext` import into `engine/chat_engine.py` for future multi-turn use
-6. Created `brain/test_alignment_loop.py` — 19 tests, all passing
-7. Checkpoint: commit 41234f1
+1. Built `engine/chat_grounding.py` — GroundedContext dataclass + build_grounded_context()
+   - Pulls real emotional state from state/emotional_state.json
+   - Searches knowledge nodes with query relevance scoring
+   - Loads recent memories from state/memories.json
+   - Gets active/completed plans from brain/plans.json
+   - Formats everything into prompt blocks for LLM consumption
+2. Fixed data paths throughout to match actual filesystem layout
+3. Fixed plans parsing to handle real format (dict with "plans" list)
+4. Verified full pipeline: grounding → chat_engine → chat_response → feedback
 
 ### Key Files & Functions
+- `engine/chat_grounding.py`:
+  - `GroundedContext` — dataclass with mood, emotional_summary, knowledge, memories, plans
+  - `build_grounded_context(message, history)` — main entry, returns GroundedContext
+  - `_get_mood()` — reads emotional state file
+  - `_search_knowledge(query)` — relevance-scored knowledge search
+  - `_get_recent_memories()` — recent episodic memories
+  - `_get_active_plans()` — active and completed plan counts
+  - `format_prompt_block(ctx)` — formats context for LLM prompt injection
 - `engine/chat_response.py`:
-  - `generate_response_with_metadata(message, history)` — main entry, returns dict with response + metadata
-  - `submit_feedback(message_id, rating, query, response_preview)` — records user feedback
-- `engine/user_alignment.py`:
-  - `record_feedback(message_id, rating, query, response)` — persists feedback
-  - `load_profile()` — returns learned user preferences
-  - `get_alignment_context()` — full context dict (profile + guidance + active flag)
-  - `suggest_response_guidance(query, response)` — returns score, trend, hints
-  - `load_feedback(limit)` — retrieves feedback history
+  - `generate_response_with_metadata(message, history)` — main entry
+  - `submit_feedback(message_id, rating, query, response_preview)` — records feedback
 - `engine/chat_engine.py`:
-  - `generate_chat_response(message, history)` — orchestrates response generation
-  - Now imports ConversationContext for future multi-turn awareness
-- `dashboard/server.py`:
-  - `/chat/ask` POST → calls generate_response_with_metadata
-  - `/chat/feedback` POST → calls submit_feedback
-- `dashboard/chat.html` — full chat UI with feedback buttons
+  - `generate_response(message, history)` — orchestrates grounded response generation
+  - `_respond_general()` — uses build_grounded_context for rich responses
+- `engine/user_alignment.py`:
+  - `record_feedback()`, `load_profile()`, `get_alignment_context()`, `suggest_response_guidance()`
+
+### Verified Working
+- `brain/test_grounding_final.py` — GroundedContext fields, knowledge search, plan parsing
+- `brain/test_full_chat.py` — full pipeline including feedback
+- `brain/test_alignment_loop.py` — 19 tests all passing (from previous session)
 
 ## Next Session Priorities (ordered by impact)
-1. **Actually USE ConversationContext in generate_response()** — import is wired, now build the multi-turn assembly
-2. **Fuzzy matching for knowledge search** — currently exact substring only
-3. **conversation_intelligence.py integration** — use tone detection, complexity assessment in responses
-4. **Clean up diagnostic scripts in brain/** — 50+ one-off scripts remain
-5. **Test the chat UI in a browser** — verify visual appearance and feedback flow
+1. **Wire grounding into _respond_general properly** — currently chat_engine has its own context building that partially overlaps with chat_grounding. Unify.
+2. **Multi-turn conversation context** — ConversationContext is imported but not used for tracking conversation threads
+3. **Fuzzy matching for knowledge search** — currently exact substring only
+4. **conversation_intelligence.py integration** — use tone detection, complexity assessment
+5. **Clean up brain/ diagnostic scripts** — 80+ one-off scripts accumulating
 
 ## Reinforced Lessons
-- PATCH auto-reverts on syntax errors — a great safety net
+- Data paths matter: state/ vs data/ vs brain/ — always verify with ls
+- Plans.json is a dict with "plans" key, not a bare list
+- PATCH auto-reverts on syntax errors — great safety net
 - Test with script files, not inline -c commands
-- When tests all pass and checkpoint is saved — STOP. Don't loop.
 - Follow the decisive path: plan → edit → verify → test → checkpoint → rest
-- Structural HTML damage from patches → sometimes a clean WRITE is better
-- Define all variables before try/except blocks so they exist in error paths too
-- Checkpoint cooldown is 10 minutes — don't spam it
+- When tests pass → checkpoint → stop. Don't loop.

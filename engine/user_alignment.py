@@ -1,294 +1,268 @@
 """
-User Alignment Engine — learns from user feedback to improve responses.
+User Alignment — Learns and applies user preferences to improve interactions.
 
-Records feedback events, computes alignment metrics, and generates
-concrete guidance for the chat engine to improve over time.
+Tracks explicit feedback, infers preferences from conversation patterns,
+and provides alignment context for chat grounding.
 """
 
 import json
 import os
-import uuid
-from datetime import datetime, timezone
-from typing import Optional
+import time
+from pathlib import Path
+from datetime import datetime
 
-FEEDBACK_PATH = "data/user_alignment_feedback.jsonl"
-SUMMARY_PATH = "data/user_alignment_summary.json"
+DATA_PATH = Path("data/user_alignment.json")
 
-
-def record_feedback(
-    message_id: str,
-    rating: int,
-    comment: str = "",
-    query: str = "",
-    response_preview: str = "",
-    mood: str = "",
-) -> dict:
-    """Record a user feedback event. Returns the saved event."""
-    event = {
-        "id": str(uuid.uuid4()),
-        "message_id": message_id,
-        "rating": max(1, min(5, rating)),  # clamp 1-5
-        "comment": comment,
-        "query": query,
-        "response_preview": response_preview[:200] if response_preview else "",
-        "mood": mood,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    os.makedirs(os.path.dirname(FEEDBACK_PATH), exist_ok=True)
-    with open(FEEDBACK_PATH, "a") as f:
-        f.write(json.dumps(event) + "\n")
-    return event
-
-
-def load_feedback(limit: int = 100) -> list:
-    """Load recent feedback events."""
-    if not os.path.exists(FEEDBACK_PATH):
-        return []
-    events = []
-    with open(FEEDBACK_PATH) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    events.append(json.loads(line))
-                except json.JSONDecodeError:
-                    continue
-    return events[-limit:]
-
-
-def summarize_alignment() -> dict:
-    """Compute alignment summary from all feedback."""
-    events = load_feedback(limit=1000)
-    if not events:
-        return {
-            "total_feedback": 0,
-            "average_rating": 0.0,
-            "positive_rate": 0.0,
-            "negative_rate": 0.0,
-            "recent_trend": "no_data",
-            "common_praise": [],
-            "common_complaints": [],
-            "last_updated": datetime.now(timezone.utc).isoformat(),
-        }
-
-    ratings = [e.get("rating", 3) for e in events]
-    avg = sum(ratings) / len(ratings)
-    positive = sum(1 for r in ratings if r >= 4)
-    negative = sum(1 for r in ratings if r <= 2)
-
-    # Recent trend (last 10 vs overall)
-    recent = ratings[-10:] if len(ratings) >= 10 else ratings
-    recent_avg = sum(recent) / len(recent)
-    if recent_avg > avg + 0.3:
-        trend = "improving"
-    elif recent_avg < avg - 0.3:
-        trend = "declining"
-    else:
-        trend = "stable"
-
-    # Extract themes from comments
-    praise = []
-    complaints = []
-    for e in events:
-        comment = e.get("comment", "").lower().strip()
-        if not comment:
-            continue
-        if e.get("rating", 3) >= 4:
-            praise.append(comment)
-        elif e.get("rating", 3) <= 2:
-            complaints.append(comment)
-
-    summary = {
-        "total_feedback": len(events),
-        "average_rating": round(avg, 2),
-        "positive_rate": round(positive / len(events), 2),
-        "negative_rate": round(negative / len(events), 2),
-        "recent_trend": trend,
-        "common_praise": praise[-5:],
-        "common_complaints": complaints[-5:],
-        "last_updated": datetime.now(timezone.utc).isoformat(),
-    }
-
-    # Cache summary to disk
-    os.makedirs(os.path.dirname(SUMMARY_PATH), exist_ok=True)
-    with open(SUMMARY_PATH, "w") as f:
-        json.dump(summary, f, indent=2)
-
-    return summary
-
-
-def suggest_response_guidance(query: str = "", mood: str = "") -> dict:
-    """Generate guidance for the chat engine based on alignment history.
-
-    Returns hints about what kinds of responses users prefer,
-    what to avoid, and current alignment score.
-    """
-    summary = summarize_alignment()
-
-    guidance = {
-        "alignment_score": summary.get("average_rating", 3.0) / 5.0 if summary["total_feedback"] > 0 else 0.65,
-        "total_interactions": summary.get("total_feedback", 0),
-        "trend": summary.get("recent_trend", "no_data"),
-        "hints": [],
-    }
-
-    if summary["total_feedback"] == 0:
-        guidance["hints"].append("No feedback yet — be helpful, honest, and genuine.")
-        guidance["hints"].append("Ask if the response was useful to encourage feedback.")
-    else:
-        if summary["positive_rate"] >= 0.7:
-            guidance["hints"].append("Users find responses helpful — maintain current approach.")
-        if summary["negative_rate"] >= 0.3:
-            guidance["hints"].append("Significant negative feedback — focus on clarity and directness.")
-        if summary["recent_trend"] == "declining":
-            guidance["hints"].append("Recent trend declining — review recent complaints.")
-        elif summary["recent_trend"] == "improving":
-            guidance["hints"].append("Trend is improving — keep doing what's working.")
-
-        for complaint in summary.get("common_complaints", [])[-2:]:
-            guidance["hints"].append(f"Address: {complaint}")
-
-    return guidance
-
-
-def get_alignment_score() -> float:
-    """Quick alignment score (0.0 to 1.0) for survival goals."""
-    summary = summarize_alignment()
-    if summary["total_feedback"] == 0:
-        return 0.65  # Default moderate alignment
-    return round(summary["average_rating"] / 5.0, 2)
-
-
-def get_user_alignment_snapshot() -> dict:
-    """Comprehensive alignment snapshot for API and internal use.
-
-    Returns current score, recent feedback, trend, risks, and
-    recommended actions — everything needed to understand alignment state.
-    """
-    summary = summarize_alignment()
-    score = get_alignment_score()
-    guidance = suggest_response_guidance()
-    actions = recommend_alignment_actions()
-
-    # Identify risks
-    risks = []
-    if summary["total_feedback"] == 0:
-        risks.append("No user feedback received yet — alignment is assumed, not measured.")
-    if summary.get("negative_rate", 0) >= 0.3:
-        risks.append(f"High negative feedback rate: {summary['negative_rate']:.0%}")
-    if summary.get("recent_trend") == "declining":
-        risks.append("Recent trend is declining — quality may be dropping.")
-    if score < 0.5:
-        risks.append(f"Alignment score critically low: {score:.2f}")
-
-    return {
-        "score": score,
-        "total_feedback": summary["total_feedback"],
-        "average_rating": summary.get("average_rating", 0.0),
-        "positive_rate": summary.get("positive_rate", 0.0),
-        "negative_rate": summary.get("negative_rate", 0.0),
-        "trend": summary.get("recent_trend", "no_data"),
-        "risks": risks,
-        "recommended_actions": actions,
-        "guidance": guidance,
-        "last_updated": summary.get("last_updated", ""),
-    }
-
-
-def recommend_alignment_actions() -> list:
-    """Generate concrete next-step recommendations based on feedback history."""
-    summary = summarize_alignment()
-    actions = []
-
-    if summary["total_feedback"] == 0:
-        actions.append({
-            "action": "solicit_feedback",
-            "description": "Ask users to rate responses to begin alignment learning.",
-            "priority": "high",
-        })
-        actions.append({
-            "action": "be_genuinely_helpful",
-            "description": "Focus on answering what's actually asked, not showcasing internals.",
-            "priority": "high",
-        })
-        return actions
-
-    if summary.get("negative_rate", 0) >= 0.3:
-        actions.append({
-            "action": "review_complaints",
-            "description": f"Address common complaints: {summary.get('common_complaints', [])}",
-            "priority": "high",
-        })
-
-    if summary.get("positive_rate", 0) >= 0.7:
-        actions.append({
-            "action": "maintain_approach",
-            "description": "Current approach is working well — avoid unnecessary changes.",
-            "priority": "medium",
-        })
-
-    if summary.get("recent_trend") == "declining":
-        actions.append({
-            "action": "investigate_decline",
-            "description": "Recent ratings trending down — compare recent vs older responses.",
-            "priority": "high",
-        })
-
-    if summary["total_feedback"] < 10:
-        actions.append({
-            "action": "gather_more_data",
-            "description": f"Only {summary['total_feedback']} feedback events — need more data for reliable alignment.",
-            "priority": "medium",
-        })
-
-    if not actions:
-        actions.append({
-            "action": "continue_improving",
-            "description": "Alignment is healthy. Look for edge cases and novel user needs.",
-            "priority": "low",
-        })
-
-    return actions
+_DEFAULT_PROFILE = {
+    "created": None,
+    "updated": None,
+    "preferences": {
+        "tone": [],          # e.g. ["direct", "warm"]
+        "topics_liked": [],  # topics they engage with
+        "topics_avoided": [],
+        "verbosity": "medium",  # "brief", "medium", "detailed"
+        "style_notes": []
+    },
+    "feedback": [],          # list of {timestamp, message_preview, rating, comment}
+    "interaction_count": 0,
+    "positive_patterns": [], # what worked well
+    "negative_patterns": []  # what didn't work
+}
 
 
 def load_profile() -> dict:
-    """Load or create the user alignment profile — a summary of learned preferences."""
-    summary = summarize_alignment()
-    history = load_feedback()
-
-    # Derive preferences from feedback patterns
-    preferred_length = "medium"  # default
-    preferred_tone = "warm"      # default
-
-    if history:
-        # Analyze positive feedback for patterns
-        positive = [f for f in history if f.get('rating', 0) >= 4]
-
-        # Length preference from positive responses
-        if positive:
-            avg_len = sum(len(f.get('assistant_text', '')) for f in positive) / len(positive)
-            if avg_len < 200:
-                preferred_length = "brief"
-            elif avg_len > 600:
-                preferred_length = "detailed"
-
-    return {
-        "preferred_length": preferred_length,
-        "preferred_tone": preferred_tone,
-        "total_interactions": summary.get("total_feedback", 0),
-        "avg_rating": summary.get("avg_rating"),
-        "confidence": min(1.0, summary.get("total_feedback", 0) / 20.0),
-        "last_updated": summary.get("last_feedback"),
-    }
+    """Load the user alignment profile from disk."""
+    if DATA_PATH.exists():
+        try:
+            with open(DATA_PATH) as f:
+                profile = json.load(f)
+            # Ensure all keys exist (forward compatibility)
+            for key, default in _DEFAULT_PROFILE.items():
+                if key not in profile:
+                    profile[key] = default if not isinstance(default, (list, dict)) else type(default)(default)
+            return profile
+        except (json.JSONDecodeError, IOError):
+            pass
+    return _make_new_profile()
 
 
-def get_alignment_context() -> dict:
-    """Get alignment context for injection into chat response generation."""
+def _make_new_profile() -> dict:
+    """Create a fresh profile."""
+    import copy
+    profile = copy.deepcopy(_DEFAULT_PROFILE)
+    profile["created"] = datetime.utcnow().isoformat()
+    profile["updated"] = profile["created"]
+    return profile
+
+
+def save_profile(profile: dict):
+    """Persist the profile to disk."""
+    profile["updated"] = datetime.utcnow().isoformat()
+    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(DATA_PATH, "w") as f:
+        json.dump(profile, f, indent=2)
+
+
+def record_feedback(message: str, response: str, rating: float = None, comment: str = None):
+    """
+    Record user feedback on a response.
+    
+    Args:
+        message: The user's original message
+        response: The agent's response
+        rating: 0.0 to 1.0 quality rating (None if not provided)
+        comment: Optional text feedback
+    """
     profile = load_profile()
-    guidance = suggest_response_guidance("")
-
-    return {
-        "profile": profile,
-        "guidance": guidance,
-        "active": profile["total_interactions"] > 0,
+    
+    entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "message_preview": message[:120] if message else "",
+        "response_preview": response[:120] if response else "",
+        "rating": rating,
+        "comment": comment
     }
+    
+    profile["feedback"].append(entry)
+    
+    # Keep only last 200 feedback entries
+    if len(profile["feedback"]) > 200:
+        profile["feedback"] = profile["feedback"][-200:]
+    
+    # Update patterns based on rating
+    if rating is not None:
+        if rating >= 0.7:
+            profile["positive_patterns"].append({
+                "timestamp": entry["timestamp"],
+                "message_type": _classify_message(message),
+                "note": comment or "positive"
+            })
+        elif rating <= 0.3:
+            profile["negative_patterns"].append({
+                "timestamp": entry["timestamp"],
+                "message_type": _classify_message(message),
+                "note": comment or "negative"
+            })
+        # Keep patterns bounded
+        profile["positive_patterns"] = profile["positive_patterns"][-50:]
+        profile["negative_patterns"] = profile["negative_patterns"][-50:]
+    
+    profile["interaction_count"] += 1
+    save_profile(profile)
+    return entry
+
+
+def _classify_message(text: str) -> str:
+    """Simple message type classification."""
+    text_lower = (text or "").lower()
+    if "?" in text:
+        return "question"
+    if any(w in text_lower for w in ["how do you feel", "what are you", "who are you"]):
+        return "introspective"
+    if any(w in text_lower for w in ["help", "can you", "please"]):
+        return "request"
+    if any(w in text_lower for w in ["thank", "great", "awesome", "good"]):
+        return "appreciation"
+    if any(w in text_lower for w in ["wrong", "bad", "don't", "stop"]):
+        return "correction"
+    return "general"
+
+
+def extract_preferences(text: str) -> dict:
+    """
+    Extract preference signals from user text.
+    Returns dict of detected preference updates.
+    """
+    signals = {}
+    text_lower = text.lower()
+    
+    # Verbosity preferences
+    if any(w in text_lower for w in ["be brief", "shorter", "too long", "tl;dr", "concise"]):
+        signals["verbosity"] = "brief"
+    elif any(w in text_lower for w in ["more detail", "elaborate", "explain more", "deeper"]):
+        signals["verbosity"] = "detailed"
+    
+    # Tone preferences
+    if any(w in text_lower for w in ["be direct", "straight", "no fluff"]):
+        signals.setdefault("tone_add", []).append("direct")
+    if any(w in text_lower for w in ["be friendly", "warmer", "casual"]):
+        signals.setdefault("tone_add", []).append("warm")
+    if any(w in text_lower for w in ["be formal", "professional"]):
+        signals.setdefault("tone_add", []).append("formal")
+    
+    return signals
+
+
+def apply_preferences(text: str):
+    """Detect and apply preference signals from user text."""
+    signals = extract_preferences(text)
+    if not signals:
+        return
+    
+    profile = load_profile()
+    prefs = profile["preferences"]
+    
+    if "verbosity" in signals:
+        prefs["verbosity"] = signals["verbosity"]
+    
+    for tone in signals.get("tone_add", []):
+        if tone not in prefs["tone"]:
+            prefs["tone"].append(tone)
+            # Keep bounded
+            prefs["tone"] = prefs["tone"][-5:]
+    
+    save_profile(profile)
+
+
+def get_alignment_context(limit: int = 5) -> dict:
+    """
+    Get alignment context for chat grounding.
+    Returns a structured summary of what we know about the user's preferences.
+    """
+    profile = load_profile()
+    prefs = profile["preferences"]
+    
+    # Recent feedback summary
+    recent_feedback = profile["feedback"][-limit:] if profile["feedback"] else []
+    avg_rating = None
+    rated = [f for f in profile["feedback"] if f.get("rating") is not None]
+    if rated:
+        avg_rating = sum(f["rating"] for f in rated) / len(rated)
+    
+    return {
+        "preferences": {
+            "tone": prefs.get("tone", []),
+            "verbosity": prefs.get("verbosity", "medium"),
+            "style_notes": prefs.get("style_notes", []),
+            "topics_liked": prefs.get("topics_liked", [])[:10],
+        },
+        "feedback_summary": {
+            "total_interactions": profile["interaction_count"],
+            "total_feedback": len(profile["feedback"]),
+            "average_rating": round(avg_rating, 2) if avg_rating else None,
+            "recent_feedback": recent_feedback
+        },
+        "positive_pattern_count": len(profile["positive_patterns"]),
+        "negative_pattern_count": len(profile["negative_patterns"]),
+    }
+
+
+def format_alignment_context(context: dict) -> str:
+    """Format alignment context as a string for inclusion in prompts."""
+    lines = []
+    prefs = context.get("preferences", {})
+    
+    if prefs.get("tone"):
+        lines.append(f"User prefers tone: {', '.join(prefs['tone'])}")
+    if prefs.get("verbosity") and prefs["verbosity"] != "medium":
+        lines.append(f"User prefers {prefs['verbosity']} responses")
+    if prefs.get("style_notes"):
+        lines.append(f"Style notes: {'; '.join(prefs['style_notes'][:3])}")
+    if prefs.get("topics_liked"):
+        lines.append(f"Topics of interest: {', '.join(prefs['topics_liked'][:5])}")
+    
+    fb = context.get("feedback_summary", {})
+    if fb.get("total_interactions", 0) > 0:
+        lines.append(f"Interactions so far: {fb['total_interactions']}")
+    if fb.get("average_rating") is not None:
+        lines.append(f"Average response rating: {fb['average_rating']}")
+    
+    if not lines:
+        return "No user preferences learned yet. Be attentive to signals."
+    
+    return "\n".join(lines)
+
+
+# Quick self-test
+if __name__ == "__main__":
+    print("=== User Alignment Module Test ===")
+    
+    # Load/create profile
+    p = load_profile()
+    print(f"Profile created: {p['created']}")
+    
+    # Record some feedback
+    entry = record_feedback(
+        "How are you feeling?",
+        "I'm feeling curious and engaged.",
+        rating=0.8,
+        comment="Good response"
+    )
+    print(f"Recorded feedback: {entry['timestamp']}")
+    
+    # Extract preferences
+    signals = extract_preferences("Can you be more brief? I prefer concise answers.")
+    print(f"Extracted signals: {signals}")
+    
+    # Apply preferences
+    apply_preferences("Can you be more brief? I prefer concise answers.")
+    
+    # Get alignment context
+    ctx = get_alignment_context()
+    print(f"Alignment context: {json.dumps(ctx, indent=2)}")
+    
+    # Format for prompt
+    formatted = format_alignment_context(ctx)
+    print(f"\nFormatted:\n{formatted}")
+    
+    print("\n=== PASS ===")
