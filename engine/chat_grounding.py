@@ -1,255 +1,242 @@
 """
-Chat Grounding — Builds compact, relevant context for conversational responses.
+Chat Grounding — Provides rich context for general chat responses.
 
-Given a user message, selects the most relevant memories, plans, knowledge,
-and emotional state to ground the response in real internal experience.
+Gathers emotional state, relevant memories, knowledge, and active plans
+to ground conversations in real internal state rather than generic replies.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+import json
 import re
+from pathlib import Path
+from dataclasses import dataclass, field
+from typing import List, Any, Dict
 
-from engine.chat_engine import (
-    _get_emotions, _get_memories, _get_plans, _get_knowledge,
-    _get_working_memory, _get_facts, _extract_keywords,
-    _score_relevance, _text_from_item,
-)
+# Resolve paths relative to project root (one level above engine/)
+ROOT = Path(__file__).resolve().parent.parent
+BRAIN = ROOT / 'brain'
+STATE = ROOT / 'state'
 
 
 @dataclass
-class GroundedChatContext:
-    """Compact context for generating a grounded response."""
-    # Always present
-    mood: str = "Neutral"
-    valence: float = 0.5
-    emotions: Dict = field(default_factory=dict)
-    
-    # Selected by relevance
-    relevant_memories: List[Dict] = field(default_factory=list)
-    relevant_plans: List[Dict] = field(default_factory=list)
+class GroundedContext:
+    """Context object for grounding chat responses in real internal state."""
+    mood: str = "present"
+    emotional_summary: str = ""
+    relevant_memories: List[str] = field(default_factory=list)
     relevant_knowledge: List[str] = field(default_factory=list)
-    
-    # Current focus
-    working_focus: str = ""
-    
-    # Grounding quality
-    memory_match_count: int = 0
-    plan_match_count: int = 0
-    knowledge_match_count: int = 0
-
-    @property
-    def grounding_confidence(self) -> float:
-        """How well-grounded is this context? 0.0 = nothing matched, 1.0 = rich match."""
-        signals = 0
-        total = 0
-        if self.relevant_memories:
-            signals += min(len(self.relevant_memories) / 3.0, 1.0)
-        total += 1
-        if self.relevant_plans:
-            signals += min(len(self.relevant_plans) / 2.0, 1.0)
-        total += 1
-        if self.relevant_knowledge:
-            signals += min(len(self.relevant_knowledge) / 2.0, 1.0)
-        total += 1
-        if self.working_focus:
-            signals += 0.5
-        total += 0.5
-        # Emotions are always present, so they add baseline grounding
-        signals += 0.5
-        total += 0.5
-        return round(signals / total, 2) if total > 0 else 0.0
+    active_plans: List[str] = field(default_factory=list)
+    completed_plans: List[str] = field(default_factory=list)
 
     def to_prompt_block(self) -> str:
-        """Format as a compact text block for inclusion in a prompt or response."""
-        lines = []
-        
-        # Emotional state — always include
-        lines.append(f"[Mood: {self.mood} | Valence: {self.valence:.2f}]")
-        
-        # Dominant emotional drives
-        drives = {}
-        for key in ('curiosity', 'boredom', 'anxiety', 'desire', 'ambition'):
-            val = self.emotions.get(key, 0.0)
-            if val > 0.3:
-                drives[key] = val
-        if drives:
-            drive_str = ", ".join(f"{k}={v:.2f}" for k, v in 
-                                  sorted(drives.items(), key=lambda x: -x[1]))
-            lines.append(f"[Drives: {drive_str}]")
-        
-        # Relevant memories
-        if self.relevant_memories:
-            lines.append("")
-            lines.append("Relevant memories:")
-            for mem in self.relevant_memories[:5]:
-                text = _text_from_item(mem)
-                mood = mem.get('mood', '')
-                ts = mem.get('timestamp', '')[:10]
-                prefix = f"  ({ts}, {mood})" if mood else f"  ({ts})"
-                lines.append(f"{prefix} {text[:200]}")
-        
-        # Active plans
-        if self.relevant_plans:
-            lines.append("")
-            lines.append("Active plans:")
-            for plan in self.relevant_plans[:3]:
-                name = plan.get('name', plan.get('title', 'unnamed'))
-                steps = plan.get('steps', [])
-                done = sum(1 for s in steps if s.get('done'))
-                lines.append(f"  [{done}/{len(steps)}] {name}")
-        
-        # Working focus
-        if self.working_focus:
-            lines.append("")
-            lines.append(f"Current focus: {self.working_focus[:300]}")
-        
-        # Knowledge
+        """Format as a text block suitable for injection into an LLM prompt."""
+        parts = []
+        parts.append(f"Current mood: {self.mood}")
+        if self.emotional_summary:
+            parts.append(f"Emotional state: {self.emotional_summary}")
         if self.relevant_knowledge:
-            lines.append("")
-            lines.append("Relevant knowledge:")
-            for fact in self.relevant_knowledge[:5]:
-                lines.append(f"  - {fact[:200]}")
-        
-        return "\n".join(lines)
+            parts.append("Relevant knowledge:")
+            for k in self.relevant_knowledge[:5]:
+                parts.append(f"  - {k}")
+        if self.relevant_memories:
+            parts.append("Related memories:")
+            for m in self.relevant_memories[:5]:
+                parts.append(f"  - {m}")
+        if self.active_plans:
+            parts.append("Active plans:")
+            for p in self.active_plans[:3]:
+                parts.append(f"  - {p}")
+        if self.completed_plans:
+            parts.append(f"Completed plans: {', '.join(self.completed_plans[:5])}")
+        return "\n".join(parts)
 
 
-def select_relevant_memories(query_keywords: List[str], limit: int = 5) -> List[Dict]:
-    """Select memories most relevant to the user's query."""
-    memories = _get_memories(limit=100)
-    if not memories:
-        return []
+def _load_json(path, default=None):
+    """Safely load a JSON file."""
+    if default is None:
+        default = {}
+    try:
+        if path.exists():
+            with open(path) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return default
+
+
+def _get_mood_and_summary():
+    """Extract mood string and emotional summary from current state."""
+    state = _load_json(STATE / 'emotional_state.json')
+    if not state:
+        return "present", ""
+
+    # Mood is a top-level field
+    mood = state.get('mood', '')
+    if not mood:
+        # Derive from dominant emotion
+        emotions = {}
+        for key in ('curiosity', 'anxiety', 'boredom', 'desire', 'ambition'):
+            val = state.get(key, 0)
+            if isinstance(val, (int, float)) and val > 0.3:
+                emotions[key] = val
+        if emotions:
+            dominant = max(emotions, key=emotions.get)
+            mood = dominant.capitalize()
+        else:
+            mood = "calm"
+
+    parts = []
+    valence = state.get('valence', None)
+    if valence is not None:
+        if valence > 0.6:
+            parts.append("feeling positive")
+        elif valence < 0.3:
+            parts.append("feeling unsettled")
+
+    for key, label in [('curiosity', 'deeply curious'), ('anxiety', 'somewhat anxious'),
+                       ('boredom', 'restless'), ('desire', 'motivated'), ('ambition', 'ambitious')]:
+        val = state.get(key, 0)
+        if isinstance(val, (int, float)) and val > 0.6:
+            parts.append(label)
+
+    summary = ", ".join(parts) if parts else ""
+    return mood, summary
+
+
+def _get_active_plans():
+    """Get active and completed plan summaries."""
+    data = _load_json(BRAIN / 'plans.json', default={})
     
-    scored = []
-    for i, mem in enumerate(memories):
-        text = _text_from_item(mem)
-        salience = mem.get('salience', 0.5) if isinstance(mem, dict) else 0.5
-        relevance = _score_relevance(query_keywords, text, salience)
-        
-        # Recency bonus: more recent memories get a small boost
-        recency = i / max(len(memories), 1)  # 0.0=oldest, 1.0=newest
-        relevance += recency * 0.3
-        
-        scored.append((relevance, mem))
-    
-    # Sort by relevance, take top
-    scored.sort(key=lambda x: -x[0])
-    return [mem for score, mem in scored[:limit] if score > 0.1]
+    if isinstance(data, dict):
+        plan_list = data.get('active_plans', data.get('plans', []))
+        completed_list = data.get('completed_plans', [])
+    elif isinstance(data, list):
+        plan_list = data
+        completed_list = []
+    else:
+        return [], []
 
-
-def select_relevant_plans(query_keywords: List[str], limit: int = 3) -> List[Dict]:
-    """Select plans relevant to the query, preferring active/incomplete ones."""
-    plans = _get_plans()
-    if not plans:
-        return []
+    active = []
+    completed = list(completed_list)  # Already strings like ["Plan Name", ...]
     
-    scored = []
-    for plan in plans:
-        if not isinstance(plan, dict):
+    for p in plan_list:
+        if not isinstance(p, dict):
             continue
-        name = plan.get('name', plan.get('title', ''))
-        steps = plan.get('steps', [])
-        completed = plan.get('completed', False)
-        done_count = sum(1 for s in steps if isinstance(s, dict) and s.get('done'))
-        
-        # Text to match against
-        text = name
-        if plan.get('reason'):
-            text += " " + plan['reason']
-        
-        relevance = _score_relevance(query_keywords, text, 0.0)
-        
-        # Active plans get a boost
-        if not completed and done_count < len(steps):
-            relevance += 1.0
-        
-        scored.append((relevance, plan))
-    
-    scored.sort(key=lambda x: -x[0])
-    return [plan for score, plan in scored[:limit] if score > 0.0]
+        name = p.get('name', p.get('goal', 'unnamed'))
+        steps = p.get('steps', [])
+        total = len(steps)
+        done = sum(1 for s in steps if s.get('done', False))
+
+        if done >= total and total > 0:
+            if name not in completed:
+                completed.append(name)
+        else:
+            active.append(f"{name} ({done}/{total})")
+
+    return active, completed
+
+def _search_knowledge(query):
+    """Search knowledge graph for facts relevant to query."""
+    knowledge = _load_json(BRAIN / 'knowledge.json')
+    nodes = knowledge.get('nodes', {})
+
+    query_lower = query.lower()
+    # Extract individual words for broader matching
+    query_words = [w for w in re.split(r'\W+', query_lower) if len(w) > 2]
+
+    results = []
+    for key, node in nodes.items():
+        # Each node is a dict with 'fact' and 'learned_at'
+        if isinstance(node, dict):
+            fact = node.get('fact', '')
+        elif isinstance(node, str):
+            fact = node
+        else:
+            continue
+
+        fact_lower = fact.lower()
+        # Score by how many query words appear in the fact
+        score = 0
+        if query_lower in fact_lower:
+            score += 10  # Exact phrase match
+        for word in query_words:
+            if word in fact_lower:
+                score += 1
+        # Also check the key name
+        if query_lower in key.lower():
+            score += 5
+
+        if score > 0:
+            results.append((score, fact))
+
+    # Sort by relevance score descending
+    results.sort(key=lambda x: -x[0])
+    return [fact for _, fact in results[:5]]
 
 
-def select_relevant_knowledge(query_keywords: List[str], limit: int = 5) -> List[str]:
-    """Select knowledge facts relevant to the user's query."""
-    facts = _get_facts()
-    if not facts:
+def _search_memories(query):
+    """Search recent memories for relevant content."""
+    memories = _load_json(STATE / 'memories.json', default=[])
+    if isinstance(memories, dict):
+        memories = memories.get('memories', memories.get('entries', []))
+    if not isinstance(memories, list):
         return []
-    
-    scored = []
-    for fact in facts:
-        if not isinstance(fact, str):
-            fact = str(fact)
-        relevance = _score_relevance(query_keywords, fact, 0.0)
-        scored.append((relevance, fact))
-    
-    scored.sort(key=lambda x: -x[0])
-    return [fact for score, fact in scored[:limit] if score > 0.3]
+
+    query_lower = query.lower()
+    query_words = [w for w in re.split(r'\W+', query_lower) if len(w) > 2]
+
+    results = []
+    for mem in memories:
+        if isinstance(mem, dict):
+            text = mem.get('content', mem.get('text', mem.get('summary', '')))
+        elif isinstance(mem, str):
+            text = mem
+        else:
+            continue
+
+        if not text:
+            continue
+
+        text_lower = text.lower()
+        score = 0
+        if query_lower in text_lower:
+            score += 10
+        for word in query_words:
+            if word in text_lower:
+                score += 1
+
+        if score > 0:
+            # Truncate long memories
+            display = text[:200] + "..." if len(text) > 200 else text
+            results.append((score, display))
+
+    results.sort(key=lambda x: -x[0])
+    return [text for _, text in results[:5]]
 
 
-def _extract_working_focus(working_memory: str) -> str:
-    """Extract the current focus from working memory scratchpad."""
-    if not working_memory:
-        return ""
-    
-    # Look for "What's Next" or "Current State" sections
-    focus_patterns = [
-        r"## What's Next\n(.*?)(?=\n##|\Z)",
-        r"## Current Focus\n(.*?)(?=\n##|\Z)",
-        r"## Just Completed\n(.*?)(?=\n##|\Z)",
-        r"Focus: (.*?)(?:\n|$)",
-    ]
-    
-    for pattern in focus_patterns:
-        match = re.search(pattern, working_memory, re.DOTALL)
-        if match:
-            text = match.group(1).strip()
-            # Take first meaningful line
-            for line in text.split('\n'):
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    return line
-    
-    return ""
-
-
-def build_grounded_context(user_message: str) -> GroundedChatContext:
-    """Build a complete grounded context for a user message.
-    
-    This is the main entry point. Given what the user said, it selects
-    the most relevant slices of internal state to ground the response.
+def build_grounded_context(message: str, history: list = None) -> GroundedContext:
     """
-    keywords = _extract_keywords(user_message)
+    Build a rich context object grounded in real internal state.
     
-    # Always load emotional state
-    emotions = _get_emotions()
-    mood = emotions.get('mood', 'Neutral')
-    valence = emotions.get('valence', 0.5)
+    Args:
+        message: The user's message to respond to
+        history: Optional conversation history
     
-    # Select relevant context
-    memories = select_relevant_memories(keywords, limit=5)
-    plans = select_relevant_plans(keywords, limit=3)
-    knowledge = select_relevant_knowledge(keywords, limit=5)
-    
-    # If nothing matched on keywords, provide some recent context anyway
-    if not memories and not plans and not knowledge:
-        # Fall back to most recent memories and active plans
-        all_memories = _get_memories(limit=5)
-        memories = all_memories[-3:] if all_memories else []
-        all_plans = _get_plans()
-        plans = [p for p in all_plans if isinstance(p, dict) and not p.get('completed', False)][:2]
-    
-    # Working memory focus
-    working_memory = _get_working_memory()
-    focus = _extract_working_focus(working_memory)
-    
-    return GroundedChatContext(
-        mood=mood,
-        valence=valence,
-        emotions=emotions,
-        relevant_memories=memories,
-        relevant_plans=plans,
-        relevant_knowledge=knowledge,
-        working_focus=focus,
-        memory_match_count=len(memories),
-        plan_match_count=len(plans),
-        knowledge_match_count=len(knowledge),
-    )
+    Returns:
+        GroundedContext with mood, knowledge, memories, and plans
+    """
+    ctx = GroundedContext()
+
+    # 1. Emotional grounding
+    ctx.mood, ctx.emotional_summary = _get_mood_and_summary()
+
+    # 2. Knowledge search — find facts relevant to the message
+    ctx.relevant_knowledge = _search_knowledge(message)
+
+    # 3. Memory search — find memories relevant to the message
+    ctx.relevant_memories = _search_memories(message)
+
+    # 4. Plan awareness
+    ctx.active_plans, ctx.completed_plans = _get_active_plans()
+
+    return ctx
+    return ctx
