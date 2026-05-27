@@ -669,6 +669,20 @@ def submit_feedback(response_id, rating, note=''):
         except Exception:
             pass  # Alignment learning is best-effort
         
+        # Update persistent user model with preference signals
+        try:
+            from engine.user_model import update_from_feedback
+            update_from_feedback({
+                'response_id': response_id,
+                'rating': rating,
+                'note': note,
+                'query': _response_cache.get(response_id, {}).get('query', ''),
+                'response': _response_cache.get(response_id, {}).get('response', ''),
+                'timestamp': feedback['timestamp']
+            })
+        except Exception:
+            pass  # User model learning is best-effort
+        
         return {'status': 'saved', 'response_id': response_id}
     except Exception as e:
         return {'status': 'error', 'error': str(e)}

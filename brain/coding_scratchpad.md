@@ -2,48 +2,52 @@
 
 ## Session (2026-05-27, afternoon) — COMPLETE ✅
 
-### Chat Introspection Pipeline — DONE
+### Chat Introspection Pipeline — DONE & VERIFIED
 
 #### What Was Built/Modified
-1. **engine/chat_engine.py**: State-aware respond() with intent routing
-   - classify_intent() routes: emotional_state, plans, knowledge, greeting, memory_query, identity, thinking
-   - Handler functions: _respond_greeting, _respond_emotional_state, _respond_plans, _respond_thinking, _respond_memories, _respond_identity
-   - _respond_general() for LLM fallback with grounding context
+1. **engine/chat_engine.py** (949 lines): State-aware respond() with intent routing
+   - `classify_intent()` routes: emotional_state, plans, knowledge, greeting, memory_query, identity, thinking
+   - Handler functions: `_respond_greeting`, `_respond_emotional_state`, `_respond_plans`, `_respond_thinking`, `_respond_memories`, `_respond_identity`
+   - `_respond_general()` for LLM fallback with grounding context
    - All handlers use real internal state (emotions, plans, memories)
 
-2. **engine/chat_response.py**: Pipeline integration
-   - _detect_intent(): maps user questions to intent categories (feelings, thinking, identity, plans, memory)
-   - _build_metadata(): enriches responses with handler info and timing
-   - generate_response_with_metadata(): routes introspection through fast handlers, general through LLM
-   - submit_feedback(): alignment feedback integration
+2. **engine/chat_response.py** (71 lines): Pipeline integration
+   - `_detect_intent()`: maps user questions to intent categories
+   - `_build_metadata()`: enriches responses with handler info and timing
+   - `generate_response_with_metadata()`: routes introspection through fast handlers
+   - `submit_feedback()`: alignment feedback integration
 
-3. **Test files**:
-   - brain/test_respond_fast.py — 12/12 tests pass
-   - brain/test_pipeline_integration.py — 5/5 intent + metadata + pipeline pass
-   - brain/test_chat_quality.py — quality verification passes
-   - brain/test_intent_classify.py — intent classification verification
+3. **Verification**: `brain/verify_conversational_chat.py` — 9/9 tests pass
+   - 5 intent classification tests
+   - 4 response quality tests (emotional, plans, identity, thinking)
 
 #### Pipeline Flow
 ```
-User message → _detect_intent() → route
+User message → classify_intent() → route
   feelings/thinking/identity/plans/memory → fast handler → real state
   general → LLM with grounding context
-→ _build_metadata() → enriched response
+→ response with metadata
 ```
 
+#### Dashboard Wiring
+- `dashboard/server.py` `/chat/ask` → `engine/chat_response.py` → `engine/chat_engine.py`
+- Full pipeline confirmed working end-to-end
+
 ## Key Files (Reference)
-- `engine/chat_engine.py`: Smart response generation with intent routing (903 lines)
-- `engine/chat_response.py`: Public facade — generate_response_with_metadata (638 lines)
+- `engine/chat_engine.py`: Smart response generation with intent routing (949 lines)
+- `engine/chat_response.py`: Public facade — generate_response_with_metadata (71 lines)
 - `engine/chat_grounding.py`: Context builder for LLM calls
 - `engine/user_alignment.py`: Preference modeling + persistence
 - `engine/llm.py`: Async LLM with fallback model chain
 - `web/chat.py`: Flask routes for /chat/ask and /chat/feedback
+- `dashboard/server.py`: HTTP handler including /chat/ask endpoint
 
 ## What's Next
 - Monitor user_alignment score improvements over time
 - Consider conversation history persistence across sessions
 - Explore proactive conversation starters based on emotional state
 - Clean up diagnostic files in brain/ (80+ files, many are one-off)
+- Consider adding "dreams" and "knowledge" response handlers with richer output
 
 ## Reinforced Lessons
 - `dir(module)` is ground truth for exports
@@ -53,3 +57,4 @@ User message → _detect_intent() → route
 - PYTHONPATH matters — use sys.path.insert(0, ...) in test scripts
 - Match test expectations to actual function behavior, not assumed behavior
 - PATCH with line numbers beats EDIT with string matching for precision
+- Timeouts in test scripts prevent LLM-call hangs from blocking verification

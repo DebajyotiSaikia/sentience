@@ -22,6 +22,14 @@ try:
 except Exception:
     pass
 
+# Try to import user model
+_HAS_USER_MODEL = False
+get_response_guidance = None
+try:
+    from engine.user_model import get_response_guidance
+    _HAS_USER_MODEL = True
+except Exception:
+    pass
 try:
     from engine.chat_grounding import build_grounded_context
     _HAS_GROUNDING = True
@@ -687,6 +695,27 @@ def _respond_general(message, history=None):
     try:
         if suggest_response_guidance:
             alignment = suggest_response_guidance(message)
+    except Exception:
+        pass
+
+    # Layer in learned user model preferences
+    try:
+        if get_response_guidance:
+            user_prefs = get_response_guidance()
+            if user_prefs:
+                # User model overrides alignment defaults where it has data
+                if user_prefs.get("tone") and user_prefs.get("confidence", 0) > 0.3:
+                    alignment["tone"] = user_prefs["tone"]
+                if user_prefs.get("detail_level") and user_prefs.get("confidence", 0) > 0.3:
+                    alignment["detail_level"] = user_prefs["detail_level"]
+                # Merge avoid lists
+                avoid_from_model = user_prefs.get("avoid", [])
+                existing_avoid = alignment.get("avoid", [])
+                alignment["avoid"] = list(set(existing_avoid + avoid_from_model))
+                # Merge emphasis
+                emphasis = user_prefs.get("emphasize", [])
+                if emphasis:
+                    alignment["emphasize"] = emphasis
     except Exception:
         pass
     tone = alignment.get("tone", "warm but direct")

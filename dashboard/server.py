@@ -387,6 +387,20 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps(summary).encode())
             except Exception as e:
                 self.wfile.write(json.dumps({"error": str(e)}).encode())
+        elif self.path == '/api/user-model':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            try:
+                import sys, os
+                sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                from engine.user_model import load_user_model, summarize_user_alignment
+                model = load_user_model()
+                summary = summarize_user_alignment(model)
+                self.wfile.write(json.dumps(summary).encode())
+            except Exception as e:
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
         elif self.path == '/api/chat/threads':
             try:
                 from engine.conversation_store import ConversationStore
