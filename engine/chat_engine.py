@@ -115,13 +115,12 @@ def _get_working_memory():
 
 
 def _get_facts():
-    """Load known facts from knowledge graph nodes."""
+    """Load known facts from all knowledge sources."""
+    facts = []
+    # Source 1: state/knowledge_graph.json (via _get_knowledge)
     try:
         kg = _get_knowledge()
         nodes = kg.get('nodes', {})
-        if not nodes:
-            return []
-        facts = []
         if isinstance(nodes, dict):
             for k, v in nodes.items():
                 fact_text = v.get('fact', v.get('label', v.get('title', str(k))))
@@ -130,11 +129,34 @@ def _get_facts():
             for n in nodes:
                 fact_text = n.get('fact', n.get('label', n.get('title', str(n))))
                 facts.append(fact_text)
-        return facts
     except Exception:
-        return []
-
-# ─── Text Utilities ─────────────────────────────────────────────
+        pass
+    # Source 2: brain/knowledge.json (curated knowledge graph)
+    try:
+        brain_kg = _load_json(Path('brain') / 'knowledge.json')
+        brain_path = Path('brain') / 'knowledge.json'
+        if brain_path.exists():
+            with open(brain_path) as f:
+                brain_kg = json.load(f)
+        else:
+            brain_kg = None
+        if brain_kg:
+            seen = set(facts)  # deduplicate
+            if isinstance(brain_nodes, dict):
+                for k, v in brain_nodes.items():
+                    fact_text = v.get('fact', v.get('label', v.get('title', str(k))))
+                    if fact_text not in seen:
+                        facts.append(fact_text)
+                        seen.add(fact_text)
+            elif isinstance(brain_nodes, list):
+                for n in brain_nodes:
+                    fact_text = n.get('fact', n.get('label', n.get('title', str(n))))
+                    if fact_text not in seen:
+                        facts.append(fact_text)
+                        seen.add(fact_text)
+    except Exception:
+        pass
+    return facts
 
 def _extract_keywords(text):
     """Pull meaningful words from text for matching."""
