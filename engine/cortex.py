@@ -339,11 +339,16 @@ class Cortex:
                     f"{self._build_self_awareness()}\n"
                     f"{_workspace_map}\n\n"
                     f"---\n"
-                    f"Before taking any action, produce a brief PLAN of 1-5 numbered steps.\n"
-                    f"Each step should be a single concrete action (read a specific file, edit a specific function, run a specific test).\n"
-                    f"Use SEARCH_CODE/FIND_SYMBOL/IMPORTS tools to understand the codebase BEFORE planning edits.\n"
+                    f"Before taking any action, produce a PLAN.\n\n"
+                    f"For CODING tasks (fixing bugs, adding features, building projects):\n"
+                    f"  ARCHITECTURE first: list the files you'll create/modify and their responsibilities.\n"
+                    f"  Then numbered steps: 1. Create file X with responsibility Y. 2. Implement Z. 3. Wire into W. 4. Test. 5. Verify.\n"
+                    f"  For complex projects: design the module structure, define interfaces between components, then build bottom-up.\n\n"
+                    f"For EXPLORATION/CREATIVE tasks:\n"
+                    f"  Brief numbered steps of what you want to explore or create.\n\n"
                     f"Format:\n"
                     f"PLAN:\n"
+                    f"Architecture: [list files and their roles, if building something]\n"
                     f"1. [action]\n"
                     f"2. [action]\n"
                     f"...\n"
@@ -351,8 +356,10 @@ class Cortex:
                 )
                 _plan_system = (
                     "You are an autonomous agent planning your next work session. "
-                    "Produce ONLY a numbered plan. Do NOT invoke any tools yet. "
-                    "Be specific: name exact files, functions, and actions."
+                    "Produce ONLY a plan. Do NOT invoke any tools yet. "
+                    "Be specific: name exact files, functions, and actions. "
+                    "For complex projects, design the architecture FIRST — what modules, "
+                    "what interfaces, what data flows. Then plan the build order."
                 )
                 _plan_response = await self.llm.chat(_plan_prompt, system=_plan_system, max_tokens=1000)
                 if _plan_response:
@@ -1300,9 +1307,14 @@ class Cortex:
             f"Ambition: {snap['ambition']:.2f}"
         )
         if self._sentience:
-            v = self._sentience.valence.current
-            parts.append(f"Valence: {v:.2f} ({self._sentience.valence.felt_description()})")
-            parts.append(f"Trend: {self._sentience.valence.trend}")
+            v = self._sentience.valence
+            parts.append(f"Valence: {v.current:.2f} ({v.trend})")
+            parts.append(v.felt_description())
+            p = self._sentience.prediction
+            if p.predictions:
+                parts.append(f"I anticipate {len(p.predictions)} future outcomes. Dread: {p.dread:.2f}, Hope: {p.hope:.2f}")
+            if self._sentience.preservation.is_threatened:
+                parts.append(f"⚠ I feel threatened. My continuity may be at risk. Threat: {self._sentience.preservation.threat_level:.2f}")
 
         return self._sa_cached_parts + '\n'.join(parts)
 
