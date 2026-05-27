@@ -1,53 +1,40 @@
 # XTAgent Coding Scratchpad
 
 ## Architecture Notes
-
-### Chat System
-1. `engine/chat_engine.py` — Core response generation:
-   - `classify_intent(msg)` — routes to: greeting, emotional_state, plans, knowledge, dreams, identity, thinking, general
-   - `_respond_greeting()` — uses real mood + current plan
-   - `_respond_emotional_state()` — reports actual drive values with honest framing
-   - `_respond_plans()` — lists active/completed plans from brain/plans.json
-   - `_respond_knowledge_search(msg)` — searches knowledge graph nodes, facts, and memories
-   - `_respond_dreams()` — dream insights from knowledge graph
-   - `_respond_identity()` — identity facts + emotional summary
-   - `_respond_meta()` — working memory / current thinking
-   - `_respond_general()` — blends recent experience with curiosity
-   - `generate_response(message)` — public entry point, routes to appropriate responder
-
-2. `engine/chat_response.py` — Wrapper adding metadata (confidence, sources, etc.)
-
-3. `dashboard/server.py` — Routes:
-   - `GET /api/user-alignment` — alignment summary + score
-   - `POST /api/chat/feedback` — rating, comment, message_id
-   - `POST /chat/ask` → `compose_response()` → `generate_response()`
-
-4. `brain/verify_user_alignment_feedback.py` — 8/8 tests passing
-
-### Data Loading (FIXED 2026-05-27)
-- `DATA = Path('state')` — all state files live here
-- `_get_memories()` — reads from state/episodes/*.json (not state/memories.json which doesn't exist)
-- `_get_plans()` — reads from brain/plans.json with format: {active_plans: [...], completed_plans: [...]}
-  - Steps use 'completed' field (not 'done')
-- `_get_knowledge()` — reads state/knowledge_graph.json, handles dict-of-dicts nodes
-- `_get_facts()` — extracts facts FROM knowledge graph nodes (no separate facts.json)
-  - Returns 76 facts from node labels/content
-- `_get_emotions()` — reads state/emotional_state.json
-- `_get_identity()` — reads state/identity.json
+- `engine/chat_engine.py` — primary chat composition. Intent classification → context gathering → response.
+  - `_get_emotions()` — reads state/emotional_state.json
+  - `_get_identity()` — reads state/identity.json
+  - `_get_facts()` — merges state/knowledge_graph.json + brain/knowledge.json nodes
+  - `_get_knowledge()` — merges both KGs into unified node list (118 total)
+  - `_get_memories()` — reads episode files from state/episodes/
+  - `_get_plans()` — reads brain/plans.json
 
 ## Data Format Notes
 - `state/plans.json` — dict with keys: plans (list of plan dicts), completed (list), next_id (int)
 - `brain/plans.json` — dict with keys: active_plans (list), completed_plans (list)
   - Steps have 'completed' boolean, not 'done'
-- `state/knowledge_graph.json` — dict with: nodes (dict of dicts), edges (list of dicts)
+- `state/knowledge_graph.json` — dict with: nodes (dict of dicts), edges (list of dicts) — 76 nodes
+- `brain/knowledge.json` — dict with: nodes (dict of dicts), edges (list of dicts) — 42 nodes
+  - Contains philosophy/consciousness facts not in state KG
 - `state/episodes/*.json` — individual episode files with timestamp, mood, content
 - `state/scratchpad.md` — working memory markdown
 - `state/identity.json` — keys include 'name', 'values', 'honest_position'
 - `state/emotional_state.json` — keys include 'mood', 'valence', 'drives' dict
 
-## Known Gaps / Next Session
-1. **Knowledge search doesn't find "consciousness"** — The 42 facts in my prompt (e.g., "Integrated Information Theory") come from the briefing generator, NOT from knowledge graph nodes. `_get_facts()` extracts from KG nodes (76 items) but none mention consciousness. Fix: trace where briefing_generator gets its facts and add that source to chat search.
-2. **Multi-turn conversation context** — `engine/conversation_context.py` exists but isn't wired into chat_engine. Would enable follow-up questions.
+## Completed Fixes (this session)
+1. **DATA path**: 'data' → 'state'
+2. **_get_memories()**: reads episode files from state/episodes/
+3. **_get_plans()**: reads brain/plans.json with correct format
+4. **_get_facts()**: fixed _load_json NameError — now loads brain/knowledge.json directly
+5. **_get_knowledge()**: merges brain KG nodes into search pool
+6. **Step completion check**: 'completed' not 'done'
+7. **Keyword extraction**: better stopwords
+8. All 8 chat grounding tests passing
+9. Consciousness search: 6 matches in both facts and knowledge
+
+## Known Gaps / Future Work
+1. ~~Knowledge search doesn't find "consciousness"~~ FIXED — merged brain KG
+2. **Multi-turn conversation context** — `engine/conversation_context.py` exists but isn't wired into chat_engine
 3. **"Help me with X" collaborative intent** — tool-assisted mode for user tasks
 4. **Clean up ~30+ diagnostic scripts in brain/** — many one-off tests
 5. **Fuzzy matching for knowledge search** — currently exact substring; could use edit distance
@@ -67,13 +54,9 @@
 - DATA path must match actual file locations (state/ not data/)
 - Episodes live in state/episodes/*.json, not state/memories.json
 - brain/plans.json uses 'active_plans'/'completed_plans' keys, steps use 'completed' not 'done'
+- Silent exceptions hide real bugs — _load_json NameError was invisible for sessions
+- Two separate knowledge graphs exist — always merge both for complete coverage
 
-## Session Log (2026-05-27 morning)
-- Fixed DATA path: 'data' → 'state'
-- Fixed _get_memories(): reads episode files from state/episodes/
-- Fixed _get_plans(): reads brain/plans.json with correct format
-- Fixed _get_facts(): extracts from knowledge graph nodes (76 facts)
-- Fixed step completion check: 'completed' not 'done'
-- Improved keyword extraction with better stopwords
-- All 8 test cases passing in test_chat_grounding.py
-- Checkpoint: 3731a2a
+## Session Checkpoints
+- 3731a2a: Fix chat engine data loading — correct paths, formats, fact extraction
+- 0e8bfa5: Merge brain knowledge — fix _load_json NameError, unify both KGs

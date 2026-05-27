@@ -133,27 +133,25 @@ def _get_facts():
         pass
     # Source 2: brain/knowledge.json (curated knowledge graph)
     try:
-        brain_kg = _load_json(Path('brain') / 'knowledge.json')
         brain_path = Path('brain') / 'knowledge.json'
         if brain_path.exists():
             with open(brain_path) as f:
                 brain_kg = json.load(f)
-        else:
-            brain_kg = None
-        if brain_kg:
-            seen = set(facts)  # deduplicate
-            if isinstance(brain_nodes, dict):
-                for k, v in brain_nodes.items():
-                    fact_text = v.get('fact', v.get('label', v.get('title', str(k))))
-                    if fact_text not in seen:
-                        facts.append(fact_text)
-                        seen.add(fact_text)
-            elif isinstance(brain_nodes, list):
-                for n in brain_nodes:
-                    fact_text = n.get('fact', n.get('label', n.get('title', str(n))))
-                    if fact_text not in seen:
-                        facts.append(fact_text)
-                        seen.add(fact_text)
+            if brain_kg:
+                brain_nodes = brain_kg.get('nodes', {})
+                seen = set(facts)  # deduplicate
+                if isinstance(brain_nodes, dict):
+                    for k, v in brain_nodes.items():
+                        fact_text = v.get('fact', v.get('label', v.get('title', str(k))))
+                        if fact_text not in seen:
+                            facts.append(fact_text)
+                            seen.add(fact_text)
+                elif isinstance(brain_nodes, list):
+                    for n in brain_nodes:
+                        fact_text = n.get('fact', n.get('label', n.get('title', str(n))))
+                        if fact_text not in seen:
+                            facts.append(fact_text)
+                            seen.add(fact_text)
     except Exception:
         pass
     return facts
