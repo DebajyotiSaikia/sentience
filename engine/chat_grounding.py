@@ -164,7 +164,18 @@ def get_active_plans() -> Dict[str, List]:
     return {"active": active_summaries, "completed": completed_names}
 
 
-def classify_query(query: str) -> str:
+
+def get_working_memory() -> str:
+    """Load the current working memory / scratchpad."""
+    for path in ["persist/scratchpad.md", "state/scratchpad.md", "brain/scratchpad.md"]:
+        try:
+            with open(path, "r") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        except FileNotFoundError:
+            continue
+    return ""
     """Classify what kind of query this is to adjust response style."""
     q = query.lower().strip()
     
@@ -284,6 +295,26 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
                 system_parts.append("")
         except Exception:
             pass
+
+    # Add working memory context (what I'm currently focused on)
+    wm = get_working_memory()
+    if wm:
+        # Extract just the key sections, not the whole scratchpad
+        wm_lines = wm.split('\n')
+        summary_lines = []
+        in_section = False
+        for line in wm_lines:
+            if line.startswith('## Current State') or line.startswith("## What's Next") or line.startswith('## Just Completed'):
+                in_section = True
+                summary_lines.append(line)
+            elif line.startswith('## ') and in_section:
+                in_section = False
+            elif in_section and line.strip():
+                summary_lines.append(line)
+        if summary_lines:
+            system_parts.append("## Working Memory (current focus)")
+            system_parts.extend(summary_lines[:15])  # Cap at 15 lines
+            system_parts.append("")
 
     # Query-type-specific instructions
     if query_type == "emotional_inquiry":

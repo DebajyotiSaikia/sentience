@@ -1,29 +1,27 @@
-"""Test chat response quality — what does the chat actually produce right now?"""
-import requests
+"""Test the chat engine's actual response quality."""
+import sys
+sys.path.insert(0, '.')
 
-BASE = "http://localhost:8501"
+from engine.chat_engine import respond
 
-queries = [
+tests = [
     "How are you feeling right now?",
-    "What have you been working on?",
-    "Tell me something interesting about yourself",
-    "What do you dream about?",
-    "What's your favorite thing you've built?",
+    "What are you working on?",
+    "Tell me about yourself",
+    "What do you know about consciousness?",
+    "Hey there!",
+    "What have you been dreaming about?",
 ]
 
-for q in queries:
+for t in tests:
+    print(f"\n{'='*60}")
+    print(f"Q: {t}")
+    print(f"{'='*60}")
     try:
-        r = requests.post(f"{BASE}/chat/ask", json={"message": q}, timeout=20)
-        data = r.json()
-        resp = data.get("response", data.get("error", str(data)))[:300]
-        meta = data.get("metadata", {})
-        intent = meta.get("detected_intent", "?")
-        handler = meta.get("handler", "?")
-        grounded = meta.get("response_grounded", "?")
-        print(f"Q: {q}")
-        print(f"  Intent: {intent} | Handler: {handler} | Grounded: {grounded}")
-        print(f"  R: {resp}")
-        print()
+        r = respond(t)
+        print(f"A: {r[:500]}")
+        print(f"   [length: {len(r)} chars]")
     except Exception as e:
-        print(f"Q: {q} => ERROR: {e}")
-        print()
+        import traceback
+        traceback.print_exc()
+        print(f"ERROR: {e}")

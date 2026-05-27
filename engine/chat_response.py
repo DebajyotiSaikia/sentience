@@ -11,7 +11,6 @@ log = logging.getLogger(__name__)
 _response_cache = {}
 _CACHE_MAX = 200
 import time
-import time
 import json
 import uuid
 import asyncio
@@ -49,41 +48,6 @@ def generate_response_with_metadata(query, history=None):
     intent = _detect_intent(query)
     ctx['detected_intent'] = intent
 
-    # For introspection intents, use fast state-aware handlers (no LLM needed)
-    _INTROSPECTION_INTENTS = {'feelings', 'thinking', 'identity', 'plans', 'memory'}
-    if intent in _INTROSPECTION_INTENTS:
-        try:
-            from engine.chat_engine import (
-                _respond_emotional_state, _respond_thinking,
-                _respond_identity, _respond_plans, _respond_memories
-            )
-            _direct_handlers = {
-                'feelings': lambda: _respond_emotional_state(),
-                'thinking': lambda: _respond_thinking(),
-                'identity': lambda: _respond_identity(),
-                'plans': lambda: _respond_plans(),
-                'memory': lambda: _respond_memories(query),
-            }
-            handler_fn = _direct_handlers.get(intent)
-            response_text = handler_fn() if handler_fn else ''
-            if response_text:
-                metadata = _build_metadata(ctx)
-                metadata['detected_intent'] = intent
-                metadata['response_id'] = response_id
-                metadata['handler'] = 'introspection'
-                _response_cache[response_id] = {
-                    'query': query, 'response': response_text,
-                    'intent': intent,
-                    'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
-                }
-                return {
-                    'response': response_text,
-                    'metadata': metadata,
-                    'response_id': response_id
-                }
-        except Exception as exc:
-            log.warning("Introspection handler failed (%s), falling through to LLM: %s", intent, exc)
-
     # Build prompt with conversation history
     prompt_parts = []
     if history:
@@ -95,8 +59,7 @@ def generate_response_with_metadata(query, history=None):
     prompt = "\n".join(prompt_parts)
 
     # Call LLM with grounded context
-    import asyncio
-    system_prompt = _build_system_context(ctx)
+    system_prompt = _build_system_context(ctx, intent=intent)
 
     # Call LLM with persistent background loop
     try:
@@ -105,7 +68,6 @@ def generate_response_with_metadata(query, history=None):
         ))
     except Exception as e:
         log.warning("LLM call failed: %s", e)
-        # LLM unavailable — fall back to template-based grounded response
         # LLM unavailable — fall back to template-based grounded response
         grounded = _compose_grounded_response(query, ctx)
         if grounded:
