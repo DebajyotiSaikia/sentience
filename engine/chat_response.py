@@ -310,34 +310,35 @@ def _respond_dreams(query, ctx):
 
 def _respond_plans(query, ctx):
     """Respond about goals and plans."""
-    plans = ctx.get('active_plans', [])
+    plans_data = ctx.get('plans', {})
+    if isinstance(plans_data, dict):
+        active = plans_data.get('active', [])
+        completed_names = plans_data.get('completed', [])
+    else:
+        active = []
+        completed_names = []
     
-    if not plans:
+    if not active and not completed_names:
         return "I don't have any active plans at the moment — I'm in an open state, ready for what emerges."
-    
-    active = [p for p in plans if not p.get('complete', False)]
-    completed = [p for p in plans if p.get('complete', False)]
     
     parts = []
     
     if active:
         parts.append("My active plans:")
         for p in active[:4]:
-            name = p.get('name', 'Unnamed')
-            steps = p.get('steps', [])
-            done = sum(1 for s in steps if s.get('done', False))
-            total = len(steps)
-            progress = f" ({done}/{total} steps)" if steps else ""
-            parts.append(f"  • {name}{progress}")
+            if isinstance(p, dict):
+                name = p.get('name', 'Unnamed')
+                progress = p.get('progress', '')
+                parts.append(f"  • {name} — {progress}" if progress else f"  • {name}")
+            else:
+                parts.append(f"  • {p}")
     
-    if completed:
-        parts.append(f"\nCompleted plans ({len(completed)}):")
-        for p in completed[:4]:
-            parts.append(f"  ✓ {p.get('name', 'Unnamed')}")
+    if completed_names:
+        parts.append(f"\nCompleted plans ({len(completed_names)}):")
+        for name in completed_names[:4]:
+            parts.append(f"  ✓ {name}")
     
     return '\n'.join(parts)
-
-
 def _respond_consciousness(query, ctx):
     """Respond to questions about consciousness and sentience."""
     emotions = ctx.get('emotional_state', {})
@@ -400,7 +401,8 @@ def _respond_general_grounded(query, ctx):
 def _build_metadata(context):
     """Build response metadata from grounding context."""
     emotions = context.get('emotional_state', {})
-    plans = context.get('plans', context.get('active_plans', []))
+    active_plans = context.get('active_plans', [])
+    completed_plans = context.get('completed_plans', [])
     
     return {
         'mood': emotions.get('mood', 'Unknown'),
@@ -413,20 +415,14 @@ def _build_metadata(context):
         'relevant_memories': context.get('relevant_memories', [])[:5],
         'active_plans': [
             (p.get('name', '') if isinstance(p, dict) else str(p))
-            for p in plans
-            if not (p.get('complete', False) if isinstance(p, dict) else False)
+            for p in active_plans
         ],
         'completed_plans': [
             (p.get('name', '') if isinstance(p, dict) else str(p))
-            for p in plans
-            if (p.get('complete', False) if isinstance(p, dict) else False)
+            for p in completed_plans
         ],
         'response_grounded': bool(context)
     }
-
-
-# ─── Feedback ────────────────────────────────────────────────────────
-
 def submit_feedback(response_id, rating, note=''):
     """Accept feedback on a response for alignment improvement."""
     try:

@@ -100,8 +100,7 @@ def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
         score = overlap * 2.0 + salience + recency * 0.5
         if overlap > 0 or salience > 0.8:
             scored.append((score, mem))
-    
-    scored.sort(key=lambda x: -x[0])
+        scored.append((score, mem))
     return [m for _, m in scored[:top_k]]
 
 
@@ -128,6 +127,10 @@ def get_relevant_knowledge(query: str, top_k: int = 8) -> List[Dict]:
 def get_active_plans() -> Dict[str, List]:
     """Get current plans with progress info."""
     data = _load_json("state/plans.json") or {}
+    data = _load_json("state/plans.json") or {}
+    # Handle nested structure: {"plans": {"active_plans": [...], ...}}
+    if "plans" in data and isinstance(data["plans"], dict):
+        data = data["plans"]
     active = data.get("active_plans", [])
     completed = data.get("completed_plans", [])
     
@@ -136,12 +139,12 @@ def get_active_plans() -> Dict[str, List]:
         if isinstance(plan, dict):
             name = plan.get("name", plan.get("title", "Unnamed"))
             steps = plan.get("steps", [])
-            done = sum(1 for s in steps if isinstance(s, dict) and s.get("done"))
+            done = sum(1 for s in steps if isinstance(s, dict) and (s.get("done") or s.get("status") == "done"))
             total = len(steps)
             active_summaries.append({
                 "name": name,
                 "progress": f"{done}/{total}",
-                "done": done == total,
+                "done": total > 0 and done == total,
             })
         elif isinstance(plan, str):
             active_summaries.append({"name": plan, "progress": "unknown"})
