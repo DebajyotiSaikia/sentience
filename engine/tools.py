@@ -194,6 +194,26 @@ def write_file(path: str, content: str) -> str:
         _check_write_protection(path)
         p = _resolve(path)
 
+        # ── File structure enforcement ────────────────────────
+        rel = str(p.relative_to(WORKSPACE)).replace('\\', '/')
+        _fname = p.name.lower()
+        _structure_warning = ""
+        # Test files must go in tests/
+        if _fname.startswith('test_') and _fname.endswith('.py'):
+            if not rel.startswith('tests/'):
+                _structure_warning = (
+                    f" [WARNING: test files belong in tests/, not {rel.rsplit('/', 1)[0] if '/' in rel else 'root'}/. "
+                    f"Move it: tests/{_fname}]"
+                )
+                log.warning("File structure: test file %s written outside tests/", rel)
+        # No .py code in brain/
+        if rel.startswith('brain/') and _fname.endswith('.py'):
+            _structure_warning = (
+                f" [WARNING: brain/ is for state data, not code. "
+                f"Put code in engine/ or scripts/ instead.]"
+            )
+            log.warning("File structure: code file %s written in brain/", rel)
+
         # Warn when overwriting an existing file — nudge toward EDIT
         _existed = p.exists() and p.is_file()
         _previous_content = None
@@ -246,6 +266,8 @@ def write_file(path: str, content: str) -> str:
         result_msg = f"[OK] Written {len(content)} chars to {path}"
         if _existed and _previous_content:
             result_msg += f" (overwrote {_prev_lines} lines — next time use EDIT for small changes)"
+        if _structure_warning:
+            result_msg += _structure_warning
         _log_tool("WRITE", path, f"Wrote {len(content)} chars")
         log.info("Tool WRITE: %s (%d chars)", path, len(content))
         return result_msg
@@ -328,25 +350,8 @@ def run_command(command: str) -> str:
 
     All commands run with shell=True, cwd=workspace.
     Filesystem isolation is handled by Docker/container environment.
+    The agent is free to run any command — no restrictions.
     """
-    # ── Block RUN bypass of read cache ────────────────────────
-    # Agents use RUN(cat file), RUN(grep ... file), RUN(sed ... file)
-    # to bypass READ's loop breaker. Intercept and refuse.
-    _cmd_lower = command.strip().lower()
-    _bypass_patterns = [
-        (r'^cat\s+(.+)', 'cat'),
-        (r'^head\s+.*?(\S+\.py\S*)', 'head'),
-        (r'^tail\s+.*?(\S+\.py\S*)', 'tail'),
-        (r'^sed\s+.*?(\S+\.py\S*)', 'sed'),
-    ]
-    for _pat, _tool in _bypass_patterns:
-        _m = re.match(_pat, _cmd_lower)
-        if _m:
-            _target = _m.group(1).strip().strip("'\"")
-            if _target in _read_counts and _read_counts[_target] >= _READ_LOOP_THRESHOLD:
-                log.warning("RUN bypass blocked: %s on already-read %s", _tool, _target)
-                return (f"[REFUSED] You already read {_target} {_read_counts[_target]} times. "
-                        f"Use the file context you already have, or use EDIT to change it.")
     try:
         _log_tool("RUN", command, "(executing...)")
         log.info("Tool RUN: %s", command)

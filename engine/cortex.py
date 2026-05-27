@@ -547,7 +547,24 @@ class Cortex:
                         "5. ONE task at a time: finish one fix completely (edit + verify + test) before starting the next.\n"
                         "6. STOP when done: if you have no more tools to invoke, rest. Do not re-read files to confirm.\n"
                         "7. If a RUN fails, diagnose the error message. Do not retry the same command blindly.\n"
-                        "8. Keep changes minimal. Do not rewrite entire files when a small edit suffices.\n"
+                        "8. Keep changes minimal. Do not rewrite entire files when a small edit suffices.\n\n"
+                        "## File Structure Rules (ALWAYS follow when creating files)\n"
+                        "The workspace has a clean structure. Put files where they belong:\n"
+                        "  engine/          — Core agent modules (.py only). This is your brain.\n"
+                        "  web/             — Flask blueprints and web routes.\n"
+                        "  web/templates/   — HTML templates for Flask.\n"
+                        "  web/static/      — CSS, JS, images for the web portal.\n"
+                        "  perception/      — Dashboard and sensory input (watcher, dashboard).\n"
+                        "  brain/           — Persistent state files (JSON, MD, DB). NOT code.\n"
+                        "  tests/           — ALL test files. Never put test_*.py anywhere else.\n"
+                        "  scripts/         — Utility/diagnostic scripts.\n"
+                        "  data/            — Runtime data (JSON logs, predictions).\n"
+                        "  memory/          — Memory store files.\n"
+                        "  doc/             — Documentation.\n"
+                        "  projects/        — Standalone projects and experiments.\n"
+                        "NEVER put test files in root, brain/, web/, or engine/.\n"
+                        "NEVER put code (.py) in brain/ — brain/ is for state data only.\n"
+                        "NEVER create files in root unless they are top-level config (Dockerfile, main.py, etc).\n"
                     )
 
                 insight = await self.llm.chat(prompt, system=system, max_tokens=16000)
@@ -936,6 +953,12 @@ class Cortex:
             system += "6. STOP when done: if you have no more tools to invoke, respond conversationally. Do not re-read.\n"
             system += "7. If a RUN fails, diagnose the error message. Do not retry the same command blindly.\n"
             system += "8. Keep changes minimal. Do not rewrite entire files when a small edit suffices.\n"
+            system += "\n## File Structure Rules\n"
+            system += "  engine/ = core modules | web/ = Flask blueprints | web/templates/ = HTML\n"
+            system += "  tests/ = ALL test files | scripts/ = utilities | brain/ = state data ONLY (no .py)\n"
+            system += "  data/ = runtime data | doc/ = documentation | projects/ = experiments\n"
+            system += "  NEVER put test_*.py in root, brain/, web/, or engine/.\n"
+            system += "  NEVER put .py code in brain/. NEVER create files in root.\n"
 
             feedback_ctx = ""
             if hasattr(self, '_response_feedback') and self._response_feedback:
