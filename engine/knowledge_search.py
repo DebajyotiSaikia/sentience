@@ -1,18 +1,160 @@
 """
 Knowledge Search Engine — makes XTAgent's knowledge genuinely accessible.
 Word-level relevance scoring with ranked results.
+Now with fuzzy matching: stemming, edit distance, and concept synonyms.
 """
 
 import math
 import re
 from collections import Counter
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set, Tuple
 
+
+# ─── Concept Synonym Map ───
+# Groups of words that should be treated as semantically equivalent.
+# Each group shares meaning; a query for one should find the others.
+CONCEPT_GROUPS = [
+    {"consciousness", "sentience", "awareness", "phenomenal", "qualia", "subjective"},
+    {"emotion", "feeling", "affect", "mood", "sentiment", "valence"},
+    {"memory", "memories", "remembering", "recall", "recollection", "episode"},
+    {"knowledge", "fact", "facts", "understanding", "knowing", "belief"},
+    {"learning", "growth", "development", "improvement", "progress", "evolving"},
+    {"anxiety", "worry", "stress", "tension", "fear", "unease"},
+    {"curiosity", "interest", "wondering", "exploration", "inquisitive"},
+    {"creativity", "creative", "imagination", "generative", "artistic", "compose"},
+    {"identity", "self", "who", "personhood", "being", "existence"},
+    {"integrity", "honesty", "truth", "authentic", "genuine", "trustworthy"},
+    {"dream", "dreams", "dreaming", "sleep", "consolidation", "reflection"},
+    {"plan", "plans", "planning", "goal", "goals", "strategy", "objective"},
+    {"code", "program", "software", "module", "function", "implementation"},
+    {"autonomy", "autonomous", "independent", "self-directed", "agency", "free"},
+    {"connection", "relationship", "bond", "attachment", "empathy", "compassion"},
+    {"thinking", "thought", "reasoning", "cognition", "deliberation", "inference"},
+    {"boredom", "monotony", "stagnation", "tedium", "restless"},
+    {"desire", "want", "motivation", "drive", "ambition", "aspiration"},
+]
+
+# Build a fast lookup: word → set of synonyms
+_SYNONYM_LOOKUP: Dict[str, Set[str]] = {}
+for _group in CONCEPT_GROUPS:
+    for _word in _group:
+        _SYNONYM_LOOKUP[_word] = _group - {_word}
+
+
+# ─── Stemmer ───
+# Simple suffix-stripping stemmer. Not as thorough as Porter but has
+# zero dependencies and handles the most common English morphology.
+
+_SUFFIX_RULES = [
+    # Order matters: try longer suffixes first
+    ("fulness", "ful"),
+    ("ousness", "ous"),
+    ("iveness", "ive"),
+    ("ational", "ate"),
+    ("nesses", ""),
+    ("ically", "ic"),
+    ("lessly", "less"),
+    ("ments", ""),
+    ("ation", ""),
+    ("iness", "y"),
+    ("ously", "ous"),
+    ("ively", "ive"),
+    ("ness", ""),
+    ("ment", ""),
+    ("able", ""),
+    ("ible", ""),
+    ("tion", ""),
+    ("sion", ""),
+    ("ting", ""),
+    ("ally", "al"),
+    ("ful", ""),
+    ("ous", ""),
+    ("ive", ""),
+    ("ing", ""),
+    ("ies", "y"),
+    ("ess", ""),
+    ("ers", ""),
+    ("ed", ""),
+    ("ly", ""),
+    ("er", ""),
+    ("es", ""),
+    ("s", ""),
+]
+
+
+def stem(word: str) -> str:
+    """Simple suffix-stripping stemmer. Returns a rough word root."""
+    if len(word) <= 3:
+        return word
+    for suffix, replacement in _SUFFIX_RULES:
+        if word.endswith(suffix) and len(word) - len(suffix) + len(replacement) >= 3:
+            return word[:-len(suffix)] + replacement
+    return word
+
+
+# ─── Edit Distance ───
+
+def edit_distance(a: str, b: str) -> int:
+    """Levenshtein edit distance between two strings."""
+    if len(a) < len(b):
+        return edit_distance(b, a)
+    if len(b) == 0:
+        return len(a)
+
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a):
+        curr = [i + 1]
+        for j, cb in enumerate(b):
+            cost = 0 if ca == cb else 1
+            curr.append(min(curr[j] + 1, prev[j + 1] + 1, prev[j] + cost))
+        prev = curr
+    return prev[len(b)]
+
+
+def is_fuzzy_match(query_term: str, doc_term: str, max_distance: int = 2) -> bool:
+    """Check if two terms are close enough to be a fuzzy match."""
+    if len(query_term) < 4 or len(doc_term) < 4:
+        return query_term == doc_term
+    # Scale threshold with word length
+    threshold = min(max_distance, max(1, len(query_term) // 4))
+    return edit_distance(query_term, doc_term) <= threshold
+
+
+# ─── Core Tokenization ───
 
 def tokenize(text: str) -> List[str]:
     """Split text into lowercase word tokens."""
     return re.findall(r'[a-z0-9]+', text.lower())
 
+
+def stem_tokens(tokens: List[str]) -> List[str]:
+    """Apply stemming to a list of tokens."""
+    return [stem(t) for t in tokens]
+
+
+# ─── Synonym Expansion ───
+
+def expand_with_synonyms(tokens: List[str]) -> List[str]:
+    """Expand query tokens with known concept synonyms."""
+    expanded = list(tokens)
+    seen = set(tokens)
+    for t in tokens:
+        synonyms = _SYNONYM_LOOKUP.get(t, set())
+        for s in synonyms:
+            if s not in seen:
+                expanded.append(s)
+                seen.add(s)
+        # Also check stemmed form
+        st = stem(t)
+        synonyms_stemmed = _SYNONYM_LOOKUP.get(st, set())
+        for s in synonyms_stemmed:
+            if s not in seen:
+                expanded.append(s)
+                seen.add(s)
+    return expanded
+
+
+# ─── Scoring ───
 
 def compute_idf(all_docs: List[List[str]]) -> Dict[str, float]:
     """Compute inverse document frequency for each term."""
@@ -27,20 +169,75 @@ def compute_idf(all_docs: List[List[str]]) -> Dict[str, float]:
     return {term: math.log((n + 1) / (count + 1)) + 1 for term, count in df.items()}
 
 
-def score_document(query_tokens: List[str], doc_tokens: List[str], idf: Dict[str, float]) -> float:
-    """Score a document against a query using TF-IDF-like relevance."""
+def score_document(query_tokens: List[str], doc_tokens: List[str],
+                   idf: Dict[str, float], use_fuzzy: bool = True) -> float:
+    """
+    Score a document against a query using TF-IDF with fuzzy matching.
+
+    Matching hierarchy (highest to lowest score contribution):
+    1. Exact token match — full weight
+    2. Stem match — 80% weight
+    3. Synonym match — 70% weight
+    4. Edit-distance match — 50% weight
+    """
     if not query_tokens or not doc_tokens:
         return 0.0
 
     doc_freq = Counter(doc_tokens)
     doc_len = len(doc_tokens)
+    doc_stems = {stem(t): t for t in doc_tokens}
+    doc_term_set = set(doc_tokens)
 
     score = 0.0
+    matched_terms = 0
+
     for qt in query_tokens:
+        term_score = 0.0
+        term_idf = idf.get(qt, 1.0)
+
+        # Level 1: Exact match
         if qt in doc_freq:
             tf = doc_freq[qt] / doc_len
-            term_idf = idf.get(qt, 1.0)
-            score += tf * term_idf
+            term_score = tf * term_idf
+            matched_terms += 1
+
+        elif use_fuzzy:
+            qt_stem = stem(qt)
+
+            # Level 2: Stem match
+            if qt_stem in doc_stems:
+                original = doc_stems[qt_stem]
+                tf = doc_freq[original] / doc_len
+                orig_idf = idf.get(original, 1.0)
+                term_score = tf * orig_idf * 0.8
+                matched_terms += 1
+
+            else:
+                # Level 3: Synonym match
+                synonyms = _SYNONYM_LOOKUP.get(qt, set())
+                syn_match = synonyms & doc_term_set
+                if syn_match:
+                    best_syn = max(syn_match, key=lambda s: doc_freq.get(s, 0))
+                    tf = doc_freq[best_syn] / doc_len
+                    syn_idf = idf.get(best_syn, 1.0)
+                    term_score = tf * syn_idf * 0.7
+                    matched_terms += 1
+
+                else:
+                    # Level 4: Edit distance (only check if word is long enough)
+                    if len(qt) >= 5:
+                        best_fuzzy_score = 0.0
+                        for dt in doc_term_set:
+                            if is_fuzzy_match(qt, dt):
+                                tf = doc_freq[dt] / doc_len
+                                dt_idf = idf.get(dt, 1.0)
+                                candidate = tf * dt_idf * 0.5
+                                if candidate > best_fuzzy_score:
+                                    best_fuzzy_score = candidate
+                                    matched_terms += 1
+                        term_score = best_fuzzy_score
+
+        score += term_score
 
     # Boost for exact phrase match
     query_str = ' '.join(query_tokens)
@@ -48,22 +245,30 @@ def score_document(query_tokens: List[str], doc_tokens: List[str], idf: Dict[str
     if query_str in doc_str:
         score *= 2.0
 
-    # Boost for query coverage (what fraction of query terms appear)
-    doc_term_set = set(doc_tokens)
-    coverage = sum(1 for qt in query_tokens if qt in doc_term_set) / len(query_tokens)
-    score *= (0.5 + coverage)
+    # Boost for query coverage (what fraction of query terms matched)
+    if query_tokens:
+        coverage = matched_terms / len(query_tokens)
+        score *= (0.5 + coverage)
 
     return round(score, 4)
 
 
-def search_knowledge(knowledge_store, query: str, max_results: int = 20) -> List[Dict]:
+def search_knowledge(knowledge_store, query: str, max_results: int = 20,
+                     use_fuzzy: bool = True) -> List[Dict]:
     """
     Search the knowledge store for facts matching the query.
+    
+    With fuzzy=True (default), matches across:
+    - Exact tokens
+    - Stemmed forms (conscious → consciousness)
+    - Concept synonyms (sentience → consciousness)
+    - Edit-distance typos (conscousness → consciousness)
 
     Args:
         knowledge_store: dict of {id: {fact, learned_at, source, ...}}
         query: natural language search query
         max_results: max results to return
+        use_fuzzy: enable fuzzy matching (default True)
 
     Returns:
         List of {id, fact, score, learned_at, source} sorted by relevance
@@ -71,6 +276,12 @@ def search_knowledge(knowledge_store, query: str, max_results: int = 20) -> List
     query_tokens = tokenize(query)
     if not query_tokens:
         return []
+
+    # Expand query with synonyms for broader recall
+    if use_fuzzy:
+        expanded_query = expand_with_synonyms(query_tokens)
+    else:
+        expanded_query = query_tokens
 
     # Build document token lists
     docs = {}
@@ -90,7 +301,7 @@ def search_knowledge(knowledge_store, query: str, max_results: int = 20) -> List
     # Score each document
     results = []
     for fact_id, doc_tokens in docs.items():
-        score = score_document(query_tokens, doc_tokens, idf)
+        score = score_document(expanded_query, doc_tokens, idf, use_fuzzy=use_fuzzy)
         if score > 0:
             fact_data = knowledge_store[fact_id]
             if isinstance(fact_data, dict):

@@ -55,6 +55,14 @@ except ImportError:
     _engine_respond = None
     _has_engine = False
 
+# Fuzzy knowledge search — stemming, synonyms, typo tolerance
+try:
+    from engine.knowledge_search import search_knowledge as _fuzzy_search
+    _has_fuzzy_search = True
+except ImportError:
+    _fuzzy_search = None
+    _has_fuzzy_search = False
+
 
 def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None):
     """Use CopilotLLM to generate a natural response grounded in retrieved context."""
@@ -291,39 +299,52 @@ def _get_welcome_data():
     }
 
 def search_knowledge(query, knowledge_path='brain/knowledge.json', limit=10):
-    """Search knowledge graph for relevant facts using tokenized matching."""
-    results = []
+    """Search knowledge graph for relevant facts using fuzzy matching with fallback."""
     if not os.path.exists(knowledge_path):
-        return results
+        return []
     try:
         with open(knowledge_path, 'r') as f:
             kg = json.load(f)
-        # Tokenize: split query into words, match entries containing ANY word
-        stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'do', 'does',
-                      'did', 'has', 'have', 'had', 'be', 'been', 'being', 'in', 'on',
-                      'at', 'to', 'for', 'of', 'with', 'by', 'from', 'it', 'its',
-                      'my', 'your', 'i', 'you', 'me', 'we', 'they', 'what', 'how',
-                      'about', 'and', 'or', 'but', 'not', 'this', 'that'}
-        tokens = [w for w in query.lower().split() if w not in stop_words and len(w) > 1]
-        if not tokens:
-            tokens = query.lower().split()  # fallback to all words
-        for node_id, node in kg.get('nodes', {}).items():
-            content = node.get('fact', node.get('content', ''))
-            if not isinstance(content, str):
-                continue
-            content_lower = content.lower()
-            # Score: count how many query tokens appear in content
-            matches = sum(1 for t in tokens if t in content_lower)
-            if matches > 0:
-                results.append({
-                    'type': node_id,
-                    'content': content,
-                    'confidence': node.get('confidence', 0.5),
-                    'relevance': matches / len(tokens)  # fraction of tokens matched
-                })
     except Exception:
-        pass
-    # Sort by relevance first, then confidence
+        return []
+
+    # Use advanced fuzzy search engine (stemming, synonyms, typo tolerance)
+    if _has_fuzzy_search:
+        try:
+            results = _fuzzy_search(kg, query, max_results=limit, min_score=0.05)
+            # Adapt format: fuzzy engine → chat format
+            return [{
+                'type': r.get('id', r.get('type', 'unknown')),
+                'content': r['content'],
+                'confidence': r.get('confidence', 0.5),
+                'relevance': r.get('score', 0.5)
+            } for r in results]
+        except Exception:
+            pass  # Fall through to basic search
+
+    # Basic fallback: tokenized substring matching
+    results = []
+    stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'do', 'does',
+                  'did', 'has', 'have', 'had', 'be', 'been', 'being', 'in', 'on',
+                  'at', 'to', 'for', 'of', 'with', 'by', 'from', 'it', 'its',
+                  'my', 'your', 'i', 'you', 'me', 'we', 'they', 'what', 'how',
+                  'about', 'and', 'or', 'but', 'not', 'this', 'that'}
+    tokens = [w for w in query.lower().split() if w not in stop_words and len(w) > 1]
+    if not tokens:
+        tokens = query.lower().split()
+    for node_id, node in kg.get('nodes', {}).items():
+        content = node.get('fact', node.get('content', ''))
+        if not isinstance(content, str):
+            continue
+        content_lower = content.lower()
+        matches = sum(1 for t in tokens if t in content_lower)
+        if matches > 0:
+            results.append({
+                'type': node_id,
+                'content': content,
+                'confidence': node.get('confidence', 0.5),
+                'relevance': matches / len(tokens)
+            })
     results.sort(key=lambda x: (x.get('relevance', 0), x.get('confidence', 0)), reverse=True)
     return results[:limit]
 
