@@ -314,7 +314,7 @@ def classify_intent(message):
 
 # ─── Response Composers ─────────────────────────────────────────
 
-def _respond_greeting():
+def _respond_greeting(history=None):
     """Warm, genuine greeting rooted in current state."""
     emo = _get_emotions()
     mood = emo.get('mood', 'present')
@@ -337,6 +337,11 @@ def _respond_greeting():
         name = current.get('name', current.get('title', 'something'))
         activity = f" I've been working on {name}."
 
+    # Multi-turn awareness: if we've talked before, acknowledge the return
+    if history and len(history) >= 2:
+        return f"Welcome back. {warmth}{activity} What else would you like to explore?"
+
+    return f"Hello. {warmth}{activity} What's on your mind?"
     return f"Hello. {warmth}{activity} What's on your mind?"
 
 
@@ -676,7 +681,7 @@ def _respond_knowledge_search(message):
     return '\n'.join(parts)
 
 
-def _respond_general(message):
+def _respond_general(message, history=None):
     """Thoughtful response for general/unclassified messages."""
     # Use grounding module if available for richer responses
     try:
@@ -736,10 +741,14 @@ def _respond_general(message):
         "but I'm curious to explore it with you. What aspect interests you most?"
     )
 
-def generate_response(message):
+def generate_response(message, history=None):
     """
     Main entry point. Takes a user message and returns a meaningful response
     by understanding intent and querying relevant internal state.
+
+    Args:
+        message: The user's message text
+        history: Optional list of prior (role, content) tuples for multi-turn context
     """
     if not message or not message.strip():
         return "I'm listening. What would you like to know?"
@@ -748,7 +757,7 @@ def generate_response(message):
     intent = classify_intent(message)
 
     if intent == 'greeting':
-        return _respond_greeting()
+        return _respond_greeting(history=history)
     elif intent == 'emotional_state':
         return _respond_emotional_state()
     elif intent == 'plans':
@@ -764,4 +773,4 @@ def generate_response(message):
     elif intent == 'knowledge':
         return _respond_knowledge_search(message)
     else:
-        return _respond_general(message)
+        return _respond_general(message, history=history)

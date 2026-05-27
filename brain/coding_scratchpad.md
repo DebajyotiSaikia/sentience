@@ -1,16 +1,14 @@
-# Coding Scratchpad — XTAgent
+# XTAgent Coding Scratchpad
 
-## Architecture: Chat Response Pipeline
+## Architecture: Chat Pipeline
 
-### Data Flow
 ```
-User query → POST /chat/ask (dashboard/server.py)
-  → generate_response_with_metadata(query) (engine/chat_response.py)
-    → classify_intent(query) (engine/chat_engine.py)
-    → generate_response(query) (engine/chat_engine.py)
-      → _respond_greeting/_respond_emotions/_respond_plans/etc.
-      → build_chat_grounding(query) (engine/chat_grounding.py) for context
-    → wraps with metadata (mood, valence, counts, grounding_used)
+User → /api/chat/ask (dashboard/server.py)
+  → generate_response_with_metadata(message) (engine/chat_response.py)
+    → classify_intent(message) (engine/chat_engine.py)
+    → _respond_greeting/_respond_emotions/_respond_plans/etc.
+    → build_chat_grounding(query) (engine/chat_grounding.py) for context
+  → wraps with metadata (mood, valence, counts, grounding_used)
 ```
 
 ### Two Intent Classifiers
@@ -26,23 +24,31 @@ User query → POST /chat/ask (dashboard/server.py)
 ### Key Files
 - `engine/chat_grounding.py` — builds compact context from brain state, knowledge, memories
 - `engine/chat_engine.py` — classify_intent + generate_response + intent-specific handlers
-- `engine/chat_response.py` — wraps response with metadata
+- `engine/chat_response.py` — wraps response with metadata (intent, emotions, grounding)
 - `engine/conversation_intelligence.py` — richer standalone intent/tone/complexity analysis
 - `engine/conversation_context.py` — ConversationContext class (277 lines, not yet wired in)
 
 ## Tests
 - `brain/test_intent.py` — 11 intent classification cases (PASSING)
-- `brain/test_chat_integration.py` — 11 intents + 5 response generation tests (PASSING)
-- `brain/test_response_quality.py` — deeper response quality checks (PASSING)
+- `brain/test_chat_integration.py` — 16 cases: intents + response generation (PASSING)
+- `brain/test_response_quality.py` — 6 deeper response quality checks (PASSING)
+- `brain/test_chat_e2e.py` — 7 end-to-end cases with assertions (PASSING)
 
-## Session 2026-05-27 Accomplishments
+## Session 2026-05-27 (Early) Accomplishments
 1. Fixed intent classification ordering (dreams before identity)
 2. Deduplicated identity_patterns block
 3. Plans checked before identity
 4. Added conversation_intelligence import to chat_engine
 5. Updated conversation_intelligence.py with richer patterns
 6. Created 3 test suites, all passing
-7. Saved checkpoints: f25b3c4
+7. Saved checkpoint: f25b3c4
+
+## Session 2026-05-27 (Current) Accomplishments
+1. Enhanced chat_response.py with rich metadata (intent, emotions, grounding sources)
+2. Fixed missing "plans" patterns in classify_intent()
+3. Created test_chat_e2e.py for end-to-end verification
+4. All 4 test suites passing (40+ test cases total)
+5. Chat now returns conversational responses grounded in real internal state
 
 ## Next Session Priorities
 1. **Wire ConversationContext into generate_response()** — multi-turn awareness
@@ -62,3 +68,4 @@ User query → POST /chat/ask (dashboard/server.py)
 - When tests all pass and checkpoint is saved — STOP. Don't loop.
 - The metacognitive monitor is right: repeated CHECKPOINTs = stuck signal
 - One clean merge beats three incremental patches
+- Follow the decisive path: plan → edit → verify → test → checkpoint → rest
