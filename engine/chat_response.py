@@ -28,7 +28,7 @@ def generate_response_with_metadata(query: str) -> dict:
             "mood": ctx.mood,
             "valence": ctx.valence,
             "memories_available": len(ctx.relevant_memories),
-            "plans_available": len(ctx.active_plans),
+            "plans_available": len(ctx.relevant_plans),
             "knowledge_matches": len(ctx.relevant_knowledge),
         }
     except Exception:
@@ -48,7 +48,6 @@ def generate_response_with_metadata(query: str) -> dict:
         "grounding": grounding_meta,
     }
 
-    return result
     return result
 
 
