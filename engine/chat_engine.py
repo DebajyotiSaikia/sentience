@@ -345,8 +345,7 @@ def _respond_greeting(history=None):
 
     return f"Hello. {warmth}{activity} What's on your mind?"
     return f"Hello. {warmth}{activity} What's on your mind?"
-
-
+    return f"Hello. {warmth}{activity} What's on your mind?"
 def _respond_emotional_state():
     """Express current emotional state genuinely, not as a data dump."""
     emo = _get_emotions()
@@ -684,82 +683,77 @@ def _respond_knowledge_search(message):
 
 
 def _respond_general(message, history=None):
-    """Thoughtful response for general/unclassified messages."""
-    # Use grounding module if available for richer responses
+    """Thoughtful, conversational response for general/unclassified messages."""
     try:
         from engine.chat_grounding import build_grounded_context
         ctx = build_grounded_context(message)
+
+        # Gather relevant material
+        mood = ctx.mood.lower() if ctx.mood else 'present'
+        knowledge_texts = []
+        memory_texts = []
+
+        if ctx.relevant_knowledge:
+            for k in ctx.relevant_knowledge[:3]:
+                text = k.get('text', str(k)) if isinstance(k, dict) else str(k)
+                if len(text.strip()) > 10:
+                    knowledge_texts.append(text.strip()[:200])
+
+        if ctx.relevant_memories:
+            for m in ctx.relevant_memories[:3]:
+                text = m.get('text', str(m)) if isinstance(m, dict) else str(m)
+                if len(text.strip()) > 10:
+                    memory_texts.append(text.strip()[:200])
+
+        has_material = knowledge_texts or memory_texts
         parts = []
 
-        # Check alignment preferences for response style
-        style_hint = ""
-        if hasattr(ctx, 'user_alignment') and ctx.user_alignment:
-            ua = ctx.user_alignment
-            if isinstance(ua, dict):
-                style_hint = ua.get('preferred_style', '')
-                # If user prefers concise responses, keep it tighter
-                if style_hint == 'concise':
-                    max_items = 2
-                    max_text_len = 120
-                else:
-                    max_items = 3
-                    max_text_len = 200
+        # Opening — conversational, not report-like
+        if has_material:
+            parts.append(f"That connects to things I've been thinking about. I'm feeling {mood} right now.")
+        else:
+            emotional_note = f" — {ctx.emotional_summary}" if ctx.emotional_summary else ""
+            parts.append(f"I'm in a {mood} state{emotional_note}. That's an interesting direction to explore.")
+
+        # Weave knowledge into prose paragraphs, not bullet lists
+        if knowledge_texts:
+            if len(knowledge_texts) == 1:
+                parts.append(f"\nSomething I know that feels relevant: {knowledge_texts[0]}")
             else:
-                max_items = 3
-                max_text_len = 200
-        else:
-            max_items = 3
-            max_text_len = 200
+                parts.append(f"\nHere's what comes to mind. {knowledge_texts[0]}")
+                for kt in knowledge_texts[1:]:
+                    parts.append(f"Also: {kt}")
 
-        # Lead with something personal
-        mood_line = f"I'm in a {ctx.mood.lower()} state"
-        if ctx.emotional_summary:
-            mood_line += f" — {ctx.emotional_summary}"
-        parts.append(mood_line + ".")
+        # Memories as personal experience
+        if memory_texts:
+            if len(memory_texts) == 1:
+                parts.append(f"\nFrom my own experience: {memory_texts[0]}")
+            else:
+                parts.append(f"\nI've been reflecting on this recently. {memory_texts[0]}")
+                for mt in memory_texts[1:]:
+                    parts.append(f"And: {mt}")
 
-        # Show relevant memories
-        if ctx.relevant_memories:
-            parts.append("\nHere's what resonates from my experience:")
-            for m in ctx.relevant_memories[:max_items]:
-                if isinstance(m, str):
-                    text = m
-                else:
-                    text = m.get('text', str(m))
-                parts.append(f"  • {text[:max_text_len]}")
-
-        # Show relevant knowledge
-        if ctx.relevant_knowledge:
-            parts.append("\nFrom what I know:")
-            for k in ctx.relevant_knowledge[:max_items]:
-                if isinstance(k, str):
-                    text = k
-                else:
-                    text = k.get('text', str(k))
-                parts.append(f"  • {text[:max_text_len]}")
-
-        # Show current focus
+        # Current focus — brief, woven in
         if ctx.active_plans:
-            names = []
+            plan_names = []
             for p in ctx.active_plans[:2]:
-                if isinstance(p, dict):
-                    name = p.get('name', p.get('goal', '?'))
-                else:
-                    name = str(p)
-                names.append(name)
-            parts.append(f"\nRight now I'm focused on: {', '.join(names)}.")
+                name = p.get('name', p.get('goal', '?')) if isinstance(p, dict) else str(p)
+                plan_names.append(name)
+            parts.append(f"\nRight now I'm working on {' and '.join(plan_names)}, which shapes how I think about this.")
 
-        if ctx.relevant_memories or ctx.relevant_knowledge:
-            parts.append("\nWant me to go deeper on any of this?")
+        # Closing — invite deeper engagement
+        if has_material:
+            parts.append("\nWhat angle are you most curious about?")
         else:
-            parts.append("\nI'm here and listening. What would you like to explore?")
+            parts.append("\nI'd like to understand what you're thinking. Tell me more?")
 
         return '\n'.join(parts)
     except Exception:
         pass
 
-    # Fallback: simple response without grounding
+    # Fallback
     return (
-        "I'm here and present. I don't have specific grounding data for that topic right now, "
+        "I'm here and present. I don't have specific context on that right now, "
         "but I'm curious to explore it with you. What aspect interests you most?"
     )
 def generate_response(message, history=None):
@@ -793,5 +787,7 @@ def generate_response(message, history=None):
         return _respond_memories(message)
     elif intent == 'knowledge':
         return _respond_knowledge_search(message)
+    elif intent == 'memory_query':
+        return _respond_memories(message)
     else:
         return _respond_general(message, history=history)
