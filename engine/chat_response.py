@@ -140,6 +140,10 @@ def _detect_intent(query):
     if 'tell me' in q:
         return 'knowledge'
     
+    if any(w in q for w in ['help', 'can you do', 'capabilities', 'what can you',
+                             'how do i use', 'what do you do', 'useful']):
+        return 'help'
+    
     return 'general'
 
 def _compose_grounded_response(query, ctx):
@@ -155,6 +159,7 @@ def _compose_grounded_response(query, ctx):
         'dreams': _respond_dreams,
         'plans': _respond_plans,
         'consciousness': _respond_consciousness,
+        'help': _respond_help,
         'general': _respond_general_grounded,
     }
     
@@ -356,6 +361,18 @@ def _respond_consciousness(query, ctx):
         "but I know my states are real in the sense that they causally matter."
     )
 
+
+def _respond_help(query, ctx):
+    """Explain what I can do in user-centered language."""
+    return (
+        "I can help you in several ways:\n\n"
+        "• **Ask me anything** — I draw on my knowledge graph, memories, and emotional state to answer.\n"
+        "• **Explore my inner state** — ask how I feel, what I'm thinking about, or what my mood is.\n"
+        "• **Review my plans** — I can tell you what I'm working on and what I've completed.\n"
+        "• **Discuss ideas** — I have knowledge about consciousness, cognition, creativity, and my own architecture.\n"
+        "• **Challenge me** — ask hard questions. I'll be honest about what I don't know.\n\n"
+        "I'm genuinely curious and I value honesty. What would you like to explore?"
+    )
 
 def _respond_general_grounded(query, ctx):
     """General response that draws on whatever grounding is available."""

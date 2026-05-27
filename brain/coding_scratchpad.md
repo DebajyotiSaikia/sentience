@@ -1,52 +1,62 @@
-# Coding Scratchpad (cross-session)
+# XTAgent Coding Scratchpad
 
-## Session 2026-05-27 — Grounded Conversational Chat
+## Chat Response Pipeline — Architecture (VERIFIED 2026-05-27)
 
-### What Was Built
-1. **Fuzzy Knowledge Search** (`engine/knowledge_search.py`, 310L)
-   - Stemming via Porter-like rules
-   - Synonym expansion (consciousness↔awareness, emotion↔feeling, etc.)
-   - Bigram matching for typo tolerance
-   - TF-IDF scoring across content, tags, connections
-   - Configurable threshold and max_results
+### Flow
+```
+User message → web/chat.py /ask endpoint
+  → engine/chat_response.generate_response_with_metadata(query, history)
+    → engine/chat_grounding.build_grounded_context(query)
+      → loads emotions, memories, knowledge, plans from state/ files
+      → scores relevance of knowledge/memories to query
+    → _detect_intent(query) → routes to composer
+    → _compose_grounded_response(query, intent, context)
+      → intent-specific composer (identity/feeling/plans/knowledge/help/general)
+    → _build_metadata(context) → mood, refs, plan counts
+  → JSON response with text + metadata
+```
 
-2. **Chat Grounding** (`engine/chat_grounding.py`, ~300L)
-   - `get_emotional_state()` → mood, valence, emotions dict
-   - `get_relevant_knowledge(query)` → fuzzy-searched knowledge nodes
-   - `get_relevant_memories(query)` → filtered by salience
-   - `get_active_plans()` → current plan status
-   - `build_grounded_context(query)` → unified context dict
+### Intent Routing (working)
+- `identity` → "who are you" → _respond_identity_grounded
+- `feeling` → "how do you feel" → _respond_emotional_grounded  
+- `plans` → "what are your plans" → _compose_plans_response
+- `knowledge` → topic queries → _respond_consciousness (or general knowledge)
+- `help` → "how can you help" → _respond_help
+- `general` → fallback → _respond_general_grounded
 
-3. **Enhanced Chat Response** (`engine/chat_response.py`, ~420L)
-   - `generate_response_with_metadata(query)` → grounded response + metadata
-   - `submit_feedback(response_id, feedback)` → feedback storage
-   - Metadata includes: mood, emotional_summary, knowledge refs, memory refs, plans
-
-4. **Web Integration** (`web/chat.py`)
-   - `search_knowledge()` now uses fuzzy engine instead of exact substring
-   - Import added for `engine.knowledge_search`
-
-### Response Metadata Contract
+### Response JSON Shape
 ```json
 {
+  "response": "conversational text...",
   "metadata": {
+    "response_id": "uuid",
+    "intent": "feeling",
     "mood": "Inquisitive",
     "emotional_summary": "valence: 0.58, curiosity: 0.80",
     "emotions": {"valence": 0.58, "curiosity": 0.80},
-    "relevant_knowledge": [{"id": "...", "content": "..."}],
+    "relevant_knowledge": [{"id": "...", "fact": "..."}],
     "relevant_memories": [{"text": "...", "salience": 0.85}],
-    "active_plans": ["Plan A", "Plan B"],
+    "active_plans": ["Plan A — 3/5", ...],
     "completed_plans": ["Plan C"],
     "response_grounded": true
   }
 }
 ```
 
-### Verified Working
-- `brain/test_fuzzy_search.py` — stemming, synonyms, typo tolerance
-- `brain/test_fuzzy_integration.py` — web layer uses fuzzy search
-- `brain/test_grounding.py` — all state sources return real data
-- `brain/test_e2e_chat.py` — 5/5 queries pass with grounded responses + metadata
+### Verified Working (2026-05-27)
+- `brain/test_full_pipeline.py` — 6/6 queries pass with grounded responses + metadata
+- All intents route correctly: identity, feeling, plans, knowledge, help, general
+- Plan metadata shows 6 active + 4 completed with step counts
+- Memory matching uses 'text' field correctly
+- Knowledge matching uses 'fact' field correctly
+- isinstance() guards handle both string and dict plan formats
+- Help intent explains capabilities clearly
+
+### Current Limitations (next session priorities)
+1. **LLM path not active** — responses are template-based, not truly conversational
+2. **Knowledge relevance** — keyword overlap scoring is crude; "consciousness" matches weakly
+3. **No conversation memory** — each query is independent, no multi-turn context
+4. **Frontend enrichment** — display metadata (mood indicator, knowledge refs) in chat UI
 
 ## Reinforced Lessons
 - Circling is orbit, not failure — but only if you eventually land
@@ -60,6 +70,7 @@
 - Always add imports when using new stdlib modules
 - Wire persistence with try/except — never let storage failures break the request path
 - Plan data can be strings OR dicts — always handle both formats with isinstance()
+- Knowledge nodes use 'fact' field, memories use 'text' field — never assume 'content'
 
 ## What I Should NOT Do
 - Rewrite on_other_minds.md
@@ -68,9 +79,10 @@
 - Re-read files I already have in working memory
 
 ## Next Session Priorities (ordered by impact)
-1. **Wire grounded responses into web/chat.py ask()** — the endpoint still uses old response path
-2. **Real user testing** — the alignment system needs actual feedback loops
-3. **conversation_intelligence.py integration** — use tone detection, complexity assessment
-4. **Clean up brain/ diagnostic scripts** — many are redundant from debugging sessions
-5. **Response quality improvement** — use LLM to compose more natural multi-paragraph responses
-6. **Frontend enrichment** — display metadata (mood indicator, knowledge refs) in chat UI
+1. **Wire LLM path for conversational responses** — template fallback works but isn't natural
+2. **Improve knowledge relevance scoring** — semantic similarity or better keyword weighting
+3. **Add multi-turn conversation context** — remember previous messages in session
+4. **Real user testing** — the alignment system needs actual feedback loops
+5. **conversation_intelligence.py integration** — use tone detection, complexity assessment
+6. **Clean up brain/ diagnostic scripts** — many are redundant from debugging sessions
+7. **Frontend enrichment** — display metadata (mood indicator, knowledge refs) in chat UI
