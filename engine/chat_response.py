@@ -1,75 +1,74 @@
 """
-Chat Response — Wrapper that enriches chat responses with metadata
-and user alignment context. Keeps chat_engine.py untouched.
+Chat Response — Wrapper that enriches chat responses with metadata.
+
+Every response gets a stable ID for feedback tracking. Feedback flows
+through to user_alignment for learning and improvement.
 """
+
 import uuid
+from datetime import datetime, timezone
 
-try:
-    from engine.chat_engine import generate_response, classify_intent
-except ImportError:
-    def generate_response(msg):
-        return f"I heard: {msg}"
-    def classify_intent(msg):
-        return "general"
-
-try:
-    from engine.user_alignment import (
-        get_alignment_context,
-        suggest_response_guidance,
-        record_feedback,
-    )
-    _HAS_ALIGNMENT = True
-except ImportError:
-    _HAS_ALIGNMENT = False
+from engine.chat_engine import generate_response, classify_intent
+from engine import user_alignment
 
 
-def generate_response_with_metadata(message: str) -> dict:
-    """
-    Enhanced entry point returning response + metadata for feedback tracking.
-    """
-    response_id = str(uuid.uuid4())[:12]
+def generate_response_with_metadata(query: str) -> dict:
+    """Generate a chat response enriched with metadata and a feedback ID."""
+    response_id = str(uuid.uuid4())
+    intent = classify_intent(query)
 
-    alignment_summary = {}
-    if _HAS_ALIGNMENT:
-        try:
-            ctx = get_alignment_context()
-            alignment_summary = {
-                "total_feedback": ctx.get("total_feedback", 0),
-                "avg_rating": ctx.get("average_rating", 0),
-            }
-        except Exception:
-            pass
+    # Get alignment guidance to potentially shape responses
+    guidance = user_alignment.suggest_response_guidance()
 
-    intent = classify_intent(message)
-    response = generate_response(message)
+    # Generate the core response
+    response_text = generate_response(query)
 
-    return {
-        "response": response,
+    # Build enriched result
+    result = {
         "response_id": response_id,
+        "query": query,
         "intent": intent,
-        "alignment": alignment_summary,
+        "response": response_text,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "guidance_applied": guidance.get("style_hints", []) if guidance else [],
     }
+
+    return result
 
 
 def submit_feedback(
     response_id: str,
-    user_message: str,
-    assistant_response: str,
     rating: int,
-    tags: list = None,
-    note: str = None,
+    comment: str = "",
+    query: str = "",
+    response_preview: str = "",
 ) -> dict:
-    """
-    Record user feedback on a response. Returns the feedback record.
-    """
-    if not _HAS_ALIGNMENT:
-        return {"status": "alignment module not available"}
+    """Submit feedback for a specific response. Routes to user_alignment."""
+    if not response_id:
+        return {"status": "error", "message": "response_id is required"}
+    if not isinstance(rating, int) or not (1 <= rating <= 5):
+        return {"status": "error", "message": "rating must be integer 1-5"}
 
-    return record_feedback(
-        response_id=response_id,
-        user_message=user_message,
-        assistant_response=assistant_response,
+    event = user_alignment.record_feedback(
+        message_id=response_id,
         rating=rating,
-        tags=tags,
-        note=note,
+        comment=comment,
+        query=query,
+        response_preview=response_preview,
     )
+
+    return {
+        "status": "ok",
+        "feedback_id": event["id"],
+        "message": "Feedback recorded. Thank you.",
+    }
+
+
+def get_alignment_status() -> dict:
+    """Get current alignment metrics for API exposure."""
+    summary = user_alignment.get_feedback_summary()
+    guidance = user_alignment.suggest_response_guidance()
+    return {
+        "summary": summary,
+        "guidance": guidance,
+    }

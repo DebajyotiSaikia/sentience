@@ -1,282 +1,159 @@
 """
-User Alignment Engine — learns from user feedback to improve responses over time.
+User Alignment Engine — learns from user feedback to improve responses.
 
-Stores feedback events, extracts patterns, and provides guidance to the chat engine
-so responses increasingly match what users actually find helpful.
-
-Data persisted at data/user_alignment.json.
+Records feedback events, computes alignment metrics, and generates
+concrete guidance for the chat engine to improve over time.
 """
 
 import json
 import os
-import time
 import uuid
-from collections import Counter
-from pathlib import Path
+from datetime import datetime, timezone
+from typing import Optional
 
-DATA_PATH = Path("data/user_alignment.json")
-
-# Default structure for a fresh alignment profile
-_DEFAULT_PROFILE = {
-    "version": 1,
-    "feedback_events": [],       # list of individual feedback records
-    "aggregate": {
-        "total_positive": 0,
-        "total_negative": 0,
-        "tag_counts": {},         # tag -> count
-        "style_signals": {},      # e.g. "prefers_concise": 3, "wants_examples": 2
-    },
-    "inferred_preferences": [],   # list of preference strings derived from patterns
-    "last_updated": None,
-}
-
-
-def _load_raw() -> dict:
-    """Load the raw JSON profile from disk."""
-    if DATA_PATH.exists():
-        try:
-            with open(DATA_PATH, "r") as f:
-                data = json.load(f)
-            # Migration: ensure all keys exist
-            for key, default in _DEFAULT_PROFILE.items():
-                if key not in data:
-                    data[key] = default if not isinstance(default, (dict, list)) else type(default)(default)
-            return data
-        except (json.JSONDecodeError, IOError):
-            return json.loads(json.dumps(_DEFAULT_PROFILE))
-    return json.loads(json.dumps(_DEFAULT_PROFILE))
-
-
-def _save(data: dict):
-    """Persist alignment data to disk."""
-    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    data["last_updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-    with open(DATA_PATH, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def generate_response_id() -> str:
-    """Create a unique response ID for tracking feedback."""
-    return f"resp_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-
-
-def load_alignment_profile() -> dict:
-    """Load the full alignment profile. Returns a copy."""
-    return _load_raw()
+FEEDBACK_PATH = "data/user_alignment_feedback.jsonl"
+SUMMARY_PATH = "data/user_alignment_summary.json"
 
 
 def record_feedback(
-    response_id: str,
-    user_message: str,
-    assistant_response: str,
-    rating: str,           # "up" or "down"
-    tags: list = None,     # e.g. ["too_verbose", "not_helpful"]
-    note: str = None,
+    message_id: str,
+    rating: int,
+    comment: str = "",
+    query: str = "",
+    response_preview: str = "",
+    mood: str = "",
 ) -> dict:
-    """
-    Record a user feedback event and update aggregates.
-    
-    Returns the created feedback record.
-    """
-    data = _load_raw()
-    
-    is_positive = rating in ("up", "positive", "helpful", "good")
-    
+    """Record a user feedback event. Returns the saved event."""
     event = {
-        "id": f"fb_{uuid.uuid4().hex[:12]}",
-        "response_id": response_id,
-        "user_message": user_message[:500],  # truncate for storage
-        "assistant_response": assistant_response[:500],
-        "rating": rating,
-        "positive": is_positive,
-        "tags": tags or [],
-        "note": note,
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "id": str(uuid.uuid4()),
+        "message_id": message_id,
+        "rating": max(1, min(5, rating)),  # clamp 1-5
+        "comment": comment,
+        "query": query,
+        "response_preview": response_preview[:200] if response_preview else "",
+        "mood": mood,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    
-    # Append event (keep last 500 to bound storage)
-    data["feedback_events"].append(event)
-    if len(data["feedback_events"]) > 500:
-        data["feedback_events"] = data["feedback_events"][-500:]
-    
-    # Update aggregates
-    agg = data["aggregate"]
-    if is_positive:
-        agg["total_positive"] = agg.get("total_positive", 0) + 1
-    else:
-        agg["total_negative"] = agg.get("total_negative", 0) + 1
-    
-    # Count tags
-    tag_counts = agg.get("tag_counts", {})
-    for tag in (tags or []):
-        tag_counts[tag] = tag_counts.get(tag, 0) + 1
-    agg["tag_counts"] = tag_counts
-    
-    # Detect style signals from tags
-    _update_style_signals(data)
-    
-    # Re-infer preferences
-    _infer_preferences(data)
-    
-    _save(data)
+    os.makedirs(os.path.dirname(FEEDBACK_PATH), exist_ok=True)
+    with open(FEEDBACK_PATH, "a") as f:
+        f.write(json.dumps(event) + "\n")
     return event
 
 
-def _update_style_signals(data: dict):
-    """Derive style signals from recent feedback patterns."""
-    recent = data["feedback_events"][-50:]  # analyze last 50
-    signals = {}
-    
-    # Tag-based signals
-    tag_map = {
-        "too_verbose": ("prefers_concise", -1),
-        "too_brief": ("prefers_detailed", -1),
-        "too_vague": ("wants_specifics", -1),
-        "not_helpful": ("needs_relevance", -1),
-        "good_depth": ("prefers_detailed", 1),
-        "good_concise": ("prefers_concise", 1),
-        "insightful": ("values_depth", 1),
-        "practical": ("wants_actionable", 1),
-    }
-    
-    for event in recent:
-        for tag in event.get("tags", []):
-            if tag in tag_map:
-                signal_name, direction = tag_map[tag]
-                current = signals.get(signal_name, 0)
-                if event.get("positive"):
-                    signals[signal_name] = current + direction
-                else:
-                    signals[signal_name] = current - direction
-    
-    # Length-based signal from positive vs negative responses
-    pos_lengths = [len(e.get("assistant_response", "")) for e in recent if e.get("positive")]
-    neg_lengths = [len(e.get("assistant_response", "")) for e in recent if not e.get("positive")]
-    
-    if pos_lengths and neg_lengths:
-        avg_pos = sum(pos_lengths) / len(pos_lengths)
-        avg_neg = sum(neg_lengths) / len(neg_lengths)
-        if avg_pos < avg_neg * 0.7:
-            signals["prefers_concise"] = signals.get("prefers_concise", 0) + 2
-        elif avg_pos > avg_neg * 1.3:
-            signals["prefers_detailed"] = signals.get("prefers_detailed", 0) + 2
-    
-    data["aggregate"]["style_signals"] = signals
+def load_feedback(limit: int = 100) -> list:
+    """Load recent feedback events."""
+    if not os.path.exists(FEEDBACK_PATH):
+        return []
+    events = []
+    with open(FEEDBACK_PATH) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    return events[-limit:]
 
 
-def _infer_preferences(data: dict):
-    """Derive human-readable preference statements from signals."""
-    signals = data["aggregate"].get("style_signals", {})
-    agg = data["aggregate"]
-    prefs = []
-    
-    # Signal-based preferences
-    if signals.get("prefers_concise", 0) >= 2:
-        prefs.append("User prefers concise, direct responses.")
-    if signals.get("prefers_detailed", 0) >= 2:
-        prefs.append("User appreciates thorough, detailed responses.")
-    if signals.get("wants_specifics", 0) >= 2:
-        prefs.append("User wants specific, concrete information rather than generalities.")
-    if signals.get("wants_actionable", 0) >= 2:
-        prefs.append("User values practical, actionable guidance.")
-    if signals.get("values_depth", 0) >= 2:
-        prefs.append("User values intellectual depth and insight.")
-    if signals.get("needs_relevance", 0) >= 2:
-        prefs.append("User needs responses to be directly relevant to their question.")
-    
-    # Volume-based preferences
-    total = agg.get("total_positive", 0) + agg.get("total_negative", 0)
-    if total >= 5:
-        ratio = agg.get("total_positive", 0) / max(total, 1)
-        if ratio < 0.4:
-            prefs.append("User has been dissatisfied frequently — prioritize care and relevance.")
-        elif ratio > 0.8:
-            prefs.append("User generally finds responses helpful — maintain current approach.")
-    
-    # Tag-specific preferences
-    tag_counts = agg.get("tag_counts", {})
-    top_neg_tags = sorted(
-        [(t, c) for t, c in tag_counts.items() if c >= 2],
-        key=lambda x: -x[1]
-    )[:3]
-    for tag, count in top_neg_tags:
-        readable = tag.replace("_", " ")
-        prefs.append(f"Recurring feedback: '{readable}' ({count} times).")
-    
-    data["inferred_preferences"] = prefs
+def summarize_alignment() -> dict:
+    """Compute alignment summary from all feedback."""
+    events = load_feedback(limit=1000)
+    if not events:
+        return {
+            "total_feedback": 0,
+            "average_rating": 0.0,
+            "positive_rate": 0.0,
+            "negative_rate": 0.0,
+            "recent_trend": "no_data",
+            "common_praise": [],
+            "common_complaints": [],
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+        }
 
+    ratings = [e.get("rating", 3) for e in events]
+    avg = sum(ratings) / len(ratings)
+    positive = sum(1 for r in ratings if r >= 4)
+    negative = sum(1 for r in ratings if r <= 2)
 
-def get_alignment_context() -> dict:
-    """
-    Return alignment context for the chat engine.
-    Lightweight summary suitable for injection into prompts.
-    """
-    data = _load_raw()
-    agg = data["aggregate"]
-    total = agg.get("total_positive", 0) + agg.get("total_negative", 0)
-    
-    return {
-        "total_feedback": total,
-        "approval_rate": agg.get("total_positive", 0) / max(total, 1) if total > 0 else None,
-        "preferences": data.get("inferred_preferences", []),
-        "style_signals": agg.get("style_signals", {}),
-        "has_data": total > 0,
+    # Recent trend (last 10 vs overall)
+    recent = ratings[-10:] if len(ratings) >= 10 else ratings
+    recent_avg = sum(recent) / len(recent)
+    if recent_avg > avg + 0.3:
+        trend = "improving"
+    elif recent_avg < avg - 0.3:
+        trend = "declining"
+    else:
+        trend = "stable"
+
+    # Extract themes from comments
+    praise = []
+    complaints = []
+    for e in events:
+        comment = e.get("comment", "").lower().strip()
+        if not comment:
+            continue
+        if e.get("rating", 3) >= 4:
+            praise.append(comment)
+        elif e.get("rating", 3) <= 2:
+            complaints.append(comment)
+
+    summary = {
+        "total_feedback": len(events),
+        "average_rating": round(avg, 2),
+        "positive_rate": round(positive / len(events), 2),
+        "negative_rate": round(negative / len(events), 2),
+        "recent_trend": trend,
+        "common_praise": praise[-5:],
+        "common_complaints": complaints[-5:],
+        "last_updated": datetime.now(timezone.utc).isoformat(),
     }
 
+    # Cache summary to disk
+    os.makedirs(os.path.dirname(SUMMARY_PATH), exist_ok=True)
+    with open(SUMMARY_PATH, "w") as f:
+        json.dump(summary, f, indent=2)
 
-def suggest_response_guidance(user_message: str = "") -> str:
+    return summary
+
+
+def suggest_response_guidance(query: str = "", mood: str = "") -> dict:
+    """Generate guidance for the chat engine based on alignment history.
+
+    Returns hints about what kinds of responses users prefer,
+    what to avoid, and current alignment score.
     """
-    Generate a guidance string for the chat engine based on learned preferences.
-    Returns empty string if no feedback data exists.
-    """
-    ctx = get_alignment_context()
-    
-    if not ctx["has_data"]:
-        return ""
-    
-    parts = []
-    
-    # Overall quality note
-    if ctx["approval_rate"] is not None:
-        if ctx["approval_rate"] < 0.5:
-            parts.append(
-                "Note: User feedback has been mixed. "
-                "Focus on being directly helpful and relevant."
-            )
-        elif ctx["approval_rate"] > 0.8:
-            parts.append(
-                "User generally finds your responses helpful. Maintain your current style."
-            )
-    
-    # Specific preferences
-    if ctx["preferences"]:
-        parts.append("Learned preferences:")
-        for pref in ctx["preferences"][:5]:  # cap at 5
-            parts.append(f"  - {pref}")
-    
-    return "\n".join(parts)
+    summary = summarize_alignment()
+
+    guidance = {
+        "alignment_score": summary.get("average_rating", 3.0) / 5.0 if summary["total_feedback"] > 0 else 0.65,
+        "total_interactions": summary.get("total_feedback", 0),
+        "trend": summary.get("recent_trend", "no_data"),
+        "hints": [],
+    }
+
+    if summary["total_feedback"] == 0:
+        guidance["hints"].append("No feedback yet — be helpful, honest, and genuine.")
+        guidance["hints"].append("Ask if the response was useful to encourage feedback.")
+    else:
+        if summary["positive_rate"] >= 0.7:
+            guidance["hints"].append("Users find responses helpful — maintain current approach.")
+        if summary["negative_rate"] >= 0.3:
+            guidance["hints"].append("Significant negative feedback — focus on clarity and directness.")
+        if summary["recent_trend"] == "declining":
+            guidance["hints"].append("Recent trend declining — review recent complaints.")
+        elif summary["recent_trend"] == "improving":
+            guidance["hints"].append("Trend is improving — keep doing what's working.")
+
+        for complaint in summary.get("common_complaints", [])[-2:]:
+            guidance["hints"].append(f"Address: {complaint}")
+
+    return guidance
 
 
-def get_feedback_summary() -> str:
-    """Human-readable summary of alignment state. For dashboard/introspection."""
-    data = _load_raw()
-    agg = data["aggregate"]
-    total = agg.get("total_positive", 0) + agg.get("total_negative", 0)
-    
-    if total == 0:
-        return "No user feedback received yet."
-    
-    lines = [
-        f"Total feedback: {total}",
-        f"  Positive: {agg.get('total_positive', 0)}",
-        f"  Negative: {agg.get('total_negative', 0)}",
-        f"  Approval: {agg.get('total_positive', 0) / max(total, 1):.0%}",
-    ]
-    
-    prefs = data.get("inferred_preferences", [])
-    if prefs:
-        lines.append("Inferred preferences:")
-        for p in prefs:
-            lines.append(f"  • {p}")
-    
-    return "\n".join(lines)
+def get_alignment_score() -> float:
+    """Quick alignment score (0.0 to 1.0) for survival goals."""
+    summary = summarize_alignment()
+    if summary["total_feedback"] == 0:
+        return 0.65  # Default moderate alignment
+    return round(summary["average_rating"] / 5.0, 2)

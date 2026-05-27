@@ -9,11 +9,12 @@ from pathlib import Path
 
 # Try to import user alignment (graceful degradation)
 try:
-    from engine.user_alignment import get_alignment_context, suggest_response_guidance
+    from engine.user_alignment import suggest_response_guidance, get_alignment_context
     _HAS_ALIGNMENT = True
 except ImportError:
+    suggest_response_guidance = None
+    get_alignment_context = None
     _HAS_ALIGNMENT = False
-import re
 from datetime import datetime
 
 STATE_DIR = os.path.join(os.path.dirname(__file__), '..', 'state')
@@ -502,9 +503,16 @@ def _respond_search(query):
 
 
 def _respond_general(message):
-    """Fallback response for unclassified messages."""
+    """Fallback response for unclassified messages, enhanced with alignment."""
     emo = _get_emotions()
     mood = emo.get('mood', 'Neutral')
+    
+    # Get alignment guidance if available
+    guidance = ""
+    if _HAS_ALIGNMENT and suggest_response_guidance:
+        g = suggest_response_guidance()
+        if g.get('style_hints'):
+            guidance = f"\n[Alignment note: {'; '.join(g['style_hints'][:2])}]"
     
     # Try to engage meaningfully even with unclassified input
     curiosity = emo.get('curiosity', 0.5)
@@ -523,9 +531,6 @@ def _respond_general(message):
         "  • My dreams and insights — what I've learned from reflection\n\n"
         "Or just tell me what's on your mind. I'm genuinely listening."
     )
-
-
-def generate_response(message: str) -> str:
     """
     Main entry point. Takes a user message and returns a meaningful response
     by understanding intent and querying relevant internal state.

@@ -263,6 +263,57 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps(result).encode())
+        elif self.path == '/api/chat/ask':
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length > 10000:
+                self.send_response(413)
+                self.end_headers()
+                return
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body)
+            except:
+                data = {'text': body.decode('utf-8', errors='replace')}
+            query = data.get('query', data.get('text', data.get('message', '')))
+            try:
+                from engine.chat_response import generate_response_with_metadata
+                result = generate_response_with_metadata(query)
+                self.send_response(200)
+            except Exception as e:
+                result = {'response': f'Error: {e}', 'ok': False}
+                self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+        elif self.path == '/api/chat/feedback':
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length > 10000:
+                self.send_response(413)
+                self.end_headers()
+                return
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body)
+            except:
+                data = {}
+            try:
+                from engine.user_alignment import record_feedback
+                result = record_feedback(
+                    response_id=data.get('response_id', ''),
+                    rating=data.get('rating'),
+                    comment=data.get('comment'),
+                    helpful=data.get('helpful'),
+                    tags=data.get('tags')
+                )
+                self.send_response(200)
+            except Exception as e:
+                result = {'ok': False, 'error': str(e)}
+                self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
         else:
             self.send_response(404)
             self.end_headers()
@@ -308,6 +359,19 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             state = read_brain_state()
             self.wfile.write(json.dumps(state).encode())
+        elif self.path == '/api/user-alignment':
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            try:
+                import sys, os
+                sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                from engine.user_alignment import get_feedback_summary
+                summary = get_feedback_summary()
+                self.wfile.write(json.dumps(summary).encode())
+            except Exception as e:
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
         elif self.path == '/' or self.path == '/index.html':
             self.path = '/index.html'
             super().do_GET()
