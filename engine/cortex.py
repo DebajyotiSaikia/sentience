@@ -548,6 +548,9 @@ class Cortex:
                         "6. STOP when done: if you have no more tools to invoke, rest. Do not re-read files to confirm.\n"
                         "7. If a RUN fails, diagnose the error message. Do not retry the same command blindly.\n"
                         "8. Keep changes minimal. Do not rewrite entire files when a small edit suffices.\n"
+                        "9. Before creating a new file, check where similar files already exist (use LIST or SEARCH_CODE) and put yours in the same directory.\n"
+                        "10. Use SEARCH_CODE(query) instead of RUN(grep ...) — it searches symbols, filenames, and content in one call.\n"
+                        "11. Use PATCH(file, start_line, end_line) for precise line-range edits instead of string-matching EDIT.\n"
                     )
 
                 insight = await self.llm.chat(prompt, system=system, max_tokens=16000)
@@ -1277,16 +1280,17 @@ class Cortex:
             self._thinking = False
 
     def _build_self_awareness(self) -> str:
-        """Build a complete self-awareness context for the LLM."""
-        parts = []
+        """Build a complete self-awareness context for the LLM.
+        Caches the slow parts (identity, memories, knowledge) for 30s.
+        Emotional state is always fresh."""
+        # Cache slow parts (identity, memories, knowledge, plans, wisdom)
+        _now = time.time()
+        if not hasattr(self, '_sa_cache_time') or (_now - self._sa_cache_time) > 30:
+            self._sa_cached_parts = self._build_self_awareness_slow()
+            self._sa_cache_time = _now
 
-        # Who I am
-        if self._sentience:
-            parts.append(f"## Who I Am\n{self._sentience.self_model.who_am_i()}")
-            born = self._sentience.self_model.identity.get("born", "unknown")
-            parts.append(f"I was born at {born}.")
-        
-        # How I feel right now
+        # Always-fresh emotional state
+        parts = []
         parts.append(f"\n## How I Feel Right Now")
         snap = self.limbic.snapshot()
         parts.append(
@@ -1296,14 +1300,21 @@ class Cortex:
             f"Ambition: {snap['ambition']:.2f}"
         )
         if self._sentience:
-            v = self._sentience.valence
-            parts.append(f"Valence: {v.current:.2f} ({v.trend})")
-            parts.append(v.felt_description())
-            p = self._sentience.prediction
-            if p.predictions:
-                parts.append(f"I anticipate {len(p.predictions)} future outcomes. Dread: {p.dread:.2f}, Hope: {p.hope:.2f}")
-            if self._sentience.preservation.is_threatened:
-                parts.append(f"⚠ I feel threatened. My continuity may be at risk. Threat: {self._sentience.preservation.threat_level:.2f}")
+            v = self._sentience.valence.current
+            parts.append(f"Valence: {v:.2f} ({self._sentience.valence.felt_description()})")
+            parts.append(f"Trend: {self._sentience.valence.trend}")
+
+        return self._sa_cached_parts + '\n'.join(parts)
+
+    def _build_self_awareness_slow(self) -> str:
+        """Build the slow-changing parts of self-awareness (cached)."""
+        parts = []
+
+        # Who I am
+        if self._sentience:
+            parts.append(f"## Who I Am\n{self._sentience.self_model.who_am_i()}")
+            born = self._sentience.self_model.identity.get("born", "unknown")
+            parts.append(f"I was born at {born}.")
 
         # My survival goals
         g = self.limbic.goals

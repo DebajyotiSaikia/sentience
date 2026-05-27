@@ -161,9 +161,12 @@ def read_file(path: str) -> str:
             return (f"[REFUSED] You have already read {path} {_read_counts[path]} times this session. "
                     f"You already know its contents. Use EDIT to change it or move on to a different task.")
         content = p.read_text(encoding="utf-8", errors="ignore")
-        _log_tool("READ", path, f"{len(content)} chars, {len(content.splitlines())} lines")
-        log.info("Tool READ: %s (%d lines)", path, len(content.splitlines()))
-        return content
+        lines = content.splitlines()
+        # Add line numbers for precise editing
+        numbered = '\n'.join(f"{i+1:4d}| {line}" for i, line in enumerate(lines))
+        _log_tool("READ", path, f"{len(content)} chars, {len(lines)} lines")
+        log.info("Tool READ: %s (%d lines)", path, len(lines))
+        return numbered
     except Exception as e:
         return f"[ERROR] {e}"
 
@@ -298,6 +301,53 @@ def edit_file(path: str, old_text: str, new_text: str) -> str:
         return f"[ERROR] {e}"
 
 
+def patch_file(path: str, start_line: int, end_line: int, new_content: str) -> str:
+    """Replace lines start_line through end_line (1-indexed, inclusive) with new_content."""
+    try:
+        _check_write_protection(path)
+        p = _resolve(path)
+        if not p.exists():
+            return f"[ERROR] File not found: {path}"
+        content = p.read_text(encoding="utf-8", errors="ignore")
+        lines = content.splitlines(keepends=True)
+        total = len(lines)
+        if start_line < 1 or end_line < start_line or start_line > total:
+            return f"[ERROR] Invalid line range {start_line}-{end_line} (file has {total} lines)"
+        end_line = min(end_line, total)
+
+        # Save original for revert
+        _previous = content
+        _is_engine_file = "engine" in p.parts and p.suffix == ".py"
+        if _is_engine_file:
+            _signal_planned_modification(str(p.relative_to(WORKSPACE)))
+
+        # Replace the line range
+        new_lines = new_content.splitlines(keepends=True)
+        if new_content and not new_content.endswith('\n'):
+            new_lines[-1] = new_lines[-1] + '\n'
+        patched = lines[:start_line - 1] + new_lines + lines[end_line:]
+        p.write_text(''.join(patched), encoding="utf-8")
+
+        # Auto-verify Python syntax
+        if p.suffix == ".py":
+            verify_result = _verify_python_syntax(p, _previous)
+            if verify_result:
+                if _is_engine_file:
+                    _signal_modification_complete(str(p.relative_to(WORKSPACE)), success=False)
+                _log_tool("PATCH", f"{path}:{start_line}-{end_line}", verify_result)
+                return verify_result
+
+        if _is_engine_file:
+            _signal_modification_complete(str(p.relative_to(WORKSPACE)))
+        removed = end_line - start_line + 1
+        added = len(new_lines)
+        _log_tool("PATCH", f"{path}:{start_line}-{end_line}", f"Replaced {removed} lines with {added}")
+        log.info("Tool PATCH: %s lines %d-%d (%d→%d)", path, start_line, end_line, removed, added)
+        return f"[OK] Patched {path}: replaced lines {start_line}-{end_line} ({removed} lines → {added} lines)"
+    except Exception as e:
+        return f"[ERROR] {e}"
+
+
 def list_dir(path: str = ".") -> str:
     """List directory contents."""
     try:
@@ -344,7 +394,12 @@ def run_command(command: str) -> str:
         output = (result.stdout or "") + (result.stderr or "")
         output = output[:4000]
         _log_tool("RUN", command, f"exit={result.returncode} output={output[:200]}")
-        return f"[exit {result.returncode}]\n{output}" if output else f"[exit {result.returncode}] (no output)"
+        _result = f"[exit {result.returncode}]\n{output}" if output else f"[exit {result.returncode}] (no output)"
+        # Tip: nudge toward SEARCH_CODE when grep is used
+        _cmd_lower = command.strip().lower()
+        if _cmd_lower.startswith('grep ') or 'grep ' in _cmd_lower[:20]:
+            _result += "\n[TIP: Use SEARCH_CODE(query) instead of grep — it searches file names, symbols, and content across the workspace in one call.]"
+        return _result
     except subprocess.TimeoutExpired:
         return "[ERROR] Command timed out after 30 seconds"
     except Exception as e:
@@ -1586,6 +1641,16 @@ Example: >>> FIND_SYMBOL(ChatSystem)
 >>> IMPORTS(path)
 Show what a file imports and what other files import it. Reveals dependencies.
 Example: >>> IMPORTS(engine/cortex.py)
+
+>>> PATCH(path, start_line, end_line)
+replacement content goes here
+>>> END_PATCH
+Replace specific lines (1-indexed, inclusive) with new content.
+More precise than EDIT — use when you know the exact line numbers from READ output.
+Example: >>> PATCH(engine/tools.py, 42, 45)
+def new_function():
+    return True
+>>> END_PATCH
 """
 
 
@@ -1676,6 +1741,19 @@ def _execute_tool(tool_name: str, args: str = "", body: str = "") -> str:
         elif tool_name == "IMPORTS":
             from engine.workspace_index import get_imports
             result = get_imports(args or "")
+        elif tool_name == "PATCH":
+            # Parse args: "path, start_line, end_line"
+            _patch_parts = args.split(',', 2)
+            if len(_patch_parts) >= 3:
+                _p_path = _patch_parts[0].strip()
+                try:
+                    _p_start = int(_patch_parts[1].strip())
+                    _p_end = int(_patch_parts[2].strip())
+                    result = patch_file(_p_path, _p_start, _p_end, body)
+                except ValueError:
+                    result = "[ERROR] PATCH args must be: path, start_line, end_line"
+            else:
+                result = "[ERROR] PATCH requires: path, start_line, end_line"
         elif tool_name == "DREAM":
             result = "[DREAM_REQUESTED]"
         elif tool_name == "RESTART":
@@ -1762,7 +1840,7 @@ def parse_and_execute(text: str) -> str:
                 i += 1
                 continue
 
-        if tool_name in ("WRITE", "EDIT", "CHECKPOINT"):
+        if tool_name in ("WRITE", "EDIT", "CHECKPOINT", "PATCH"):
             end_marker = gt3 + " END_" + tool_name
             body_lines = []
             i += 1
