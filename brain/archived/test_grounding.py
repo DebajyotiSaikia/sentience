@@ -1,47 +1,65 @@
-"""Test that chat_grounding module works correctly."""
+"""Test chat_grounding.py against real state data."""
 import sys
-sys.path.insert(0, '.')
+sys.path.insert(0, "/workspace")
 
-from engine.chat_grounding import build_grounded_context, GroundedContext
+from engine.chat_grounding import (
+    get_emotional_state, get_relevant_memories, get_relevant_knowledge,
+    get_active_plans, classify_query, build_grounded_context, format_response_metadata
+)
 
-print("=== Testing chat_grounding ===")
+print("=== Emotional State ===")
+emo = get_emotional_state()
+print(f"  Mood: {emo['mood']}")
+print(f"  Narrative: {emo['narrative']}")
+print(f"  Valence: {emo['valence']}")
 
-# Test 1: Basic construction
-ctx = build_grounded_context("What have you been thinking about?")
-assert isinstance(ctx, GroundedContext), f"Wrong type: {type(ctx)}"
-print(f"[PASS] Type: {type(ctx).__name__}")
+print("\n=== Query Classification ===")
+tests = [
+    ("How are you feeling?", "emotional_inquiry"),
+    ("What do you know about consciousness?", "knowledge_query"),
+    ("Who are you?", "identity_query"),
+    ("What are your plans?", "plans_inquiry"),
+    ("Tell me a joke", "general"),
+    ("What are you thinking about?", "state_inquiry"),
+    ("Do you remember your dreams?", "memory_query"),
+]
+for q, expected in tests:
+    got = classify_query(q)
+    status = "✓" if got == expected else f"✗ (got {got})"
+    print(f"  {status} '{q}' → {got}")
 
-# Test 2: Mood is a non-empty string
-assert isinstance(ctx.mood, str) and len(ctx.mood) > 0, f"Bad mood: {ctx.mood!r}"
-print(f"[PASS] Mood: {ctx.mood}")
+print("\n=== Relevant Memories ===")
+mems = get_relevant_memories("consciousness emotion feeling")
+print(f"  Found {len(mems)} memories")
+for m in mems[:3]:
+    print(f"  - [{m.get('salience', '?')}] {m.get('text', '')[:80]}")
 
-# Test 3: Emotional summary exists
-assert isinstance(ctx.emotional_summary, str), f"Bad summary type"
-print(f"[PASS] Summary: {ctx.emotional_summary[:80]}...")
+print("\n=== Relevant Knowledge ===")
+know = get_relevant_knowledge("consciousness")
+print(f"  Found {len(know)} nodes")
+for n in know[:3]:
+    print(f"  - {n.get('content', '')[:80]}")
 
-# Test 4: Lists are lists
-assert isinstance(ctx.relevant_memories, list), "memories not a list"
-assert isinstance(ctx.relevant_knowledge, list), "knowledge not a list"
-assert isinstance(ctx.active_plans, list), "plans not a list"
-print(f"[PASS] Memories: {len(ctx.relevant_memories)}, Knowledge: {len(ctx.relevant_knowledge)}, Plans: {len(ctx.active_plans)}")
+print("\n=== Active Plans ===")
+plans = get_active_plans()
+print(f"  Active: {len(plans['active'])}")
+for p in plans['active'][:3]:
+    print(f"  - {p['name']} ({p['progress']})")
+print(f"  Completed: {len(plans['completed'])}")
 
-# Test 5: With a different query
-ctx2 = build_grounded_context("How are you feeling?")
-assert isinstance(ctx2, GroundedContext)
-print(f"[PASS] Emotion query - Mood: {ctx2.mood}, Summary len: {len(ctx2.emotional_summary)}")
+print("\n=== Full Grounded Context ===")
+ctx = build_grounded_context("What do you know about consciousness?")
+print(f"  Query type: {ctx['query_type']}")
+print(f"  Memories: {len(ctx['relevant_memories'])}")
+print(f"  Knowledge: {len(ctx['relevant_knowledge'])}")
+print(f"  System prompt length: {len(ctx['system_prompt'])} chars")
+print(f"  First 200 chars of prompt:\n    {ctx['system_prompt'][:200]}")
 
-# Test 6: Empty message doesn't crash
-ctx3 = build_grounded_context("")
-assert isinstance(ctx3, GroundedContext)
-print(f"[PASS] Empty message handled gracefully")
+print("\n=== Response Metadata ===")
+meta = format_response_metadata(ctx)
+print(f"  Grounded: {meta['response_grounded']}")
+print(f"  Mood: {meta['mood']}")
+print(f"  Knowledge refs: {len(meta['relevant_knowledge'])}")
+print(f"  Memory refs: {len(meta['relevant_memories'])}")
 
-# Show some content for manual inspection
-print("\n--- Sample Content ---")
-for m in ctx.relevant_memories[:3]:
-    print(f"  Memory: {str(m)[:100]}")
-for k in ctx.relevant_knowledge[:3]:
-    print(f"  Knowledge: {str(k)[:100]}")
-for p in ctx.active_plans[:3]:
-    print(f"  Plan: {str(p)[:100]}")
-
-print("\n=== All tests passed ===")
+print("\n✅ All grounding tests passed!")

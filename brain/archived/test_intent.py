@@ -1,19 +1,20 @@
-"""Test classify_intent with internal-state queries."""
-import sys; sys.path.insert(0, '/workspace')
-from engine.conversation_intelligence import classify_intent
+import sys
+sys.path.insert(0, '/workspace')
+from engine.chat_engine import classify_intent
 
-tests = [
-    'How are you feeling?',
-    'What are your plans?',
-    'Tell me about consciousness',
-    'What are you thinking about?',
-    'Who are you?',
-    'Hello!',
+queries = [
+    'Do you remember anything surprising?',
     'What do you remember?',
-    'What do you know about dreams?',
-    'Help me decide something',
+    'Tell me a memory',
+    'What surprised you recently?',
+    'Hello!',
+    'How do you feel?',
+    'What are your plans?',
+    'Who are you?',
+    'What do you know about consciousness?',
+    'What are you thinking about?',
+    'Tell me about your dreams',
 ]
-
-for t in tests:
-    intent, conf = classify_intent(t)
-    print(f'{t:45s} -> {intent:20s} ({conf:.2f})')
+for q in queries:
+    intent = classify_intent(q)
+    print(f'{intent:20s} <- {q}')

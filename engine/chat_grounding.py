@@ -17,6 +17,12 @@ try:
 except ImportError:
     search_knowledge = None
 
+# User alignment — learn from feedback
+try:
+    from engine.user_alignment import get_alignment_context
+except ImportError:
+    get_alignment_context = None
+
 
 def _load_json(path: str) -> Any:
     """Safely load a JSON file."""
@@ -100,7 +106,7 @@ def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
         score = overlap * 2.0 + salience + recency * 0.5
         if overlap > 0 or salience > 0.8:
             scored.append((score, mem))
-        scored.append((score, mem))
+    scored.sort(key=lambda x: x[0], reverse=True)
     return [m for _, m in scored[:top_k]]
 
 
@@ -126,7 +132,6 @@ def get_relevant_knowledge(query: str, top_k: int = 8) -> List[Dict]:
 
 def get_active_plans() -> Dict[str, List]:
     """Get current plans with progress info."""
-    data = _load_json("state/plans.json") or {}
     data = _load_json("state/plans.json") or {}
     # Handle nested structure: {"plans": {"active_plans": [...], ...}}
     if "plans" in data and isinstance(data["plans"], dict):
@@ -251,6 +256,35 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
         system_parts.append(f"Completed: {', '.join(plans['completed'][:5])}")
         system_parts.append("")
     
+    # Add user alignment context if available
+    alignment = None
+    if get_alignment_context:
+        try:
+            alignment = get_alignment_context()
+            prefs = alignment.get("preferences", {})
+            if any(prefs.values()):
+                system_parts.append("## User Preferences (learned from feedback)")
+                if prefs.get("tone"):
+                    system_parts.append(f"- Preferred tone: {prefs['tone']}")
+                if prefs.get("topics"):
+                    system_parts.append(f"- Interested in: {', '.join(prefs['topics'])}")
+                if prefs.get("verbosity"):
+                    system_parts.append(f"- Verbosity preference: {prefs['verbosity']}")
+                if prefs.get("style_notes"):
+                    system_parts.append(f"- Style notes: {prefs['style_notes']}")
+                system_parts.append("")
+            fb = alignment.get("feedback_summary", {})
+            if fb.get("total", 0) > 0:
+                system_parts.append(f"## Feedback History")
+                system_parts.append(f"- Total interactions rated: {fb['total']}")
+                if fb.get("positive", 0) > 0:
+                    system_parts.append(f"- Positive ratings: {fb['positive']}")
+                if fb.get("negative", 0) > 0:
+                    system_parts.append(f"- Negative ratings: {fb['negative']} — adjust your approach")
+                system_parts.append("")
+        except Exception:
+            pass
+
     # Query-type-specific instructions
     if query_type == "emotional_inquiry":
         system_parts.append("## Response Instructions")
@@ -293,6 +327,7 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
         "relevant_memories": memories,
         "relevant_knowledge": knowledge,
         "plans": plans,
+        "alignment": alignment,
         "system_prompt": system_prompt,
     }
 
