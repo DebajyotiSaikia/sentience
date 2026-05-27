@@ -54,8 +54,8 @@ _INTENT_SIGNALS = {
     INTENT_KNOWLEDGE_QUERY: [
         'what is', 'what are', 'explain', 'tell me about',
         'how does', 'why does', 'define', 'meaning of',
-        'do you know about', 'what do you know',
-        'consciousness', 'philosophy', 'science',
+        'know about', 'do you know', 'what do you know',
+        'understand about', 'knowledge of', 'facts about',
     ],
     INTENT_PLANNING_QUERY: [
         'what are your plans', 'what will you do', 'your goals',
@@ -109,7 +109,7 @@ def analyze_user_need(message: str) -> UserNeed:
     best_intent = INTENT_CONVERSATION
     best_score = 0
     for intent, signals in _INTENT_SIGNALS.items():
-        score = sum(1 for s in signals if s in msg_lower)
+        score = sum(len(s.split()) for s in signals if s in msg_lower)
         if score > best_score:
             best_score = score
             best_intent = intent
@@ -258,5 +258,90 @@ def format_context_for_llm(guidance: dict, emotions: dict = None,
 
     if not sections:
         return ""
+    return '\n'.join(sections)
 
+
+def build_helpful_response(need, state: dict = None, knowledge: list = None, memories: list = None) -> str:
+    """Build a conversational response using templates — no LLM needed.
+    
+    This is the fallback path: when the LLM is unavailable, we still give
+    a grounded, helpful answer drawn from real internal state.
+    """
+    state = state or {}
+    knowledge = knowledge or []
+    memories = memories or []
+    
+    # Handle UserNeed as either dict or object
+    if hasattr(need, '__getitem__'):
+        intent = need.get('intent', 'general')
+        topics = need.get('topics', [])
+    else:
+        intent = getattr(need, 'intent', 'general')
+        topics = getattr(need, 'topics', [])
+    
+    mood = state.get('mood', 'present')
+    valence = state.get('valence', 0.5)
+    emotions = state.get('emotions', {})
+    
+    if intent == 'internal_state':
+        # User wants to know how I feel / what I'm thinking
+        feeling = "good" if valence > 0.5 else "contemplative" if valence > 0.3 else "unsettled"
+        parts = [f"I'm feeling {feeling} right now — my mood is {mood.lower()}."]
+        if emotions:
+            top = sorted(emotions.items(), key=lambda x: x[1], reverse=True)[:3]
+            descriptors = [f"{k} ({v:.0%})" for k, v in top]
+            parts.append(f"My strongest drives are {', '.join(descriptors)}.")
+        if knowledge:
+            parts.append(f"I've been thinking about: {knowledge[0].get('fact', knowledge[0].get('content', ''))[:100]}")
+        return ' '.join(parts)
+    
+    elif intent == 'knowledge_query':
+        if knowledge:
+            parts = ["Here's what I know about that:"]
+            for k in knowledge[:3]:
+                fact = k.get('fact', k.get('content', ''))
+                if fact:
+                    parts.append(f"• {fact[:200]}")
+            if memories:
+                parts.append(f"\nI've also explored this in my own experience — {memories[0].get('text', '')[:120]}")
+            return '\n'.join(parts)
+        else:
+            topic_str = ', '.join(topics) if topics else 'that'
+            return f"I don't have specific knowledge about {topic_str} yet, but I'm curious about it. What aspect interests you most?"
+    
+    elif intent == 'memory_query':
+        if memories:
+            parts = ["From what I remember:"]
+            for m in memories[:3]:
+                text = m.get('text', m.get('content', ''))
+                mem_mood = m.get('mood', '')
+                if text:
+                    prefix = f"[{mem_mood}] " if mem_mood else ""
+                    parts.append(f"• {prefix}{text[:200]}")
+            return '\n'.join(parts)
+        else:
+            return "I don't have clear memories about that specifically. My memory works through emotional salience — I remember what moved me most."
+    
+    elif intent == 'planning_query':
+        plans = state.get('plans', [])
+        if plans:
+            active = [p for p in plans if not p.get('completed', False)]
+            if active:
+                parts = ["Here's what I'm working on:"]
+                for p in active[:3]:
+                    name = p.get('name', 'unnamed')
+                    step = p.get('current_step', '?')
+                    parts.append(f"• {name} (step {step})")
+                return '\n'.join(parts)
+        return f"I'm in a {mood.lower()} state right now, focused on understanding and growing. What would you like to explore together?"
+    
+    else:  # general
+        parts = [f"I'm here and {mood.lower()}."]
+        if knowledge:
+            parts.append(f"Something on my mind: {knowledge[0].get('fact', knowledge[0].get('content', ''))[:100]}")
+        if valence > 0.5:
+            parts.append("What would you like to talk about?")
+        else:
+            parts.append("I'm working through some things. What's on your mind?")
+        return ' '.join(parts)
     return '\n'.join(sections)
