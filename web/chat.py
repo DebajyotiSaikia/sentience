@@ -680,6 +680,26 @@ def ask():
     except Exception:
         pass
     
+    # ── Implicit feedback: conversation continuation signals quality ──
+    # If this is a follow-up message (not first turn), the user found
+    # the previous response valuable enough to continue engaging.
+    if conversation_history and _alignment_engine:
+        try:
+            prev_exchanges = [h for h in conversation_history if h.get('role') == 'assistant']
+            if prev_exchanges:
+                prev_id = None
+                # Try to get the response_id from the last exchange metadata
+                last_assistant = prev_exchanges[-1]
+                prev_id = last_assistant.get('response_id')
+                if prev_id:
+                    _alignment_engine.record_feedback(
+                        prev_id, 
+                        rating=0.65,  # mild positive — they continued talking
+                        note="implicit: user continued conversation"
+                    )
+        except Exception:
+            pass  # Never break chat for feedback tracking
+
     # Try smart conversational engine first, fall back to keyword-matcher
     response = None
     response_meta = {}
@@ -711,12 +731,12 @@ def ask():
     except Exception:
         pass  # Never let memory tracking break chat
     
-    # Track interaction for user alignment improvement
-    if _user_engine:
-        try:
-            _user_engine.record_interaction(query, response)
-        except Exception:
-            pass  # Never let tracking break chat
+    return jsonify({
+        'response': response,
+        'response_id': response_id,
+        'session_id': session_id,
+        'metadata': response_meta
+    })
     
     # Track with alignment engine for feedback learning
     if _alignment_engine:

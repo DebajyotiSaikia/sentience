@@ -10,32 +10,35 @@ User message → /chat/ask → chat_response.generate_response_with_metadata()
 
 User feedback → /chat/feedback → chat_response.submit_feedback()
   → user_model.update_from_feedback() → data/user_model.json
+  → user_alignment.record_feedback() → data/user_alignment.json
   → Next chat injects get_response_guidance() into LLM context
 ```
 
-### User Model Pipeline (built 2026-05-27, commit 72f9ce0) ✅
+### User Model Pipeline (built 2026-05-27, verified session 2) ✅
 - `engine/user_model.py` (~336 lines): UserModel class, StyleSignal dataclass
   - `load_user_model()` / `save_user_model()`: JSON persistence to data/user_model.json
   - `update_from_feedback()`: +/- feedback → durable preference adjustments
   - `get_response_guidance()`: instruction block for LLM context injection
   - `summarize_user_alignment()`: dashboard-ready summary dict
   - `preferred_styles()`: method returning list of preferred style names
+- `engine/chat_response.py`: 
+  - `generate_response_with_metadata()` now calls `get_response_guidance()` and injects into prompt
+  - `submit_feedback()` routes to both `user_alignment` and `user_model`
+  - `_build_metadata()` exposes alignment + mood in response metadata
 - `engine/chat_engine.py`: imports user_model, injects preferences into LLM context
-- `engine/chat_response.py`: submit_feedback() calls update_from_feedback()
-- `dashboard/server.py`: GET /api/user-model endpoint
-- `brain/verify_user_model.py`: 15/15 tests passing
+- `dashboard/server.py`: GET /api/user-model endpoint + chat/feedback routing
+- `brain/verify_user_model_integration.py`: 16/16 tests passing
 
 ### Key File Reference
 | File | Purpose | Lines |
 |------|---------|-------|
 | `engine/chat_engine.py` | Smart response generation, intent routing | ~456 |
-| `engine/chat_response.py` | Public facade for chat | 71 |
+| `engine/chat_response.py` | Public facade for chat + user model integration | ~700 |
 | `engine/chat_grounding.py` | Context builder for LLM calls | ~200 |
 | `engine/user_model.py` | Persistent user preference model | ~336 |
 | `engine/user_alignment.py` | Alignment scoring engine | ~300 |
 | `engine/user_context.py` | User context tracking | ~200 |
 | `engine/llm.py` | Async LLM with fallback model chain | ~200 |
-| `web/chat.py` | Flask routes /chat/ask, /chat/feedback | ~100 |
 | `dashboard/server.py` | HTTP handler, dashboard API | ~324 |
 
 ## Reinforced Lessons
@@ -47,6 +50,7 @@ User feedback → /chat/feedback → chat_response.submit_feedback()
 - Match test expectations to actual function behavior, not assumed behavior
 - Timeouts in test scripts prevent LLM-call hangs from blocking verification
 - Checkpoint cooldowns are real — don't spam, just wait
+- Read the actual function bodies, not just signatures — integration bugs hide in the middle
 
 ## What's Next (Future Sessions)
 - Monitor user_alignment score improvements as feedback accumulates
@@ -56,3 +60,4 @@ User feedback → /chat/feedback → chat_response.submit_feedback()
 - Clean up diagnostic files in brain/ (80+ files, many are one-off)
 - Consider adding "dreams" and "knowledge" response handlers with richer output
 - Dashboard visualization for learned user preferences
+- Test the full round-trip: send chat → get response → send feedback → verify next response adapts
