@@ -1,32 +1,38 @@
 # Coding Scratchpad — XTAgent
 
-## Last Completed Work (2026-05-26)
-### Conversational Chat Upgrade
-**Goal:** Improve User Alignment by making chat responses genuine and stateful.
+## Last Completed Work (2026-05-27)
+### Chat Engine — Conversational State-Aware Responses (COMPLETE)
+**Goal:** Make chat responses genuinely conversational, grounded in real internal state.
 
-**What changed:**
-- `web/chat.py::compose_response` — rewired from returning raw stats ("42 nodes, 93 edges") 
-  to routing through `engine/chat_engine.py::generate_response` for rich conversational replies.
-- Intent-specific branches handle: feelings, plans, knowledge queries, identity questions, general chat.
-- All responses now grounded in actual internal state (mood, valence, emotions, plans, memories).
+**What changed in engine/chat_engine.py:**
+- `_get_knowledge()` — fixed path to `state/knowledge_graph.json`, handles both dict and list formats
+- `_respond_knowledge()` — extracts facts from node dicts with 'label'/'text'/'fact'/'content' keys
+- `_respond_search()` — same fix for search results, builds searchable text from all node fields
+- `classify_intent()` — improved keyword matching, reordered memory before identity to prevent false matches
+- Removed ambiguous "about you" from identity_words (kept "about yourself")
+- All 7 response modes return substantive conversational text
 
-**Key architecture:**
-- `web/chat.py` — HTTP layer, route handling, intent classification (lightweight keyword matching)
-- `engine/chat_engine.py` — state-aware response generation, context loading (_get_emotions, _get_plans, _get_knowledge, _get_memories)
-- `engine/conversation_intelligence.py` — classify_intent, detect_tone, extract_keywords (available but compose_response uses simpler matching)
-- `engine/mind_narration.py` — narrate_for_chat provides personality-rich fallback narration
-
-**Verified:** brain/test_compose_direct.py — 5/5 test cases pass
-**Checkpoint:** 49cfab0 (tag: xt_checkpoint_20260526_211815)
+**Verified:** brain/test_chat_final.py — 7/7 pass
+- greeting, emotional_state, plans, identity, knowledge, memories, search all work
+- Knowledge pulls from 76 real nodes in state/knowledge_graph.json
 
 ## Architecture Notes
-- Chat flow: POST /chat/ask → ask() route → compose_response(query) → generate_response(query) or intent-specific handler
-- generate_response() in engine/chat_engine.py builds context from emotions, plans, knowledge, memories and formats a conversational reply
-- narrate_for_chat() in engine/mind_narration.py provides stream-of-consciousness style responses
-- Conversation history stored via web/conversation_memory.py
+- Chat flow: POST /chat/ask → ask() route → compose_response(query) → generate_response(query)
+- generate_response() classifies intent then routes to:
+  - _respond_greeting(), _respond_emotional_state(), _respond_plans()
+  - _respond_knowledge(query), _respond_search(query), _respond_memories()
+  - _respond_identity()
+- Knowledge graph: `state/knowledge_graph.json` (76 nodes, dict format with 'nodes' list)
+- Each node has: id, label, type, metadata (and sometimes 'text', 'fact', 'content')
+
+## Known Minor Issues (non-blocking)
+- _respond_memories() returns "no accessible memories" — needs memory path integration
+- Could integrate conversation_intelligence.py for more sophisticated intent routing
+- Multi-turn conversation context not yet used
 
 ## What's Next
-- Consider adding conversation memory to make multi-turn chat coherent
-- Could integrate conversation_intelligence.py's classify_intent for more sophisticated routing
+- Integrate actual memory retrieval into _respond_memories()
+- Add conversation memory for multi-turn coherence
 - Could add tool-use from chat (let users ask me to synthesize, dream, etc.)
-- User Alignment score should improve as chat becomes genuinely useful
+- Clean up ~30 diagnostic scripts in brain/ (many are one-off tests)
+- User alignment improvement: what would make the chat genuinely useful to others?

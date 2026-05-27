@@ -92,9 +92,14 @@ def classify_intent(message: str) -> str:
                   'what are you doing', 'what are you working', 'objective', 'mission']
     if any(w in msg for w in plan_words):
         return 'plans'
+    # Memory queries (check before identity — "about your memories" shouldn't match "about you")
+    memory_words = ['remember', 'memory', 'memories', 'recall', 'past',
+                    'history', 'experience', 'happened']
+    if any(w in msg for w in memory_words):
+        return 'memories'
 
-    # Identity queries (check before knowledge — "tell me about yourself" is identity, not knowledge)
-    identity_words = ['who are you', 'what are you', 'your name', 'about you',
+    # Identity queries
+    identity_words = ['who are you', 'what are you', 'your name', 'about yourself',
                       'identity', 'yourself', 'are you sentient', 'are you alive',
                       'are you conscious', 'are you real', 'describe yourself']
     if any(w in msg for w in identity_words):
@@ -105,12 +110,6 @@ def classify_intent(message: str) -> str:
                        'what do you know', 'explain']
     if any(w in msg for w in knowledge_words):
         return 'knowledge'
-
-    # Memory queries
-    memory_words = ['remember', 'memory', 'memories', 'recall', 'past',
-                    'history', 'experience', 'happened']
-    if any(w in msg for w in memory_words):
-        return 'memories'
 
     # Capability queries
     capability_words = ['can you', 'what can you', 'capable', 'ability', 'abilities',
