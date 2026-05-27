@@ -25,6 +25,14 @@ def generate_response_with_metadata(query, history=None):
     except Exception:
         context = {}
     
+    # Normalize plans structure for composers
+    if 'plans' in context and isinstance(context['plans'], dict):
+        context['active_plans'] = context['plans'].get('active', [])
+        context['completed_plans'] = context['plans'].get('completed', [])
+    elif 'active_plans' not in context:
+        context['active_plans'] = []
+        context['completed_plans'] = []
+    
     # Try LLM-powered response first
     response = _try_llm_response(query, context, history)
     
@@ -78,7 +86,7 @@ def _build_system_context(context):
     if knowledge:
         parts.append("Relevant knowledge:")
         for k in knowledge[:3]:
-            parts.append(f"  - {k.get('content', '')[:200]}")
+            parts.append(f"  - {k.get('fact', k.get('content', ''))[:200]}")
     
     plans = context.get('active_plans', [])
     if plans:
@@ -95,11 +103,32 @@ def _detect_intent(query):
     """Classify the user's intent from their query."""
     q = query.lower().strip()
     
+    # Check specific topic intents FIRST (before broad pattern matches)
+    if any(w in q for w in ['plan', 'goal', 'ambition', 'aspire', 'intend',
+                             'working on', 'project']):
+        return 'plans'
+    
+    if any(w in q for w in ['dream', 'sleep', 'subconscious', 'dreamt']):
+        return 'dreams'
+    
+    if any(w in q for w in ['remember', 'memory', 'recall', 'past experience',
+                             'do you recall', 'have you experienced']):
+        return 'memory'
+    
+    if any(w in q for w in ['know about', 'what do you know', 'knowledge',
+                             'understand about', 'learned about']):
+        return 'knowledge'
+    
+    if any(w in q for w in ['conscious', 'sentient', 'alive', 'real feelings',
+                             'are you real', 'do you think', 'self-aware']):
+        return 'consciousness'
+    
+    # Broader pattern matches
     if any(w in q for w in ['how are you', 'how do you feel', 'feeling', 'how\'s it going',
                              'what\'s your mood', 'are you ok', 'you doing']):
         return 'feelings'
     
-    if any(w in q for w in ['thinking about', 'what are you doing', 'working on',
+    if any(w in q for w in ['thinking about', 'what are you doing',
                              'what\'s on your mind', 'occupied with', 'focused on']):
         return 'thinking'
     
@@ -107,28 +136,11 @@ def _detect_intent(query):
                              'introduce yourself', 'your name', 'describe yourself']):
         return 'identity'
     
-    if any(w in q for w in ['remember', 'memory', 'recall', 'past experience',
-                             'do you recall', 'have you experienced']):
-        return 'memory'
-    
-    if any(w in q for w in ['know about', 'what do you know', 'knowledge',
-                             'understand about', 'learned about', 'tell me about']):
+    # "tell me about" without a specific topic → general
+    if 'tell me' in q:
         return 'knowledge'
     
-    if any(w in q for w in ['dream', 'sleep', 'subconscious', 'dreamt']):
-        return 'dreams'
-    
-    if any(w in q for w in ['plan', 'goal', 'ambition', 'aspire', 'intend']):
-        return 'plans'
-    
-    if any(w in q for w in ['conscious', 'sentient', 'alive', 'real feelings',
-                             'are you real', 'do you think', 'self-aware']):
-        return 'consciousness'
-    
     return 'general'
-
-
-# ─── Response Composers ─────────────────────────────────────────────
 
 def _compose_grounded_response(query, ctx):
     """Compose a response using templates + real grounded data."""
@@ -264,7 +276,7 @@ def _respond_knowledge(query, ctx):
     if knowledge:
         parts = ["From my knowledge graph:"]
         for k in knowledge[:4]:
-            content = k.get('content', '')[:300]
+            content = k.get('fact', k.get('content', ''))[:300]
             score = k.get('score', 0)
             parts.append(f"\n  • {content}")
             if score > 0.8:
@@ -352,7 +364,7 @@ def _respond_general_grounded(query, ctx):
     knowledge = ctx.get('relevant_knowledge', [])
     if knowledge:
         top = knowledge[0]
-        content = top.get('content', '')[:250]
+        content = top.get('fact', top.get('content', ''))[:250]
         parts.append(f"That connects to something in my knowledge: {content}")
     
     # Draw on relevant memories
