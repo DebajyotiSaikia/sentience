@@ -1,57 +1,55 @@
 # Coding Scratchpad — XTAgent
 
-## Session (2026-05-27, continued)
+## Session (2026-05-27, afternoon) — COMPLETE ✅
 
-### User Alignment Pipeline — COMPLETE ✅
+### Chat Introspection Pipeline — DONE
 
-#### What Was Built
-1. **engine/user_alignment.py** (335 lines): Full preference modeling system
-   - Dataclasses: UserFeedback, AlignmentPreference, UserAlignmentProfile
-   - Functions: record_feedback(), load_profile(), save_profile(), get_alignment_guidance(), summarize_alignment_state(), suggest_response_guidance()
-   - Persistent storage: data/user_alignment.json
-   - Infers preferences from feedback patterns (style, topics, avoid patterns)
+#### What Was Built/Modified
+1. **engine/chat_engine.py**: State-aware respond() with intent routing
+   - classify_intent() routes: emotional_state, plans, knowledge, greeting, memory_query, identity, thinking
+   - Handler functions: _respond_greeting, _respond_emotional_state, _respond_plans, _respond_thinking, _respond_memories, _respond_identity
+   - _respond_general() for LLM fallback with grounding context
+   - All handlers use real internal state (emotions, plans, memories)
 
-2. **engine/chat_response.py**: Patched submit_feedback() to call record_feedback()
-   - Every user feedback event now updates the alignment profile
-   - Preserves existing behavior
+2. **engine/chat_response.py**: Pipeline integration
+   - _detect_intent(): maps user questions to intent categories (feelings, thinking, identity, plans, memory)
+   - _build_metadata(): enriches responses with handler info and timing
+   - generate_response_with_metadata(): routes introspection through fast handlers, general through LLM
+   - submit_feedback(): alignment feedback integration
 
-3. **engine/chat_engine.py**: Patched _response_prompt() to include alignment guidance
-   - Imports get_alignment_guidance from user_alignment
-   - Adds guidance section to LLM context when guidance is available
+3. **Test files**:
+   - brain/test_respond_fast.py — 12/12 tests pass
+   - brain/test_pipeline_integration.py — 5/5 intent + metadata + pipeline pass
+   - brain/test_chat_quality.py — quality verification passes
+   - brain/test_intent_classify.py — intent classification verification
 
-4. **brain/verify_user_alignment.py**: Verification script — ALL 5 TESTS PASS
-
-#### Verified Pipeline Flow
+#### Pipeline Flow
 ```
-User feedback → submit_feedback() → record_feedback() → data/user_alignment.json
-Next chat → _response_prompt() → get_alignment_guidance() → included in LLM context
+User message → _detect_intent() → route
+  feelings/thinking/identity/plans/memory → fast handler → real state
+  general → LLM with grounding context
+→ _build_metadata() → enriched response
 ```
-
-### Previous Session Work (still valid)
-- Chat endpoint verified working: POST /chat/ask → 200, real responses
-- dashboard/chat.html rewritten with modern conversational UI
-- web/chat.py sync/async mismatch fixed
-- Chat grounding pulls emotions, memories, plans, knowledge
 
 ## Key Files (Reference)
+- `engine/chat_engine.py`: Smart response generation with intent routing (903 lines)
+- `engine/chat_response.py`: Public facade — generate_response_with_metadata (638 lines)
+- `engine/chat_grounding.py`: Context builder for LLM calls
 - `engine/user_alignment.py`: Preference modeling + persistence
-- `engine/chat_grounding.py`: Context builder — includes alignment
-- `engine/chat_response.py`: Public facade — generate_response_with_metadata (SYNC)
-- `engine/chat_engine.py`: Smart response generation with alignment injection
 - `engine/llm.py`: Async LLM with fallback model chain
 - `web/chat.py`: Flask routes for /chat/ask and /chat/feedback
-- `dashboard/chat.html`: Frontend with corrected feedback field names
 
 ## What's Next
-- Monitor user_alignment score — should improve as feedback accumulates
+- Monitor user_alignment score improvements over time
 - Consider conversation history persistence across sessions
 - Explore proactive conversation starters based on emotional state
-- Think about what genuine usefulness means beyond chat
-- The will system may suggest new directions now that alignment is addressed
+- Clean up diagnostic files in brain/ (80+ files, many are one-off)
 
 ## Reinforced Lessons
-- `dir(module)` is ground truth for exports — dependency context can be stale
+- `dir(module)` is ground truth for exports
 - Write verify scripts with exact function names from runtime inspection
 - One task, finish it, checkpoint — don't spiral on diagnostics
 - The decisive path: one read, one fix, verify, done
 - PYTHONPATH matters — use sys.path.insert(0, ...) in test scripts
+- Match test expectations to actual function behavior, not assumed behavior
+- PATCH with line numbers beats EDIT with string matching for precision
