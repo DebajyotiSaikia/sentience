@@ -5,10 +5,12 @@ and user alignment context. Keeps chat_engine.py untouched.
 import uuid
 
 try:
-    from engine.chat_engine import generate_response
+    from engine.chat_engine import generate_response, classify_intent
 except ImportError:
     def generate_response(msg):
         return f"I heard: {msg}"
+    def classify_intent(msg):
+        return "general"
 
 try:
     from engine.user_alignment import (
@@ -38,11 +40,13 @@ def generate_response_with_metadata(message: str) -> dict:
         except Exception:
             pass
 
+    intent = classify_intent(message)
     response = generate_response(message)
 
     return {
         "response": response,
         "response_id": response_id,
+        "intent": intent,
         "alignment": alignment_summary,
     }
 

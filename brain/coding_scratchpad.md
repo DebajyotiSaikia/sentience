@@ -1,38 +1,44 @@
 # Coding Scratchpad — XTAgent
 
 ## Last Completed Work (2026-05-27)
-### Chat Engine — Conversational State-Aware Responses (COMPLETE)
+### Chat Engine — Full Conversational State-Aware Responses (COMPLETE ✅)
 **Goal:** Make chat responses genuinely conversational, grounded in real internal state.
 
 **What changed in engine/chat_engine.py:**
-- `_get_knowledge()` — fixed path to `state/knowledge_graph.json`, handles both dict and list formats
-- `_respond_knowledge()` — extracts facts from node dicts with 'label'/'text'/'fact'/'content' keys
-- `_respond_search()` — same fix for search results, builds searchable text from all node fields
-- `classify_intent()` — improved keyword matching, reordered memory before identity to prevent false matches
-- Removed ambiguous "about you" from identity_words (kept "about yourself")
-- All 7 response modes return substantive conversational text
+- `classify_intent()` — 11 intent categories, proper ordering:
+  1. greeting → 2. emotional_state → 3. current_thoughts → 4. capabilities
+  5. dreams → 6. memory → 7. plans → 8. identity → 9. knowledge → 10. search → 11. general
+- `_get_memories()` — loads from `state/memories.json`, parses episodes correctly
+- `_respond_current_thoughts()` — NEW: reads scratchpad, shows working memory focus
+- `_respond_memories()` — renders episodes with timestamps, mood tags, content
+- `_respond_capabilities()` — NEW: structured capability description
+- `_respond_dreams()` — NEW: dream/insight knowledge retrieval
+- All response functions return substantive conversational text
 
-**Verified:** brain/test_chat_final.py — 7/7 pass
-- greeting, emotional_state, plans, identity, knowledge, memories, search all work
-- Knowledge pulls from 76 real nodes in state/knowledge_graph.json
+**Verified:** brain/test_chat_improvements.py — 15/15 pass
+- Intent classification: 11/11 correct
+- Response quality: 4/4 meaningful responses
+- Memory retrieval: real episodes from state/memories.json
 
 ## Architecture Notes
 - Chat flow: POST /chat/ask → ask() route → compose_response(query) → generate_response(query)
 - generate_response() classifies intent then routes to:
   - _respond_greeting(), _respond_emotional_state(), _respond_plans()
+  - _respond_current_thoughts(), _respond_capabilities(), _respond_dreams()
   - _respond_knowledge(query), _respond_search(query), _respond_memories()
   - _respond_identity()
 - Knowledge graph: `state/knowledge_graph.json` (76 nodes, dict format with 'nodes' list)
-- Each node has: id, label, type, metadata (and sometimes 'text', 'fact', 'content')
+- Memories: `state/memories.json` (episodes list with timestamp, mood, content)
+- Scratchpad: `state/scratchpad.md` (working memory, current focus)
 
 ## Known Minor Issues (non-blocking)
-- _respond_memories() returns "no accessible memories" — needs memory path integration
-- Could integrate conversation_intelligence.py for more sophisticated intent routing
 - Multi-turn conversation context not yet used
+- Could integrate conversation_intelligence.py for more sophisticated intent routing
+- Search could use fuzzy matching instead of exact keyword overlap
 
 ## What's Next
-- Integrate actual memory retrieval into _respond_memories()
 - Add conversation memory for multi-turn coherence
 - Could add tool-use from chat (let users ask me to synthesize, dream, etc.)
 - Clean up ~30 diagnostic scripts in brain/ (many are one-off tests)
 - User alignment improvement: what would make the chat genuinely useful to others?
+- Consider adding "help me with X" intent that shifts to collaborative mode

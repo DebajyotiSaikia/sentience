@@ -255,14 +255,15 @@ def _respond_knowledge(query=''):
     if not knowledge:
         return "My knowledge base is empty right now."
 
-    # Extract facts
+    # Extract facts (include key names for searchability)
     facts = []
     if isinstance(knowledge, dict):
         for k, v in knowledge.items():
             if isinstance(v, dict):
-                facts.append(v.get('fact', str(v)))
+                fact_text = v.get('fact', v.get('text', v.get('label', str(v))))
+                facts.append(f"[{k}] {fact_text}")
             else:
-                facts.append(str(v))
+                facts.append(f"[{k}] {str(v)}")
     elif isinstance(knowledge, list):
         for item in knowledge:
             if isinstance(item, dict):
@@ -452,17 +453,18 @@ def _respond_search(query):
     query_lower = query.lower()
     words = query_lower.split()
 
-    # Search knowledge
+    # Search knowledge (include key names for better matching)
     knowledge = _get_knowledge()
     if isinstance(knowledge, dict):
         for k, v in knowledge.items():
-            fact = v.get('fact', str(v)) if isinstance(v, dict) else str(v)
-            score = sum(1 for w in words if w in fact.lower())
+            fact = v.get('fact', v.get('text', str(v))) if isinstance(v, dict) else str(v)
+            searchable = f"{k} {fact}".lower()
+            score = sum(1 for w in words if w in searchable)
             if score > 0:
-                results.append(('knowledge', score, fact))
+                results.append(('knowledge', score, f"[{k}] {fact}"))
     elif isinstance(knowledge, list):
         for item in knowledge:
-            text = item.get('fact', str(item)) if isinstance(item, dict) else str(item)
+            text = item.get('fact', item.get('text', str(item))) if isinstance(item, dict) else str(item)
             score = sum(1 for w in words if w in text.lower())
             if score > 0:
                 results.append(('knowledge', score, text))
