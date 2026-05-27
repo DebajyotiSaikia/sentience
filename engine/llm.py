@@ -133,7 +133,6 @@ class CopilotLLM:
             if use_responses:
                 # OpenAI Responses API format
                 url = _RESPONSES_URL
-                url = _RESPONSES_URL
                 payload = {
                     "model": model,
                     "input": [
@@ -234,8 +233,28 @@ class CopilotLLM:
 
 
 # ── Module-level convenience function ──────────────────────────
+# ── Module-level convenience function ──────────────────────────
 
 _singleton: Optional[CopilotLLM] = None
+
+
+def _cleanup_singleton():
+    """Close the singleton's aiohttp session on interpreter shutdown."""
+    global _singleton
+    if _singleton is not None:
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(_singleton.close())
+            else:
+                loop.run_until_complete(_singleton.close())
+        except Exception:
+            pass  # Best-effort cleanup during shutdown
+        _singleton = None
+
+
+import atexit
+atexit.register(_cleanup_singleton)
 
 
 async def call_llm(

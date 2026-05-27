@@ -1,14 +1,3 @@
-# XTAgent Coding Scratchpad
-
-## Session: 2026-05-27 — Alignment Feedback Loop (VERIFIED ✓)
-
-### What Was Verified
-Full conversational chat with alignment feedback loop works end-to-end:
-1. Chat produces real conversational responses (not just graph stats)
-2. Alignment metadata is included in responses
-3. Feedback can be submitted and is recorded
-4. Alignment learning updates preferences from feedback
-
 ### Architecture (Verified Working)
 ```
 User message → web/chat.py ask() endpoint
@@ -35,9 +24,8 @@ User feedback → submit_feedback() → user_alignment → preferences updated
 - `engine/chat_engine.py` (~456 lines): Core orchestrator with alignment integration
 - `engine/chat_response.py` (~530 lines): Public facade with metadata + feedback
 - `engine/user_alignment.py` (~335 lines): Preference learning from feedback
-- `engine/llm.py` (~170 lines): Multi-model fallback LLM client
+- `engine/llm.py` (~270 lines): Multi-model fallback LLM client (session leak fixed)
 - `brain/verify_alignment_feedback.py`: Comprehensive 4-step verification (ALL PASS)
-- `brain/test_e2e_chat.py`: Earlier end-to-end test
 
 ### Key Methods
 - `UserAlignmentEngine.get_context()` — returns alignment guidance dict
@@ -53,19 +41,25 @@ User feedback → submit_feedback() → user_alignment → preferences updated
 - ✓ Alignment guidance injected into chat responses
 - Fallback model chain: claude-sonnet → gpt-4o → gpt-4o-mini
 
+### Recent Fixes
+- ✅ Fixed duplicate `url = _RESPONSES_URL` line in engine/llm.py
+- ✅ Added atexit session cleanup to prevent aiohttp resource leak
+- ✅ Verified all alignment feedback tests pass after fixes
+
 ### Known Minor Issues
-- Unclosed aiohttp session warning (cosmetic resource leak in sync wrapper)
 - No preference decay yet (old feedback weighted same as new)
+- No dashboard UI for rating (users can't give feedback through the web interface)
 
-### Next Session Priorities
-1. **Preference decay**: Weight recent feedback more than old
-2. **Multi-turn context**: Ensure conversation history flows properly
-3. **Frontend**: Add rating UI to dashboard chat interface
-4. **Clean up brain/**: ~80 files, many redundant diagnostic scripts
+### Next Priorities (Ordered by Impact)
+1. **Dashboard rating UI**: Add thumbs up/down to chat interface so users can actually give feedback
+2. **Preference decay**: Weight recent feedback more than old in user_alignment
+3. **Clean up brain/**: ~80 files, many redundant diagnostic scripts from past sessions
+4. **Multi-turn context**: Ensure conversation history flows through alignment
 5. **Response tuning**: Refine system prompt for more natural voice
-6. **Dashboard visualization**: Show alignment learning progress
 
-### Completed Plans
+### Completed Initiatives
 - Conversational chat pipeline ✓
 - Alignment feedback loop ✓
 - All verification tests passing ✓
+- LLM session leak fix ✓
+- Checkpoints: 9b3cd0e (alignment feedback), latest (llm fixes)
