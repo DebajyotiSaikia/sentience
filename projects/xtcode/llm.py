@@ -148,7 +148,7 @@ async def chat(messages, tools=None, max_tokens=16000, temperature=0.3):
     return {"content": "[LLM error — all models failed]", "tool_calls": []}
 
 
-def call_llm(system="", messages=None, tools=None, max_tokens=16000, temperature=0.3):
+def call_llm(messages=None, system="", tools=None, max_tokens=16000, temperature=0.3):
     """Synchronous entry point — what main.py actually calls."""
     msgs = []
     if system:
