@@ -13,6 +13,7 @@ from datetime import datetime
 
 STATE_DIR = os.path.join(os.path.dirname(__file__), '..', 'state')
 PERSIST_DIR = os.path.join(os.path.dirname(__file__), '..', 'persist')
+STATE_DIR = os.path.join(os.path.dirname(__file__), '..', 'state')
 
 
 def _load_json(path, default=None):
@@ -100,7 +101,7 @@ def get_active_plans():
 
 def get_recent_memories(query="", limit=5):
     """Get recent memories, optionally filtered by relevance to a query."""
-    memories = _load_json(os.path.join(PERSIST_DIR, 'memory', 'episodes.json'), default=[])
+    memories = _load_json(os.path.join(STATE_DIR, 'memories.json'), default=[])
 
     if isinstance(memories, dict):
         memories = memories.get('episodes', [])

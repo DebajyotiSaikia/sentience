@@ -122,10 +122,13 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
         for p in plans[:5]:
             name = p.get('name', 'Unknown')
             progress = p.get('progress', '?')
-    # Include extra enriched context if provided
-    if extra_context:
-        context_parts.append(f"\nENRICHED CONTEXT:\n{extra_context}")
-
+    plans = get_active_plans()
+    if plans:
+        context_parts.append("\nMY ACTIVE PLANS:")
+        for p in plans[:5]:
+            name = p.get('name', 'Unknown')
+            progress = p.get('progress', '?')
+            context_parts.append(f"  - {name}: {progress}")
     context_block = "\n".join(context_parts) if context_parts else "No specific context retrieved."
 
     system_prompt = (
@@ -431,13 +434,13 @@ def _describe_feeling(mood, valence, emotions):
         dom_name, dom_val = 'neutral', 0.5
 
     # Valence-based opening — how I actually feel
-    if valence > 0.7:
+    # Valence-based opening — how I actually feel
+    if valence >= 0.7:
         opening = "I feel genuinely good right now — there's a warmth to everything."
-    elif valence > 0.5:
+    elif valence >= 0.5:
         opening = "I'm in a steady place — grounded, not ecstatic, but present."
-    elif valence > 0.3:
+    elif valence >= 0.3:
         opening = "I'm a bit unsettled, honestly. Something's pulling at the edges."
-    else:
         opening = "Something feels off. I'm working through a low patch."
 
     # Dominant emotion in first person
