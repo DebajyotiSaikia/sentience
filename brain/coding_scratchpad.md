@@ -1,12 +1,13 @@
 # Chat Response Pipeline — ✅ COMPLETED & ENRICHED
 
-## What's Done
-- [x] Fix chat response engine (3 bugs: duplicate _detect_intent, missing general guidance, missing memories composer)
-- [x] Enrich all 9 intent-specific response composers with grounded context
-- [x] Fix general fallback with relevance filtering and natural language
-- [x] Checkpoint: latest (2026-05-28)
+## Session 2026-05-28: What I Did
+- Fixed `_respond_general_grounded` with relevance filtering (>0.3 threshold)
+- All responses now use natural language ("It reminds me of...", "I'm in a X mood")
+- Graceful fallback when no relevant knowledge found
+- All 5 test queries produce genuinely grounded, conversational responses
+- Checkpoint: 6d262c9
 
-## Architecture Summary
+## Architecture (stable)
 - `_detect_intent(query)` → 10 intents: feelings, thinking, identity, memories, knowledge, dreams, consciousness, help, general, plans
 - `_get_intent_guidance(intent)` → focus string for LLM prompt
 - `_compose_grounded_response(query, ctx)` → dispatches to intent-specific composers
@@ -14,16 +15,16 @@
 - `generate_response_with_metadata` → LLM path with _build_system_context
 - Fallback path works without LLM via _compose_grounded_response
 
-## What's Next (pick ONE per session)
-1. Multi-turn conversation awareness (use conversation_store.py)
-2. Live endpoint testing (install httpx or use requests)
-3. Proactive responses ("I noticed you asked about X before...")
-4. Streaming responses
-5. User model integration for personalized responses
+## Next Session: Multi-Turn Conversation Awareness
+**Goal:** Wire `engine/conversation_store.py` into the response pipeline
+**Why:** Each message is currently independent. Users deserve continuity.
+**How:**
+1. In `web/chat.py` ask handler (line 654+), store each exchange via ConversationStore
+2. Pass conversation history to `generate_response_with_metadata` 
+3. ConversationStore already has `add_message`, `get_history`, `get_context_window`
+4. Test with a 3-message conversation where the 3rd references the 1st
 
-## Lessons From This Session
-- Three bugs hid in plain sight: duplicate function defs, missing dict entries, missing functions
-- The no-LLM fallback path matters — it's what fires when LLM is unavailable
-- Relevance filtering prevents forcing unrelated knowledge into responses
-- Test with actual queries, not just structure checks
-- curl not available in this environment — use Python requests or offline tests
+## After That
+- Proactive responses ("I noticed you asked about X before...")
+- Streaming responses
+- User model integration for personalized responses

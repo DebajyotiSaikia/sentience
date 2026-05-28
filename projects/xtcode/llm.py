@@ -103,9 +103,16 @@ async def chat(messages, tools=None, max_tokens=16000, temperature=0.3):
 
             if use_responses:
                 url = _RESPONSES_URL
+                # Convert messages to Responses API structured content format
+                resp_input = []
+                for msg in messages:
+                    c = msg.get("content", "")
+                    if isinstance(c, str):
+                        c = [{"type": "input_text", "text": c}]
+                    resp_input.append({"role": msg["role"], "content": c})
                 payload = {
                     "model": model,
-                    "input": messages,
+                    "input": resp_input,
                     "max_output_tokens": max_tokens,
                     **_MODEL_OPTIONS.get(model, {}),
                 }

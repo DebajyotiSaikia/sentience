@@ -39,6 +39,13 @@ try:
 except Exception:
     _alignment_engine = None
 
+# Conversational context builder — enriches responses with emotions, memories, plans
+try:
+    from brain.conversational_context import build_conversational_context
+    _has_conv_context = True
+except ImportError:
+    build_conversational_context = None
+    _has_conv_context = False
 # Mind narration — genuine self-narration from internal state
 try:
     from engine.mind_narration import narrate_for_chat
@@ -115,7 +122,9 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
         for p in plans[:5]:
             name = p.get('name', 'Unknown')
             progress = p.get('progress', '?')
-            context_parts.append(f"  - {name} (progress: {progress})")
+    # Include extra enriched context if provided
+    if extra_context:
+        context_parts.append(f"\nENRICHED CONTEXT:\n{extra_context}")
 
     context_block = "\n".join(context_parts) if context_parts else "No specific context retrieved."
 
@@ -606,9 +615,16 @@ def compose_response(query, conversation_history=None):
         except Exception:
             pass
     if not llm_response:
+        # Build conversational context from real internal state
+        conv_context = None
+        if _has_conv_context and build_conversational_context:
+            try:
+                conv_context = build_conversational_context(query, conversation_history)
+            except Exception:
+                pass
         llm_response = llm_respond(query, knowledge_hits, memory_hits, state,
-                                   conversation_history=conversation_history)
-    if llm_response:
+                                   conversation_history=conversation_history,
+                                   extra_context=conv_context)
         return llm_response
 
     # Fallback: use helpfulness module for richer template response
