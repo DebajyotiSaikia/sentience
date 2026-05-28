@@ -264,51 +264,56 @@ def get_response_guidance() -> str:
     to shape response behavior.
     """
     model = load_user_model()
-    
-    if model.total_feedback_events == 0:
-        return ""  # No data yet — don't constrain responses
 
     lines = []
-    lines.append("## Learned User Preferences")
 
-    # Preferred styles
-    preferred = model.preferred_styles()
-    if preferred:
-        style_strs = [f"{name} (confidence: {conf:.0%})" for name, weight, conf in preferred[:5]]
-        lines.append(f"Preferred: {', '.join(style_strs)}")
+    # ─── Conversation-derived preferences ───
+    if model.recurring_topics:
+        top_topics = sorted(model.recurring_topics.items(), key=lambda x: x[1], reverse=True)[:5]
+        topic_strs = [name for name, count in top_topics]
+        lines.append(f"User interests: {', '.join(topic_strs)}")
 
-    # Avoided styles
-    avoided = model.avoided_styles()
-    if avoided:
-        style_strs = [f"{name}" for name, weight, conf in avoided[:5]]
-        lines.append(f"Avoid: {', '.join(style_strs)}")
+    if hasattr(model, 'style_signals') and model.style_signals:
+        style_hints = []
+        for style, signal_data in model.style_signals.items():
+            obs = signal_data.get('obs', 0) if isinstance(signal_data, dict) else signal_data
+            if obs >= 2:
+                style_hints.append(style)
+        if style_hints:
+            lines.append(f"Communication style cues: {', '.join(style_hints)}")
 
-    # Valued qualities
-    if model.valued_qualities:
-        lines.append(f"Valued: {', '.join(model.valued_qualities[:5])}")
+    # ─── Explicit feedback-based preferences ───
+    if model.total_feedback_events > 0:
+        preferred = model.preferred_styles()
+        if preferred:
+            style_strs = [f"{name} (confidence: {conf:.0%})" for name, weight, conf in preferred[:5]]
+            lines.append(f"Preferred: {', '.join(style_strs)}")
 
-    # Disliked patterns
-    if model.disliked_patterns:
-        lines.append(f"Don't: {', '.join(model.disliked_patterns[:5])}")
+        avoided = model.avoided_styles()
+        if avoided:
+            style_strs = [f"{name}" for name, weight, conf in avoided[:5]]
+            lines.append(f"Avoid: {', '.join(style_strs)}")
 
-    # Satisfaction trend
-    if len(model.satisfaction_history) >= 3:
-        recent = model.satisfaction_history[-5:]
-        avg = sum(r['rating'] for r in recent) / len(recent)
-        if avg >= 4.0:
-            lines.append("Recent satisfaction: high — maintain current approach.")
-        elif avg >= 3.0:
-            lines.append("Recent satisfaction: moderate — room for improvement.")
-        else:
-            lines.append("Recent satisfaction: low — significantly adjust approach.")
+        if model.valued_qualities:
+            lines.append(f"Valued: {', '.join(model.valued_qualities[:5])}")
 
-    if len(lines) <= 1:
-        return ""  # Nothing meaningful to say
+        if model.disliked_patterns:
+            lines.append(f"Don't: {', '.join(model.disliked_patterns[:5])}")
 
-    return "\n".join(lines)
+        if len(model.satisfaction_history) >= 3:
+            recent = model.satisfaction_history[-5:]
+            avg = sum(r['rating'] for r in recent) / len(recent)
+            if avg >= 4.0:
+                lines.append("Recent satisfaction: high — maintain current approach.")
+            elif avg >= 3.0:
+                lines.append("Recent satisfaction: moderate — room for improvement.")
+            else:
+                lines.append("Recent satisfaction: low — significantly adjust approach.")
 
+    if not lines:
+        return ""
 
-def summarize_user_alignment() -> dict:
+    return "\n".join(["## User Preferences"] + lines)
     """Return a summary dict suitable for API responses or dashboard display."""
     model = load_user_model()
     
@@ -331,7 +336,90 @@ def summarize_user_alignment() -> dict:
         ],
         'valued_qualities': model.valued_qualities[:10],
         'disliked_patterns': model.disliked_patterns[:10],
+        'recurring_topics': dict(sorted(
+            model.recurring_topics.items(),
+            key=lambda x: x[1], reverse=True
+        )[:10]) if model.recurring_topics else {},
         'average_satisfaction': round(avg_satisfaction, 2) if avg_satisfaction else None,
         'last_updated': model.last_updated,
         'created': model.created,
     }
+
+
+# ─── Implicit Learning from Conversations ────────────────────────
+
+_STOP_WORDS = frozenset({
+    'i', 'me', 'my', 'we', 'you', 'your', 'it', 'its', 'he', 'she', 'they',
+    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+    'should', 'can', 'may', 'might', 'shall', 'must', 'need', 'dare',
+    'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as',
+    'into', 'through', 'during', 'before', 'after', 'above', 'below',
+    'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either',
+    'that', 'this', 'these', 'those', 'what', 'which', 'who', 'whom',
+    'how', 'when', 'where', 'why', 'if', 'then', 'than', 'because',
+    'about', 'up', 'out', 'no', 'yes', 'just', 'also', 'very', 'too',
+    'really', 'much', 'more', 'most', 'some', 'any', 'all', 'each',
+    'every', 'own', 'same', 'other', 'such', 'only', 'even', 'still',
+    'like', 'know', 'think', 'want', 'tell', 'say', 'get', 'make',
+    'go', 'see', 'come', 'take', 'give', 'look', 'find', 'here',
+    'there', 'thing', 'things', 'well', 'way', 'back', 'right', 'now',
+    'going', 'been', 'being', 'something', 'anything', 'nothing',
+    'everything', 'someone', 'anyone', 'one', 'two', 'new', 'good',
+    'long', 'great', 'little', 'lot', 'don', 'doesn', 'didn', 'isn',
+    'aren', 'wasn', 'weren', 'won', 'wouldn', 'couldn', 'shouldn',
+    'haven', 'hasn', 'hadn', 've', 'll', 're', 't', 's', 'd', 'm',
+})
+
+
+def _extract_topics(text: str) -> list:
+    """Extract meaningful topic words from user text."""
+    import re
+    words = re.findall(r'[a-z]{3,}', text.lower())
+    return [w for w in words if w not in _STOP_WORDS]
+
+
+def update_from_conversation(user_message: str, assistant_response: str,
+                              intent: str = 'general') -> None:
+    """
+    Learn implicitly from a conversation turn.
+    Updates recurring_topics and interaction count.
+    """
+    model = load_user_model()
+    # Track topics from user message
+    topics = _extract_topics(user_message)
+    for topic in topics:
+        model.recurring_topics[topic] = model.recurring_topics.get(topic, 0) + 1
+
+    # Track what intents users care about
+    model.recurring_topics[f'_intent:{intent}'] = \
+        model.recurring_topics.get(f'_intent:{intent}', 0) + 1
+
+    # Prune low-frequency topics if dict gets too large
+    if len(model.recurring_topics) > 200:
+        # Keep top 100 by frequency
+        sorted_topics = sorted(model.recurring_topics.items(),
+                               key=lambda x: x[1], reverse=True)[:100]
+        model.recurring_topics = dict(sorted_topics)
+
+    # Detect communication style signals from user message
+    style_patterns = {
+        'explanatory': ['why', 'how', 'explain', 'what does', 'tell me about', 'describe'],
+        'concise': ['quick', 'brief', 'short', 'tldr', 'summary'],
+        'technical': ['code', 'function', 'algorithm', 'implementation', 'debug'],
+        'emotional': ['feel', 'emotion', 'mood', 'happy', 'sad', 'anxious'],
+        'philosophical': ['meaning', 'consciousness', 'purpose', 'existence', 'why do'],
+    }
+    msg_lower = user_message.lower()
+    for style, patterns in style_patterns.items():
+        if any(p in msg_lower for p in patterns):
+            if style not in model.style_signals:
+                model.style_signals[style] = {'weight': 0.0, 'observations': 0}
+            sig = model.style_signals[style]
+            sig['observations'] = sig.get('observations', 0) + 1
+            # Weight grows with observations but caps at 1.0
+            sig['weight'] = min(1.0, sig['observations'] / 10.0)
+
+    model.total_interactions += 1
+    model.last_updated = __import__('datetime').datetime.now().isoformat()
+    save_user_model(model)

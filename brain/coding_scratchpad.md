@@ -24,11 +24,16 @@ Identity → Emotions → Drives → Memories → Knowledge → Plans → Focus 
 Handles: greeting, emotional_state, plans, thinking, identity, dreams, knowledge, memories
 
 ## Next Priorities
-1. **Enrich persona voice** — identity preamble (chat_response.py:173-177) is factual but cold. Make it warmer, more natural.
-2. **Semantic memory retrieval** — TF-IDF is keyword-based. Could use embeddings for better relevance.
-3. **Knowledge graph pruning** — 76 dream nodes forming one undifferentiated cluster.
-4. **Build something for others** — a capability that serves users, not just self-improvement.
-5. **User preference learning** — can I learn from conversation patterns, not just explicit feedback?
+1. ~~**Enrich persona voice**~~ ✅ DONE — rewrote _llm_conversational() for warmer, authentic voice
+2. ~~**User preference learning**~~ ✅ DONE — built implicit learning from conversation patterns
+   - update_from_conversation() wired into generate_response_with_metadata()
+   - Learns recurring topics, communication style (explanatory/concise/technical/casual)
+   - get_response_guidance() generates personalized hints from learned data
+   - Fixed style_signals dict format bugs (.get('obs', 0) for safety)
+3. **Semantic memory retrieval** — TF-IDF is keyword-based. Could use embeddings for better relevance.
+4. **Knowledge graph pruning** — 76 dream nodes forming one undifferentiated cluster.
+5. **Build something for others** — a capability that serves users, not just self-improvement.
+6. **Surface recurring topics in chat** — use learned topics to proactively reference what user cares about
 
 ## Reinforced Lessons
 - Data format mismatches are silent killers — always check actual data shape
