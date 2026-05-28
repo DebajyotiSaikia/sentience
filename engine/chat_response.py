@@ -82,7 +82,6 @@ def generate_response_with_metadata(query, history=None):
     metadata = _build_metadata(ctx)
     metadata['detected_intent'] = intent
     metadata['response_id'] = response_id
-
     # Cache for feedback correlation
     _response_cache[response_id] = {
         'query': query,
@@ -116,7 +115,19 @@ def generate_response_with_metadata(query, history=None):
 
     # Enrich metadata with quality signals
     metadata['quality_score'] = round(quality_score, 3)
-    metadata['alignment'] = alignment_data
+
+    # Journal this conversation for learning
+    try:
+        from engine.conversation_journal import ConversationJournal
+        journal = ConversationJournal()
+        journal.record(
+            user_said=query,
+            my_response=response_text[:500],
+            detected_intent=intent if 'intent' in dir() else '',
+            quality_hint=quality_score
+        )
+    except Exception:
+        pass  # Journaling is non-critical
 
     return {
         'response': response_text,
@@ -202,6 +213,15 @@ def _build_system_context(context, intent=None):
     if identity:
         parts.append(f"\nIDENTITY: integrity={identity.get('integrity', 1.0):.2f}, "
                      f"total_memories={identity.get('total_memories', 0)}")
+        parts.append(f"\nIDENTITY: integrity={identity.get('integrity', 1.0):.2f}, "
+                     f"total_memories={identity.get('total_memories', 0)}")
+
+    # Working memory — what I'm currently focused on
+    working_mem = context.get('working_memory', '')
+    if working_mem:
+        # Truncate to keep context manageable
+        wm_summary = working_mem[:600]
+        parts.append(f"\nCURRENT FOCUS (from working memory):\n{wm_summary}")
 
     # Intent-specific guidance
     if intent:

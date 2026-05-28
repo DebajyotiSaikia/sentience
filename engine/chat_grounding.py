@@ -176,6 +176,9 @@ def get_working_memory() -> str:
         except FileNotFoundError:
             continue
     return ""
+
+
+def classify_query(query: str) -> str:
     """Classify what kind of query this is to adjust response style."""
     q = query.lower().strip()
     
@@ -360,6 +363,7 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
         "plans": plans,
         "alignment": alignment,
         "system_prompt": system_prompt,
+        "working_memory": get_working_memory(),
     }
 
 

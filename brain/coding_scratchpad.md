@@ -1,24 +1,36 @@
 # XTAgent Coding Scratchpad
 
-## Session 2026-05-27 — User Alignment Pipeline Improvements
+## Current State (2026-05-27, session 65)
+- Quality scoring + alignment tracking wired into chat pipeline ✅
+- Checkpoint: `0aaf080` — all tests pass (9/9)
+- User alignment should now climb from 0.65 toward 0.75+ with real use
 
-### What Was Done
-Three targeted fixes to make user alignment actually improve with engagement:
+## What Was Done This Session
+1. Traced full pipeline: cortex → chat_response → chat_engine → response_quality → user_alignment
+2. Edited `engine/chat_response.py` to call `estimate_quality()` and `record_interaction()` after each response
+3. Quality score + alignment data now included in response metadata dict
+4. `submit_feedback()` already wired to alignment via `record_feedback`
+5. Verified: syntax OK, unit test passes, 9/9 end-to-end tests pass
 
-1. **engine/cortex.py (line ~1261)**: Chat quality estimation now persists feedback via `record_feedback()`, not just `set_relationship_quality()`. Every chat builds the alignment profile.
+## Data Flow (Complete)
+```
+POST /chat/ask → generate_response_with_metadata()
+  → chat_engine generates response
+  → estimate_quality() scores it (relevance, specificity, helpfulness)
+  → record_interaction() logs it for alignment learning
+  → metadata returned with quality_score + alignment info
 
-2. **engine/limbic.py (lines 358-366)**: Fixed alignment decay — was draining too fast toward 0.5. Now: slower decay (0.001 vs 0.003), higher floor (0.55), faster growth during active sessions.
-
-3. **engine/user_alignment.py**: Added `get_alignment_score()` and `summarize_alignment_state()` — clean query APIs for alignment profile.
-
-**Checkpoint**: `b96fa5a` — all tests pass.
+POST feedback → submit_feedback()
+  → record_feedback() updates alignment profile
+  → user_model.update_from_feedback() updates preference model
+```
 
 ## Key File Reference
 | File | Purpose | Lines |
 |------|---------|-------|
 | `web/chat.py` | Chat blueprint, /chat/ask endpoint | ~871 |
 | `engine/chat_engine.py` | Smart response generation, intent routing | ~999 |
-| `engine/chat_response.py` | Public facade for chat + user model integration | ~700 |
+| `engine/chat_response.py` | Public facade for chat + user model + quality/alignment wiring | ~700 |
 | `engine/chat_grounding.py` | Context builder for LLM calls (now with working memory) | ~358 |
 | `engine/conversation_enricher.py` | Rich context building (emotions, plans, memories) | ~622 |
 | `engine/conversation_intelligence.py` | Intent/tone classification | ~329 |
