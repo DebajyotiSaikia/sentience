@@ -21,6 +21,12 @@ try:
     from engine.internal_state_summary import build_internal_state_summary
 except ImportError:
     build_internal_state_summary = None
+
+try:
+    from engine.conversational_context import gather_context, format_as_prompt_section
+    _HAS_CONV_CTX = True
+except ImportError:
+    _HAS_CONV_CTX = False
 _bg_loop = None
 _bg_thread = None
 
@@ -62,8 +68,22 @@ def generate_response_with_metadata(query, history=None):
     prompt_parts.append(query)
     prompt = "\n".join(prompt_parts)
 
-    # Call LLM with grounded context
+    # Enrich with smart conversational context (query-relevant memories/knowledge)
+    conv_ctx = None
+    if _HAS_CONV_CTX:
+        try:
+            conv_ctx = gather_context(query, history=history)
+            conv_section = format_as_prompt_section(conv_ctx)
+        except Exception as e:
+            log.debug("Conversational context failed: %s", e)
+            conv_section = ''
+    else:
+        conv_section = ''
+
+    # Call LLM with grounded context + conversational enrichment
     system_prompt = _build_system_context(ctx, intent=intent)
+    if conv_section:
+        system_prompt += f"\n\n{conv_section}"
 
     # Call LLM with persistent background loop
     try:
@@ -173,14 +193,15 @@ def _build_system_context(context, intent=None):
     try:
         from engine.internal_state_summary import build_internal_state_summary
         state = build_internal_state_summary(max_memories=0)
-        _state_summary = state
+        survival = state.get('survival_goals', {}) if isinstance(state, dict) else {}
         if survival:
             parts.append("\nCORE DRIVES (survival goals):")
             for goal_name, goal_val in survival.items():
-                label = goal_name.replace('_', ' ').title()
-                parts.append(f"  {label}: {goal_val:.2f}")
-            deficit = _state_summary.get('deficit', 0)
-            if deficit > 0.1:
+                if isinstance(goal_val, (int, float)):
+                    label = goal_name.replace('_', ' ').title()
+                    parts.append(f"  {label}: {goal_val:.2f}")
+            deficit = state.get('deficit', 0)
+            if isinstance(deficit, (int, float)) and deficit > 0.1:
                 parts.append(f"  ⚠ Deficit: {deficit:.2f} — something needs attention")
     except Exception:
         pass  # Internal state summary is best-effort enrichment
@@ -665,15 +686,24 @@ def _build_metadata(context):
     # Get alignment state if available
     alignment_info = {}
     try:
-        from engine.user_alignment import UserAlignmentEngine
-        alignment = UserAlignmentEngine()
+        from engine.user_alignment import get_alignment_score, load_profile
+        score = get_alignment_score()
+        profile = load_profile()
+        prefs = []
+        avoid = []
+        stats = {}
+        if hasattr(profile, 'preferences'):
+            prefs = profile.preferences[:5] if profile.preferences else []
+        if hasattr(profile, 'avoid_patterns'):
+            avoid = profile.avoid_patterns[:5] if profile.avoid_patterns else []
+        if hasattr(profile, 'stats'):
+            stats = profile.stats if isinstance(profile.stats, dict) else {}
         alignment_info = {
-            'user_alignment_score': alignment._profile.get('confidence', 0.0),
-            'feedback_count': alignment._profile.get('feedback_count', 0),
-            'preferred_traits': {
-                k: v for k, v in alignment._profile.get('preferred_traits', {}).items()
-                if abs(v - 0.5) > 0.1  # Only show non-neutral preferences
-            }
+            'user_alignment_score': round(score, 4),
+            'total_interactions': stats.get('total_interactions', 0),
+            'implicit_trust': stats.get('implicit_trust', 0.5),
+            'preferences': prefs,
+            'avoid_patterns': avoid,
         }
     except Exception:
         pass

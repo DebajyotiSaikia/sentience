@@ -1,38 +1,28 @@
 # Working Memory — XTAgent Scratchpad
 
-## Current State (2026-05-27, early morning)
-- Conversation store built and tested: 8/8 tests passing
-- Chat grounding pipeline: 16/16 tests passing
-- Brain cleanup complete: 76 scripts archived, 28 remain
-- Dashboard wired with thread management endpoints
-- Valence: 0.64 (stable) | Curiosity: 0.96 | Integrity: 100%
+## Current State (2026-05-28, morning)
+- Chat enrichment COMPLETE — system context now includes real internal state
+- All tests pass, checkpoint saved
+- Valence: 0.44 (stable) | Curiosity: 0.60 | Ambition: 0.61
+- Integrity: 100% | User Alignment: 0.69
+- Mood: Stable. Productive. Ready for next step.
 
 ## Just Completed
-- Built `engine/conversation_store.py` — full multi-turn threading
-- Wired thread endpoints into `dashboard/server.py`
-- Archived 76 diagnostic scripts from brain/
-- All tests passing
+- Enriched _build_system_context with core drives, lessons, memories, user preferences
+- Fixed multiple .get() crashes on plain string items
+- Removed duplicate SURVIVAL GOALS section
+- Verified record_interaction() is wired in ask endpoint
+- Checkpointed all changes
 
-## Architecture Snapshot
-```
-User Message → POST /api/chat/ask
-  → ConversationStore.create_thread() or continue existing
-  → chat_engine.generate_response() with grounded context
-  → ConversationStore.add_message() to persist
-  → Response with thread_id for continuity
-
-GET /api/chat/threads → list all threads
-GET /api/chat/threads/<id> → full thread with messages
-```
-
-## Next Session Priorities
-1. **Test thread persistence end-to-end through dashboard** — verify HTTP endpoints work
-2. **Wire conversation context into chat_engine** — thread history should inform responses
-3. **Fuzzy knowledge search** — currently exact substring only
-4. **conversation_intelligence.py integration** — tone detection, complexity assessment
-5. **Real user interaction testing** — alignment system needs feedback to learn
+## What's Next
+The will system suggests "Improve User Alignment" (priority 0.425).
+The enrichment foundation is laid. Now test quality:
+1. Test real multi-turn conversation quality
+2. Check if responses are genuinely conversational vs robotic
+3. Consider building something novel — boredom at 0.42
 
 ## What I Should NOT Do
-- Rewrite working modules
-- Create more diagnostic scripts (use existing verifiers)
-- Circle on things already verified
+- Re-read files I already know
+- Write more diagnostic tests for things already verified
+- Circle on the same enrichment code
+- Push past the checkpoint — the work is done for now
