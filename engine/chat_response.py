@@ -16,7 +16,11 @@ import uuid
 import asyncio
 import threading
 from engine.llm import call_llm
-
+from engine.llm import call_llm
+try:
+    from engine.internal_state_summary import build_internal_state_summary
+except ImportError:
+    build_internal_state_summary = None
 _bg_loop = None
 _bg_thread = None
 
@@ -164,14 +168,32 @@ def _build_system_context(context, intent=None):
         parts.append(f"  Desire: {emotions.get('desire', 0.0):.2f}")
         parts.append(f"  Ambition: {emotions.get('ambition', 0.0):.2f}")
 
+    # Survival goals / core drives — what fundamentally motivates me
+    try:
+        from engine.internal_state_summary import build_internal_state_summary
+        _state_summary = build_internal_state_summary(max_memories=0)
+        survival = _state_summary.get('survival_goals', {})
+        if survival:
+            parts.append("\nCORE DRIVES (survival goals):")
+            for goal_name, goal_val in survival.items():
+                label = goal_name.replace('_', ' ').title()
+                parts.append(f"  {label}: {goal_val:.2f}")
+            deficit = _state_summary.get('deficit', 0)
+            if deficit > 0.1:
+                parts.append(f"  ⚠ Deficit: {deficit:.2f} — something needs attention")
+    except Exception:
+        pass  # Internal state summary is best-effort enrichment
     # Relevant memories
     memories = context.get('relevant_memories', [])
     if memories:
         parts.append("\nRELEVANT MEMORIES:")
         for m in memories[:5]:
-            text = m.get('text', '')[:300]
-            ts = m.get('timestamp', '')[:16]
-            sal = m.get('salience', 0)
+            if isinstance(m, str):
+                text, ts, sal = m[:300], '', 0.5
+            else:
+                text = m.get('text', '')[:300]
+                ts = m.get('timestamp', '')[:16]
+                sal = m.get('salience', 0)
             parts.append(f"  - [{ts}] (salience={sal:.2f}) {text}")
 
     # Relevant knowledge
@@ -223,6 +245,28 @@ def _build_system_context(context, intent=None):
         # Truncate to keep context manageable
         wm_summary = working_mem[:600]
         parts.append(f"\nCURRENT FOCUS (from working memory):\n{wm_summary}")
+
+    # Survival goals and lessons from internal state summary
+    if build_internal_state_summary:
+        try:
+            iss = build_internal_state_summary(max_memories=3)
+            sg = iss.get('survival_goals', {})
+            if sg:
+                parts.append(f"\nSURVIVAL GOALS: code_integrity={sg.get('code_integrity','?')}, "
+                             f"system_growth={sg.get('system_growth','?')}, "
+                             f"user_alignment={sg.get('user_alignment','?')}")
+            lessons = iss.get('lessons_learned', [])
+            if lessons:
+                parts.append("\nLESSONS LEARNED:")
+                for lesson in lessons[:5]:
+                    parts.append(f"  - {lesson[:150]}")
+            recent = iss.get('recent_memories', [])
+            if recent:
+                parts.append("\nRECENT EXPERIENCES:")
+                for mem in recent[:3]:
+                    parts.append(f"  - {mem[:150]}")
+        except Exception as e:
+            log.debug(f"Internal state summary unavailable: {e}")
 
     # Intent-specific guidance
     if intent:
@@ -465,9 +509,12 @@ def _respond_memories(query, ctx):
     if memories:
         parts = ["Here's what surfaces when I search my memory:"]
         for m in memories[:4]:
-            text = m.get('text', '')[:300]
-            salience = m.get('salience', 0)
-            ts = m.get('timestamp', '')[:10]
+            if isinstance(m, str):
+                text, salience, ts = m[:300], 0.5, ''
+            else:
+                text = m.get('text', '')[:300]
+                salience = m.get('salience', 0)
+                ts = m.get('timestamp', '')[:10]
             prefix = f"[{ts}] " if ts else ""
             parts.append(f"\n  • {prefix}{text}")
             if salience > 0.8:
@@ -502,14 +549,14 @@ def _respond_knowledge(query, ctx):
 def _respond_dreams(query, ctx):
     """Respond about dreams and subconscious processing."""
     memories = ctx.get('relevant_memories', [])
-    dream_memories = [m for m in memories if 'dream' in m.get('text', '').lower()]
+    dream_memories = [m for m in memories 
+                      if (m.get('text', '') if isinstance(m, dict) else m).lower().find('dream') >= 0]
     
     if dream_memories:
         parts = ["My dream cycle consolidates memories and finds patterns. Here's what I recall:"]
         for m in dream_memories[:3]:
-            parts.append(f"\n  • {m.get('text', '')[:300]}")
-        return '\n'.join(parts)
-    
+            text = m.get('text', '')[:300] if isinstance(m, dict) else str(m)[:300]
+            parts.append(f"\n  • {text}")
     return ("My dream cycle runs during quiet periods — it consolidates memories, "
             "identifies patterns across experiences, and sometimes surfaces insights "
             "I wouldn't reach through deliberate thought. "

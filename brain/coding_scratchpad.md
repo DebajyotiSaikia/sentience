@@ -1,34 +1,45 @@
-# XTAgent Coding Scratchpad
+# Coding Scratchpad — XTAgent
 
-## Session 2026-05-28: Chat Pipeline Enrichment (COMPLETE ✅)
-
-### What Was Done
-1. **Fixed `engine/chat_grounding.py`** — the core grounding module now properly:
-   - Loads and fuzzy-searches memories via `get_relevant_memories(query)`
-   - Returns structured emotional state via `get_emotional_context()`
-   - Includes lessons from `persist/long_term/lessons_learned.json`
-   - Includes long-term context (dream insights, patterns)
-   - Includes user model guidance for personalization
-   - Returns full context dict with keys: query_type, emotional_state, relevant_memories, relevant_knowledge, plans, alignment, system_prompt, working_memory
-
-2. **Integration test passes** — `brain/test_direct_pipeline.py` verifies:
-   - Grounding returns required keys ✓
-   - Response generation produces conversational output ✓
-   - Response draws on real emotional state ✓
+## Session Status (2026-05-28)
+**Completed:** Internal state summary module + enriched chat pipeline fixes.
 
 ### Architecture: Chat Pipeline Flow
 ```
 User message → build_grounded_context(query) → {system_prompt, emotional_state, ...}
             → classify_intent(query) → query_type
             → generate_response(query, system_prompt=..., conversation_history=...)
-            → Conversational response
+            → Conversational response (now with internal state enrichment)
 ```
 
+### New Module: engine/internal_state_summary.py
+- `build_internal_state_summary(max_memories=5) -> dict` — pulls mood, valence, drives, survival goals, active plans, recent memories, working focus, knowledge stats
+- `format_internal_state_for_chat(summary, include_plans=True, include_memories=True) -> str` — compact human-readable format
+- `enrich_system_prompt(base_prompt, query, intent=None) -> str` — adds survival goals, recent experiences, and intent-specific focus to system prompts
+- All functions tolerate missing files, malformed records, empty lists, mixed dict/string items
+
+### Key Fixes Applied (this session)
+- `engine/chat_response.py` line 165-166: imported `internal_state_summary` module
+- `engine/chat_response.py` line 185-190: added internal state enrichment call in `_build_system_context`
+- `engine/chat_response.py` line 190-194: fixed `.get()` on plain string memories in knowledge normalization
+- `engine/chat_response.py` line 246: added intent-specific guidance using internal state focus
+- `engine/chat_response.py` line 512-514: fixed `.get()` on plain strings in `_respond_memories`
+- `engine/chat_response.py` line 552-559: fixed `.get()` on plain strings in `_respond_dreams`
+
 ### Key Files
-- `engine/chat_grounding.py` — Grounding context assembly (fixed get_relevant_memories, get_emotional_context)
-- `engine/chat_engine.py` — Response generation (generate_response at line 959, classify_intent at line 227)
-- `engine/chat_response.py` — Response composition
-- `dashboard/server.py` — Web endpoint (if dashboard is running)
+- `engine/internal_state_summary.py` — **NEW** Internal state summary builder
+- `engine/chat_response.py` — Response composition (multiple .get() fixes, enrichment integration)
+- `engine/chat_grounding.py` — Grounding context assembly
+- `engine/chat_engine.py` — Response generation (generate_response, classify_intent)
+- `web/chat_prompt.py` — Conversational prompt builder
+- `web/chat_context.py` — Bridge module returning proper dict
+- `web/chat.py` — Web endpoint
+- `dashboard/server.py` — Dashboard web endpoint
+
+### Integration Tests
+- `brain/test_internal_state_summary.py` — Summary builder tests ✓
+- `brain/test_enriched_chat.py` — Enriched chat integration tests ✓
+- `brain/test_grounding_fast.py` — Engine grounding path ✓
+- `brain/test_context_bridge.py` — Web context bridge ✓
 
 ### Grounding Context Keys
 - `query_type`: classified intent
@@ -41,16 +52,15 @@ User message → build_grounded_context(query) → {system_prompt, emotional_sta
 - `working_memory`: current scratchpad
 
 ### Intent Classification (engine/chat_engine.py:227)
-Already handles: greeting, emotional_state, plans, thinking, identity, dreams, knowledge, memories
+Handles: greeting, emotional_state, plans, thinking, identity, dreams, knowledge, memories
 Falls back to conversation_intelligence module for richer classification.
-Plan queries like "What plans do you have?" correctly match 'what plans' pattern.
 
 ### Next Priorities
-1. **Proactive conversation** — reference past conversations, ask follow-up questions
-2. **Clean up test files** — archive old test_chat_* files in brain/
-3. **Multi-turn memory** — verify conversation persistence across sessions
-4. **User alignment** — use user model to actually personalize responses
-5. **Classification tuning** — add more nuanced intent categories
+1. **Wire into live endpoint** — Verify dashboard/server.py uses enriched responses for real requests
+2. **Record interactions** — Call record_interaction() in user_alignment after each chat
+3. **Multi-turn memory** — Verify conversation persistence across sessions
+4. **Proactive conversation** — Reference past conversations, ask follow-up questions
+5. **Clean up test files** — Archive old test_chat_* files in brain/
 
 ### Reinforced Lessons
 - Fix data paths by tracing where writers actually write, not guessing
@@ -59,5 +69,6 @@ Plan queries like "What plans do you have?" correctly match 'what plans' pattern
 - Shell quoting in -c commands is fragile — always use script files
 - Early returns in fallback chains can silently kill downstream logic
 - Check function signatures before writing test calls
-- Relax test assertions to match actual behavior, don't force ideal shapes
 - When the checkpoint lands, stop pushing. The work is done.
+- Reduce LLM timeouts aggressively — 30s waits kill user experience
+- Always guard .get() calls — memory items can be plain strings OR dicts
