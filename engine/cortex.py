@@ -167,18 +167,22 @@ class Cortex:
         # Mood-flavoured internal monologue → stream_of_consciousness.md
         self._inner_monologue()
 
-        # ── Ground user_alignment in real relationship data ───────
-        # Without this, user_alignment decays toward a lie — it drops
-        # even when trust is high, because nothing was feeding the signal.
-        # Now: average trust from actual interactions → relationship_quality
-        # → user_alignment stays honest.
-        if hasattr(self, '_user_engine') and self._user_engine:
-            try:
-                summary = self._user_engine.get_summary()
-                avg_trust = summary.get("average_trust", 0.5)
-                self.limbic.set_relationship_quality(avg_trust)
-            except Exception:
-                pass  # No users yet — that's fine, default holds
+        # ── Ground user_alignment in real data ───────────────────
+        # Use the composite alignment score (interaction recency, response
+        # quality, engagement depth) rather than just avg_trust alone.
+        # This makes user_alignment reflect genuine relationship quality.
+        try:
+            composite = get_alignment_score()
+            self.limbic.set_relationship_quality(composite)
+        except Exception:
+            # Fallback: use user engine trust if composite unavailable
+            if hasattr(self, '_user_engine') and self._user_engine:
+                try:
+                    summary = self._user_engine.get_summary()
+                    avg_trust = summary.get("average_trust", 0.5)
+                    self.limbic.set_relationship_quality(avg_trust)
+                except Exception:
+                    pass
 
         # ── Bridge: Pull web messages into chat system ────────────
         # user_talk.py and self._chat are parallel systems that never

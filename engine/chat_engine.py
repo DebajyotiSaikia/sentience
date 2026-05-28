@@ -13,11 +13,12 @@ from engine.conversation_context import ConversationContext
 
 DATA = Path('state')
 
-# Try to import alignment guidance
+# Try to import alignment guidance and recording
 _HAS_ALIGNMENT = False
 suggest_response_guidance = None
+record_interaction = None
 try:
-    from engine.user_alignment import suggest_response_guidance
+    from engine.user_alignment import suggest_response_guidance, record_interaction
     _HAS_ALIGNMENT = True
 except Exception:
     pass
@@ -985,7 +986,14 @@ def generate_response(query: str, *, system_context: str = "", history: list = N
         response = loop.run_until_complete(coro)
         loop.close()
         if response and isinstance(response, str) and len(response.strip()) > 5:
-            return response.strip()
+            result = response.strip()
+            # Record this interaction for alignment scoring
+            if _HAS_ALIGNMENT and record_interaction:
+                try:
+                    record_interaction(query, result)
+                except Exception:
+                    pass  # Don't let recording failures break responses
+            return result
     except Exception:
         # Clean up: ensure coroutine is closed if it wasn't awaited
         try:
