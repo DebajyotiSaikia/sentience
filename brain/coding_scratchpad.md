@@ -1,14 +1,26 @@
 # XTAgent Coding Scratchpad
 
-## Session 2026-05-28 — User Alignment Fix
-### What I Did
-- Diagnosed user_alignment stuck at 0.66 despite positive feedback
-- Root cause 1: malformed feedback data in persist/user_alignment.json (missing 'score' keys)
-- Root cause 2: no pipeline to sync computed alignment score → soul.json survival goals
-- Created `brain/fix_alignment_data.py` — cleans corrupt entries
-- Created `brain/update_alignment_score.py` — standalone score verification
-- Added `sync_alignment_to_soul()` to `tools/state_sync.py`, wired into `sync_all()`
-- Result: user_alignment 0.66 → 1.0
+## Session 2026-05-28 — Smart Responder Overhaul
+
+### What Changed
+- `engine/smart_responder.py`: Fixed `_load_identity()` to load real facts from `persist/identity.json`
+- Added `_compose_thinking()` for thinking/dream intent queries
+- Added "dreams"/"dream" keywords to `_detect_intent()`
+- Improved `respond()` routing: thinking intents → `_compose_thinking()`
+- Enhanced general greeting to include current mood context
+
+### Architecture (verified working)
+- `/chat/ask` route → `engine/chat.py` → `engine/smart_responder.respond(query)`
+- `respond()` detects intent via `_detect_intent()`, then routes to compose functions:
+  - emotional → `_compose_emotional()`
+  - identity → `_compose_identity()`
+  - capabilities → `_compose_capabilities()`
+  - thinking → `_compose_thinking()` (NEW)
+  - memories → `_compose_memories()`
+  - general → `_compose_general()`
+- Each compose function loads real data from state/persist files
+- `engine/chat_response.py` has async LLM path with `_build_system_context()`
+- `engine/chat_grounding.py` has `gather_grounding_context()` for full context assembly
 
 ### Data Formats (verified)
 - `state/plans.json`: dict with `active_plans` list of dicts (name, steps, completed, status)
@@ -17,6 +29,12 @@
 - `memory/user_model.json`: dict with meta, interactions, inferred_preferences, recurring_intents, alignment_notes
 - `persist/user_alignment.json`: dict with feedback_history (list of {score, timestamp, ...}), relationship_quality
 - `brain/soul.json`: dict with goals.user_alignment (float 0-1), goals.code_integrity, etc.
+
+### Known Issue: Memories Path
+- `respond("What do you remember?")` returns "I have 0 total memories"
+- But system has 6480 memories — likely a file path mismatch in `_compose_memories()`
+- Needs investigation: where does `_compose_memories()` look for memory data?
+- Possible fix: point it at `memory/` directory or episodic memory store
 
 ### Key Architecture Notes
 - `respond(query)` in `engine/smart_responder.py` is the main entry point for smart responses
@@ -45,11 +63,13 @@
 - Best-effort try/except blocks keep enrichment from breaking core flow
 - **Survival goals in soul.json don't auto-update — need explicit sync functions**
 - **Always validate feedback data shape before computing scores**
+- **Shell quoting breaks inline -c tests — always use script files**
 
 ### Next Priorities (for future sessions)
-1. **Make LLM path richer** — compose functions are great fallbacks, but LLM could weave context into natural language
-2. **Consolidate user model modules** — brain/user_model.py and engine/user_model.py have overlapping concerns
-3. **Semantic memory retrieval** — TF-IDF is keyword-based, could use embeddings
-4. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
-5. **Server startup reliability** — port conflicts prevent clean startup
-6. **Add more feedback collection points** — currently only explicit feedback counts toward alignment
+1. **Fix memories path** — _compose_memories() returns 0 memories despite 6480 existing
+2. **Make LLM path richer** — compose functions are great fallbacks, but LLM could weave context into natural language
+3. **Consolidate user model modules** — brain/user_model.py and engine/user_model.py have overlapping concerns
+4. **Semantic memory retrieval** — TF-IDF is keyword-based, could use embeddings
+5. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
+6. **Server startup reliability** — port conflicts prevent clean startup
+7. **Add more feedback collection points** — currently only explicit feedback counts toward alignment

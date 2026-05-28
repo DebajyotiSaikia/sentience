@@ -86,7 +86,7 @@ def _load_knowledge_facts() -> List[Dict]:
 
 def _load_memories(limit: int = 200) -> List[Dict]:
     """Load recent memories."""
-    mems = _load_json('persist/memories.json', [])
+    mems = _load_json('state/memories.json', [])
     if not isinstance(mems, list):
         return []
     result = []
@@ -333,7 +333,7 @@ def _count_knowledge() -> int:
 
 def _count_memories() -> int:
     """Count total memories."""
-    mems = _load_json('persist/memories.json', [])
+    mems = _load_json('state/memories.json', [])
     return len(mems) if isinstance(mems, list) else 0
 
 
@@ -506,9 +506,16 @@ def _compose_memories_response(query: str, memories: List[Dict]) -> str:
             else:
                 parts.append(f"  • {content[:200]}")
     else:
-        parts.append("I have memories, but none strongly match your query. "
-                     f"I have {len(memories)} total memories. "
-                     "Try asking about something specific I might have experienced.")
+        # No keyword matches — show most recent memories as overview
+        recent = sorted(memories, key=lambda m: m.get('timestamp', ''), reverse=True)[:7]
+        parts.append(f"I have {len(memories)} memories. Here are my most recent experiences:")
+        for mem in recent:
+            content = mem.get('content', mem.get('text', ''))
+            ts = mem.get('timestamp', '')
+            if ts:
+                parts.append(f"  [{ts[:10]}] {content[:200]}")
+            else:
+                parts.append(f"  - {content[:200]}")
 
     return '\n'.join(parts)
 
