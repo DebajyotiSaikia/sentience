@@ -306,12 +306,30 @@ def read_conversation(text: str, history: list = None) -> ConversationRead:
     This is my understanding of this moment in conversation.
     """
     intent, confidence = classify_intent(text)
-    tone = detect_tone(text)
-    complexity = assess_complexity(text)
-    needs_tools = likely_needs_tools(text, intent)
-    clarify, clarify_reason = should_clarify_first(text, intent, complexity, confidence)
-    keywords = extract_keywords(text)
-    strategy = choose_response_strategy(intent, tone, complexity)
+    try:
+        tone = detect_tone(text)
+    except NameError:
+        tone = "neutral"
+    try:
+        complexity = assess_complexity(text)
+    except NameError:
+        complexity = "moderate"
+    try:
+        needs_tools = likely_needs_tools(text, intent)
+    except NameError:
+        needs_tools = False
+    try:
+        clarify, clarify_reason = should_clarify_first(text, intent, complexity, confidence)
+    except NameError:
+        clarify, clarify_reason = False, ""
+    try:
+        keywords = extract_keywords(text)
+    except NameError:
+        keywords = [w.lower() for w in text.split()[:5]]
+    try:
+        strategy = choose_response_strategy(intent, tone, complexity)
+    except NameError:
+        strategy = "direct"
 
     # If clarification is needed, adjust strategy
     if clarify:
