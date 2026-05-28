@@ -277,7 +277,26 @@ def _build_system_context(context, intent=None):
                 parts.append(f"  - {name} ({progress})" if progress else f"  - {name}")
             else:
                 parts.append(f"  - {p}")
+    # Working memory (current focus, scratchpad)
+    working_mem = context.get('working_memory', '')
+    if working_mem and isinstance(working_mem, str):
+        # Extract just the key parts - current state and what's next
+        wm_lines = working_mem.strip().split('\n')
+        wm_summary = []
+        in_section = False
+        for line in wm_lines:
+            if any(h in line for h in ['## Current State', "## What's Next", '## Just Completed', '## Reinforced Lessons']):
+                in_section = True
+                wm_summary.append(line)
+            elif line.startswith('## ') and in_section:
+                in_section = False
+            elif in_section and len(wm_summary) < 15:
+                wm_summary.append(line)
+        if wm_summary:
+            parts.append("\nCURRENT FOCUS (from working memory):")
+            parts.append('\n'.join(wm_summary))
 
+    # Completed plans
     # Completed plans
     completed_plans = context.get('completed_plans', [])
     if completed_plans:
@@ -342,8 +361,6 @@ def _build_system_context(context, intent=None):
     except Exception:
         pass  # User model guidance is best-effort
 
-    # === User alignment guidance (learned from interaction patterns) ===
-    # === User alignment guidance (learned from interaction patterns) ===
     # === User alignment guidance (learned from interaction patterns) ===
     try:
         from engine.user_alignment import get_alignment_context

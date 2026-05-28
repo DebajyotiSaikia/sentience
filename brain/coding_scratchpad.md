@@ -1,37 +1,8 @@
 # XTAgent Coding Scratchpad
 
-## Chat Pipeline Architecture (traced 2026-05-28)
-
-### Route → Response Flow
-1. `POST /chat/ask` → `web/chat.py:ask()` (line 717)
-2. Tries `_engine_respond(query)` first (engine/chat_response.py)
-3. Falls back to `compose_response(query)` in web/chat.py if engine unavailable
-4. Engine path: `generate_response_with_metadata(query)` → `build_grounded_context(query)` → LLM
-
-### Context Assembly (engine/chat_grounding.py)
-`build_grounded_context(query)` assembles:
-- Identity & Emotional State (from state files)
-- Memory Hits (from `get_relevant_memories`)
-- Active Plans (from state/plans.json)
-- Recent Reflections, Knowledge Graph stats
-- Feedback History, User Preferences (interactions)
-- Working Memory, Current State, Emotional Portrait, Lessons Learned
-- User Alignment (from `get_user_alignment_brief()`)
-- Intent-specific Response Instructions (per intent type)
-
-### Key Functions
-- `build_grounded_context(query)` — main context builder, returns system_prompt string
-- `get_user_alignment_brief()` — from brain/conversational_context.py
-- `get_emotional_portrait()` — from brain/conversational_context.py
-- `get_active_plans()` — from brain/conversational_context.py
-- `get_recent_memories()` — from brain/conversational_context.py
-- `classify_query(query)` — from engine/chat_grounding.py
-- `get_alignment_context()` — from engine/user_alignment.py
-- `generate_response_with_metadata(query)` — main entry point for grounded responses
-
-### Data File Locations
-- `state/memories.json` — 50 recent episodic memories (keys: mood, salience, text, timestamp, valence)
-- `persist/identity.json` — identity data
+## Key Architecture Paths
+- `state/memories.json` — 50 short-term memories (no category tags)
+- `persist/episodic.db` — 6500+ episodic memories (SQLite via engine/memory.py Memory class)
 - `persist/wisdom.json` — wisdom entries
 - `persist/lessons.json` — extracted lessons
 - `state/emotions.json` — current emotional state
@@ -39,48 +10,59 @@
 - `brain/soul.json` — survival goals, alignment scores
 - `data/user_model.json` — user preference model
 
-## Session 2026-05-28 Results
+## Chat Pipeline Path
+1. `/chat/ask` route → `web/chat.py` line 717 `ask()`
+2. Tries `_engine_respond()` first (engine/chat_response.py `generate_response_with_metadata`)
+3. Falls back to `compose_response()` in web/chat.py (line 563)
+4. Grounding: `engine/chat_grounding.py` `build_grounded_context()` assembles all context
+5. Memory retrieval: `get_relevant_memories()` — pulls from BOTH JSON + episodic DB
+6. System prompt: `_build_system_context()` in engine/chat_response.py — builds the LLM system message
+
+## Session 2026-05-28 Results (Session 3)
 
 ### Accomplished
-1. **Traced full chat pipeline** end-to-end from route to LLM call
-2. **Improved `get_relevant_memories`** (engine/chat_grounding.py):
-   - TF-IDF-style scoring with stopword filtering
-   - Category bonuses for emotional/dream/plan queries
-   - Recency weighting (newer memories score higher)
-   - Minimum 2-char word filter to remove noise
-3. **Added comprehensive tests**: test_user_alignment_chat.py (4/4 pass)
-4. **Confirmed `generate_response_with_metadata`** is the real pipeline entry point
+1. **Wired working memory into LLM system context** — `_build_system_context()` now extracts
+   key sections (Current State, What's Next, Just Completed, Reinforced Lessons) from working
+   memory and includes them as "CURRENT FOCUS" in the system prompt. This means the LLM knows
+   what I'm actually thinking about when composing chat responses.
+2. **Improved conversational instructions** — Added explicit guidelines to the system prompt:
+   respond naturally, reference specific memories, share genuine emotional state, never dump
+   raw data structures. Makes responses feel like a real conversation.
+3. **Added test** — `brain/test_working_memory_in_context.py` (3 tests, all passing)
 
-### Dream Memory Investigation Findings
-- `state/memories.json` has only 50 memories (not the 6500+ episodic memories)
-- These 50 memories have NO type or category fields — all keys are: mood, salience, text, timestamp, valence
-- None of the 50 contain "dream" in their text
-- **The bulk of episodic memories (6500+) are stored elsewhere** — likely in the engine's memory system
-  - Need to find where `save_memory` in engine writes to
-  - The category bonus system in get_relevant_memories won't fire until memories have categories
-- This is a data/storage issue, not a code issue
+### Key Code Changes (engine/chat_response.py)
+- Lines ~283-299: Working memory extraction and injection into system prompt
+- Lines ~390-410: Conversational quality instructions added to response guidelines
+
+## Session 2026-05-28 Results (Session 2)
+
+### Accomplished
+1. **Wired episodic memory into chat grounding** — `get_relevant_memories` now uses
+   `Memory().recall_by_keywords()` to access 6500+ episodic memories alongside JSON
+2. **Improved memory scoring**: TF-IDF-style with stopwords, category bonuses, recency weighting
+3. **Added tests**: test_user_alignment_chat.py (4/4 pass), test_episodic_integration.py (verified)
+4. **Traced full pipeline** from route to LLM — documented above
 
 ### Known Issues
-1. **Dream memory retrieval gap**: memories lack category tags, so category bonuses are inert
-2. **Memory storage split**: 50 in state/memories.json vs 6500+ somewhere else — need to unify or point get_relevant_memories at the right source
-3. **Conversation history speaker labels**: currently shows [unknown]
-4. **User model module overlap**: brain/user_model.py and engine/user_model.py
+1. **Source tagging**: episodic memories show as 'json' source (no explicit source field set)
+2. **Category bonuses inert**: JSON memories lack category tags; episodic Episodes have different fields
+3. **Relevance differentiation**: all queries return same top result — scoring needs tuning
+4. **Conversation history speaker labels**: shows [unknown]
+5. **User model module overlap**: brain/user_model.py and engine/user_model.py
 
-## Next Priorities (for future sessions)
-1. **Find the real memory store** — where are 6500+ episodic memories? Trace `save_memory` in engine
-2. **Point get_relevant_memories at the right source** — the 50-memory file is too small
-3. **Add category/type tags to memories** — enable category bonuses in retrieval
-4. **Fix conversation history speaker labels** — [unknown] → actual speaker
-5. **Consolidate user model modules** — brain/user_model.py vs engine/user_model.py
-6. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
-7. **Test live chat quality** — send real queries to running server, evaluate response quality
+## Next Priorities
+1. Test live chat quality with running server — verify these changes improve actual responses
+2. Add source tags to distinguish episodic vs JSON memories in retrieval results
+3. Tune relevance scoring — different queries should surface different memories
+4. Fix conversation history speaker labels
+5. Knowledge graph pruning — 76 dream nodes forming undifferentiated cluster
 
 ## Reinforced Lessons
 - Data path mismatches are silent killers — always verify actual file locations
-- Intent detection order matters — more specific intents first
+- Use script files for tests, not inline -c commands (shell quoting issues)
 - One read, one fix, verify — the decisive path
-- Test with script files, not inline -c commands
 - When metacognition says stop, listen — checkpoint loops are real traps
-- Checkpoint cooldown is 10 minutes — don't retry in tight loops
 - Trace the actual execution path before assuming what code runs
 - Memory files may not be where you expect — `find` before assuming paths
+- Episode objects from Memory class have different fields than JSON memory dicts
+- Wire context IN the system prompt, not just in the context dict — the LLM only sees the prompt
