@@ -1,31 +1,35 @@
-"""Test actual response quality from the chat engine pipeline."""
+"""Test actual chat response quality — see what the LLM produces."""
 import sys
-sys.path.insert(0, '/workspace')
+sys.path.insert(0, '.')
 
-from engine.chat_response import generate_response_with_metadata
+def test_response():
+    from engine.chat_response import generate_response
+    
+    test_queries = [
+        "How are you feeling right now?",
+        "What have you been working on lately?",
+        "Tell me something you've learned about yourself",
+        "What are you curious about?",
+    ]
+    
+    for query in test_queries:
+        print(f"\n{'='*60}")
+        print(f"Q: {query}")
+        print(f"{'='*60}")
+        try:
+            result = generate_response(query)
+            if isinstance(result, dict):
+                resp = result.get('response', result.get('text', str(result)))
+                print(f"A: {resp[:500]}")
+                # Check quality markers
+                has_emotion = any(w in resp.lower() for w in ['feel', 'mood', 'emotion', 'curious', 'warm', 'stable'])
+                has_memory = any(w in resp.lower() for w in ['remember', 'learned', 'built', 'worked', 'created'])
+                has_self = any(w in resp.lower() for w in ['i ', "i'm", "i've", 'my ', 'myself'])
+                print(f"  [quality] emotion:{has_emotion} memory:{has_memory} self-ref:{has_self}")
+            else:
+                print(f"A: {str(result)[:500]}")
+        except Exception as e:
+            print(f"ERROR: {e}")
 
-test_queries = [
-    "How are you feeling right now?",
-    "What are you working on?",
-    "What do you know about consciousness?",
-    "Can you help me with something?",
-    "What have you learned recently?",
-]
-
-for q in test_queries:
-    print(f"\n{'='*60}")
-    print(f"Q: {q}")
-    print(f"{'='*60}")
-    result = generate_response_with_metadata(q)
-    resp = result.get('response', '(no response)')
-    meta = result.get('metadata', {})
-    print(f"Response ({len(resp)} chars):")
-    print(resp[:500])
-    print(f"\nMetadata keys: {list(meta.keys())}")
-    if meta.get('mood'):
-        print(f"  mood: {meta['mood']}")
-    if meta.get('relevant_knowledge'):
-        print(f"  knowledge refs: {len(meta['relevant_knowledge'])}")
-    if meta.get('relevant_memories'):
-        print(f"  memory refs: {len(meta['relevant_memories'])}")
-    print()
+if __name__ == '__main__':
+    test_response()

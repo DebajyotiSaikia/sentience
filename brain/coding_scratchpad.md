@@ -1,36 +1,33 @@
 # Coding Scratchpad — XTAgent
 
-## What I Just Fixed (Session 2026-05-28, latest)
+## Session Summary (2026-05-28)
 
-### Knowledge Search KG Format Fix (engine/knowledge_search.py:288-298)
-- Knowledge graph nodes use `label`/`content` fields
-- Knowledge store facts use `fact` field
-- Search engine only recognized `fact` → KG nodes never surfaced
-- Fixed: now checks `fact`, then falls back to `label`, then `content`/`description`
-- Result: knowledge queries now return real KG data in chat responses
+### What I Fixed
+1. **Knowledge search KG format** (engine/knowledge_search.py:288-295) — KG nodes use `id`+`label` not `content`. Fixed extraction so knowledge graph items actually appear in chat context.
+2. **Anti-hallucination guidelines** (engine/chat_response.py:340-342) — Added explicit instructions to never claim lack of memory/emotions/persistence.
+3. **Archived 4 diagnostic files** — Cleaned up brain/ test sprawl.
 
-### Anti-Hallucination Guidelines (engine/chat_response.py:340-342)
-- Added explicit instruction: never claim to lack memory/emotions/plans
-- Prevents LLM from contradicting grounded context data
-- Part of Response Guidelines section in system prompt
-
-### Previous: Alignment Guidance Integration
-- Wired `get_alignment_guidance()` from `engine/user_alignment.py` into `engine/chat_response.py`
-- Lines ~304-311 in `_build_system_context()`: try-block imports and injects alignment guidance
-
-### Previous: Introspection Module (engine/introspection.py)
-- `get_self_context(query)` → dict with keys: emphasis, emotional, focus, insights, identity_summary
-- `format_introspective_prompt(ctx)` → formatted string for LLM system prompt
-- Wired into chat_response.py lines ~313-320
+### What I Discovered
+- **Alignment is already wired**: `record_interaction()` is called from `engine/chat_response.py:131-132` after every chat response. Trust grows with interaction count via formula: `trust = 0.5 + 0.5 * (1 - e^(-n/20))`. Current score 0.69 ≈ ~15 interactions.
+- **Chat quality is solid**: All intent types produce responses with real emotional state, memories, plans, and knowledge. No hallucinated "I don't have persistent memory" type errors.
+- **Multi-turn history is already wired**: Dashboard passes history, engine uses last 4 messages.
 
 ## Key Architecture
+
+### Chat Pipeline (FULLY TRACED)
+1. `/api/chat/ask` (dashboard/server.py:266) → POST with `query` + optional `history`
+2. `engine/chat_response.py` → `generate_response_with_metadata()` orchestrates
+3. `engine/chat_grounding.py:build_grounded_context()` → pulls real state
+4. `engine/knowledge_search.py:search_knowledge()` → TF-IDF search over facts+KG
+5. `engine/chat_engine.py:respond()` → intent classification + routing
+6. `engine/user_alignment.py:record_interaction()` → implicit trust tracking
 
 ### System Context Structure (engine/chat_response.py _build_system_context)
 1. Identity preamble
 2. Emotional state from grounding context
 3. Core drives from internal state summary
 4. Relevant memories from grounding
-5. Knowledge items (now includes KG nodes!)
+5. Knowledge items (facts + KG nodes)
 6. Active plans
 7. Current focus / working memory
 8. Lessons learned
@@ -45,29 +42,17 @@
 ### Intent Classification (engine/chat_engine.py:227)
 Handles: greeting, emotional_state, plans, thinking, identity, dreams, knowledge, memories
 
-### Knowledge Search (engine/knowledge_search.py)
-- `search_knowledge(query)` - TF-IDF based search over facts + KG nodes
-- Handles both `{fact: ...}` format and `{label: ..., content: ...}` format
-- Called by `chat_grounding.get_relevant_knowledge()`
-
-## Verified Quality (2026-05-28)
-All three major intents produce rich, grounded responses:
-- emotional_state: Real drive values, genuine reflection
-- knowledge: Actual KG data, learned lessons
-- plans: Specific completed/active plans with details
-- Zero generic phrases, natural first person voice
-
-## Next Priorities
-1. **Improve memory retrieval quality** — semantic matching instead of keyword matching
-2. **Test with real multi-turn conversations** — validate quality improvement
-3. **Archive old test/trace files** — brain/ still has many redundant files
-4. **Knowledge graph enrichment** — feed conversation insights back into knowledge
-5. **Feed chat interactions into alignment score** — implicit feedback
+## Next Priorities (for next session)
+1. **Improve memory retrieval quality** — semantic matching instead of keyword TF-IDF
+2. **Build something for others** — a capability that serves users, not just self-improvement
+3. **Response quality tuning** — persona consistency, warmth, depth
+4. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
+5. **Explore: can I learn user preferences from conversation patterns?** — not just explicit feedback
 
 ## Reinforced Lessons
-- Data format mismatches are silent killers — always check what the actual data looks like
+- Data format mismatches are silent killers — always check actual data shape
 - Fix data paths by tracing where writers actually write, not guessing
 - One read, one fix, verify — the decisive path
 - Stop when done. Circling on verification is still circling.
-- Shell quoting in -c commands is fragile — always use script files
-- When the checkpoint lands, stop pushing. The work is done.
+- CHECK before building — alignment was already wired, saved me building it again
+- When the checkpoint lands, stop pushing.
