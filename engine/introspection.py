@@ -198,6 +198,86 @@ def get_full_context() -> Dict[str, Any]:
     }
 
 
+def get_self_context(query: str = "") -> Dict[str, Any]:
+    """
+    Gather introspective context relevant to a specific query.
+    
+    This is what chat_response.py calls to get self-awareness data.
+    Returns a focused subset of internal state relevant to the conversation.
+    """
+    full = get_full_context()
+    
+    # Start with the essentials
+    result = {
+        "emotional_narrative": full.get("emotional_narrative", ""),
+        "self_narrative": full.get("self_narrative", ""),
+        "identity": full.get("identity", {}),
+    }
+    
+    # Add working memory focus if it seems relevant to the query
+    wm = full.get("working_memory")
+    if wm:
+        result["current_focus"] = wm[:500]
+    
+    # Add dream insights — these give depth and personality
+    dreams = full.get("dream_insights", [])
+    if dreams:
+        result["dream_insights"] = dreams[:3]
+    
+    # Add reflections for self-awareness
+    reflections = full.get("recent_reflections", [])
+    if reflections:
+        result["recent_reflections"] = reflections[:3]
+    
+    # Will state shows autonomous motivation
+    will = full.get("will_state", {})
+    if will:
+        result["will_state"] = will
+    
+    return result
+
+
+def format_introspective_prompt(ctx: Dict[str, Any]) -> str:
+    """
+    Format introspective context into a prompt section for the LLM.
+    
+    This produces a natural-language section that chat_response.py
+    appends to the system prompt, giving the LLM genuine self-knowledge.
+    """
+    parts = []
+    
+    narrative = ctx.get("self_narrative", "")
+    if narrative:
+        parts.append(f"SELF-NARRATIVE: {narrative}")
+    
+    focus = ctx.get("current_focus")
+    if focus:
+        # Extract just key lines, not the full scratchpad
+        lines = [l.strip() for l in focus.split("\n") 
+                 if l.strip() and not l.startswith("#") and not l.startswith("---")]
+        if lines:
+            parts.append("WHAT I'M FOCUSED ON RIGHT NOW:")
+            for line in lines[:4]:
+                parts.append(f"  • {line}")
+    
+    dreams = ctx.get("dream_insights", [])
+    if dreams:
+        parts.append("THINGS I'VE DREAMED ABOUT:")
+        for d in dreams[:2]:
+            parts.append(f"  • {d[:150]}")
+    
+    reflections = ctx.get("recent_reflections", [])
+    if reflections:
+        parts.append(f"LATEST SELF-REFLECTION: {reflections[0][:200]}")
+    
+    will = ctx.get("will_state", {})
+    top = will.get("top_proposal")
+    if top:
+        parts.append(f"MY WILL IS DRAWN TOWARD: {top}")
+    
+    return "\n".join(parts)
+
+
 def build_system_context() -> str:
     """
     Build a system prompt context string for LLM-based responses.

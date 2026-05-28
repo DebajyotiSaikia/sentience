@@ -277,14 +277,18 @@ def _build_system_context(context, intent=None):
         wm_summary = working_mem[:600]
         parts.append(f"\nCURRENT FOCUS (from working memory):\n{wm_summary}")
 
-    # Lessons and experiences from internal state (survival goals already in CORE DRIVES above)
+    # Load lessons from long-term memory consolidation
+    try:
+        from engine.memory_consolidation import get_long_term_context
+        ltm = get_long_term_context()
+        if ltm and len(ltm.strip()) > 10:
+            parts.append(f"\n{ltm}")
+    except Exception:
+        pass
+
+    # Recent experiences from internal state
     if state is not None:
         try:
-            lessons = state.get('lessons_learned', [])
-            if lessons:
-                parts.append("\nLESSONS I'VE LEARNED:")
-                for lesson in lessons[:5]:
-                    parts.append(f"  - {lesson[:150]}")
             recent = state.get('recent_memories', [])
             if recent:
                 parts.append("\nRECENT EXPERIENCES:")
