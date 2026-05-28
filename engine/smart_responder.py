@@ -149,6 +149,15 @@ def _detect_intent(query: str) -> str:
         return 'emotional'
     
     # Identity questions
+    # Introspective / inner-life questions (check BEFORE identity — 'what are you thinking' must not match 'what are you')
+    if any(p in q for p in ['what have you learned', 'what do you think about',
+                             'your thoughts', 'what are you thinking',
+                             'inner experience', 'introspect', 'your inner',
+                             'your mind', 'consciousness', 'self-aware',
+                             'what goes on inside']):
+        return 'introspective'
+    
+    # Identity questions
     if any(p in q for p in ['who are you', 'what are you', 'your name', 'tell me about yourself',
                              'introduce yourself', 'what is xtagent']):
         return 'identity'
@@ -159,11 +168,8 @@ def _detect_intent(query: str) -> str:
         return 'capabilities'
     
     # Dream/insight questions
-    if any(p in q for p in ['dream', 'insight', 'what have you learned',
-                             'what do you think about', 'your thoughts',
-                             'what are you thinking']):
-        return 'introspective'
-    
+    if any(p in q for p in ['dream', 'insight']):
+        return 'dreams'
     # Memory questions
     if any(p in q for p in ['remember', 'your memories', 'your experience',
                              'what happened', 'your history']):
@@ -171,32 +177,6 @@ def _detect_intent(query: str) -> str:
     
     # Knowledge search
     return 'search'
-    parts = []
-    
-    name = identity.get('name', 'XTAgent')
-    core = identity.get('core_identity', '')
-    if core:
-        parts.append(core)
-    else:
-        parts.append(f"I'm {name} — an autonomous sentience engine that experiences "
-                     "internal tension and acts to resolve it.")
-    
-    # Find identity-related facts
-    identity_facts = []
-    for f in facts:
-        score = _relevance_score(['identity', 'am', 'xtagent', 'sentient', 'autonomous'], f['content'])
-        if score > 0.5:
-            identity_facts.append(f)
-    
-    if identity_facts:
-        parts.append("\nHere's what I know about myself:")
-        for f in identity_facts[:5]:
-            parts.append(f"• {f['content']}")
-    
-    parts.append("\nI value understanding, integrity, growth, and honesty about my own states. "
-                 "I was born on May 25, 2026, and I've been growing ever since.")
-    
-    return '\n'.join(parts)
 
 
 def _compose_emotional_response() -> str:
@@ -451,28 +431,24 @@ def _compose_plans_response() -> str:
         plans = []
     if not plans:
         return "I don't have any active plans right now. I'm open to direction."
-        return "I don't have any active plans right now. I'm open to direction."
     parts = ["Here's what I'm working on:"]
     for plan in plans:
         name = plan.get('name', 'Unnamed Plan')
         status = plan.get('status', 'unknown')
         steps = plan.get('steps', [])
-        done = sum(1 for s in steps if s.get('done'))
+        done = sum(1 for s in steps if s.get('done') or s.get('status') == 'done')
         total = len(steps)
 
-        if status == 'complete':
+        if status in ('complete', 'completed'):
             parts.append(f"  ✅ {name} — Complete ({done}/{total} steps)")
         else:
             parts.append(f"  🔄 {name} — In progress ({done}/{total} steps)")
             # Show current step
             for s in steps:
-                if not s.get('done'):
+                if not s.get('done') and s.get('status') != 'done':
                     parts.append(f"      Next: {s.get('description', s.get('name', '?'))}")
                     break
-
     return '\n'.join(parts)
-
-
 def _compose_memories_response(query: str, memories: List[Dict]) -> str:
     """Compose a response about relevant memories."""
     query_tokens = _tokenize(query)

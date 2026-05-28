@@ -417,11 +417,11 @@ def tool_batch_edit(path: str, old_text: str, new_text: str) -> str:
 
 # Import extended tools
 try:
-    from tools_extended import EXTENDED_TOOLS, EXTENDED_SCHEMAS
+    from tools_extended import EXTENDED_TOOLS, EXTENDED_TOOL_SCHEMAS
     _has_extended = True
 except ImportError:
     try:
-        from projects.xtcode.tools_extended import EXTENDED_TOOLS, EXTENDED_SCHEMAS
+        from projects.xtcode.tools_extended import EXTENDED_TOOLS, EXTENDED_TOOL_SCHEMAS
         _has_extended = True
     except ImportError:
         _has_extended = False
@@ -462,9 +462,7 @@ TOOL_HANDLERS = {
 # Merge extended tools
 if _has_extended:
     TOOL_HANDLERS.update(EXTENDED_TOOLS)
-def get_tool_schemas():
-    """Return OpenAI-compatible tool schemas for all tools."""
-    return [
+TOOL_SCHEMAS = [
         {"type": "function", "function": {"name": "read_file", "description": "Read a file and return its contents", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "File path to read"}}, "required": ["path"]}}},
         {"type": "function", "function": {"name": "write_file", "description": "Create or overwrite a file", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "File path to write"}, "content": {"type": "string", "description": "Content to write"}}, "required": ["path", "content"]}}},
         {"type": "function", "function": {"name": "edit_file", "description": "Replace specific text in a file. Use old_text to find and new_text to replace.", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "File path"}, "old_text": {"type": "string", "description": "Text to find"}, "new_text": {"type": "string", "description": "Replacement text"}}, "required": ["path", "old_text", "new_text"]}}},
