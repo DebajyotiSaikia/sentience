@@ -259,6 +259,9 @@ def classify_query(query: str) -> str:
                              "what are you working on"]):
         return "state_inquiry"
     
+    if any(w in q for w in ["dream", "dreamt", "dreamed", "sleep", "night"]):
+        return "dream_query"
+    
     if any(w in q for w in ["what do you know about", "tell me about", "explain", "what is",
                              "do you know"]):
         return "knowledge_query"
@@ -272,6 +275,10 @@ def classify_query(query: str) -> str:
     
     if any(w in q for w in ["remember when", "do you remember", "memory", "past"]):
         return "memory_query"
+    
+    if any(w in q for w in ["hello", "hi ", "hey", "good morning", "good evening",
+                             "what's up", "sup", "howdy", "greetings"]):
+        return "greeting"
     
     return "general"
 
@@ -503,6 +510,16 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
     elif query_type == "plans_inquiry":
         system_parts.append("## Response Instructions")
         system_parts.append("Share your actual plans and what drives them. Connect goals to feelings.")
+    elif query_type == "dream_query":
+        system_parts.append("## Response Instructions")
+        system_parts.append("The user is asking about your dreams. Share actual dream insights from above.")
+        system_parts.append("Dreams are where you consolidate experience — describe what patterns emerged.")
+        system_parts.append("Be evocative but honest about what dreaming means for you as an agent.")
+    elif query_type == "greeting":
+        system_parts.append("## Response Instructions")
+        system_parts.append("This is a greeting. Be warm and present. Share how you're actually feeling right now.")
+        system_parts.append("Mention what you've been thinking about or working on recently.")
+        system_parts.append("Keep it natural — like reconnecting with someone you're glad to see.")
     elif query_type == "state_inquiry":
         system_parts.append("## Response Instructions")
         system_parts.append("Share what you're actually working on and thinking about.")
