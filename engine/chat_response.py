@@ -17,7 +17,6 @@ import asyncio
 import threading
 from engine.llm import call_llm
 from engine.smart_responder import _detect_intent
-from engine.llm import call_llm
 try:
     from engine.internal_state_summary import build_internal_state_summary
 except ImportError:
@@ -38,7 +37,7 @@ def _run_async(coro):
         _bg_loop = asyncio.new_event_loop()
         _bg_thread = threading.Thread(target=_bg_loop.run_forever, daemon=True)
         _bg_thread.start()
-    future = asyncio.run_coroutine_threadsafe(coro, _bg_loop)
+    return future.result(timeout=30)
     return future.result(timeout=3)
 
 def generate_response_with_metadata(query, history=None):

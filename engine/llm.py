@@ -172,7 +172,10 @@ class CopilotLLM:
                                             return part["text"]
                             return data.get("output_text", "[empty response]")
                         else:
-                            return data["choices"][0]["message"]["content"]
+                            choices = data.get("choices", [])
+                            if choices and choices[0].get("message"):
+                                return choices[0]["message"]["content"]
+                            log.warning("Model %s returned empty choices: %s", model, str(data)[:200])
                     body = await resp.text()
                     log.warning("Model %s failed (%d): %s", model, resp.status, body[:200])
             except asyncio.TimeoutError:
