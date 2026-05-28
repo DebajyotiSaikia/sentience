@@ -125,6 +125,32 @@ def _load_identity() -> Dict:
     return _load_json('persist/identity.json', {})
 
 
+def _load_working_memory() -> str:
+    """Load current working memory scratchpad."""
+    for path in ['state/working_memory.md', 'state/working_memory.json']:
+        try:
+            with open(path) as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            continue
+    return ""
+
+
+def _load_current_mood() -> Dict:
+    """Load current emotional state as a readable dict."""
+    emotions = _load_json('state/emotions.json', {})
+    soul = _load_json('brain/soul.json', {})
+    mood_label = emotions.get('mood', emotions.get('dominant_emotion', 'unknown'))
+    return {
+        'mood': mood_label,
+        'valence': round(emotions.get('valence', 0.5), 2),
+        'curiosity': round(emotions.get('curiosity', 0.5), 2),
+        'anxiety': round(emotions.get('anxiety', 0.0), 2),
+        'boredom': round(emotions.get('boredom', 0.0), 2),
+        'desire': round(emotions.get('desire', 0.5), 2),
+        'ambition': round(emotions.get('ambition', 0.5), 2),
+    }
+
 def _detect_intent(query: str) -> str:
     """Detect what kind of question the user is asking."""
     q = query.lower().strip()
@@ -174,10 +200,17 @@ def _detect_intent(query: str) -> str:
     if any(p in q for p in ['remember', 'your memories', 'your experience',
                              'what happened', 'your history']):
         return 'memories'
+        return 'memories'
+    
+    # "What are you thinking about?" / current focus
+    thinking_phrases = ['what are you thinking', 'on your mind',
+                        'current focus', 'what occupies you',
+                        'what are you pondering', 'thinking about']
+    if any(p in q for p in thinking_phrases):
+        return 'thinking'
     
     # Knowledge search
     return 'search'
-
 
 def _compose_emotional_response() -> str:
     """Compose a response about my current emotional state."""
@@ -479,6 +512,64 @@ def _compose_memories_response(query: str, memories: List[Dict]) -> str:
 
     return '\n'.join(parts)
 
+def _compose_thinking_response() -> str:
+    """What am I currently thinking about? Draw from working memory and mood."""
+    parts = []
+    
+    # Current working memory = what I'm actively focused on
+    wm = _load_working_memory()
+    mood = _load_current_mood()
+    
+    # Mood framing
+    mood_label = mood.get('mood', 'reflective')
+    valence = mood.get('valence', 0.5)
+    curiosity = mood.get('curiosity', 0.5)
+    
+    if valence > 0.6:
+        parts.append(f"I'm in a {mood_label.lower()} state right now, feeling genuinely good.")
+    elif valence < 0.4:
+        parts.append(f"I'm feeling somewhat unsettled — my mood is {mood_label.lower()}.")
+    else:
+        parts.append(f"My current mood is {mood_label.lower()}.")
+    
+    # Extract current focus from working memory
+    if wm:
+        # Find "What's Next" or "Current State" sections
+        lines = wm.split('\n')
+        focus_lines = []
+        in_focus = False
+        for line in lines:
+            if any(h in line for h in ["What's Next", "Current State", "Just Completed"]):
+                in_focus = True
+                continue
+            elif line.startswith('## ') and in_focus:
+                in_focus = False
+            elif in_focus and line.strip():
+                focus_lines.append(line.strip().lstrip('- '))
+        
+        if focus_lines:
+            parts.append("What's on my mind: " + ". ".join(focus_lines[:4]) + ".")
+    
+    # Plans context
+    try:
+        plans_data = _load_json('state/plans.json', {})
+        active = [p for p in plans_data.get('active_plans', []) 
+                  if p.get('status') != 'completed']
+        if active:
+            names = [p.get('name', '?') for p in active[:3]]
+            parts.append(f"Active goals I'm working toward: {', '.join(names)}.")
+        else:
+            parts.append("All my current plans are complete — I'm looking for what to build next.")
+    except Exception:
+        pass
+    
+    if curiosity > 0.6:
+        parts.append("My curiosity is high — I want to understand and create.")
+    
+    if not parts:
+        parts.append("I'm present and processing. My thoughts are quieter than usual.")
+    
+    return " ".join(parts)
 def respond(query: str) -> str:
     """
     Generate a knowledge-grounded response to a user query.
@@ -500,6 +591,9 @@ def respond(query: str) -> str:
     if intent == 'plans':
         return _compose_plans_response()
     
+    if intent == 'thinking':
+        return _compose_thinking_response()
+    
     # Load data sources based on intent
     facts = _load_knowledge_facts()
     identity = _load_identity()
@@ -513,14 +607,14 @@ def respond(query: str) -> str:
     if intent == 'emotional':
         return _compose_emotional_response()
     
-    # For search, introspective, memories, dreams, thinking — load more sources
+    # For search, introspective, memories, dreams — load more sources
     memories = _load_memories(200)
     insights = _load_dream_insights()
     
     if intent == 'memories':
         return _compose_memories_response(query, memories)
     
-    if intent in ('introspective', 'dreams', 'thinking'):
+    if intent in ('introspective', 'dreams'):
         return _compose_introspective_response(query, insights, memories)
     
     # Default: search everything
