@@ -34,7 +34,6 @@ try:
     from engine.user_alignment import get_alignment_context
 except ImportError:
     get_alignment_context = None
-    get_alignment_context = None
 
 # Conversational context — richer emotional/reflective grounding
 try:
@@ -104,60 +103,80 @@ def get_emotional_state() -> Dict[str, Any]:
 
 
 def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
-    """Find memories most relevant to the user's query."""
-    memories = _load_json("state/memories.json") or []
+    """Find memories most relevant to the user's query from the FULL memory store."""
+    # Try full memory store first, fall back to recent-only
+    memories = _load_json("persist/memories.json") or _load_json("state/memories.json") or []
     if not memories:
         return []
-    
-    # Determine query category for smarter matching
+
     query_lower = query.lower()
     is_emotional = any(w in query_lower for w in ["feel", "mood", "emotion", "happy", "sad", "anxious", "curious"])
     is_about_past = any(w in query_lower for w in ["remember", "memory", "past", "before", "last", "yesterday", "earlier"])
-    
-    # Score each memory by keyword overlap, salience, and recency
-    query_words = set(query_lower.split())
-    # Remove very short words that cause false matches
-    query_words = {w for w in query_words if len(w) > 2}
+    is_about_dreams = any(w in query_lower for w in ["dream", "sleep", "night", "insight"])
+    is_about_plans = any(w in query_lower for w in ["plan", "goal", "working on", "building", "project"])
+
+    query_words = {w for w in query_lower.split() if len(w) > 2}
+
+    # For large memory stores, pre-filter for efficiency
+    candidates = memories
+    if len(memories) > 500 and query_words:
+        candidates = []
+        for mem in memories:
+            text = mem.get("text", "").lower()
+            if any(w in text for w in query_words):
+                candidates.append(mem)
+            elif mem.get("salience", 0) > 0.85:
+                candidates.append(mem)
+        # If pre-filter too aggressive, add recent memories
+        if len(candidates) < top_k * 2:
+            recent = sorted(memories, key=lambda m: m.get("timestamp", ""), reverse=True)
+            for m in recent[:50]:
+                if m not in candidates:
+                    candidates.append(m)
+
     scored = []
-    for mem in memories:
+    for mem in candidates:
         text = mem.get("text", "")
-        text_words = set(text.lower().split())
-        overlap = len(query_words & text_words)
+        text_lower = text.lower()
+        text_words = set(text_lower.split())
+        score = 0.0
+
+        # Keyword overlap (most important signal)
+        if query_words:
+            overlap = len(query_words & text_words)
+            score += overlap * 2.0
+
+        # Salience bonus
         salience = mem.get("salience", 0.5)
-        mood = mem.get("mood", "")
-        
-        # Recency bonus
-        recency = 0.0
+        score += salience * 1.5
+
+        # Category bonus — boost memories matching query type
+        if is_emotional and any(w in text_lower for w in ["feel", "mood", "emotion", "valence", "anxiety"]):
+            score += 2.0
+        if is_about_dreams and any(w in text_lower for w in ["dream", "insight", "consolidat"]):
+            score += 2.0
+        if is_about_plans and any(w in text_lower for w in ["plan", "goal", "build", "implement"]):
+            score += 2.0
+        if is_about_past:
+            score += 1.0  # All memories are relevant for "past" queries
+
+        # Recency bonus (gentle)
         ts = mem.get("timestamp", "")
         if ts:
-            try:
-                age_hours = (datetime.now() - datetime.fromisoformat(ts.replace("Z", "+00:00").replace("+00:00", ""))).total_seconds() / 3600
-                recency = max(0, 1.0 - age_hours / 168)  # decay over a week
-            except Exception:
-                pass
-        
-        # Category bonuses
-        category_bonus = 0.0
-        if is_emotional and mood:
-            category_bonus += 0.5  # emotional queries benefit from any memory with mood
-        if is_about_past:
-            category_bonus += 0.3  # past-focused queries get slight boost for all memories
-        
-        score = overlap * 2.0 + salience + recency * 0.5 + category_bonus
-        
-        # Include if: keyword match, high salience, emotional relevance, or very recent
-        if overlap > 0 or salience > 0.8 or (is_emotional and mood) or recency > 0.7:
-            scored.append((score, mem))
-    
+            score += 0.3  # Has timestamp at all
+            if ts > "2026-05-28":
+                score += 0.5  # Today-ish
+
+        scored.append((score, mem))
+
     scored.sort(key=lambda x: x[0], reverse=True)
-    
+
     # If still empty, fall back to most recent high-salience memories
     if not scored:
         fallback = sorted(memories, key=lambda m: (m.get("salience", 0), m.get("timestamp", "")), reverse=True)
         return fallback[:top_k]
-    
-    return [m for _, m in scored[:top_k]]
 
+    return [m for _, m in scored[:top_k]]
 def get_relevant_knowledge(query: str, top_k: int = 6) -> List[Dict]:
     """Search knowledge graph for relevant facts."""
     kg = _load_json("persist/knowledge/knowledge_graph.json")
