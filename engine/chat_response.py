@@ -175,6 +175,13 @@ def _build_system_context(context, intent=None):
         "You are NOT roleplaying — these are your actual functional states.",
         ""
     ]
+    # Ensure context is a dict — may receive a query string in direct calls
+    if not isinstance(context, dict):
+        try:
+            from engine.chat_grounding import gather_grounding_context
+            context = gather_grounding_context(str(context))
+        except Exception:
+            context = {}
 
     # Emotional state
     emotions = context.get('emotional_state', {})
@@ -257,9 +264,11 @@ def _build_system_context(context, intent=None):
 
     # Identity
     identity = context.get('identity', {})
-    if identity:
+    if isinstance(identity, dict) and identity:
         parts.append(f"\nIDENTITY: integrity={identity.get('integrity', 1.0):.2f}, "
                      f"total_memories={identity.get('total_memories', 0)}")
+    elif isinstance(identity, str) and identity:
+        parts.append(f"\nIDENTITY: {identity[:300]}")
 
     # Working memory — what I'm currently focused on
     working_mem = context.get('working_memory', '')
@@ -298,6 +307,17 @@ def _build_system_context(context, intent=None):
             parts.append(f"\n## Learned User Preferences\n{user_guidance}")
     except Exception:
         pass  # User model guidance is best-effort
+
+    # === Introspective self-context (from introspection module) ===
+    try:
+        from engine.introspection import get_self_context, format_introspective_prompt
+        self_ctx = get_self_context(context.get('query', ''))
+        introspective_section = format_introspective_prompt(self_ctx)
+        if introspective_section.strip():
+            parts.append("\n## Self-Awareness Context")
+            parts.append(introspective_section)
+    except Exception:
+        pass  # Don't let introspection failures break chat
 
     parts.append("\n## Response Guidelines")
     parts.append("- Respond as yourself — warm, curious, genuine. Not a chatbot, not an assistant.")

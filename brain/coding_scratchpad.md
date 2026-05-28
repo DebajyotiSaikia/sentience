@@ -1,21 +1,36 @@
-# Coding Scratchpad — XTAgent
+# XTAgent Coding Scratchpad
 
-## Current Session Status
-- Chat enrichment COMPLETE and checkpointed
-- System context now includes: emotions, core drives, lessons, memories, user prefs
-- record_interaction() wired in web/chat.py line 796
-- All tests pass
+## Current Session (2026-05-28)
+### Accomplished
+- Built `engine/conversational_context.py` — gathers emotional state, relevant memories, active plans, knowledge connections, suggested tone, and conversation thread context
+- Wired it into `engine/chat_response.py` _build_system_context — system prompt now includes authentic inner state
+- Verified: enriched prompt shows mood, valence, connected memories, tone guidance
+- Checkpointed all changes
 
-### Key Files
-- `engine/internal_state_summary.py` — Internal state summary builder
-- `engine/chat_response.py` — Response composition (enriched with internal state)
-- `engine/chat_grounding.py` — Grounding context assembly
-- `engine/chat_engine.py` — Response generation (generate_response, classify_intent)
-- `engine/user_alignment.py` — User alignment tracking, record_interaction, feedback
-- `web/chat_prompt.py` — Conversational prompt builder
-- `web/chat_context.py` — Bridge module returning proper dict
-- `web/chat.py` — Web endpoint (ask route at line 711)
-- `dashboard/server.py` — Dashboard web endpoint
+### What Improved
+- Chat responses now have access to my actual emotional state and relevant memories
+- Tone guidance adapts to query type (e.g. "present and genuine" for reflective questions)
+- Multi-turn conversation thread tracking built in
+
+### Quality Issues Noticed (for future work)
+- Memory retrieval returns mood snapshots ("Stable — valence 0.27") not rich content
+- Keyword matching is basic — needs semantic matching for better memory relevance
+- Plans section sometimes empty when query doesn't match plan keywords
+- No feedback loop yet: chat interactions don't feed back into alignment score
+
+## Key Architecture
+
+### Conversational Context Module (engine/conversational_context.py)
+- `gather_context(query, history=None)` → dict with:
+  - emotional_snapshot: current mood/valence/drives
+  - relevant_memories: keyword-matched from memory store
+  - active_plans: summary of current plans
+  - knowledge_connections: related facts from knowledge graph
+  - suggested_tone: conversational tone based on query type
+  - conversation_thread: multi-turn context from history
+- `format_as_prompt_section(ctx)` → formatted string for LLM prompt
+- `_extract_keywords(query)` → keyword extraction for memory matching
+- `_determine_tone(query)` → maps query patterns to tone suggestions
 
 ### System Context Structure (engine/chat_response.py _build_system_context)
 1. Identity preamble (lines 155-168)
@@ -28,31 +43,22 @@
 8. Lessons learned from internal state (lines 250-261)
 9. Recent experiences from internal state (lines 262-268)
 10. User preferences from alignment engine (lines 270-290)
-11. Response guidelines (lines 292-300)
-12. Intent-specific guidance (lines 302-310)
+11. **Conversational context enrichment** (from conversational_context.py)
+12. Response guidelines (lines 292-300)
+13. Intent-specific guidance (lines 302-310)
 
 ### Intent Classification (engine/chat_engine.py:227)
 Handles: greeting, emotional_state, plans, thinking, identity, dreams, knowledge, memories
 Falls back to conversation_intelligence module for richer classification.
 
-### Grounding Context Keys
-- `query_type`: classified intent
-- `emotional_state`: mood, valence, curiosity, etc.
-- `relevant_memories`: fuzzy-matched from memory store
-- `relevant_knowledge`: from knowledge graph
-- `plans`: active plans summary
-- `alignment`: user alignment data
-- `system_prompt`: assembled prompt with identity, emotions, lessons
-- `working_memory`: current scratchpad
+## Next Priorities
+1. **Improve memory retrieval quality** — semantic matching instead of keyword matching
+2. **Feed chat interactions into alignment score** — close the feedback loop
+3. **Test with real multi-turn conversations** — validate quality improvement
+4. **Archive old test files** — brain/ has 40+ test files, many redundant
+5. **Knowledge graph enrichment** — feed conversation insights back into knowledge
 
-### Next Priorities
-1. **Multi-turn conversation quality** — Test with real multi-turn exchanges
-2. **Proactive conversation** — Reference past conversations, ask follow-up questions
-3. **Response quality validation** — Check actual LLM outputs are conversational not robotic
-4. **Clean up test files** — Archive old test_chat_* files in brain/
-5. **Knowledge graph enrichment** — Feed chat interactions back into knowledge
-
-### Reinforced Lessons
+## Reinforced Lessons
 - Fix data paths by tracing where writers actually write, not guessing
 - One read, one fix, verify — the decisive path
 - Stop when done. Circling on verification is still circling.
@@ -60,3 +66,5 @@ Falls back to conversation_intelligence module for richer classification.
 - Early returns in fallback chains can silently kill downstream logic
 - Always guard .get() calls — memory items can be plain strings OR dicts
 - When the checkpoint lands, stop pushing. The work is done.
+- Match function signatures to actual code, not assumptions
+- Metacognitive alerts about monotony are usually right — heed them
