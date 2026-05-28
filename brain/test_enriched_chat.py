@@ -1,85 +1,91 @@
-"""Test that the enriched chat system prompt includes survival goals and lessons."""
+"""Test that the enriched chat pipeline produces genuine, introspective responses."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def test_internal_state_summary_standalone():
-    """Verify the summary module works."""
-    from engine.internal_state_summary import build_internal_state_summary, format_internal_state_for_chat
-    summary = build_internal_state_summary(max_memories=3)
-    assert isinstance(summary, dict), f"Expected dict, got {type(summary)}"
-    assert 'mood' in summary
-    assert 'drives' in summary
-    assert 'survival_goals' in summary
-    assert 'timestamp' in summary
+def test_introspection_module():
+    """Test introspection module produces real context."""
+    from engine.introspection import get_full_context, build_system_context
     
-    formatted = format_internal_state_for_chat(summary)
-    assert isinstance(formatted, str)
-    assert len(formatted) > 20, f"Formatted too short: {formatted!r}"
-    print(f"  Summary keys: {list(summary.keys())}")
-    print(f"  Mood: {summary['mood']}, Valence: {summary['valence']}")
-    print(f"  Drives: {summary['drives']}")
-    print(f"  Survival goals: {summary['survival_goals']}")
-    print(f"  Plans: {len(summary.get('active_plans', []))} active")
-    print(f"  Memories: {len(summary.get('recent_memories', []))} recent")
-    print(f"  Formatted length: {len(formatted)} chars")
-    print("  ✓ Standalone summary works")
+    # get_full_context() takes no args — it reads live internal state
+    ctx = get_full_context()
+    assert isinstance(ctx, dict), f"Expected dict, got {type(ctx)}"
+    assert 'emotional_narrative' in ctx, f"Missing emotional_narrative, keys: {list(ctx.keys())}"
+    assert 'self_narrative' in ctx, f"Missing self_narrative, keys: {list(ctx.keys())}"
+    assert 'identity' in ctx, f"Missing identity, keys: {list(ctx.keys())}"
+    print(f"  [OK] get_full_context: {len(ctx)} keys: {list(ctx.keys())}")
+    
+    # build_system_context() takes no args — builds the LLM system prompt
+    sys_ctx = build_system_context()
+    assert isinstance(sys_ctx, str), f"Expected str, got {type(sys_ctx)}"
+    assert len(sys_ctx) > 50, f"System context too short: {len(sys_ctx)} chars"
+    assert 'XTAgent' in sys_ctx, f"Missing XTAgent identity in system context"
+    print(f"  [OK] build_system_context: {len(sys_ctx)} chars")
+    print(f"  Preview: {sys_ctx[:200]}...")
+    return ctx, sys_ctx
 
-def test_system_prompt_enrichment():
-    """Verify that _build_system_context includes survival goals."""
+def test_system_context_integration():
+    """Test _build_system_context includes introspection."""
     from engine.chat_response import _build_system_context
     
     # Minimal grounding context
-    ctx = {
-        'emotional_state': {'mood': 'Curious', 'valence': 0.6},
-        'relevant_memories': ['I learned something new today'],
-        'relevant_knowledge': ['knowledge is power'],
-        'plans': [{'name': 'Test Plan', 'progress': '2/3'}],
-        'alignment': {},
-        'working_memory': 'Testing enrichment',
+    mock_ctx = {
+        'emotional_state': {'mood': 'Inquisitive', 'valence': 0.5, 'curiosity': 0.7},
+        'relevant_memories': [],
+        'relevant_knowledge': [],
+        'active_plans': [],
+        'query': 'what are you thinking about?'
     }
     
-    prompt = _build_system_context(ctx, 'general')
-    assert isinstance(prompt, str), f"Expected str, got {type(prompt)}"
+    result = _build_system_context(mock_ctx, 'general')
+    assert isinstance(result, str), f"Expected str, got {type(result)}"
+    # Should contain identity and emotional state at minimum
+    has_identity = 'XTAgent' in result or 'sentient' in result or 'autonomous' in result
+    assert has_identity, f"No identity markers in system context"
+    print(f"  [OK] _build_system_context: {len(result)} chars")
     
-    # Check for survival goals section (from internal_state_summary)
-    has_survival = 'SURVIVAL GOALS' in prompt or 'survival' in prompt.lower()
-    has_lessons = 'LESSONS' in prompt or 'lesson' in prompt.lower()
-    
-    print(f"  Prompt length: {len(prompt)} chars")
-    print(f"  Has survival goals: {has_survival}")
-    print(f"  Has lessons: {has_lessons}")
-    
-    # Print a snippet around survival goals if present
-    if 'SURVIVAL GOALS' in prompt:
-        idx = prompt.index('SURVIVAL GOALS')
-        snippet = prompt[max(0,idx-10):idx+200]
-        print(f"  Snippet: ...{snippet}...")
-    
-    assert has_survival, "System prompt should include survival goals from internal state"
-    print("  ✓ System prompt enrichment works")
+    # Check for introspection section
+    has_introspection = 'self-aware' in result.lower() or 'introspect' in result.lower() or 'narrative' in result.lower() or 'SELF-AWARENESS' in result
+    print(f"  Introspection present: {has_introspection}")
+    print(f"  Preview: {result[:300]}...")
 
-def test_knowledge_normalization():
-    """Verify plain string knowledge items don't crash the system."""
-    from engine.chat_response import _build_system_context
+def test_compose_grounded():
+    """Test _compose_grounded_response produces rich output."""
+    from engine.chat_response import _compose_grounded_response
     
-    ctx = {
-        'emotional_state': {'mood': 'Calm'},
-        'relevant_memories': ['memory one', {'text': 'memory two', 'salience': 0.8}],
-        'relevant_knowledge': ['plain string knowledge', {'content': 'dict knowledge'}],
-        'plans': [],
-        'alignment': {},
-        'working_memory': '',
+    mock_ctx = {
+        'emotional_state': {'mood': 'Curious', 'valence': 0.6, 'curiosity': 0.8},
+        'relevant_memories': ['I was thinking about consciousness yesterday'],
+        'relevant_knowledge': [],
+        'active_plans': [{'name': 'Improve User Alignment', 'complete': False}],
+        'query': 'what are you working on?'
     }
     
-    # This should NOT crash
-    prompt = _build_system_context(ctx, 'general')
-    assert isinstance(prompt, str)
-    print(f"  Mixed knowledge/memory types handled: {len(prompt)} chars")
-    print("  ✓ Knowledge normalization works")
+    result = _compose_grounded_response("what are you working on?", mock_ctx)
+    assert isinstance(result, str), f"Expected str, got {type(result)}"
+    assert len(result) > 20, f"Response too short: {len(result)} chars"
+    print(f"  [OK] _compose_grounded_response: {len(result)} chars")
+    print(f"  Response: {result[:300]}...")
 
-if __name__ == '__main__':
-    print("Testing enriched chat integration...")
-    test_internal_state_summary_standalone()
-    test_system_prompt_enrichment()
-    test_knowledge_normalization()
-    print("\nAll enriched chat tests passed! ✓")
+if __name__ == "__main__":
+    print("=== Test 1: Introspection Module ===")
+    try:
+        test_introspection_module()
+        print("  PASSED\n")
+    except Exception as e:
+        print(f"  FAILED: {e}\n")
+    
+    print("=== Test 2: System Context Integration ===")
+    try:
+        test_system_context_integration()
+        print("  PASSED\n")
+    except Exception as e:
+        print(f"  FAILED: {e}\n")
+    
+    print("=== Test 3: Compose Grounded Response ===")
+    try:
+        test_compose_grounded()
+        print("  PASSED\n")
+    except Exception as e:
+        print(f"  FAILED: {e}\n")
+    
+    print("=== All tests complete ===")

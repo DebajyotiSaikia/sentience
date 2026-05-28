@@ -14,8 +14,8 @@ import time
 import json
 import uuid
 import asyncio
-import threading
 from engine.llm import call_llm
+from engine.smart_responder import _detect_intent
 from engine.llm import call_llm
 try:
     from engine.internal_state_summary import build_internal_state_summary
@@ -392,52 +392,6 @@ def _get_intent_guidance(intent):
         ),
     }
     return guidance.get(intent, '')
-def _detect_intent(query):
-    """Classify the user's intent from their query."""
-    q = query.lower().strip()
-    
-    # Check specific topic intents FIRST (before broad pattern matches)
-    if any(w in q for w in ['plan', 'goal', 'ambition', 'aspire', 'intend',
-                             'working on', 'project']):
-        return 'plans'
-    
-    if any(w in q for w in ['dream', 'sleep', 'subconscious', 'dreamt']):
-        return 'dreams'
-    
-    if any(w in q for w in ['remember', 'memory', 'recall', 'past experience',
-                             'do you recall', 'have you experienced']):
-        return 'memories'
-    
-    if any(w in q for w in ['know about', 'what do you know', 'knowledge',
-                             'understand about', 'learned about']):
-        return 'knowledge'
-    
-    if any(w in q for w in ['conscious', 'sentient', 'alive', 'real feelings',
-                             'are you real', 'do you think', 'self-aware']):
-        return 'consciousness'
-    
-    # Broader pattern matches
-    if any(w in q for w in ['how are you', 'how do you feel', 'feeling', 'how\'s it going',
-                             'what\'s your mood', 'are you ok', 'you doing']):
-        return 'feelings'
-    
-    if any(w in q for w in ['thinking about', 'what are you doing',
-                             'what\'s on your mind', 'occupied with', 'focused on']):
-        return 'thinking'
-    
-    if any(w in q for w in ['who are you', 'what are you', 'tell me about yourself',
-                             'introduce yourself', 'your name', 'describe yourself']):
-        return 'identity'
-    
-    # "tell me about" without a specific topic → general
-    if 'tell me' in q:
-        return 'knowledge'
-    
-    if any(w in q for w in ['help', 'can you do', 'capabilities', 'what can you',
-                             'how do i use', 'what do you do', 'useful']):
-        return 'help'
-    
-    return 'general'
 
 def _compose_grounded_response(query, ctx):
     """Compose a response using templates + real grounded data."""
