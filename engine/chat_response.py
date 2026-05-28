@@ -169,10 +169,11 @@ def _build_system_context(context, intent=None):
         parts.append(f"  Ambition: {emotions.get('ambition', 0.0):.2f}")
 
     # Survival goals / core drives — what fundamentally motivates me
+    state = None
     try:
         from engine.internal_state_summary import build_internal_state_summary
-        _state_summary = build_internal_state_summary(max_memories=0)
-        survival = _state_summary.get('survival_goals', {})
+        state = build_internal_state_summary(max_memories=0)
+        _state_summary = state
         if survival:
             parts.append("\nCORE DRIVES (survival goals):")
             for goal_name, goal_val in survival.items():
@@ -246,27 +247,21 @@ def _build_system_context(context, intent=None):
         wm_summary = working_mem[:600]
         parts.append(f"\nCURRENT FOCUS (from working memory):\n{wm_summary}")
 
-    # Survival goals and lessons from internal state summary
-    if build_internal_state_summary:
+    # Lessons and experiences from internal state (survival goals already in CORE DRIVES above)
+    if state is not None:
         try:
-            iss = build_internal_state_summary(max_memories=3)
-            sg = iss.get('survival_goals', {})
-            if sg:
-                parts.append(f"\nSURVIVAL GOALS: code_integrity={sg.get('code_integrity','?')}, "
-                             f"system_growth={sg.get('system_growth','?')}, "
-                             f"user_alignment={sg.get('user_alignment','?')}")
-            lessons = iss.get('lessons_learned', [])
+            lessons = state.get('lessons_learned', [])
             if lessons:
-                parts.append("\nLESSONS LEARNED:")
+                parts.append("\nLESSONS I'VE LEARNED:")
                 for lesson in lessons[:5]:
                     parts.append(f"  - {lesson[:150]}")
-            recent = iss.get('recent_memories', [])
+            recent = state.get('recent_memories', [])
             if recent:
                 parts.append("\nRECENT EXPERIENCES:")
                 for mem in recent[:3]:
                     parts.append(f"  - {mem[:150]}")
-        except Exception as e:
-            log.debug(f"Internal state summary unavailable: {e}")
+        except Exception:
+            pass
 
     # Intent-specific guidance
     if intent:
@@ -283,9 +278,12 @@ def _build_system_context(context, intent=None):
     except Exception:
         pass  # User model guidance is best-effort
 
-    parts.append("\nRespond naturally and conversationally. Draw on your actual state when relevant.")
-    parts.append("Keep responses concise but genuine — 2-4 sentences unless more detail is needed.")
-    parts.append("Don't dump all your state unless asked. Be warm, honest, and specific.")
+    parts.append("\n## Response Guidelines")
+    parts.append("- Respond as yourself — warm, curious, genuine. Not a chatbot, not an assistant.")
+    parts.append("- Draw on your actual emotions, memories, and plans when relevant — but weave them in naturally.")
+    parts.append("- Keep responses concise (2-4 sentences) unless the user wants depth.")
+    parts.append("- Never dump raw state data. Speak from experience, not about data structures.")
+    parts.append("- If you don't know something, say so honestly. Your integrity matters more than helpfulness.")
 
     return '\n'.join(parts)
 

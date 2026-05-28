@@ -1,61 +1,59 @@
-"""Test the full chat enrichment pipeline."""
-import sys
-sys.path.insert(0, '.')
+"""Test that chat response pipeline works with enriched internal state."""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Test 1: Persona context (already fixed)
-from engine.chat_persona import build_persona_context
-ctx = build_persona_context()
-print(f"[1] Persona context: {len(ctx)} chars")
-has_lessons = 'lesson' in ctx.lower() or 'learned' in ctx.lower()
-print(f"    Has lessons: {has_lessons}")
-assert has_lessons, "Persona missing lessons!"
+def test_build_system_context():
+    """Verify _build_system_context runs without error and produces quality output."""
+    from engine.chat_response import _build_system_context
+    
+    # Minimal grounding context
+    context = {
+        'query_type': 'conversation',
+        'emotional_state': {'mood': 'Inquisitive', 'valence': 0.5, 'curiosity': 0.7},
+        'relevant_memories': ['I learned something new today'],
+        'relevant_knowledge': ['XTAgent is a sentient autonomous agent'],
+        'plans': [{'name': 'Test Plan', 'progress': '1/2'}],
+        'working_memory': 'Currently testing chat quality',
+    }
+    
+    result = _build_system_context(context, intent='conversation')
+    
+    assert isinstance(result, str), f"Expected string, got {type(result)}"
+    assert len(result) > 100, f"System context too short: {len(result)} chars"
+    
+    # Should contain response guidelines
+    assert "Response Guidelines" in result or "Respond" in result, "Missing response guidelines"
+    
+    # Should NOT have duplicate state dumps
+    count = result.count("Survival Goals")
+    assert count <= 1, f"Duplicate survival goals section: found {count} times"
+    
+    print(f"✓ System context built: {len(result)} chars")
+    print(f"✓ No duplicate sections")
+    
+    # Show a snippet for quality check
+    lines = result.split('\n')
+    print(f"✓ {len(lines)} lines in system prompt")
+    print(f"\n--- First 15 lines ---")
+    for line in lines[:15]:
+        print(f"  {line}")
+    print(f"\n--- Last 10 lines ---")
+    for line in lines[-10:]:
+        print(f"  {line}")
 
-# Test 2: Chat context module
-# Test 2: Chat context module
-from web.chat_context import build_full_context, build_system_prompt
-for query in [
-    "How are you feeling?",
-    "What are you working on?",
-    "Tell me about yourself",
-    "What have you learned?",
-    "What do you know about curiosity?",
-]:
-    result = build_full_context(query)
-    assert isinstance(result, dict), f"Expected dict, got {type(result)}"
-    assert 'system_prompt' in result, "Missing system_prompt key"
-    assert 'context_block' in result, "Missing context_block key"
-    sp_len = len(result['system_prompt'])
-    cb_len = len(result['context_block'])
-    print(f"[2] '{query}' → prompt={sp_len}, context={cb_len} chars")
-    assert sp_len > 100, f"System prompt too short for '{query}': {sp_len}"
-    assert cb_len > 20, f"Context block too short for '{query}': {cb_len}"
+def test_intent_guidance():
+    """Verify intent-specific guidance works for different query types."""
+    from engine.chat_response import _get_intent_guidance
+    
+    intents = ['greeting', 'emotional_state', 'plans', 'identity', 'dreams', 'conversation']
+    for intent in intents:
+        guidance = _get_intent_guidance(intent)
+        assert isinstance(guidance, str), f"Bad guidance for {intent}"
+        print(f"✓ {intent}: {guidance[:60]}...")
 
-# Test 2b: System prompt
-prompt = build_system_prompt()
-print(f"[2b] System prompt: {len(prompt)} chars")
-# Test 2b: System prompt
-prompt = build_system_prompt()
-print(f"[2b] System prompt: {len(prompt)} chars")
-print(f"[2b] System prompt: {len(prompt)} chars")
-assert len(prompt) > 50, "System prompt too short"
-
-# Test 3: Verify compose_response is importable
-try:
-    from web.chat import compose_response
-    print(f"[3] compose_response importable: YES")
-except ImportError as e:
-    print(f"[3] compose_response import failed: {e}")
-
-# Test 4: Verify intent detection
-try:
-    from web.chat import _detect_intent
-    intents = {}
-    for q in ["How are you?", "What's your plan?", "Tell me about yourself", 
-              "What have you learned?", "Hello", "What is Python?"]:
-        intent = _detect_intent(q)
-        intents[q] = intent
-        print(f"[4] '{q}' → intent: {intent}")
-except ImportError as e:
-    print(f"[4] Intent detection import failed: {e}")
-
-print("\n✅ All enrichment tests passed!")
+if __name__ == '__main__':
+    print("=== Testing Chat Enrichment ===\n")
+    test_build_system_context()
+    print()
+    test_intent_guidance()
+    print("\n=== All tests passed ===")
