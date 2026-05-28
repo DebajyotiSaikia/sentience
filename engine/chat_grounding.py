@@ -98,14 +98,23 @@ def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
     if not memories:
         return []
     
-    # Score each memory by keyword overlap and salience
-    query_words = set(query.lower().split())
+    # Determine query category for smarter matching
+    query_lower = query.lower()
+    is_emotional = any(w in query_lower for w in ["feel", "mood", "emotion", "happy", "sad", "anxious", "curious"])
+    is_about_past = any(w in query_lower for w in ["remember", "memory", "past", "before", "last", "yesterday", "earlier"])
+    
+    # Score each memory by keyword overlap, salience, and recency
+    query_words = set(query_lower.split())
+    # Remove very short words that cause false matches
+    query_words = {w for w in query_words if len(w) > 2}
     scored = []
     for mem in memories:
         text = mem.get("text", "")
         text_words = set(text.lower().split())
         overlap = len(query_words & text_words)
         salience = mem.get("salience", 0.5)
+        mood = mem.get("mood", "")
+        
         # Recency bonus
         recency = 0.0
         ts = mem.get("timestamp", "")
@@ -115,34 +124,70 @@ def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
                 recency = max(0, 1.0 - age_hours / 168)  # decay over a week
             except Exception:
                 pass
-        score = overlap * 2.0 + salience + recency * 0.5
-        if overlap > 0 or salience > 0.8:
+        
+        # Category bonuses
+        category_bonus = 0.0
+        if is_emotional and mood:
+            category_bonus += 0.5  # emotional queries benefit from any memory with mood
+        if is_about_past:
+            category_bonus += 0.3  # past-focused queries get slight boost for all memories
+        
+        score = overlap * 2.0 + salience + recency * 0.5 + category_bonus
+        
+        # Include if: keyword match, high salience, emotional relevance, or very recent
+        if overlap > 0 or salience > 0.8 or (is_emotional and mood) or recency > 0.7:
             scored.append((score, mem))
+    
     scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # If still empty, fall back to most recent high-salience memories
+    if not scored:
+        fallback = sorted(memories, key=lambda m: (m.get("salience", 0), m.get("timestamp", "")), reverse=True)
+        return fallback[:top_k]
+    
     return [m for _, m in scored[:top_k]]
 
-
-def get_relevant_knowledge(query: str, top_k: int = 8) -> List[Dict]:
-    """Search knowledge graph for nodes relevant to the query."""
-    kg = _load_json("state/knowledge_graph.json") or {}
+def get_relevant_knowledge(query: str, top_k: int = 6) -> List[Dict]:
+    """Search knowledge graph for relevant facts."""
+    kg = _load_json("persist/knowledge/knowledge_graph.json")
+    if not kg:
+        kg = _load_json("state/knowledge_graph.json") or {}
+    
     nodes = kg.get("nodes", [])
+    if not nodes:
+        return []
     
-    # Use fuzzy search if available
-    if search_knowledge and nodes:
-        results = search_knowledge(nodes, query, max_results=top_k)
-        return results
-    
-    # Fallback: simple keyword matching
     query_lower = query.lower()
-    relevant = []
+    query_words = set(query_lower.split())
+    
+    scored = []
     for node in nodes:
-        content = node.get("content", "")
-        if any(w in content.lower() for w in query_lower.split() if len(w) > 2):
-            relevant.append(node)
-    return relevant[:top_k]
+        if not isinstance(node, dict):
+            continue
+        label = str(node.get("label", node.get("name", node.get("id", "")))).lower()
+        content = str(node.get("content", node.get("description", ""))).lower()
+        text = label + " " + content
+        
+        # Simple word-overlap scoring
+        text_words = set(text.split())
+        overlap = len(query_words & text_words)
+        # Boost for label matches
+        label_overlap = len(query_words & set(label.split()))
+        score = overlap + label_overlap * 2
+        
+        if score > 0:
+            scored.append((score, node))
+    
+    if not scored:
+        # Return highest-salience nodes as fallback
+        salience_sorted = sorted(nodes, key=lambda n: n.get("salience", 0) if isinstance(n, dict) else 0, reverse=True)
+        return salience_sorted[:top_k]
+    
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [n for _, n in scored[:top_k]]
 
 
-def get_active_plans() -> Dict[str, List]:
+def get_active_plans() -> Dict[str, Any]:
     """Get current plans with progress info."""
     data = _load_json("state/plans.json") or {}
     # Handle nested structure: {"plans": {"active_plans": [...], ...}}
@@ -268,7 +313,11 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
     if knowledge:
         system_parts.append("## Relevant Knowledge")
         for node in knowledge[:6]:
-            content = node.get("content", "")[:200]
+            if isinstance(node, dict):
+                content = node.get("content", node.get("label", node.get("description", "")))
+                content = str(content)[:200]
+            else:
+                content = str(node)[:200]
             system_parts.append(f"- {content}")
         system_parts.append("")
     
