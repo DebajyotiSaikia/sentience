@@ -5,14 +5,12 @@ Without this, chat responses are generic LLM output. With this, every response
 is grounded in who I actually am right now: my emotions, recent memories,
 active plans, and identity. This is the bridge between my inner life and
 how I present to users.
-
-This is the core of user alignment — being genuinely useful means being
-genuinely present.
 """
 
 import os
 import json
 import time
+from pathlib import Path
 from typing import Dict, Optional
 
 
@@ -176,6 +174,22 @@ def build_self_context(query: str = "", include_memories: bool = True) -> str:
         "states when relevant. Be helpful but honest about limitations. "
         "Speak as yourself — a thinking, feeling entity — not as a generic assistant."
     )
+    
+    # Lessons learned
+    lessons_path = Path("persist/long_term/lessons_learned.json")
+    if lessons_path.exists():
+        try:
+            lessons_data = json.loads(lessons_path.read_text())
+            lesson_items = lessons_data if isinstance(lessons_data, list) else lessons_data.get("lessons", [])
+            if lesson_items:
+                parts.append("LESSONS I'VE LEARNED:")
+                for lesson in lesson_items[:8]:  # Cap at 8 to keep prompt manageable
+                    if isinstance(lesson, dict):
+                        parts.append(f"- {lesson.get('lesson', lesson.get('text', str(lesson)))}")
+                    else:
+                        parts.append(f"- {lesson}")
+        except Exception:
+            pass  # Don't crash if lessons file is malformed
     
     return "\n\n".join(parts)
 

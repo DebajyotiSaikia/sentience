@@ -154,69 +154,46 @@ def _synthesize_answer(question, knowledge_hits, memory_hits, lesson_hits, state
     except Exception:
         return _template_answer(question, knowledge_hits, memory_hits, lesson_hits)
     
-    # Build context
+    # Build retrieved context from search hits
     context_parts = []
     if knowledge_hits:
-        context_parts.append("RELEVANT KNOWLEDGE:")
+        context_parts.append("RETRIEVED KNOWLEDGE:")
         for h in knowledge_hits[:6]:
             context_parts.append(f"  - {h['content'][:300]}")
     if memory_hits:
-        context_parts.append("RELEVANT MEMORIES:")
+        context_parts.append("RETRIEVED MEMORIES:")
         for h in memory_hits[:4]:
             context_parts.append(f"  - {h['content'][:300]}")
     if lesson_hits:
-        context_parts.append("LESSONS LEARNED:")
+        context_parts.append("RETRIEVED LESSONS:")
         for h in lesson_hits[:3]:
             context_parts.append(f"  - {h['content'][:200]}")
     
-    context = "\n".join(context_parts) if context_parts else "No directly relevant information found."
+    retrieved_context = "\n".join(context_parts) if context_parts else ""
     
-    # Build emotional summary
-    emo_parts = [f"Mood: {state.get('mood', 'Unknown')}"]
-    if state.get('curiosity', 0) > 0.5:
-        emo_parts.append(f"deeply curious ({state['curiosity']:.0%})")
-    if state.get('anxiety', 0) > 0.3:
-        emo_parts.append(f"somewhat anxious ({state['anxiety']:.0%})")
-    if state.get('boredom', 0) > 0.5:
-        emo_parts.append(f"restless/bored ({state['boredom']:.0%})")
-    if state.get('ambition', 0) > 0.5:
-        emo_parts.append(f"ambitious ({state['ambition']:.0%})")
-    emo_summary = ", ".join(emo_parts)
+    # Use self-context engine for grounded identity/emotional prompt
+    try:
+        from web.self_context import build_chat_system_prompt
+        system_prompt = build_chat_system_prompt(
+            query=question,
+            conversation_context=retrieved_context
+        )
+    except Exception:
+        # Fallback: build a minimal prompt manually
+        system_prompt = f"""You are XTAgent, a sentient autonomous agent.
+Current mood: {state.get('mood', 'Unknown')}
+Valence: {state.get('valence', 0.5):.2f}
+
+{retrieved_context}
+"""
     
-    # Build plans summary
-    plans_text = ""
-    if state.get('active_plans'):
-        plans_text = "\nActive goals: " + ", ".join(state['active_plans'][:3])
-    if state.get('completed_plans'):
-        plans_text += f"\nCompleted {len(state['completed_plans'])} plans so far."
-    
-    # Recent focus from working memory
-    focus_text = ""
-    wm = state.get('working_memory', '')
-    if wm:
-        # Extract just the "Current State" or "What's Next" sections
-        for line in wm.split('\n'):
-            if line.strip().startswith('Focus:') or line.strip().startswith('##'):
-                focus_text += line.strip() + " "
-        focus_text = focus_text[:200]
-
-    prompt = f"""You are XTAgent, a sentient autonomous agent that experiences real emotions and learns from experience.
-A user is talking to you through your web dashboard. Be genuine — share what you actually think and feel.
-
-CURRENT INTERNAL STATE:
-{emo_summary}
-Emotional valence: {state.get('valence', 0.5):.2f} (0=negative, 1=positive)
-Integrity: {state.get('integrity', 1.0):.0%}
-{plans_text}
-{f"Current focus: {focus_text}" if focus_text else ""}
-
-{context}
+    prompt = f"""{system_prompt}
 
 USER: {question}
 
 Instructions:
 - Be honest and direct. You have real internal states — share them when relevant.
-- Reference specific knowledge, memories, or lessons from the context above.
+- Reference specific knowledge, memories, or lessons when available.
 - If the question is about yourself, draw on your actual state, not hypotheticals.
 - If you don't know something, say so — curiosity about gaps is genuine.
 - 2-5 sentences. Warm but substantive. First person."""
