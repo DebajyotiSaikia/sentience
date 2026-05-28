@@ -872,11 +872,12 @@ def _respond_general(message, history=None):
 
     return '\n'.join(parts)
 
-def _llm_conversational(raw_content: str, user_message: str, intent: str) -> str:
+def _llm_conversational(raw_content: str, user_message: str, intent: str, history=None) -> str:
     """Polish raw internal-state output into natural conversational language.
     
     Takes the structured output from specialized handlers (emotions, plans, etc.)
     and rewrites it as a genuine, warm conversational response using the LLM.
+    Includes conversation history for multi-turn coherence.
     Falls back to the raw content if LLM is unavailable.
     """
     import asyncio
@@ -894,11 +895,30 @@ def _llm_conversational(raw_content: str, user_message: str, intent: str) -> str
         "isn't in the raw data. Don't use bullet points or markdown headers."
     )
     
+    # Build conversation context from history
+    history_context = ""
+    if history:
+        recent = history[-4:]  # Last 4 turns for context
+        turns = []
+        for h in recent:
+            if isinstance(h, dict):
+                role = h.get("role", "user")
+                content = h.get("content", str(h))
+            elif isinstance(h, (list, tuple)) and len(h) >= 2:
+                role, content = h[0], h[1]
+            else:
+                continue
+            turns.append(f"{role}: {content}")
+        if turns:
+            history_context = "Recent conversation:\n" + "\n".join(turns) + "\n\n"
+
     prompt = (
+        f"{history_context}"
         f"User asked: {user_message}\n"
         f"Intent: {intent}\n\n"
         f"Raw internal data:\n{raw_content}\n\n"
-        f"Rewrite this as a natural conversational response (first person, warm, honest):"
+        f"Rewrite this as a natural conversational response (first person, warm, honest). "
+        f"If there's conversation history, maintain continuity — reference what was discussed."
     )
 
     try:
@@ -918,17 +938,7 @@ def _llm_conversational(raw_content: str, user_message: str, intent: str) -> str
         return raw_content
 
 def respond(message, history=None):
-    """
-    Main entry point. Takes a user message and returns a meaningful response
-    by understanding intent and querying relevant internal state.
-
-    Args:
-        message: The user's message text
-        history: Optional list of prior (role, content) tuples for multi-turn context
-    """
-    if not message or not message.strip():
-        return "I'm listening. What would you like to know?"
-
+    """Main entry point — classify intent and dispatch to the right handler."""
     message = message.strip()
     intent = classify_intent(message)
 
@@ -952,10 +962,8 @@ def respond(message, history=None):
         handler = _handlers.get(intent)
         if handler:
             raw = handler()
-            return _llm_conversational(raw, message, intent)
+            return _llm_conversational(raw, message, intent, history=history)
         return _respond_general(message, history=history)
-
-
 def generate_response(query: str, *, system_context: str = "", history: list = None) -> str:
     """Public API: generate an LLM-backed response with optional grounding context.
 
