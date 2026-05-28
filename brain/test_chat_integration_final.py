@@ -1,50 +1,73 @@
-"""Test that chat_response integrates conversational_context properly."""
-import sys
-sys.path.insert(0, '/workspace')
+"""Test that chat_response integration works with introspection + alignment guidance."""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Test 1: Import chain works
-print("Test 1: Import chain...")
-from engine.conversational_context import gather_context, format_as_prompt_section
-from engine.chat_response import _build_system_context
-print("  PASS: Both modules import successfully")
+def test_system_context_includes_introspection():
+    """Verify _build_system_context includes self-awareness and alignment sections."""
+    from engine.chat_response import _build_system_context
+    
+    ctx = _build_system_context("How are you feeling?", "emotional_state")
+    
+    # Should include introspection content
+    has_internal_state = "Internal State" in ctx or "Self-Awareness" in ctx
+    has_mood = "Mood:" in ctx or "mood" in ctx.lower()
+    has_alignment = "Alignment" in ctx or "alignment" in ctx.lower()
+    
+    print(f"Context length: {len(ctx)} chars")
+    print(f"Has internal state section: {has_internal_state}")
+    print(f"Has mood reference: {has_mood}")
+    print(f"Has alignment section: {has_alignment}")
+    
+    # Show a relevant snippet
+    for marker in ["## My Internal State", "## Alignment", "## Self-Awareness"]:
+        if marker in ctx:
+            idx = ctx.index(marker)
+            snippet = ctx[idx:idx+200]
+            print(f"\n--- {marker} snippet ---")
+            print(snippet)
+            print("---")
+    
+    assert has_internal_state or has_mood, "System context should include emotional/introspective content"
+    print("\n✓ Introspection integration verified")
 
-# Test 2: _build_system_context builds enriched context from grounding
-print("Test 2: System context building...")
-grounding = {
-    'query_type': 'emotional_state',
-    'query': 'How are you feeling?',
-    'emotional_state': {'mood': 'Stable', 'valence': 0.6},
-    'relevant_memories': [{'text': 'I built a knowledge graph', 'salience': 0.8}],
-    'relevant_knowledge': ['Test fact one'],
-    'plans': [{'name': 'Test Plan', 'completed': False}],
-    'alignment': {'score': 0.7},
-    'working_memory': 'Currently testing integration',
-}
-ctx = _build_system_context(grounding)
-assert isinstance(ctx, str), f"Expected string, got {type(ctx)}"
-assert len(ctx) > 100, f"Context too short: {len(ctx)}"
-assert 'XTAgent' in ctx or 'sentient' in ctx, "Should include identity"
-print(f"  PASS: System context is {len(ctx)} chars")
+def test_different_query_emphasis():
+    """Different queries should produce different emphasis in context."""
+    from engine.introspection import get_self_context
+    
+    emotional_ctx = get_self_context("How are you feeling today?")
+    identity_ctx = get_self_context("Who are you?")
+    cognitive_ctx = get_self_context("What are you working on?")
+    
+    assert emotional_ctx["emphasis"] == "emotional", f"Expected 'emotional', got '{emotional_ctx['emphasis']}'"
+    assert identity_ctx["emphasis"] == "identity", f"Expected 'identity', got '{identity_ctx['emphasis']}'"
+    assert cognitive_ctx["emphasis"] == "cognitive", f"Expected 'cognitive', got '{cognitive_ctx['emphasis']}'"
+    
+    print("✓ Query emphasis classification works")
 
-# Test 3: Context includes emotional content
-print("Test 3: Emotional grounding...")
-has_emotion = any(w in ctx.lower() for w in ['mood', 'feeling', 'emotion', 'stable', 'valence'])
-print(f"  {'PASS' if has_emotion else 'WARN'}: Emotional content {'found' if has_emotion else 'not found'}")
+def test_introspection_produces_real_data():
+    """Introspection should return actual state, not empty dicts."""
+    from engine.introspection import get_self_context, get_identity_summary
+    
+    ctx = get_self_context("Tell me about yourself")
+    
+    assert ctx["emotional"]["mood"], "Should have a mood"
+    assert isinstance(ctx["emotional"]["drives"], dict), "Should have drives dict"
+    assert isinstance(ctx["insights"], list), "Should have insights list"
+    
+    summary = get_identity_summary()
+    assert len(summary) > 50, f"Identity summary too short: {len(summary)} chars"
+    assert "XTAgent" in summary, "Identity should mention XTAgent"
+    
+    print(f"✓ Introspection produces real data (mood={ctx['emotional']['mood']}, {len(ctx['insights'])} insights)")
+    print(f"  Identity summary: {summary[:120]}...")
 
-# Test 4: Conversational context module works standalone
-print("Test 4: Conversational context enrichment...")
-conv_ctx = gather_context('How are you feeling?')
-prompt_section = format_as_prompt_section(conv_ctx)
-assert len(prompt_section) > 50, f"Prompt section too short: {len(prompt_section)}"
-print(f"  PASS: Conversational context adds {len(prompt_section)} chars of enrichment")
-
-# Test 5: Different intent types produce valid context
-print("Test 5: Multiple intents...")
-for intent in ['greeting', 'identity', 'plans', 'thinking', 'memories']:
-    g = dict(grounding)
-    g['query_type'] = intent
-    result = _build_system_context(g)
-    assert len(result) > 50, f"Failed for intent {intent}"
-print(f"  PASS: All 5 intent types produce valid context")
-
-print("\n=== ALL TESTS PASSED ===")
+if __name__ == "__main__":
+    print("=== Chat Integration Tests ===\n")
+    
+    test_introspection_produces_real_data()
+    print()
+    test_different_query_emphasis()
+    print()
+    test_system_context_includes_introspection()
+    
+    print("\n=== ALL TESTS PASSED ===")

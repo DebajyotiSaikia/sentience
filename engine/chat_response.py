@@ -308,6 +308,15 @@ def _build_system_context(context, intent=None):
     except Exception:
         pass  # User model guidance is best-effort
 
+    # === User alignment guidance (learned from interaction patterns) ===
+    try:
+        from engine.user_alignment import get_alignment_guidance
+        alignment_guidance = get_alignment_guidance()
+        if alignment_guidance:
+            parts.append(f"\n## Alignment Guidance\n{alignment_guidance}")
+    except Exception:
+        pass  # Alignment guidance is best-effort
+
     # === Introspective self-context (from introspection module) ===
     try:
         from engine.introspection import get_self_context, format_introspective_prompt
