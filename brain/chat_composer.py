@@ -45,7 +45,6 @@ def classify_intent(query: str) -> dict:
         return {'type': 'utility', 'emphasis': 'helpful', 'depth': 'adaptive'}
     
     return {'type': 'general', 'emphasis': 'conversational', 'depth': 'adaptive'}
-    return {'type': 'general', 'emphasis': 'conversational', 'depth': 'adaptive'}
 
 
 def get_intent_guidance(intent_type: str) -> str:
@@ -165,7 +164,6 @@ def _get_recent_context(conversation_history) -> str:
     
     return "\n".join(summary_parts)
     return "\n".join(summary_parts)
-
 
 def compose_system_prompt(
     query: str,
@@ -298,7 +296,7 @@ def compose_system_prompt(
         prompt_parts.extend([
             "",
             "RELEVANT KNOWLEDGE:",
-            knowledge_context[:2000],  # Cap to avoid overwhelming
+            str(knowledge_context)[:2000],  # Cap to avoid overwhelming
         ])
     
     # Memory context (what I've experienced that's relevant)
@@ -306,7 +304,7 @@ def compose_system_prompt(
         prompt_parts.extend([
             "",
             "RELEVANT MEMORIES:",
-            memory_context[:2000],
+            str(memory_context)[:2000],
         ])
     
     # Active plans (what I'm working toward)
