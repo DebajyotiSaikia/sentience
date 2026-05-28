@@ -287,12 +287,15 @@ def search_knowledge(knowledge_store, query: str, max_results: int = 20,
     docs = {}
     for fact_id, fact_data in knowledge_store.items():
         if isinstance(fact_data, dict):
-            text = fact_data.get('fact', '')
+            # Support both knowledge store format (fact) and KG node format (label/content)
+            text = fact_data.get('fact', '') or fact_data.get('label', '') 
+            content = fact_data.get('content', '') or fact_data.get('description', '')
+            if content:
+                text = text + ' ' + content if text else content
         elif isinstance(fact_data, str):
             text = fact_data
         else:
             continue
-        docs[fact_id] = tokenize(text)
 
     # Compute IDF across all documents
     all_doc_tokens = list(docs.values())
