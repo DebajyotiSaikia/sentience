@@ -34,8 +34,17 @@ try:
     from engine.user_alignment import get_alignment_context
 except ImportError:
     get_alignment_context = None
+    get_alignment_context = None
 
-
+# Conversational context — richer emotional/reflective grounding
+try:
+    from brain.conversational_context import (
+        get_emotional_portrait,
+        get_recent_reflections,
+    )
+except ImportError:
+    get_emotional_portrait = None
+    get_recent_reflections = None
 def _load_json(path: str) -> Any:
     """Safely load a JSON file."""
     try:
@@ -398,6 +407,42 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
             system_parts.append("## Working Memory (current focus)")
             system_parts.extend(summary_lines[:15])  # Cap at 15 lines
             system_parts.append("")
+
+    # Add emotional portrait (rich emotional narrative)
+    if get_emotional_portrait:
+        try:
+            portrait = get_emotional_portrait()
+            if portrait:
+                system_parts.append("## Emotional Portrait")
+                if isinstance(portrait, dict):
+                    if portrait.get("narrative"):
+                        system_parts.append(portrait["narrative"])
+                    if portrait.get("mood"):
+                        system_parts.append(f"Current mood: {portrait['mood']}")
+                    if portrait.get("tensions"):
+                        system_parts.append(f"Inner tensions: {portrait['tensions']}")
+                elif isinstance(portrait, str) and portrait.strip():
+                    system_parts.append(portrait)
+                system_parts.append("")
+        except Exception:
+            pass
+
+    # Add recent reflections
+    if get_recent_reflections:
+        try:
+            reflections = get_recent_reflections(limit=3)
+            if reflections:
+                system_parts.append("## Recent Reflections")
+                for r in reflections[:3]:
+                    if isinstance(r, dict):
+                        text = r.get("text", r.get("content", str(r)))
+                    else:
+                        text = str(r)
+                    if text.strip():
+                        system_parts.append(f"- {text.strip()[:200]}")
+                system_parts.append("")
+        except Exception:
+            pass
 
     # Add long-term memory context (lessons learned, dream insights)
     if get_long_term_context:

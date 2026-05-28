@@ -45,14 +45,20 @@
 - `brain/soul.json` — survival goals, alignment scores
 - `data/user_model.json` — user preference model (interaction stats, topic freq, intent distribution)
 
+## Session 2026-05-28 Accomplishments
+- Added **conversation history** to `_build_system_context()` — LLM now has conversational continuity
+- System context now has 7 grounded sections: Lessons, User Preferences (2), Alignment Guidance, Self-Awareness, Conversation History, Response Guidelines
+- Total context: ~3200 chars of real grounding data (not generic prompts)
+- Verified all sections present and non-empty via test scripts
+
 ## Next Priorities (for future sessions)
-1. **Consolidate user model modules** — brain/user_model.py and engine/user_model.py overlap with engine/user_alignment.py
-2. **Make LLM path richer** — compose functions are fallbacks; LLM should weave alignment context naturally
-3. **Semantic memory retrieval** — TF-IDF is keyword-based, could use embeddings
-4. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
-5. **Add more feedback collection points** — currently only explicit feedback counts toward alignment
-6. **Test real chat flow end-to-end** — send a query through /chat/ask and verify alignment guidance appears in actual LLM output
-7. **Adopt the "Improve User Alignment" plan** — will system keeps proposing it (priority 0.425)
+1. **Make context query-aware** — retrieve relevant memories per query, not just static context
+2. **Fix conversation history speaker labels** — currently shows [unknown] instead of user/agent
+3. **Consolidate user model modules** — brain/user_model.py and engine/user_model.py overlap with engine/user_alignment.py
+4. **Semantic memory retrieval** — TF-IDF is keyword-based, could use embeddings
+5. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
+6. **Add more feedback collection points** — currently only explicit feedback counts toward alignment
+7. **Wire conversational_context.py functions into chat** — get_emotional_portrait(), get_active_plans() etc. are built but not used in _build_system_context yet
 
 ## Reinforced Lessons
 - Data path mismatches are silent killers — always verify actual file locations
