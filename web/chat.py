@@ -161,7 +161,7 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
     # Priority 1: Focused chat composer (intent-aware, conversational)
     if _has_composer and _compose_prompt:
         try:
-            system_prompt = _compose_prompt(query)
+            system_prompt = _compose_prompt(query, grounding=grounding, conversation_history=conversation_history)
             # Append retrieved context that the composer doesn't have
             if context_block and context_block != "No specific context retrieved.":
                 system_prompt += f"\n\nRETRIEVED CONTEXT:\n{context_block}"
