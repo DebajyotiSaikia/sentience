@@ -74,6 +74,15 @@ except ImportError:
     narrate_for_chat = None
     _has_narration = False
 
+# Focused chat composer — intent-aware, conversational prompt building
+try:
+    from brain.chat_composer import compose_system_prompt as _compose_prompt, classify_intent
+    _has_composer = True
+except ImportError:
+    _compose_prompt = None
+    classify_intent = None
+    _has_composer = False
+
 # Smart chat engine — intent classification + state-aware responses
 try:
     from engine.chat_response import generate_response_with_metadata as _engine_respond
@@ -148,7 +157,19 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
 
     # Build enriched system prompt from live internal state
     system_prompt = None
-    if _has_rich_context:
+    
+    # Priority 1: Focused chat composer (intent-aware, conversational)
+    if _has_composer and _compose_prompt:
+        try:
+            system_prompt = _compose_prompt(query)
+            # Append retrieved context that the composer doesn't have
+            if context_block and context_block != "No specific context retrieved.":
+                system_prompt += f"\n\nRETRIEVED CONTEXT:\n{context_block}"
+        except Exception:
+            system_prompt = None
+    
+    # Priority 2: Rich context builder
+    if system_prompt is None and _has_rich_context:
         try:
             rich_ctx = build_full_context(query)
             system_prompt = (
