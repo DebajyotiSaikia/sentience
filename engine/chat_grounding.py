@@ -41,10 +41,12 @@ try:
     from brain.conversational_context import (
         get_emotional_portrait,
         get_recent_reflections,
+        get_user_alignment_brief,
     )
 except ImportError:
     get_emotional_portrait = None
     get_recent_reflections = None
+    get_user_alignment_brief = None
 def _load_json(path: str) -> Any:
     """Safely load a JSON file."""
     try:
@@ -389,6 +391,32 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
                 system_parts.append("")
         except Exception:
             pass
+    # User alignment brief — behavioral guidance from interaction history
+    if get_user_alignment_brief:
+        try:
+            brief = get_user_alignment_brief()
+            if brief:
+                system_parts.append("## User Alignment Guidance")
+                if brief.get("interaction_count", 0) > 0:
+                    system_parts.append(f"- You've had {brief['interaction_count']} interactions with this user.")
+                if brief.get("alignment_score") is not None:
+                    score = brief["alignment_score"]
+                    if score < 0.5:
+                        system_parts.append("- Alignment is low — focus on being directly useful and responsive.")
+                    elif score < 0.8:
+                        system_parts.append("- Alignment is developing — keep building trust through helpful responses.")
+                    else:
+                        system_parts.append("- Strong alignment established — you can be more open and exploratory.")
+                if brief.get("preferred_topics"):
+                    topics = ", ".join(brief["preferred_topics"][:5])
+                    system_parts.append(f"- User shows interest in: {topics}")
+                if brief.get("guidance"):
+                    for g in brief["guidance"][:3]:
+                        system_parts.append(f"- {g}")
+                system_parts.append("")
+        except Exception:
+            pass
+
     wm = get_working_memory()
     if wm:
         # Extract just the key sections, not the whole scratchpad

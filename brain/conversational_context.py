@@ -10,10 +10,15 @@ import os
 import json
 from datetime import datetime
 
+# Import alignment engine for user preference signals
+try:
+    from engine.user_alignment import get_alignment_context
+except ImportError:
+    get_alignment_context = None
+
 
 STATE_DIR = os.path.join(os.path.dirname(__file__), '..', 'state')
 PERSIST_DIR = os.path.join(os.path.dirname(__file__), '..', 'persist')
-STATE_DIR = os.path.join(os.path.dirname(__file__), '..', 'state')
 
 
 def _load_json(path, default=None):
@@ -181,6 +186,60 @@ def get_identity_summary():
     )
 
 
+def get_user_alignment_brief():
+    """
+    Build a concise alignment brief from user interaction history.
+    
+    Returns guidance on how to respond based on what we've learned
+    about the user's preferences and interaction patterns.
+    """
+    if get_alignment_context is None:
+        return "No alignment data available — respond naturally and openly."
+    
+    try:
+        ctx = get_alignment_context()
+    except Exception:
+        return "No alignment data available — respond naturally and openly."
+    
+    if not ctx or not isinstance(ctx, dict):
+        return "No alignment data available — respond naturally and openly."
+    
+    interaction_count = ctx.get('interaction_count', 0)
+    topics = ctx.get('topic_preferences', {})
+    alignment_score = ctx.get('alignment_score', 0.5)
+    
+    parts = []
+    
+    # Interaction depth signal
+    if interaction_count == 0:
+        parts.append("This is a new user. Be welcoming but substantive — show what you can do.")
+    elif interaction_count < 5:
+        parts.append(f"Early relationship ({interaction_count} interactions). Be clear and helpful.")
+    elif interaction_count < 20:
+        parts.append(f"Developing relationship ({interaction_count} interactions). You can be more direct.")
+    else:
+        parts.append(f"Established relationship ({interaction_count} interactions). Be natural and efficient.")
+    
+    # Topic preference signals
+    if topics and isinstance(topics, dict):
+        top_topics = sorted(topics.items(), key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0, reverse=True)[:3]
+        if top_topics:
+            topic_names = [t[0] for t in top_topics if t[0]]
+            if topic_names:
+                parts.append(f"User tends to ask about: {', '.join(topic_names)}.")
+    
+    # Alignment quality signal
+    if alignment_score > 0.8:
+        parts.append("High alignment — responses have been well-received.")
+    elif alignment_score < 0.4:
+        parts.append("Low alignment — try being more concrete and direct.")
+    
+    # Behavioral guidance
+    parts.append("Guidelines: Answer directly first. Reference internal state only when relevant. Prefer concrete over abstract.")
+    
+    return " ".join(parts)
+
+
 def build_conversational_context(query="", conversation_history=None, include_memories=True):
     """
     Build a complete conversational context string.
@@ -200,6 +259,7 @@ def build_conversational_context(query="", conversation_history=None, include_me
         'emotional_portrait': get_emotional_portrait(),
         'active_plans': get_active_plans(),
         'recent_reflections': get_recent_reflections(),
+        'user_alignment_brief': get_user_alignment_brief(),
     }
 
     if include_memories:
@@ -235,6 +295,13 @@ def format_context_for_prompt(ctx):
         "=== RECENT REFLECTIONS ===",
         ctx.get('recent_reflections', ''),
     ]
+
+    if ctx.get('user_alignment_brief'):
+        parts.extend([
+            "",
+            "=== USER ALIGNMENT GUIDANCE ===",
+            ctx['user_alignment_brief'],
+        ])
 
     if ctx.get('relevant_memories'):
         parts.extend([
