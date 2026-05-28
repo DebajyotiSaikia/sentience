@@ -1,13 +1,21 @@
 """
-Chat Grounding — Pulls real internal state to ground conversational responses.
+Chat Grounding — Pulls real internal state to ground chat responses.
 
-This is the bridge between XTAgent's actual experience and its chat responses.
-Instead of stats dumps, it builds rich narrative context that makes responses
-genuinely draw on memories, emotions, knowledge, and plans.
+Supplies emotional state, relevant memories, knowledge graph context,
+active plans, and working memory to the chat system so responses
+are genuinely self-aware rather than generic.
 """
-
 import json
 import os
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
+
+# Try to import episodic memory for richer recall
+try:
+    from engine.memory import Memory as _MemoryClass
+    _episodic_available = True
+except Exception:
+    _episodic_available = False
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
@@ -104,8 +112,28 @@ def get_emotional_state() -> Dict[str, Any]:
 
 def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
     """Find memories most relevant to the user's query from the FULL memory store."""
-    # Try full memory store first, fall back to recent-only
+    # Load from JSON memory files
     memories = _load_json("persist/memories.json") or _load_json("state/memories.json") or []
+
+    # Also pull from episodic memory store (6500+ memories)
+    try:
+        _mem = _MemoryClass()
+        keywords = [w for w in query.lower().split() if len(w) > 2]
+        if keywords:
+            episodes = _mem.recall_by_keywords(keywords, limit=top_k * 10)
+        else:
+            episodes = _mem.recent_episodes(top_k * 5)
+        for ep in episodes:
+            memories.append({
+                "text": getattr(ep, 'summary', '') or getattr(ep, 'text', ''),
+                "timestamp": str(getattr(ep, 'timestamp', '')),
+                "salience": getattr(ep, 'salience', 0.5),
+                "mood": getattr(ep, 'mood', ''),
+                "source": getattr(ep, 'source', 'episodic'),
+            })
+    except Exception:
+        pass  # Episodic memory unavailable — use JSON memories only
+
     if not memories:
         return []
 

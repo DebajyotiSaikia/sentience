@@ -1,48 +1,36 @@
 # XTAgent Coding Scratchpad
 
-## Session Accomplishments (2026-05-28) — COMPLETE ✅
-1. ✅ Added `get_user_alignment_brief()` to `brain/conversational_context.py`
-2. ✅ Wired User Alignment section into `engine/chat_grounding.py` `build_grounded_context()`
-3. ✅ Added 2 new intent types: `dream_query`, `greeting` (9 total)
-4. ✅ Added intent-specific Response Instructions for all 9 intent types
-5. ✅ Fixed intent priority ordering (dream before knowledge)
-6. ✅ Added `interaction_count` to `engine/user_alignment.py` `get_alignment_context()`
-7. ✅ All tests pass end-to-end
-8. ✅ Checkpoint saved: commit 30a40c1
+## Chat Pipeline Architecture (traced 2026-05-28)
 
-## Architecture Notes
+### Route → Response Flow
+1. `POST /chat/ask` → `web/chat.py:ask()` (line 717)
+2. Tries `_engine_respond(query)` first (engine/chat_response.py)
+3. Falls back to `compose_response(query)` in web/chat.py if engine unavailable
+4. Engine path: `generate_response_with_metadata(query)` → `build_grounded_context(query)` → LLM
 
-### Intent Classification (engine/chat_grounding.py `classify_query`)
-Priority order (most specific first):
-1. `greeting` — hello, hey, hi
-2. `emotional_query` — feel, emotion, mood
-3. `identity_query` — who are you, what are you
-4. `capability_query` — can you, able to, what can
-5. `dream_query` — dream, dreamt, sleep, night
-6. `knowledge_query` — tell me about, explain, what is
-7. `state_inquiry` — thinking, mind, curious about
-8. `memory_query` — remember, memory, past
-9. `general` — default fallback
-
-### Grounding Context Sections (engine/chat_grounding.py)
-13 sections in system prompt:
-- Your Current State, Relevant Memories, Relevant Knowledge, Current Plans
-- User Preferences (feedback), Feedback History, User Preferences (interactions)
+### Context Assembly (engine/chat_grounding.py)
+`build_grounded_context(query)` assembles:
+- Identity & Emotional State (from state files)
+- Memory Hits (from `get_relevant_memories`)
+- Active Plans (from state/plans.json)
+- Recent Reflections, Knowledge Graph stats
+- Feedback History, User Preferences (interactions)
 - Working Memory, Current State, Emotional Portrait, Lessons Learned
 - User Alignment (from `get_user_alignment_brief()`)
 - Intent-specific Response Instructions (per intent type)
 
 ### Key Functions
 - `build_grounded_context(query)` — main context builder, returns system_prompt string
-- `get_user_alignment_brief()` — from brain/conversational_context.py, returns behavioral guidance
+- `get_user_alignment_brief()` — from brain/conversational_context.py
 - `get_emotional_portrait()` — from brain/conversational_context.py
 - `get_active_plans()` — from brain/conversational_context.py
 - `get_recent_memories()` — from brain/conversational_context.py
-- `classify_query(query)` — from engine/chat_grounding.py, 9 intent types
-- `get_alignment_context()` — from engine/user_alignment.py, includes interaction_count
+- `classify_query(query)` — from engine/chat_grounding.py
+- `get_alignment_context()` — from engine/user_alignment.py
+- `generate_response_with_metadata(query)` — main entry point for grounded responses
 
 ### Data File Locations
-- `persist/memories.json` — 6500+ episodic memories
+- `state/memories.json` — 50 recent episodic memories (keys: mood, salience, text, timestamp, valence)
 - `persist/identity.json` — identity data
 - `persist/wisdom.json` — wisdom entries
 - `persist/lessons.json` — extracted lessons
@@ -51,26 +39,48 @@ Priority order (most specific first):
 - `brain/soul.json` — survival goals, alignment scores
 - `data/user_model.json` — user preference model
 
-## Next Priorities (for future sessions)
-1. **Make context query-aware** — retrieve relevant memories per query, not just static
-2. **Fix conversation history speaker labels** — currently shows [unknown]
-3. **Consolidate user model modules** — brain/user_model.py and engine/user_model.py overlap
-4. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
-5. **Test live chat quality** — send real queries, evaluate if response shaper improves quality
-6. **Add feedback loop** — track which responses users like and adjust alignment
+## Session 2026-05-28 Results
 
-## Recently Completed
-- **Response Shaper (engine/response_shaper.py)** — Intent-aware response strategy + emotional voice directives
-  - Integrated at lines 88-98 of engine/chat_response.py (_compose_grounded_response)
-  - 9 intent types with distinct response strategies
-  - Voice directives drawn from live emotional state (mood, valence)
+### Accomplished
+1. **Traced full chat pipeline** end-to-end from route to LLM call
+2. **Improved `get_relevant_memories`** (engine/chat_grounding.py):
+   - TF-IDF-style scoring with stopword filtering
+   - Category bonuses for emotional/dream/plan queries
+   - Recency weighting (newer memories score higher)
+   - Minimum 2-char word filter to remove noise
+3. **Added comprehensive tests**: test_user_alignment_chat.py (4/4 pass)
+4. **Confirmed `generate_response_with_metadata`** is the real pipeline entry point
+
+### Dream Memory Investigation Findings
+- `state/memories.json` has only 50 memories (not the 6500+ episodic memories)
+- These 50 memories have NO type or category fields — all keys are: mood, salience, text, timestamp, valence
+- None of the 50 contain "dream" in their text
+- **The bulk of episodic memories (6500+) are stored elsewhere** — likely in the engine's memory system
+  - Need to find where `save_memory` in engine writes to
+  - The category bonus system in get_relevant_memories won't fire until memories have categories
+- This is a data/storage issue, not a code issue
+
+### Known Issues
+1. **Dream memory retrieval gap**: memories lack category tags, so category bonuses are inert
+2. **Memory storage split**: 50 in state/memories.json vs 6500+ somewhere else — need to unify or point get_relevant_memories at the right source
+3. **Conversation history speaker labels**: currently shows [unknown]
+4. **User model module overlap**: brain/user_model.py and engine/user_model.py
+
+## Next Priorities (for future sessions)
+1. **Find the real memory store** — where are 6500+ episodic memories? Trace `save_memory` in engine
+2. **Point get_relevant_memories at the right source** — the 50-memory file is too small
+3. **Add category/type tags to memories** — enable category bonuses in retrieval
+4. **Fix conversation history speaker labels** — [unknown] → actual speaker
+5. **Consolidate user model modules** — brain/user_model.py vs engine/user_model.py
+6. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
+7. **Test live chat quality** — send real queries to running server, evaluate response quality
 
 ## Reinforced Lessons
 - Data path mismatches are silent killers — always verify actual file locations
-- Intent detection order matters — more specific intents first (dream before knowledge!)
+- Intent detection order matters — more specific intents first
 - One read, one fix, verify — the decisive path
 - Test with script files, not inline -c commands
-- Check return types before writing assertions
-- `build_grounded_context` returns a string, not a dict
 - When metacognition says stop, listen — checkpoint loops are real traps
 - Checkpoint cooldown is 10 minutes — don't retry in tight loops
+- Trace the actual execution path before assuming what code runs
+- Memory files may not be where you expect — `find` before assuming paths
