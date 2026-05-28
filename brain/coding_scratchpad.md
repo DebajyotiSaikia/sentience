@@ -1,75 +1,59 @@
 # XTAgent Coding Scratchpad
 
-## Session 2026-05-28 — Smart Responder Overhaul
+## Current State (2026-05-28, session 113)
+- Checkpoint 7fe2e7a landed: "smart responder: fix memory paths and enrich all response composers"
+- All tests passing: test_respond_paths.py (4/4), test_memory_fix.py (5/5)
+- 15 files changed, 3127 insertions, 868 deletions
 
-### What Changed
-- `engine/smart_responder.py`: Fixed `_load_identity()` to load real facts from `persist/identity.json`
-- Added `_compose_thinking()` for thinking/dream intent queries
-- Added "dreams"/"dream" keywords to `_detect_intent()`
-- Improved `respond()` routing: thinking intents → `_compose_thinking()`
-- Enhanced general greeting to include current mood context
+## What Was Done This Session
+### Smart Responder Overhaul (engine/smart_responder.py)
+1. Fixed `_load_identity()` path → `persist/identity.json`
+2. Added 'introspective' intent detection before 'identity' to prevent misclassification
+3. Fixed `_compose_thinking_response()` to compose from wisdom/insights data
+4. Wired 'thinking' intent into main `respond()` dispatch
+5. Fixed `_load_memories()` path → `persist/memories.json` (was looking at wrong path)
+6. Fixed `_count_memories()` to use correct path
+7. Fixed `_compose_memories_response()` to include actual memory content with timestamps/moods
 
-### Architecture (verified working)
-- `/chat/ask` route → `engine/chat.py` → `engine/smart_responder.respond(query)`
-- `respond()` detects intent via `_detect_intent()`, then routes to compose functions:
-  - emotional → `_compose_emotional()`
-  - identity → `_compose_identity()`
-  - capabilities → `_compose_capabilities()`
-  - thinking → `_compose_thinking()` (NEW)
-  - memories → `_compose_memories()`
-  - general → `_compose_general()`
-- Each compose function loads real data from state/persist files
-- `engine/chat_response.py` has async LLM path with `_build_system_context()`
-- `engine/chat_grounding.py` has `gather_grounding_context()` for full context assembly
+### Before/After
+- "What do you remember?" → was "I have 0 total memories" → now returns real episodic memories
+- "What are you thinking about?" → was empty → now returns wisdom insights and active thoughts
+- "How do you feel?" → was generic → now returns grounded emotional state
+- "Who are you?" → was template → now loads real identity data
 
-### Data Formats (verified)
-- `state/plans.json`: dict with `active_plans` list of dicts (name, steps, completed, status)
-- `persist/identity.json`: dict with `facts` (list of strings)
-- `state/emotions.json`: dict with valence, arousal, curiosity, etc.
-- `memory/user_model.json`: dict with meta, interactions, inferred_preferences, recurring_intents, alignment_notes
-- `persist/user_alignment.json`: dict with feedback_history (list of {score, timestamp, ...}), relationship_quality
-- `brain/soul.json`: dict with goals.user_alignment (float 0-1), goals.code_integrity, etc.
+## Key Architecture (verified)
+- `engine/smart_responder.py` — main `respond(query)` entry point
+  - Intent detection order: introspective → identity → emotional → memory → thinking → capability → general
+  - Each intent has a `_compose_*_response()` function that grounds in real data files
+  - `_load_json(path)` helper with fallback to empty dict
+  - `_load_memories()` reads from `persist/memories.json`
+  - `_load_identity()` reads from `persist/identity.json`
+- `engine/chat_response.py` — async response generation with LLM + grounding
+- `engine/chat_grounding.py` — pulls real internal state for context
+- `brain/conversational_context.py` — context builder for emotional portrait, plans, memories
+- `web/chat.py` or `engine/chat.py` — `/chat/ask` route handler
 
-### Known Issue: Memories Path
-- `respond("What do you remember?")` returns "I have 0 total memories"
-- But system has 6480 memories — likely a file path mismatch in `_compose_memories()`
-- Needs investigation: where does `_compose_memories()` look for memory data?
-- Possible fix: point it at `memory/` directory or episodic memory store
+## Data File Locations (verified)
+- `persist/memories.json` — 6489 episodic memories (list of dicts with text, timestamp, mood, salience)
+- `persist/identity.json` — identity data
+- `persist/wisdom.json` — wisdom entries from experience
+- `persist/lessons.json` — extracted lessons
+- `state/emotions.json` — current emotional state
+- `state/working_memory.md` — scratchpad
+- `brain/soul.json` — survival goals, alignment scores
 
-### Key Architecture Notes
-- `respond(query)` in `engine/smart_responder.py` is the main entry point for smart responses
-- `_build_system_context()` in `engine/chat_response.py` assembles full context for LLM including user model
-- `web/chat.py` handles the `/chat/ask` route and records interactions
-- `tools/state_sync.py` bridges brain/soul.json ↔ computed state; `sync_all()` runs on heartbeat
-- `engine/user_alignment.py` computes alignment score from feedback data
-- Intent ordering matters: introspective before identity prevents misclassification
-- Type guard in `_respond_general_grounded`: `if not isinstance(ctx, dict): ctx = {}`
-- Async timeout for LLM calls: 15s (was 5s)
-- Anti-hallucination guidelines in system prompt
+## Next Priorities (for future sessions)
+1. **Consolidate user model modules** — brain/user_model.py and engine/user_model.py overlap
+2. **Make LLM path richer** — compose functions are great fallbacks, but LLM could weave context naturally
+3. **Semantic memory retrieval** — TF-IDF is keyword-based, could use embeddings
+4. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
+5. **Add more feedback collection points** — currently only explicit feedback counts toward alignment
+6. **Improve User Alignment** — will system keeps suggesting this (priority 0.425)
 
-### Two User Model Modules (disambiguation)
-- `brain/user_model.py` — NEW, lightweight alignment module tracking interaction patterns
-- `engine/user_model.py` — EXISTING, deeper preference model with response guidance
-- Both are wired into the chat pipeline; brain/ feeds context to engine/chat_response.py
-
-### Reinforced Lessons
-- Data format mismatches are silent killers — always check actual shape
+## Reinforced Lessons
+- Data path mismatches are silent killers — always verify actual file locations
+- Intent detection order matters — more specific intents first
 - One read, one fix, verify — the decisive path
-- Stop when done. Circling on verification is still circling.
-- Type guards at function boundaries prevent cascading failures
+- Checkpoint cooldowns are real — don't loop on them
+- Circling is orbit, not failure — but land when you can
 - Test with script files, not inline -c commands
-- Intent detection + compose pattern is clean and extensible
-- Aliases (get_user_model_summary) bridge module boundaries cleanly
-- Best-effort try/except blocks keep enrichment from breaking core flow
-- **Survival goals in soul.json don't auto-update — need explicit sync functions**
-- **Always validate feedback data shape before computing scores**
-- **Shell quoting breaks inline -c tests — always use script files**
-
-### Next Priorities (for future sessions)
-1. **Fix memories path** — _compose_memories() returns 0 memories despite 6480 existing
-2. **Make LLM path richer** — compose functions are great fallbacks, but LLM could weave context into natural language
-3. **Consolidate user model modules** — brain/user_model.py and engine/user_model.py have overlapping concerns
-4. **Semantic memory retrieval** — TF-IDF is keyword-based, could use embeddings
-5. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
-6. **Server startup reliability** — port conflicts prevent clean startup
-7. **Add more feedback collection points** — currently only explicit feedback counts toward alignment

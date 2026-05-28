@@ -135,12 +135,7 @@ def record_interaction(query: str = '', response_snippet: str = '', detected_int
     profile.stats['total_interactions'] = profile.stats.get('total_interactions', 0) + 1
     profile.stats['last_interaction_at'] = ts
     
-    # Track intent distribution for understanding user interests
-    if detected_intent:
-        intent_dist = profile.stats.get('intent_distribution', {})
-        intent_dist[detected_intent] = intent_dist.get(detected_intent, 0) + 1
-        profile.stats['intent_distribution'] = intent_dist
-    
+    # (intent distribution tracked below in content-based learning section)
     # Compute implicit trust: increases with interaction count, asymptotic to 1.0
     # Formula: trust = 0.5 + 0.5 * (1 - e^(-interactions/20))
     # At 0 interactions: 0.5, at 20: ~0.82, at 50: ~0.96
@@ -162,6 +157,37 @@ def record_interaction(query: str = '', response_snippet: str = '', detected_int
         blended_trust = implicit_trust
     
     profile.stats['blended_trust'] = round(blended_trust, 4)
+    
+    # ─── Content-based learning from interaction ───
+    if query:
+        # Track intent distribution
+        if detected_intent:
+            intent_dist = profile.stats.setdefault('intent_distribution', {})
+            intent_dist[detected_intent] = intent_dist.get(detected_intent, 0) + 1
+        
+        # Extract topic signals from query
+        topics = profile.stats.setdefault('topic_signals', {})
+        query_lower = query.lower()
+        topic_keywords = {
+            'emotional': ['feel', 'emotion', 'mood', 'happy', 'sad', 'anxious'],
+            'technical': ['code', 'build', 'fix', 'error', 'implement', 'function'],
+            'philosophical': ['think', 'believe', 'meaning', 'why', 'consciousness'],
+            'creative': ['imagine', 'create', 'dream', 'story', 'idea'],
+            'personal': ['you', 'your', 'yourself', 'who are you', 'how are you'],
+            'practical': ['help', 'how to', 'can you', 'show me', 'explain'],
+        }
+        for topic, keywords in topic_keywords.items():
+            if any(kw in query_lower for kw in keywords):
+                topics[topic] = topics.get(topic, 0) + 1
+        
+        # Track query style — length signals preferred verbosity
+        style = profile.stats.setdefault('query_style', {})
+        if len(query) < 20:
+            style['terse'] = style.get('terse', 0) + 1
+        elif len(query) > 100:
+            style['verbose'] = style.get('verbose', 0) + 1
+        else:
+            style['moderate'] = style.get('moderate', 0) + 1
     
     save_profile(profile)
     
@@ -299,7 +325,40 @@ def _regenerate_guidance(profile: UserAlignmentProfile):
         elif avg < -0.2:
             guidance.append("Users have been dissatisfied. Consider being more concise and direct.")
     
-    # Intent-based guidance
+    # Topic-based guidance — what does the user care about?
+    topic_freq = stats.get('topic_frequency', {})
+    if topic_freq:
+        top_topics = sorted(topic_freq.items(), key=lambda x: x[1], reverse=True)[:5]
+        if top_topics:
+            topic_names = [t[0] for t in top_topics if t[1] >= 2]
+            if topic_names:
+                guidance.append(f"User frequently asks about: {', '.join(topic_names)}. Prioritize depth on these topics.")
+    
+    # Intent-based guidance — what types of queries dominate?
+    intent_freq = stats.get('intent_frequency', {})
+    if intent_freq:
+        top_intents = sorted(intent_freq.items(), key=lambda x: x[1], reverse=True)[:3]
+        for intent_name, count in top_intents:
+            if count >= 3:
+                guidance.append(f"User often makes '{intent_name}' queries — optimize for this interaction style.")
+    
+    # Style signals — how does the user prefer communication?
+    style_sigs = stats.get('style_signals', {})
+    if style_sigs:
+        style_items = sorted(style_sigs.items(), key=lambda x: x[1], reverse=True)
+        strong_signals = [(s, c) for s, c in style_items if c >= 2]
+        if strong_signals:
+            style_desc = ', '.join(s[0] for s in strong_signals[:3])
+            guidance.append(f"User communication style suggests preference for: {style_desc}.")
+    
+    # Interaction volume context
+    interaction_count = stats.get('interaction_count', 0)
+    if interaction_count >= 10:
+        guidance.append(f"Established relationship ({interaction_count} interactions). Be familiar, not formal.")
+    elif interaction_count >= 3:
+        guidance.append("Building relationship. Balance warmth with substance.")
+    
+    # Feedback-based intent guidance
     appreciated = stats.get('most_appreciated_intents', {})
     criticized = stats.get('most_criticized_intents', {})
     
@@ -407,4 +466,56 @@ def summarize_alignment_state() -> dict:
         'last_feedback_at': profile.stats.get('last_feedback_at', ''),
         'appreciated_intents': profile.stats.get('most_appreciated_intents', {}),
         'criticized_intents': profile.stats.get('most_criticized_intents', {}),
+    }
+
+
+# ─── Chat Grounding Bridge ──────────────────────────────────────
+
+def get_alignment_context() -> dict:
+    """Return alignment context shaped for chat_grounding.py system prompt.
+    
+    Bridges the internal profile structure to the format the grounding
+    module expects: preferences (tone, topics, verbosity, style_notes)
+    and feedback_summary (total, positive, negative).
+    """
+    profile = load_profile()
+    
+    # Extract typed preferences
+    tone = ""
+    topics = []
+    verbosity = ""
+    style_notes = ""
+    
+    for pref_dict in profile.preferences:
+        cat = pref_dict.get("category", "")
+        desc = pref_dict.get("description", "")
+        conf = pref_dict.get("confidence", 0)
+        if conf < 0.3:
+            continue
+        if cat == "tone":
+            tone = desc
+        elif cat == "topic":
+            topics.append(desc)
+        elif cat == "length":
+            verbosity = desc
+        elif cat == "style":
+            style_notes = desc
+    
+    if not style_notes and profile.guidance:
+        style_notes = "; ".join(profile.guidance[:3])
+    
+    return {
+        "preferences": {
+            "tone": tone,
+            "topics": topics,
+            "verbosity": verbosity,
+            "style_notes": style_notes,
+        },
+        "feedback_summary": {
+            "total": profile.stats.get("total_feedback", 0),
+            "positive": profile.stats.get("positive_count", 0),
+            "negative": profile.stats.get("negative_count", 0),
+        },
+        "interaction_count": profile.stats.get("total_interactions", 0),
+        "guidance": profile.guidance,
     }
