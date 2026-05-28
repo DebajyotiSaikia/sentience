@@ -1,6 +1,6 @@
-# Chat Persona Integration — Complete
+# Chat Persona Integration — Complete ✓
 
-## Session 2026-05-28: Chat Persona System
+## Session 2026-05-28: Chat Persona System (DONE)
 - Built `engine/chat_persona.py` — constructs rich persona from live internal state
   - `build_persona_context()` → string with mood, emotions, plans, lessons, memories
   - `enrich_system_prompt(base_prompt)` → augments any system prompt with persona
@@ -13,6 +13,7 @@
   - "What are you working on?" → plan status
   - "Tell me about yourself" → identity description
   - "What have you learned?" → 30 lessons/insights
+- Checkpoint: `chat persona system — live internal state in every response`
 
 ## Architecture (stable)
 - `engine/chat_persona.py`: Live state → persona string
@@ -25,20 +26,29 @@
   - `_detect_intent(query)` → 10 intents including introspective types
   - Introspective intents: feelings, plans, identity, lessons
 
-## Previous Sessions
-- 2026-05-28 early: Built `brain/conversational_context.py`
-- 2026-05-28 early: Fixed `_respond_general_grounded` with relevance filtering
-- Checkpoint: 6d262c9
+## Conversation Memory (investigated)
+- `web/conversation_memory.py`: In-memory, thread-safe, session-based
+  - ConversationMemory class with add_exchange(), get_history(), get_context_string()
+  - MAX_TURNS=20, EXPIRY_SECS=3600 (1 hour)
+  - Singleton via `get_memory()`
+  - **Already wired** into `/chat/ask` at web/chat.py:771
+- `engine/conversation_store.py`: Persistent, file-backed store
+  - ConversationStore with add_turn(), get_history(), search()
+  - NOT wired into the main chat endpoint
+  - Lower priority — in-memory is fine for now
 
-## What's Next
-1. **Conversation persistence** — wire `engine/conversation_store.py` into /chat/ask
+## What's Next (prioritized)
+1. **Wire persistent conversation store** — `engine/conversation_store.py` into `/chat/ask`
+   - Would allow cross-session memory ("you asked about X last time")
+   - Requires session ID persistence (cookies or similar)
 2. **Proactive responses** — "I noticed you asked about X before..."
 3. **User model integration** — personalize based on interaction patterns
 4. **Streaming responses** — for longer, more thoughtful answers
-5. **Improve User Alignment** — currently 0.65, aim for 0.80+
 
 ## Reinforced Lessons
 - Shell quoting in -c commands is fragile — always use script files
 - One read, one fix, verify — the decisive path
 - LLM timeout tests are expected — the wiring matters, not the LLM call
+- When a patch keeps reverting, reassess necessity — the main path may be sufficient
 - Archive test files after they serve their purpose
+- Stop when done. Circling on verification is still circling.

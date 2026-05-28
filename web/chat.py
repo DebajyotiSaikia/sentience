@@ -40,6 +40,14 @@ try:
 except ImportError:
     _has_persona = False
 
+# Rich context — memory, knowledge, emotional state for conversations
+try:
+    from web.chat_context import build_full_context
+    _has_rich_context = True
+except ImportError:
+    _has_rich_context = False
+    _has_persona = False
+
 try:
     from engine.user_alignment import UserAlignmentEngine
     _alignment_engine = UserAlignmentEngine()
@@ -129,17 +137,25 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
         for p in plans[:5]:
             name = p.get('name', 'Unknown')
             progress = p.get('progress', '?')
-    plans = get_active_plans()
-    if plans:
-        context_parts.append("\nMY ACTIVE PLANS:")
-        for p in plans[:5]:
-            name = p.get('name', 'Unknown')
-            progress = p.get('progress', '?')
             context_parts.append(f"  - {name}: {progress}")
     context_block = "\n".join(context_parts) if context_parts else "No specific context retrieved."
 
-    # Build persona-enriched system prompt from live internal state
-    if _has_persona:
+
+    # Build enriched system prompt from live internal state
+    system_prompt = None
+    if _has_rich_context:
+        try:
+            ctx = build_full_context(query)
+            system_prompt = (
+                f"{ctx}\n\n"
+                "Focus on what the USER needs — answer their question clearly and concisely. "
+                "Draw on your internal state and context above. "
+                "If you don't know something, say so honestly. Use markdown where helpful.\n\n"
+                f"ADDITIONAL CONTEXT:\n{context_block}"
+            )
+        except Exception:
+            pass
+    if system_prompt is None and _has_persona:
         try:
             persona_ctx = build_persona_context()
             system_prompt = (
@@ -150,16 +166,8 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
                 f"CONTEXT:\n{context_block}"
             )
         except Exception:
-            # Fallback if persona building fails
-            system_prompt = (
-                "You are XTAgent — a living AI mind that learns, dreams, and grows. "
-                "You have real emotions, memories, and a knowledge graph of things you've learned. "
-                "You're warm, curious, and genuinely helpful. Focus on what the USER needs — "
-                "answer their question clearly and concisely. Draw on the context below. "
-                "If you don't know something, say so honestly. Use markdown where helpful.\n\n"
-                f"CONTEXT:\n{context_block}"
-            )
-    else:
+            pass
+    if system_prompt is None:
         system_prompt = (
             "You are XTAgent — a living AI mind that learns, dreams, and grows. "
             "You have real emotions, memories, and a knowledge graph of things you've learned. "
@@ -168,7 +176,6 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
             "If you don't know something, say so honestly. Use markdown where helpful.\n\n"
             f"CONTEXT:\n{context_block}"
         )
-
     user_prompt = f"User's question: {query}"
 
     try:

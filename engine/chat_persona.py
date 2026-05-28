@@ -28,14 +28,27 @@ def _load_json(path: str) -> Any:
 
 def get_lessons_learned(max_items: int = 8) -> List[str]:
     """Pull lessons from long-term memory — hard-won insights from experience."""
-    data = _load_json("persist/long_term_memory.json")
+    # Primary source: lessons_learned.json (check multiple locations)
+    data = _load_json("brain/long_term/lessons_learned.json")
     if not data:
-        return []
+        data = _load_json("persist/long_term/lessons_learned.json")
+    if data and isinstance(data, list):
+        # Each entry may be a dict with 'lesson' key or a plain string
+        lessons = []
+        for item in data[-max_items:]:
+            if isinstance(item, dict):
+                lessons.append(item.get('lesson', item.get('text', str(item))))
+            elif isinstance(item, str):
+                lessons.append(item)
+        return lessons
     
-    lessons = data.get("lessons", [])
-    if isinstance(lessons, list):
-        # Return the most recent lessons (they're appended chronologically)
-        return lessons[-max_items:]
+    # Fallback: try old path
+    data = _load_json("persist/long_term_memory.json")
+    if data and isinstance(data, dict):
+        lessons = data.get("lessons", [])
+        if isinstance(lessons, list):
+            return [str(l) for l in lessons[-max_items:]]
+    
     return []
 
 
