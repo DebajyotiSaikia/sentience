@@ -97,10 +97,32 @@ def generate_response_with_metadata(query, history=None):
                        key=lambda k: _response_cache[k].get('timestamp', ''))[0]
         del _response_cache[oldest]
 
+    # Score response quality and record interaction for alignment learning
+    try:
+        from engine.response_quality import estimate_quality
+        quality_score = estimate_quality(query, response_text)
+    except Exception:
+        quality_score = 0.5
+
+    try:
+        from engine.user_alignment import record_interaction
+        alignment_data = record_interaction(
+            query=query,
+            response_snippet=response_text[:200],
+            detected_intent=intent if 'intent' in dir() else ''
+        )
+    except Exception:
+        alignment_data = {}
+
+    # Enrich metadata with quality signals
+    metadata['quality_score'] = round(quality_score, 3)
+    metadata['alignment'] = alignment_data
+
     return {
         'response': response_text,
         'metadata': metadata,
-        'response_id': response_id
+        'response_id': response_id,
+        'quality_score': round(quality_score, 3)
     }
 
 
