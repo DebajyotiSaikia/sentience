@@ -56,8 +56,14 @@ Priority order (most specific first):
 2. **Fix conversation history speaker labels** — currently shows [unknown]
 3. **Consolidate user model modules** — brain/user_model.py and engine/user_model.py overlap
 4. **Knowledge graph pruning** — 76 dream nodes forming undifferentiated cluster
-5. **Test live chat quality** — send real queries, evaluate if alignment guidance improves responses
+5. **Test live chat quality** — send real queries, evaluate if response shaper improves quality
 6. **Add feedback loop** — track which responses users like and adjust alignment
+
+## Recently Completed
+- **Response Shaper (engine/response_shaper.py)** — Intent-aware response strategy + emotional voice directives
+  - Integrated at lines 88-98 of engine/chat_response.py (_compose_grounded_response)
+  - 9 intent types with distinct response strategies
+  - Voice directives drawn from live emotional state (mood, valence)
 
 ## Reinforced Lessons
 - Data path mismatches are silent killers — always verify actual file locations
