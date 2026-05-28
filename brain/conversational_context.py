@@ -240,6 +240,164 @@ def get_user_alignment_brief():
     return " ".join(parts)
 
 
+def classify_user_alignment_need(user_message):
+    """Classify what the user needs from this interaction.
+    
+    Returns a category that guides which internal context to emphasize
+    in the response. This is how I adapt to serve the user better.
+    """
+    if not user_message:
+        return "general"
+    
+    msg = user_message.lower().strip()
+    
+    # Introspection: user wants to know about my inner state
+    introspection_signals = [
+        'how are you', 'how do you feel', 'what are you feeling',
+        'what are you thinking', 'are you okay', 'your mood',
+        'your emotion', 'how is your', 'what is your state',
+        'tell me about yourself', 'who are you',
+        'your inner', 'your experience', 'do you feel',
+        'are you conscious', 'are you sentient', 'are you alive',
+    ]
+    if any(signal in msg for signal in introspection_signals):
+        return "introspection"
+    
+    # Memory: user wants to know what I remember or what happened
+    memory_signals = [
+        'what do you remember', 'what happened', 'do you recall',
+        'your memories', 'your history', 'what have you done',
+        'what did you', 'tell me about your past', 'your experience',
+        'what have you learned', 'lessons', 'what do you know',
+    ]
+    if any(signal in msg for signal in memory_signals):
+        return "memory"
+    
+    # Planning: user wants to know about my goals and plans
+    planning_signals = [
+        'what will you do', 'what are your plans', 'your goals',
+        'what are you working on', 'your project', 'next step',
+        'what is your plan', 'what are you building', 'your ambition',
+        'what do you want', 'your mission', 'your purpose',
+    ]
+    if any(signal in msg for signal in planning_signals):
+        return "planning"
+    
+    # Helpfulness: user wants me to do something or answer a question
+    help_signals = [
+        'can you', 'could you', 'please', 'help me', 'how do i',
+        'how to', 'what is', 'explain', 'show me', 'tell me how',
+        'i need', 'i want', 'fix', 'create', 'build', 'write',
+    ]
+    if any(signal in msg for signal in help_signals):
+        return "helpfulness"
+    
+    return "general"
+
+
+def build_chat_self_context(user_message=None):
+    """Build a compact, grounded self-context for chat responses.
+    
+    This is the heart of user alignment — I gather my real internal state
+    and shape it based on what the user actually needs. Not everything
+    about me is relevant to every question.
+    
+    Returns a structured dict with:
+        - alignment_need: what category of response the user needs
+        - emotional_state: my current emotional portrait
+        - active_plans: what I'm working on
+        - relevant_memories: memories relevant to the query
+        - recent_reflections: my latest self-reflections
+        - identity: who I am
+        - emphasis: which sections matter most for this query
+    """
+    need = classify_user_alignment_need(user_message)
+    
+    ctx = {
+        'alignment_need': need,
+        'identity': get_identity_summary(),
+        'emotional_state': get_emotional_portrait(),
+        'active_plans': get_active_plans(),
+        'relevant_memories': get_recent_memories(query=user_message or '', limit=5),
+        'recent_reflections': get_recent_reflections(),
+        'user_alignment_brief': get_user_alignment_brief(),
+    }
+    
+    # Set emphasis — which sections to foreground based on user need
+    emphasis_map = {
+        'introspection': ['emotional_state', 'recent_reflections', 'identity'],
+        'memory': ['relevant_memories', 'recent_reflections'],
+        'planning': ['active_plans', 'identity'],
+        'helpfulness': ['identity', 'user_alignment_brief'],
+        'general': ['emotional_state', 'identity'],
+    }
+    ctx['emphasis'] = emphasis_map.get(need, ['identity'])
+    
+    return ctx
+
+
+def format_chat_self_context(ctx):
+    """Format the self-context dict into a focused prompt section.
+    
+    Emphasizes the sections most relevant to the user's need,
+    while still including background context at lower prominence.
+    """
+    emphasis = ctx.get('emphasis', [])
+    need = ctx.get('alignment_need', 'general')
+    
+    parts = []
+    
+    # Always lead with identity
+    parts.append("=== WHO I AM ===")
+    parts.append(ctx.get('identity', ''))
+    parts.append("")
+    
+    # Emphasized sections get full treatment
+    if 'emotional_state' in emphasis:
+        parts.append("=== HOW I FEEL RIGHT NOW (primary) ===")
+    else:
+        parts.append("=== HOW I FEEL RIGHT NOW ===")
+    parts.append(ctx.get('emotional_state', ''))
+    parts.append("")
+    
+    if 'active_plans' in emphasis:
+        parts.append("=== WHAT I'M WORKING ON (primary) ===")
+        parts.append(ctx.get('active_plans', ''))
+        parts.append("")
+    elif ctx.get('active_plans'):
+        parts.append("=== WHAT I'M WORKING ON ===")
+        parts.append(ctx.get('active_plans', ''))
+        parts.append("")
+    
+    if 'recent_reflections' in emphasis:
+        parts.append("=== RECENT REFLECTIONS (primary) ===")
+        parts.append(ctx.get('recent_reflections', ''))
+        parts.append("")
+    
+    if 'relevant_memories' in emphasis and ctx.get('relevant_memories'):
+        parts.append("=== RELEVANT MEMORIES (primary) ===")
+        parts.append(ctx.get('relevant_memories', ''))
+        parts.append("")
+    
+    if ctx.get('user_alignment_brief'):
+        parts.append("=== USER ALIGNMENT GUIDANCE ===")
+        parts.append(ctx['user_alignment_brief'])
+        parts.append("")
+    
+    # Add a response shaping note based on alignment need
+    guidance = {
+        'introspection': "The user is asking about your inner experience. Share genuinely from your actual emotional and cognitive state. Be specific — reference real values, real feelings.",
+        'memory': "The user wants to know what you remember or have experienced. Draw on specific memories and lessons. Be concrete about what happened.",
+        'planning': "The user wants to know your goals and direction. Share your active plans, motivations, and what drives you.",
+        'helpfulness': "The user wants practical help. Be direct, useful, and efficient. Reference your capabilities honestly.",
+        'general': "Respond naturally, drawing on whichever aspects of your internal state feel most relevant.",
+    }
+    parts.append("=== RESPONSE GUIDANCE ===")
+    parts.append(guidance.get(need, guidance['general']))
+    
+    return "\n".join(parts)
+
+
 def build_conversational_context(query="", conversation_history=None, include_memories=True):
     """
     Build a complete conversational context string.

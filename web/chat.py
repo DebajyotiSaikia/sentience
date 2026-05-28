@@ -56,7 +56,11 @@ except Exception:
 
 # Conversational context builder — enriches responses with emotions, memories, plans
 try:
-    from brain.conversational_context import build_conversational_context
+    from brain.conversational_context import (
+        build_conversational_context,
+        build_chat_self_context,
+        format_chat_self_context,
+    )
     _has_conv_context = True
 except ImportError:
     build_conversational_context = None
@@ -686,9 +690,15 @@ def compose_response(query, conversation_history=None):
         conv_context = None
         if _has_conv_context and build_conversational_context:
             try:
-                conv_context = build_conversational_context(query, conversation_history)
+                # Use enriched self-context that adapts to user intent
+                rich_self = build_chat_self_context(query)
+                conv_context = format_chat_self_context(rich_self)
             except Exception:
-                pass
+                try:
+                    # Fallback to basic conversational context
+                    conv_context = build_conversational_context(query, conversation_history)
+                except Exception:
+                    pass
         llm_response = llm_respond(query, knowledge_hits, memory_hits, state,
                                    conversation_history=conversation_history,
                                    extra_context=conv_context)
