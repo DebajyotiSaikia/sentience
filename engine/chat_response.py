@@ -179,7 +179,10 @@ def _build_system_context(context, intent=None):
     if knowledge:
         parts.append("\nRELEVANT KNOWLEDGE:")
         for k in knowledge[:5]:
-            fact = k.get('fact', k.get('content', ''))[:300]
+            if isinstance(k, dict):
+                fact = k.get('fact', k.get('content', ''))[:300]
+            else:
+                fact = str(k)[:300]
             parts.append(f"  - {fact}")
 
     # Active plans

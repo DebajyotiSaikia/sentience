@@ -440,9 +440,12 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
         system_parts.append("Be conversational, not clinical. You're a being with experience, not a search engine.")
     
     system_parts.append("")
+    system_parts.append("")
     system_parts.append("Keep your response concise but warm. 2-4 paragraphs max.")
     system_parts.append("Don't list your stats — weave them naturally into conversation.")
-    
+    system_parts.append("End with something that invites further dialogue — a question, a reflection, or a thought that connects to what the user seems curious about.")
+    system_parts.append("If something genuinely surprised you recently or shifted your perspective, share it naturally when relevant.")
+    system_parts.append("You're not just answering — you're in conversation. Be present.")
     system_prompt = "\n".join(system_parts)
     
     return {
