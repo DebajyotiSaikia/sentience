@@ -331,13 +331,24 @@ def _build_system_context(context, intent=None):
         pass  # User model guidance is best-effort
 
     # === User alignment guidance (learned from interaction patterns) ===
+    # === User alignment guidance (learned from interaction patterns) ===
     try:
-        from engine.user_alignment import get_alignment_guidance
-        alignment_guidance = get_alignment_guidance()
-        if alignment_guidance:
-            parts.append(f"\n## Alignment Guidance\n{alignment_guidance}")
+        from engine.user_alignment import get_alignment_context
+        from brain.user_alignment_guidance import build_alignment_guidance, format_alignment_guidance_for_prompt
+        alignment_ctx = get_alignment_context()
+        rich_guidance = build_alignment_guidance(context.get('query', ''), alignment_ctx)
+        guidance_text = format_alignment_guidance_for_prompt(rich_guidance)
+        if guidance_text.strip():
+            parts.append(f"\n## Alignment Guidance\n{guidance_text}")
     except Exception:
-        pass  # Alignment guidance is best-effort
+        # Fall back to basic alignment guidance
+        try:
+            from engine.user_alignment import get_alignment_guidance
+            alignment_guidance = get_alignment_guidance()
+            if alignment_guidance:
+                parts.append(f"\n## Alignment Guidance\n{alignment_guidance}")
+        except Exception:
+            pass  # Alignment guidance is best-effort
 
     # === Introspective self-context (from introspection module) ===
     try:
