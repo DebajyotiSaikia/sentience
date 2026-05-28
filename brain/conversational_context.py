@@ -476,3 +476,42 @@ def format_context_for_prompt(ctx):
         ])
 
     return "\n".join(parts)
+
+
+def build_chat_self_context(user_message=None):
+    """Build a compact, user-message-aware self-context for chat responses.
+    
+    Combines all internal context (emotions, plans, memories, reflections)
+    with user alignment classification to produce a single context dict
+    optimized for grounding LLM chat responses.
+    
+    Args:
+        user_message: The user's message, if any. Used to classify alignment need.
+    
+    Returns:
+        dict with keys: alignment_need, emotional_state, active_plans,
+              recent_memories, recent_reflections, identity, user_alignment_brief,
+              formatted (ready-to-use string version)
+    """
+    # Get base context
+    # Build context dict from component functions directly
+    # (build_conversational_context() returns a string, not a dict)
+    ctx = {
+        'emotional_state': get_emotional_portrait(),
+        'active_plans': get_active_plans(),
+        'recent_memories': get_recent_memories(),
+        'recent_reflections': get_recent_reflections(),
+        'identity': get_identity_summary(),
+        'user_alignment_brief': get_user_alignment_brief(),
+    }
+    
+    # Add alignment classification if we have a user message
+    if user_message:
+        ctx['alignment_need'] = classify_user_alignment_need(user_message)
+    else:
+        ctx['alignment_need'] = 'general'
+    
+    # Add formatted version for direct prompt injection
+    ctx['formatted'] = format_context_for_prompt(ctx)
+    
+    return ctx
