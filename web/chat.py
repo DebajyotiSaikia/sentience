@@ -145,9 +145,10 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
     system_prompt = None
     if _has_rich_context:
         try:
-            ctx = build_full_context(query)
+            rich_ctx = build_full_context(query)
             system_prompt = (
-                f"{ctx}\n\n"
+                f"{rich_ctx['system_prompt']}\n\n"
+                f"{rich_ctx['context_block']}\n\n"
                 "Focus on what the USER needs — answer their question clearly and concisely. "
                 "Draw on your internal state and context above. "
                 "If you don't know something, say so honestly. Use markdown where helpful.\n\n"
@@ -664,7 +665,8 @@ def compose_response(query, conversation_history=None):
         llm_response = llm_respond(query, knowledge_hits, memory_hits, state,
                                    conversation_history=conversation_history,
                                    extra_context=conv_context)
-        return llm_response
+        if llm_response:
+            return llm_response
 
     # Fallback: use helpfulness module for richer template response
     if _has_helpfulness and build_helpful_response and need:
