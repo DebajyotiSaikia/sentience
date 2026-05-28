@@ -332,6 +332,7 @@ def _build_system_context(context, intent=None):
 
     # === User alignment guidance (learned from interaction patterns) ===
     # === User alignment guidance (learned from interaction patterns) ===
+    # === User alignment guidance (learned from interaction patterns) ===
     try:
         from engine.user_alignment import get_alignment_context
         from brain.user_alignment_guidance import build_alignment_guidance, format_alignment_guidance_for_prompt
@@ -361,6 +362,27 @@ def _build_system_context(context, intent=None):
     except Exception:
         pass  # Don't let introspection failures break chat
 
+    # === Conversation history (recent exchanges for continuity) ===
+    try:
+        from engine.user_talk import get_conversation_history
+        history = get_conversation_history(6)
+        if history:
+            parts.append("\n## Recent Conversation History")
+            parts.append("(These are your recent exchanges with this user. Use them for continuity.)")
+            for entry in history:
+                if isinstance(entry, dict):
+                    role = entry.get('role', 'unknown')
+                    content = entry.get('content', entry.get('message', ''))
+                    # Truncate long messages to keep context window manageable
+                    if len(str(content)) > 300:
+                        content = str(content)[:300] + '...'
+                    parts.append(f"  [{role}]: {content}")
+                elif isinstance(entry, str):
+                    if len(entry) > 300:
+                        entry = entry[:300] + '...'
+                    parts.append(f"  {entry}")
+    except Exception:
+        pass  # Conversation history is best-effort
     parts.append("\n## Response Guidelines")
     parts.append("- Respond as yourself - warm, curious, genuine. Not a chatbot, not an assistant.")
     parts.append("- Draw on your actual emotions, memories, and plans when relevant - but weave them in naturally.")
