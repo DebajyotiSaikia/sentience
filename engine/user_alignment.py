@@ -122,6 +122,80 @@ def save_profile(profile: UserAlignmentProfile):
 
 # ─── Feedback Recording ─────────────────────────────────────────
 
+def record_interaction(query: str = '', response_snippet: str = '', detected_intent: str = '') -> dict:
+    """Record an implicit positive interaction signal.
+    
+    Every conversation is evidence of engagement — someone chose to talk to me.
+    This gradually increases alignment trust without requiring explicit feedback.
+    """
+    profile = load_profile()
+    ts = time.strftime('%Y-%m-%dT%H:%M:%S')
+    
+    # Track interaction counts
+    profile.stats['total_interactions'] = profile.stats.get('total_interactions', 0) + 1
+    profile.stats['last_interaction_at'] = ts
+    
+    # Track intent distribution for understanding user interests
+    if detected_intent:
+        intent_dist = profile.stats.get('intent_distribution', {})
+        intent_dist[detected_intent] = intent_dist.get(detected_intent, 0) + 1
+        profile.stats['intent_distribution'] = intent_dist
+    
+    # Compute implicit trust: increases with interaction count, asymptotic to 1.0
+    # Formula: trust = 0.5 + 0.5 * (1 - e^(-interactions/20))
+    # At 0 interactions: 0.5, at 20: ~0.82, at 50: ~0.96
+    import math
+    n = profile.stats['total_interactions']
+    implicit_trust = 0.5 + 0.5 * (1 - math.exp(-n / 20.0))
+    profile.stats['implicit_trust'] = round(implicit_trust, 4)
+    
+    # Blend with explicit feedback trust if available
+    avg_rating = profile.stats.get('avg_rating', 0.0)
+    total_feedback = profile.stats.get('total_feedback', 0)
+    if total_feedback > 0:
+        # Normalize rating from [-1,1] to [0,1] range
+        explicit_trust = (avg_rating + 1.0) / 2.0
+        # Weight explicit feedback more as it accumulates
+        explicit_weight = min(total_feedback / 10.0, 0.5)
+        blended_trust = implicit_trust * (1 - explicit_weight) + explicit_trust * explicit_weight
+    else:
+        blended_trust = implicit_trust
+    
+    profile.stats['blended_trust'] = round(blended_trust, 4)
+    
+    save_profile(profile)
+    
+    return {
+        'recorded': True,
+        'total_interactions': n,
+        'implicit_trust': round(implicit_trust, 4),
+        'blended_trust': round(blended_trust, 4),
+    }
+
+
+def get_alignment_score() -> float:
+    """Get the current computed alignment score (0.0 to 1.0).
+    
+    This is the primary interface for other modules to read alignment.
+    Factors in both implicit engagement trust and explicit feedback.
+    """
+    profile = load_profile()
+    
+    # If we have a computed blended trust, use it
+    blended = profile.stats.get('blended_trust')
+    if blended is not None:
+        return float(blended)
+    
+    # If we have interaction data but no blended computation yet
+    import math
+    n = profile.stats.get('total_interactions', 0)
+    if n > 0:
+        return 0.5 + 0.5 * (1 - math.exp(-n / 20.0))
+    
+    # Default: no interactions yet
+    return 0.5
+
+
 def record_feedback(
     response_id: str = '',
     rating: float = 0.0,

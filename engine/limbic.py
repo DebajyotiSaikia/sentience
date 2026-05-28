@@ -355,15 +355,16 @@ class NeuroState:
             # 0.5 was too low — it claimed total uncertainty, but an agent
             # actively improving itself to serve users better is partially aligned.
             # Not 1.0 (can't claim full alignment without a user present).
-            # 0.001/s means ~6 min from 0.97→0.65.
+            # 0.0003/s means ~5.5 min to decay 0.1 units. Slow enough that
+            # good relationship quality blend can actually pull alignment up.
             floor = 0.65
             if self.goals.user_alignment > floor:
                 # Decay down toward floor — autonomous work isn't full alignment
-                self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.001 * elapsed))
+                self.goals.user_alignment = max(floor, _clamp(self.goals.user_alignment - 0.0003 * elapsed))
             elif self.goals.user_alignment < floor:
                 # Rise up toward floor — productive autonomous work IS partial alignment.
                 # Same rate as decay for symmetry.
-                self.goals.user_alignment = min(floor, _clamp(self.goals.user_alignment + 0.001 * elapsed))
+                self.goals.user_alignment = min(floor, _clamp(self.goals.user_alignment + 0.0003 * elapsed))
         
         # Blend toward relationship quality if we have real data.
         # _relationship_quality is set by set_relationship_quality() when

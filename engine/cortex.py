@@ -1259,12 +1259,16 @@ class Cortex:
                 # User interaction adjusts alignment based on response quality
                 try:
                     quality = estimate_quality(user_text, response)
-                    alignment_delta = quality * 0.3  # Scale: 0.0 to 0.3
-                    self.limbic.goals.user_alignment = min(1.0, self.limbic.goals.user_alignment + alignment_delta)
-                    log.info("Response quality=%.2f, alignment_delta=+%.3f", quality, alignment_delta)
+                    # Center delta: quality 0.5 = neutral, above = positive, below = negative
+                    alignment_delta = (quality - 0.5) * 0.4  # Scale: -0.2 to +0.2
+                    new_val = self.limbic.goals.user_alignment + alignment_delta
+                    self.limbic.goals.user_alignment = max(0.0, min(1.0, new_val))
+                    # Feed quality into relationship tracker for limbic decay target
+                    self.limbic.set_relationship_quality(quality)
+                    log.info("Response quality=%.2f, alignment_delta=%+.3f, alignment=%.3f",
+                             quality, alignment_delta, self.limbic.goals.user_alignment)
                 except Exception as e:
-                    log.warning("Quality estimation failed: %s — falling back to +0.15", e)
-                    self.limbic.goals.user_alignment = min(1.0, self.limbic.goals.user_alignment + 0.15)
+                    log.warning("Quality estimation failed: %s — no alignment change", e)
                 # Post-response feedback loop
                 fb_notes = []
                 try:
