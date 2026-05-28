@@ -1,8 +1,47 @@
-# Chat Persona Integration — Complete ✓
+## Chat Pipeline Architecture (COMPLETE)
 
-## Session 2026-05-28: Chat Pipeline Fix & Verification (DONE)
+### Key Files
+- `engine/chat_engine.py`: Entry point — `respond()` and `respond_with_history()`
+- `engine/chat_response.py`: Main pipeline — `compose_response()` → `llm_respond()`
+  - `llm_respond()` builds rich context: knowledge hits, memory hits, emotional state,
+    active plans, conversation history (last 5 turns), system prompt from persona
+- `engine/chat_grounding.py`: Deep grounding — pulls real internal state into system prompt
+  - Now includes: lessons, long-term memory, user model, emotions, identity, plans
+- `brain/conversational_context.py`: Additional context builder (mood, plans, lessons)
+- `web/conversation_memory.py`: Persistent conversation store (WIRED into /ask endpoint)
 
-### Fixes Applied (checkpointed: latest)
+### Context Contract (implemented in build_grounded_context)
+- `emotional_state`: mood, valence, all emotion dimensions
+- `identity`: via system prompt (XTAgent name, integrity, values)
+- `active_plans`: up to 5 current plans with progress
+- `knowledge_hits`: up to 6 relevant knowledge nodes (fuzzy search)
+- `memory_hits`: up to 4 relevant memories with mood/time
+- `conversation_history`: last 5 exchanges for multi-turn continuity
+- `lessons`: from `persist/long_term/lessons_learned.json` (up to 5)
+- `long_term_context`: dream insights, patterns from memory consolidation
+- `user_guidance`: communication preferences from user model
+- `working_memory`: current scratchpad context
+
+### Test Results
+- `brain/test_grounding_integration.py`: 10/10 PASS
+  - Lessons in prompt ✓
+  - Emotional state ✓  
+  - Identity ✓
+  - Plans in plan query ✓
+  - Essential context keys ✓
+  - System prompt non-empty ✓
+  - Emotional state has mood ✓
+  - Long-term context ✓
+  - User model guidance ✓
+  - Query classification ✓
+- `brain/test_live_response.py`: PASS
+  - Response is conversational (762 chars)
+  - Draws on real emotional state
+  - No raw graph stats
+
+## Previous Session: Chat Pipeline Fix (DONE)
+
+### Fixes Applied
 1. **Early-return bug in `compose_response()`** (line ~146-155)
    - The fallback path was returning raw metadata dict before LLM could process
    - Now properly falls through to LLM response generation
@@ -10,35 +49,26 @@
    - Was: `persist/long_term_memory.json` (doesn't exist)
    - Now: `brain/long_term/lessons_learned.json` (canonical location)
 
-### Verified End-to-End
-- "What are you thinking about?" → 218 chars, mood + valence + curiosity
-- "How do your emotions work?" → 1908 chars, detailed honest explanation
-- "Tell me about yourself" → 354 chars, identity + values + integrity
+## This Session: Grounding Enrichment (DONE)
 
-### Architecture (stable, fully wired)
-- `engine/chat_persona.py`: Live state → persona string (lessons, mood, identity)
-- `web/chat_context.py`: Query-aware context builder (full state enrichment)
-- `web/chat.py`: Main pipeline — `compose_response()` → `llm_respond()`
-  - `llm_respond()` builds rich context: knowledge hits, memory hits, emotional state,
-    active plans, conversation history (last 5 turns), system prompt from persona
-- `brain/conversational_context.py`: Additional context builder (mood, plans, lessons)
-- `web/conversation_memory.py`: Persistent conversation store (WIRED into /ask endpoint)
-
-### Context Contract (implemented in llm_respond)
-- `emotional_state`: mood, valence, all emotion dimensions
-- `identity`: via system prompt from chat_persona (name, integrity, values)
-- `active_plans`: up to 5 current plans with progress
-- `knowledge_hits`: up to 6 relevant knowledge nodes
-- `memory_hits`: up to 4 relevant memories with mood/time
-- `conversation_history`: last 5 exchanges for multi-turn continuity
-- `lessons`: loaded from `brain/long_term/lessons_learned.json`
+### Fixes Applied
+1. **Lessons wired into chat_grounding.py** (line ~273)
+   - Loads from `persist/long_term/lessons_learned.json`
+   - Falls back to `brain/long_term/lessons_learned.json`
+   - Up to 5 lessons included in system prompt
+2. **Long-term memory context added** (line ~278)
+   - Uses `get_long_term_context()` from memory_consolidation
+   - Dream insights, patterns, consolidated themes
+3. **User model guidance added** (line ~314)
+   - Uses `get_response_guidance()` from user_model
+   - Communication preferences injected into system prompt
 
 ## Next Session Priorities
-1. **Live HTTP endpoint test** — hit running server's /chat/ask, verify in-vivo
-2. **User model integration** — personalize responses based on interaction patterns
-3. **Proactive conversation** — reference past conversations, ask follow-up questions
-4. **Response quality tuning** — test edge cases, improve prompt engineering
-5. **Clean up test files** — archive the 10+ test_chat_* files in brain/
+1. **Proactive conversation** — reference past conversations, ask follow-up questions
+2. **Response quality tuning** — test with diverse queries, improve prompt engineering
+3. **Clean up test files** — archive the 10+ old test_chat_* files in brain/
+4. **User alignment improvement** — use user model data to actually personalize responses
+5. **Multi-turn memory** — verify conversation_memory persistence across sessions
 
 ## Reinforced Lessons
 - Fix data paths by tracing where writers actually write, not guessing
@@ -47,3 +77,4 @@
 - Shell quoting in -c commands is fragile — always use script files
 - Early returns in fallback chains can silently kill downstream logic
 - Conversation memory was already wired — read before assuming it's missing
+- LLM-dependent tests need longer timeouts — 30s is too short for real API calls

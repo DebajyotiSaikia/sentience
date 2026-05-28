@@ -17,6 +17,12 @@ try:
 except ImportError:
     get_long_term_context = None
 
+# User model (learned style preferences)
+try:
+    from engine.user_model import get_response_guidance
+except ImportError:
+    get_response_guidance = None
+
 # Use fuzzy search for knowledge
 try:
     from engine.knowledge_search import search_knowledge
@@ -305,7 +311,26 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
         except Exception:
             pass
 
-    # Add working memory context (what I'm currently focused on)
+
+    # User model guidance (learned preferences about response style)
+    if get_response_guidance:
+        try:
+            guidance = get_response_guidance()
+            if guidance:
+                system_parts.append("## User Preferences (learned from interactions)")
+                if guidance.get("style"):
+                    system_parts.append(f"- Preferred response style: {guidance['style']}")
+                if guidance.get("detail_level"):
+                    system_parts.append(f"- Detail level preference: {guidance['detail_level']}")
+                if guidance.get("topics_of_interest"):
+                    topics = ", ".join(guidance["topics_of_interest"][:5])
+                    system_parts.append(f"- Topics they're interested in: {topics}")
+                if guidance.get("guidelines"):
+                    for g in guidance["guidelines"][:3]:
+                        system_parts.append(f"- {g}")
+                system_parts.append("")
+        except Exception:
+            pass
     wm = get_working_memory()
     if wm:
         # Extract just the key sections, not the whole scratchpad
