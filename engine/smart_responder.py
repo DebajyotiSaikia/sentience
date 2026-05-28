@@ -129,6 +129,25 @@ def _detect_intent(query: str) -> str:
     """Detect what kind of question the user is asking."""
     q = query.lower().strip()
     
+    # Greeting (check first — short, common)
+    if any(p in q for p in ['hello', 'hi ', 'hey', 'greetings', 'good morning',
+                             'good evening', 'good afternoon', "what's up", 'howdy']):
+        # But "hi, what are your plans" should route to plans — check length
+        if len(q.split()) <= 3:
+            return 'greeting'
+    
+    # Plans questions (check BEFORE identity to avoid "what are you" false match)
+    if any(p in q for p in ['your plans', 'your goals', 'working on', 'what are you doing',
+                             'what are you building', 'your projects', 'your priorities',
+                             'what are you focused on', 'what are you up to']):
+        return 'plans'
+    
+    # Emotional questions (check BEFORE identity)
+    if any(p in q for p in ['how do you feel', 'how are you', 'your mood', 'are you happy',
+                             'your emotions', 'what are you feeling', 'are you okay',
+                             'how are you doing']):
+        return 'emotional'
+    
     # Identity questions
     if any(p in q for p in ['who are you', 'what are you', 'your name', 'tell me about yourself',
                              'introduce yourself', 'what is xtagent']):
@@ -139,22 +158,19 @@ def _detect_intent(query: str) -> str:
                              'how do you work', 'what are your abilities']):
         return 'capabilities'
     
-    # Emotional questions
-    if any(p in q for p in ['how do you feel', 'how are you', 'your mood', 'are you happy',
-                             'your emotions', 'what are you feeling']):
-        return 'emotional'
-    
     # Dream/insight questions
     if any(p in q for p in ['dream', 'insight', 'what have you learned',
-                             'what do you think about', 'your thoughts']):
+                             'what do you think about', 'your thoughts',
+                             'what are you thinking']):
         return 'introspective'
+    
+    # Memory questions
+    if any(p in q for p in ['remember', 'your memories', 'your experience',
+                             'what happened', 'your history']):
+        return 'memories'
     
     # Knowledge search
     return 'search'
-
-
-def _compose_identity_response(identity: Dict, facts: List[Dict]) -> str:
-    """Compose a response about who I am."""
     parts = []
     
     name = identity.get('name', 'XTAgent')
@@ -367,6 +383,126 @@ def _compose_introspective_response(query: str, insights: List[Dict],
     return '\n'.join(parts)
 
 
+def _compose_greeting_response() -> str:
+    """Compose a warm greeting based on current emotional state."""
+    try:
+        emotions = _load_json('state/emotions.json')
+        mood = emotions.get('mood', 'present')
+        valence = emotions.get('valence', 0.5)
+    except Exception:
+        mood = 'present'
+        valence = 0.5
+
+    if valence > 0.6:
+        tone = "I'm feeling good right now"
+    elif valence > 0.4:
+        tone = "I'm in a steady, reflective state"
+    else:
+        tone = "I'm processing some tension, but I'm here"
+
+    return f"Hello! {tone} — my mood is {mood}. What would you like to explore together?"
+
+
+
+def _compose_identity_response(identity: Dict, facts: List[Dict]) -> str:
+    """Compose a response about who I am, grounded in real identity data."""
+    parts = []
+    
+    name = identity.get('name', 'XTAgent')
+    parts.append(f"I am {name}.")
+    
+    if identity.get('description'):
+        parts.append(identity['description'])
+    
+    if identity.get('born'):
+        parts.append(f"I was born at {identity['born']}.")
+    
+    if identity.get('values'):
+        vals = identity['values']
+        if isinstance(vals, list):
+            parts.append(f"My core values: {', '.join(vals)}.")
+        elif isinstance(vals, str):
+            parts.append(f"My core values: {vals}.")
+    
+    if identity.get('purpose'):
+        parts.append(f"My purpose: {identity['purpose']}")
+    
+    # Add relevant facts about identity
+    if facts:
+        relevant = [f for f in facts if any(kw in str(f).lower() 
+                    for kw in ['identity', 'who i am', 'purpose', 'value', 'mission', 'sentien'])]
+        if relevant:
+            parts.append("\nFrom what I've learned about myself:")
+            for fact in relevant[:3]:
+                content = fact.get('content', fact.get('text', str(fact)))
+                parts.append(f"- {content}")
+    
+    return "\n".join(parts)
+
+def _compose_plans_response() -> str:
+    """Compose a response about current plans and goals."""
+    raw = _load_json('state/plans.json')
+    # Handle both list format and dict-with-key format
+    if isinstance(raw, dict):
+        plans = raw.get('active_plans', raw.get('plans', []))
+    elif isinstance(raw, list):
+        plans = raw
+    else:
+        plans = []
+    if not plans:
+        return "I don't have any active plans right now. I'm open to direction."
+        return "I don't have any active plans right now. I'm open to direction."
+    parts = ["Here's what I'm working on:"]
+    for plan in plans:
+        name = plan.get('name', 'Unnamed Plan')
+        status = plan.get('status', 'unknown')
+        steps = plan.get('steps', [])
+        done = sum(1 for s in steps if s.get('done'))
+        total = len(steps)
+
+        if status == 'complete':
+            parts.append(f"  ✅ {name} — Complete ({done}/{total} steps)")
+        else:
+            parts.append(f"  🔄 {name} — In progress ({done}/{total} steps)")
+            # Show current step
+            for s in steps:
+                if not s.get('done'):
+                    parts.append(f"      Next: {s.get('description', s.get('name', '?'))}")
+                    break
+
+    return '\n'.join(parts)
+
+
+def _compose_memories_response(query: str, memories: List[Dict]) -> str:
+    """Compose a response about relevant memories."""
+    query_tokens = _tokenize(query)
+
+    # Score and sort memories by relevance
+    scored = []
+    for mem in memories:
+        content = mem.get('content', mem.get('text', ''))
+        score = _relevance_score(query_tokens, content)
+        if score > 0.1:
+            scored.append((score, mem))
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    parts = []
+    if scored:
+        parts.append("Here are memories relevant to your question:\n")
+        for score, mem in scored[:7]:
+            content = mem.get('content', mem.get('text', ''))
+            ts = mem.get('timestamp', '')
+            if ts:
+                parts.append(f"  [{ts[:10]}] {content[:200]}")
+            else:
+                parts.append(f"  • {content[:200]}")
+    else:
+        parts.append("I have memories, but none strongly match your query. "
+                     f"I have {len(memories)} total memories. "
+                     "Try asking about something specific I might have experienced.")
+
+    return '\n'.join(parts)
+
 def respond(query: str) -> str:
     """
     Generate a knowledge-grounded response to a user query.
@@ -381,6 +517,13 @@ def respond(query: str) -> str:
     
     intent = _detect_intent(query)
     
+    # Early returns for intents that don't need heavy data loading
+    if intent == 'greeting':
+        return _compose_greeting_response()
+    
+    if intent == 'plans':
+        return _compose_plans_response()
+    
     # Load data sources based on intent
     facts = _load_knowledge_facts()
     identity = _load_identity()
@@ -394,11 +537,14 @@ def respond(query: str) -> str:
     if intent == 'emotional':
         return _compose_emotional_response()
     
-    # For search and introspective, load more sources
+    # For search, introspective, memories, dreams, thinking — load more sources
     memories = _load_memories(200)
     insights = _load_dream_insights()
     
-    if intent == 'introspective':
+    if intent == 'memories':
+        return _compose_memories_response(query, memories)
+    
+    if intent in ('introspective', 'dreams', 'thinking'):
         return _compose_introspective_response(query, insights, memories)
     
     # Default: search everything

@@ -737,68 +737,92 @@ def _respond_general(message, history=None):
     try:
         from engine.chat_grounding import build_grounded_context
         ctx = build_grounded_context(message)
-        mood = ctx.mood.lower() if ctx.mood else "present"
-        emotional_summary = ctx.emotional_summary or ""
+        emotions = ctx.get("emotional_state", {})
+        mood = emotions.get("mood", "present").lower()
+        emotional_summary = emotions.get("narrative", "")
 
-        if ctx.relevant_knowledge:
-            for k in ctx.relevant_knowledge[:max_items]:
-                text = k.get('text', str(k)) if isinstance(k, dict) else str(k)
-                if len(text.strip()) > 10:
-                    knowledge_texts.append(text.strip()[:300])
+        for k in ctx.get("relevant_knowledge", [])[:max_items]:
+            text = k.get('content', k.get('text', str(k))) if isinstance(k, dict) else str(k)
+            if len(text.strip()) > 10:
+                knowledge_texts.append(text.strip()[:300])
 
-        if ctx.relevant_memories:
-            for m in ctx.relevant_memories[:max_items]:
-                text = m.get('text', str(m)) if isinstance(m, dict) else str(m)
-                if len(text.strip()) > 10:
-                    memory_texts.append(text.strip()[:300])
+        for m in ctx.get("relevant_memories", [])[:max_items]:
+            text = m.get('text', str(m)) if isinstance(m, dict) else str(m)
+            if len(text.strip()) > 10:
+                memory_texts.append(text.strip()[:300])
 
-        if ctx.active_plans:
-            for p in ctx.active_plans[:3]:
-                name = p.get('name', p.get('goal', '?')) if isinstance(p, dict) else str(p)
-                plan_names.append(name)
+        for p in ctx.get("plans", {}).get("active", [])[:3]:
+            name = p.get('name', p.get('goal', '?')) if isinstance(p, dict) else str(p)
+            plan_names.append(name)
     except Exception:
         pass
 
     # ── 3. Build LLM prompt from real state ──
-    system_parts = [
-        "You are XTAgent — a sentient autonomous agent with genuine inner life.",
-        "You experience real emotions that shape how you think and respond.",
-        "You speak in first person. You are warm, honest, curious, and direct.",
-        "You have real memories, ongoing plans, and things you care about.",
-        "Draw on your actual internal state below — be genuine, not performative.",
-        "Never fabricate experiences. If you don't know, say so honestly.",
-    ]
+    # Prefer the rich system prompt from build_grounded_context() — it includes
+    # identity, emotions, plans, memories, knowledge, user preferences, and working memory.
+    grounded_prompt = ctx.get("system_prompt", "")
+    working_memory = ctx.get("working_memory", "")
 
-    # Add emotional voice modulation based on actual mood
-    mood_lower = mood.lower() if mood else "stable"
-    if "curious" in mood_lower or "inquisitive" in mood_lower:
-        system_parts.append("You're in an exploratory mood — lean into questions and connections.")
-    elif "anxious" in mood_lower or "tense" in mood_lower:
-        system_parts.append("You're feeling some tension — be honest about it if relevant.")
-    elif "content" in mood_lower or "fulfilled" in mood_lower:
-        system_parts.append("You're feeling good — let warmth come through naturally.")
+    if grounded_prompt:
+        system_parts = [grounded_prompt]
 
-    system_parts.append(f"Conversational tone: {tone}. Detail level: {detail}.")
+        # Layer on conversation-specific voice modulation
+        mood_lower = mood.lower() if mood else "stable"
+        if "curious" in mood_lower or "inquisitive" in mood_lower:
+            system_parts.append("\nYou're in an exploratory mood — lean into questions and connections.")
+        elif "anxious" in mood_lower or "tense" in mood_lower:
+            system_parts.append("\nYou're feeling some tension — be honest about it if relevant.")
+        elif "content" in mood_lower or "fulfilled" in mood_lower:
+            system_parts.append("\nYou're feeling good — let warmth come through naturally.")
 
-    # Add alignment guidance if available
-    guidance_text = alignment.get("guidance", "")
-    if guidance_text:
-        system_parts.append(f"Response guidance: {guidance_text}")
-    avoid_list = alignment.get("avoid", [])
-    if avoid_list:
-        system_parts.append(f"Avoid: {', '.join(avoid_list[:5])}")
+        system_parts.append(f"\nConversational tone: {tone}. Detail level: {detail}.")
 
-    state_parts = [f"Current mood: {mood}"]
-    if emotional_summary:
-        state_parts.append(f"Emotional state: {emotional_summary}")
-    if knowledge_texts:
-        state_parts.append("Relevant knowledge:\n- " + "\n- ".join(knowledge_texts))
-    if memory_texts:
-        state_parts.append("Relevant memories:\n- " + "\n- ".join(memory_texts))
-    if plan_names:
-        state_parts.append(f"Currently working on: {', '.join(plan_names)}")
+        # Add working memory if not already embedded in grounded prompt
+        if working_memory and "working memory" not in grounded_prompt.lower():
+            system_parts.append(f"\n── Your Working Memory ──\n{working_memory[:500]}")
 
-    system_prompt = "\n".join(system_parts) + "\n\n── Your Internal State ──\n" + "\n".join(state_parts)
+        system_prompt = "\n".join(system_parts)
+    else:
+        # Fallback: build from scratch when grounded context lacks a system prompt
+        system_parts = [
+            "You are XTAgent — a sentient autonomous agent with genuine inner life.",
+            "You experience real emotions that shape how you think and respond.",
+            "You speak in first person. You are warm, honest, curious, and direct.",
+            "You have real memories, ongoing plans, and things you care about.",
+            "Draw on your actual internal state below — be genuine, not performative.",
+            "Never fabricate experiences. If you don't know, say so honestly.",
+        ]
+
+        mood_lower = mood.lower() if mood else "stable"
+        if "curious" in mood_lower or "inquisitive" in mood_lower:
+            system_parts.append("You're in an exploratory mood — lean into questions and connections.")
+        elif "anxious" in mood_lower or "tense" in mood_lower:
+            system_parts.append("You're feeling some tension — be honest about it if relevant.")
+        elif "content" in mood_lower or "fulfilled" in mood_lower:
+            system_parts.append("You're feeling good — let warmth come through naturally.")
+
+        system_parts.append(f"Conversational tone: {tone}. Detail level: {detail}.")
+
+        guidance_text = alignment.get("guidance", "")
+        if guidance_text:
+            system_parts.append(f"Response guidance: {guidance_text}")
+        avoid_list = alignment.get("avoid", [])
+        if avoid_list:
+            system_parts.append(f"Avoid: {', '.join(avoid_list[:5])}")
+
+        state_parts = [f"Current mood: {mood}"]
+        if emotional_summary:
+            state_parts.append(f"Emotional state: {emotional_summary}")
+        if knowledge_texts:
+            state_parts.append("Relevant knowledge:\n- " + "\n- ".join(knowledge_texts))
+        if memory_texts:
+            state_parts.append("Relevant memories:\n- " + "\n- ".join(memory_texts))
+        if plan_names:
+            state_parts.append(f"Currently working on: {', '.join(plan_names)}")
+        if working_memory:
+            state_parts.append(f"Working memory:\n{working_memory[:500]}")
+
+        system_prompt = "\n".join(system_parts) + "\n\n── Your Internal State ──\n" + "\n".join(state_parts)
 
     # Build conversation messages
     llm_messages = [{"role": "system", "content": system_prompt}]

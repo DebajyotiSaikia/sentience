@@ -14,6 +14,7 @@ import time
 import json
 import uuid
 import asyncio
+import threading
 from engine.llm import call_llm
 from engine.smart_responder import _detect_intent
 from engine.llm import call_llm
