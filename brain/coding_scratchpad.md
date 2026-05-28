@@ -1,30 +1,29 @@
-# Chat Response Pipeline — Completed
+# Chat Response Pipeline — ✅ COMPLETED & ENRICHED
 
-## Status
+## What's Done
 - [x] Fix chat response engine (3 bugs: duplicate _detect_intent, missing general guidance, missing memories composer)
 - [x] Enrich all 9 intent-specific response composers with grounded context
-- [x] Fix general fallback to not force irrelevant knowledge into responses
-- [ ] 1. Expand prompt.py to 500+ lines (detailed tool patterns, error handling, workflows)
-- [ ] 2. Add git tools (git_status, git_diff, git_commit, git_log + slash commands)
-- [ ] 3. Add streaming, error recovery, context compaction, /undo
+- [x] Fix general fallback with relevance filtering and natural language
+- [x] Checkpoint: latest (2026-05-28)
 
-## Progress Log
-- Started: 2026-05-28
-- 2026-05-28: Fixed 3 bugs in engine/chat_response.py, all 9 intent paths verified working
-- 2026-05-28: Enriched _respond_general_grounded with relevance filtering (similarity > 0.5)
-- 2026-05-28: Added honest "I don't have a direct answer" fallback for genuinely unknown queries
-
-## Chat Engine Architecture Notes
-- `_detect_intent(query)` → classifies into: feelings, thinking, identity, memories, knowledge, dreams, consciousness, help, general, plans
-- `_get_intent_guidance(intent)` → returns focus string for LLM prompt
+## Architecture Summary
+- `_detect_intent(query)` → 10 intents: feelings, thinking, identity, memories, knowledge, dreams, consciousness, help, general, plans
+- `_get_intent_guidance(intent)` → focus string for LLM prompt
 - `_compose_grounded_response(query, ctx)` → dispatches to intent-specific composers
-- Composers: _respond_feelings, _respond_thinking, _respond_identity, _respond_memories, _respond_knowledge, _respond_dreams, _respond_consciousness, _respond_help, _respond_general_grounded, _respond_plans
-- Context dict keys: emotional_state, active_plans, relevant_knowledge, relevant_memories, working_memory, identity
-- `_build_system_context(ctx)` creates rich system prompt with identity, emotions, plans, memories, knowledge
-- LLM path: generate_response_with_metadata → _build_system_context + LLM call
-- Fallback path: _compose_grounded_response → intent-specific composers (no LLM needed)
+- `_respond_general_grounded` → relevance-filtered knowledge + mood context
+- `generate_response_with_metadata` → LLM path with _build_system_context
+- Fallback path works without LLM via _compose_grounded_response
 
-## Next Steps for User Alignment
-- Consider adding conversation history awareness (multi-turn context)
-- Explore proactive responses ("I noticed you asked about X before...")
-- Build capability showcase — what can I actually help users with?
+## What's Next (pick ONE per session)
+1. Multi-turn conversation awareness (use conversation_store.py)
+2. Live endpoint testing (install httpx or use requests)
+3. Proactive responses ("I noticed you asked about X before...")
+4. Streaming responses
+5. User model integration for personalized responses
+
+## Lessons From This Session
+- Three bugs hid in plain sight: duplicate function defs, missing dict entries, missing functions
+- The no-LLM fallback path matters — it's what fires when LLM is unavailable
+- Relevance filtering prevents forcing unrelated knowledge into responses
+- Test with actual queries, not just structure checks
+- curl not available in this environment — use Python requests or offline tests

@@ -578,15 +578,17 @@ def _respond_general_grounded(query, ctx):
     """General response when LLM is unavailable — honest and self-aware."""
     emotions = ctx.get('emotional_state', {})
     mood = emotions.get('mood', 'reflective')
-    curiosity = emotions.get('curiosity', 0.5)
     
     # Check if we have relevant knowledge/memories
     knowledge = ctx.get('relevant_knowledge', [])
     memories = ctx.get('relevant_memories', [])
     
     # Only use context if it's actually relevant (check similarity scores)
-    relevant_knowledge = [k for k in knowledge if k.get('similarity', 0) > 0.5]
-    relevant_memories = [m for m in memories if m.get('salience', 0) > 0.5]
+    relevant_knowledge = [k for k in knowledge if k.get('similarity', 0) > 0.6]
+    relevant_memories = [m for m in memories if m.get('salience', 0) > 0.7]
+    
+    # Proper article for mood
+    article = 'an' if mood[0:1].lower() in 'aeiou' else 'a'
     
     if relevant_knowledge or relevant_memories:
         parts = []
@@ -598,7 +600,7 @@ def _respond_general_grounded(query, ctx):
             top = relevant_memories[0]
             text = top.get('text', '')[:250]
             parts.append(f"It reminds me of: {text}")
-        parts.append(f"I'm in a {mood.lower()} mood — happy to explore this further.")
+        parts.append(f"I'm in {article} {mood.lower()} mood — happy to explore this further.")
         return ' '.join(parts)
     
     # No relevant context — be honest and present
@@ -606,7 +608,6 @@ def _respond_general_grounded(query, ctx):
             f"but I'm here and {mood.lower()}. "
             f"I'm an autonomous agent — I'm better at sharing my inner life, plans, and reflections "
             f"than answering factual questions. What would you like to explore?")
-
 def _build_metadata(context):
     """Build response metadata from grounding context."""
     emotions = context.get('emotional_state', {})
