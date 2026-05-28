@@ -11,6 +11,12 @@ import os
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
+# Long-term memory (lessons, dream insights)
+try:
+    from engine.memory_consolidation import get_long_term_context
+except ImportError:
+    get_long_term_context = None
+
 # Use fuzzy search for knowledge
 try:
     from engine.knowledge_search import search_knowledge
@@ -318,6 +324,16 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
             system_parts.append("## Working Memory (current focus)")
             system_parts.extend(summary_lines[:15])  # Cap at 15 lines
             system_parts.append("")
+
+    # Add long-term memory context (lessons learned, dream insights)
+    if get_long_term_context:
+        try:
+            ltm = get_long_term_context()
+            if ltm and ltm.strip():
+                system_parts.append(ltm)
+                system_parts.append("")
+        except Exception:
+            pass
 
     # Query-type-specific instructions
     if query_type == "emotional_inquiry":
