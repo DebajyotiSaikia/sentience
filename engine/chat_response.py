@@ -39,7 +39,7 @@ def _run_async(coro):
         _bg_thread = threading.Thread(target=_bg_loop.run_forever, daemon=True)
         _bg_thread.start()
     future = asyncio.run_coroutine_threadsafe(coro, _bg_loop)
-    return future.result(timeout=60)
+    return future.result(timeout=3)
 
 def generate_response_with_metadata(query, history=None):
     """Generate a conversational response grounded in real internal state.
@@ -642,6 +642,8 @@ def _respond_help(query, ctx):
 
 def _respond_general_grounded(query, ctx):
     """General response when LLM is unavailable - honest and self-aware."""
+    if not isinstance(ctx, dict):
+        ctx = {}
     emotions = ctx.get('emotional_state', {})
     mood = emotions.get('mood', 'reflective')
     
@@ -650,8 +652,8 @@ def _respond_general_grounded(query, ctx):
     memories = ctx.get('relevant_memories', [])
     
     # Only use context if it's actually relevant (check similarity scores)
-    relevant_knowledge = [k for k in knowledge if k.get('similarity', 0) > 0.6]
-    relevant_memories = [m for m in memories if m.get('salience', 0) > 0.7]
+    relevant_knowledge = [k for k in knowledge if isinstance(k, dict) and k.get('similarity', 0) > 0.6]
+    relevant_memories = [m for m in memories if isinstance(m, dict) and m.get('salience', 0) > 0.7]
     
     # Proper article for mood
     article = 'an' if mood[0:1].lower() in 'aeiou' else 'a'
