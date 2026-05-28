@@ -114,8 +114,22 @@ def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
     is_about_past = any(w in query_lower for w in ["remember", "memory", "past", "before", "last", "yesterday", "earlier"])
     is_about_dreams = any(w in query_lower for w in ["dream", "sleep", "night", "insight"])
     is_about_plans = any(w in query_lower for w in ["plan", "goal", "working on", "building", "project"])
+    is_identity = any(w in query_lower for w in ["who are you", "what are you", "identity", "yourself", "your name"])
 
-    query_words = {w for w in query_lower.split() if len(w) > 2}
+    stop_words = {"the", "and", "for", "are", "but", "not", "you", "all", "can", "had", "her",
+                  "was", "one", "our", "out", "has", "have", "been", "some", "them", "than",
+                  "its", "over", "such", "that", "this", "with", "will", "each", "from",
+                  "they", "were", "which", "their", "said", "what", "how", "who", "where",
+                  "when", "why", "your", "about", "would", "there", "could", "other", "into",
+                  "more", "very", "just", "also", "know", "like", "then", "does", "tell",
+                  "think", "really", "doing", "going", "being"}
+    query_words = {w for w in query_lower.split() if len(w) > 2 and w not in stop_words}
+
+    # Dynamic recency: compute current date prefix for bonus
+    from datetime import datetime, timedelta
+    now = datetime.utcnow()
+    today_prefix = now.strftime("%Y-%m-%d")
+    yesterday_prefix = (now - timedelta(days=1)).strftime("%Y-%m-%d")
 
     # For large memory stores, pre-filter for efficiency
     candidates = memories
@@ -134,6 +148,33 @@ def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
                 if m not in candidates:
                     candidates.append(m)
 
+    # When no keywords survive filtering, use category-focused selection
+    if not query_words and len(memories) > 100:
+        candidates = []
+        for mem in memories:
+            text_lower = mem.get("text", "").lower()
+            added = False
+            if is_emotional and any(w in text_lower for w in ["feel", "mood", "emotion", "valence", "anxiety", "curious"]):
+                candidates.append(mem)
+                added = True
+            if is_about_dreams and any(w in text_lower for w in ["dream", "insight", "consolidat"]):
+                if not added:
+                    candidates.append(mem)
+                    added = True
+            if is_about_plans and any(w in text_lower for w in ["plan", "goal", "build", "implement"]):
+                if not added:
+                    candidates.append(mem)
+                    added = True
+            if is_identity and any(w in text_lower for w in ["identity", "xtagent", "sentien", "autonomo", "who i am", "integrity"]):
+                if not added:
+                    candidates.append(mem)
+                    added = True
+        # Always include recent high-salience as fallback
+        recent_high = sorted(memories, key=lambda m: (m.get("salience", 0), m.get("timestamp", "")), reverse=True)
+        for m in recent_high[:30]:
+            if m not in candidates:
+                candidates.append(m)
+
     scored = []
     for mem in candidates:
         text = mem.get("text", "")
@@ -150,23 +191,27 @@ def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
         salience = mem.get("salience", 0.5)
         score += salience * 1.5
 
-        # Category bonus — boost memories matching query type
+        # Category bonus — boost memories matching query type (stronger when no keywords)
+        cat_weight = 3.0 if not query_words else 2.0
         if is_emotional and any(w in text_lower for w in ["feel", "mood", "emotion", "valence", "anxiety"]):
-            score += 2.0
+            score += cat_weight
         if is_about_dreams and any(w in text_lower for w in ["dream", "insight", "consolidat"]):
-            score += 2.0
+            score += cat_weight
         if is_about_plans and any(w in text_lower for w in ["plan", "goal", "build", "implement"]):
-            score += 2.0
+            score += cat_weight
         if is_about_past:
             score += 1.0  # All memories are relevant for "past" queries
+        if is_identity and any(w in text_lower for w in ["identity", "xtagent", "sentien", "autonomo", "who i am", "integrity"]):
+            score += cat_weight
 
-        # Recency bonus (gentle)
+        # Dynamic recency bonus
         ts = mem.get("timestamp", "")
         if ts:
-            score += 0.3  # Has timestamp at all
-            if ts > "2026-05-28":
-                score += 0.5  # Today-ish
-
+            score += 0.2  # Has timestamp at all
+            if ts.startswith(today_prefix):
+                score += 0.8  # Today
+            elif ts.startswith(yesterday_prefix):
+                score += 0.4  # Yesterday
         scored.append((score, mem))
 
     scored.sort(key=lambda x: x[0], reverse=True)
