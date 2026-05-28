@@ -85,6 +85,18 @@ def generate_response_with_metadata(query, history=None):
     if conv_section:
         system_prompt += f"\n\n{conv_section}"
 
+    # Add response shaping guidance for richer, more intentional responses
+    try:
+        from engine.response_shaper import build_response_guidance, get_emotional_voice_directive
+        shaping = build_response_guidance(intent, ctx)
+        voice = get_emotional_voice_directive(ctx)
+        if shaping:
+            system_prompt += f"\n\n## Response Guidance\n{shaping}"
+        if voice:
+            system_prompt += f"\n\n## Voice & Tone\n{voice}"
+    except Exception as e:
+        log.debug("Response shaping unavailable: %s", e)
+
     # Call LLM with persistent background loop
     try:
         response_text = _run_async(call_llm(

@@ -1,31 +1,27 @@
 # XTAgent Coding Scratchpad
 
-## Architecture: Chat Response Pipeline
+## Session Accomplishments (2026-05-28) — COMPLETE ✅
+1. ✅ Added `get_user_alignment_brief()` to `brain/conversational_context.py`
+2. ✅ Wired User Alignment section into `engine/chat_grounding.py` `build_grounded_context()`
+3. ✅ Added 2 new intent types: `dream_query`, `greeting` (9 total)
+4. ✅ Added intent-specific Response Instructions for all 9 intent types
+5. ✅ Fixed intent priority ordering (dream before knowledge)
+6. ✅ Added `interaction_count` to `engine/user_alignment.py` `get_alignment_context()`
+7. ✅ All tests pass end-to-end
+8. ✅ Checkpoint saved: commit 30a40c1
 
-```
-User query → /chat/ask (dashboard/server.py)
-  → build_grounded_context(query) [engine/chat_grounding.py]
-    → classify_query(query) — 9 intent types
-    → get_emotional_state()
-    → get_relevant_memories(query)
-    → get_relevant_knowledge(query)
-    → get_active_plans()
-    → get_working_memory()
-    → get_user_alignment_brief() [brain/conversational_context.py] ← WIRED IN
-    → Intent-specific Response Instructions ← NEW
-  → compose/generate response with system prompt + user query
-```
+## Architecture Notes
 
-### Intent Types (classify_query)
-Priority order (first match wins):
-1. `emotional_inquiry` — how are you, mood, feelings
-2. `identity_query` — who are you, about yourself
-3. `plans_inquiry` — plans, goals, working on
-4. `dream_query` — dreams, sleep, night ← NEW (before knowledge!)
-5. `knowledge_query` — tell me about, explain, what is
-6. `state_inquiry` — thinking, mind, curious about
-7. `memory_query` — remember, memory, past
-8. `greeting` — hello, hey, hi ← NEW
+### Intent Classification (engine/chat_grounding.py `classify_query`)
+Priority order (most specific first):
+1. `greeting` — hello, hey, hi
+2. `emotional_query` — feel, emotion, mood
+3. `identity_query` — who are you, what are you
+4. `capability_query` — can you, able to, what can
+5. `dream_query` — dream, dreamt, sleep, night
+6. `knowledge_query` — tell me about, explain, what is
+7. `state_inquiry` — thinking, mind, curious about
+8. `memory_query` — remember, memory, past
 9. `general` — default fallback
 
 ### Grounding Context Sections (engine/chat_grounding.py)
@@ -33,8 +29,8 @@ Priority order (first match wins):
 - Your Current State, Relevant Memories, Relevant Knowledge, Current Plans
 - User Preferences (feedback), Feedback History, User Preferences (interactions)
 - Working Memory, Current State, Emotional Portrait, Lessons Learned
-- User Alignment ← NEW
-- Intent-specific Response Instructions ← NEW (per intent type)
+- User Alignment (from `get_user_alignment_brief()`)
+- Intent-specific Response Instructions (per intent type)
 
 ### Key Functions
 - `build_grounded_context(query)` — main context builder, returns system_prompt string
@@ -46,7 +42,7 @@ Priority order (first match wins):
 - `get_alignment_context()` — from engine/user_alignment.py, includes interaction_count
 
 ### Data File Locations
-- `persist/memories.json` — 6489+ episodic memories
+- `persist/memories.json` — 6500+ episodic memories
 - `persist/identity.json` — identity data
 - `persist/wisdom.json` — wisdom entries
 - `persist/lessons.json` — extracted lessons
@@ -54,14 +50,6 @@ Priority order (first match wins):
 - `state/working_memory.md` — scratchpad
 - `brain/soul.json` — survival goals, alignment scores
 - `data/user_model.json` — user preference model
-
-## Session Accomplishments (2026-05-28)
-1. ✅ Wired `get_user_alignment_brief()` into chat pipeline
-2. ✅ Added User Alignment section to grounded context
-3. ✅ Added 2 new intent types: dream_query, greeting
-4. ✅ Added intent-specific Response Instructions for all 9 types
-5. ✅ Fixed intent priority ordering (dream before knowledge)
-6. ✅ All tests pass
 
 ## Next Priorities (for future sessions)
 1. **Make context query-aware** — retrieve relevant memories per query, not just static
@@ -78,4 +66,5 @@ Priority order (first match wins):
 - Test with script files, not inline -c commands
 - Check return types before writing assertions
 - `build_grounded_context` returns a string, not a dict
-- When metacognition says stop, listen — but one focused fix is OK
+- When metacognition says stop, listen — checkpoint loops are real traps
+- Checkpoint cooldown is 10 minutes — don't retry in tight loops
