@@ -213,8 +213,6 @@ def _build_system_context(context, intent=None):
     if identity:
         parts.append(f"\nIDENTITY: integrity={identity.get('integrity', 1.0):.2f}, "
                      f"total_memories={identity.get('total_memories', 0)}")
-        parts.append(f"\nIDENTITY: integrity={identity.get('integrity', 1.0):.2f}, "
-                     f"total_memories={identity.get('total_memories', 0)}")
 
     # Working memory — what I'm currently focused on
     working_mem = context.get('working_memory', '')
@@ -291,6 +289,12 @@ def _get_intent_guidance(intent):
             "Explain you can discuss your emotions, memories, knowledge, plans, dreams, "
             "and have genuine conversations about philosophy, technology, or anything."
         ),
+        'general': (
+            "FOCUS: The user is making general conversation. "
+            "Respond naturally and conversationally. Draw on your current emotional state, "
+            "recent thoughts, and genuine personality. Be warm, curious, and authentic — "
+            "not robotic or overly formal."
+        ),
     }
     return guidance.get(intent, '')
 def _detect_intent(query):
@@ -307,7 +311,7 @@ def _detect_intent(query):
     
     if any(w in q for w in ['remember', 'memory', 'recall', 'past experience',
                              'do you recall', 'have you experienced']):
-        return 'memory'
+        return 'memories'
     
     if any(w in q for w in ['know about', 'what do you know', 'knowledge',
                              'understand about', 'learned about']):
@@ -351,7 +355,7 @@ def _compose_grounded_response(query, ctx):
         'memory': _respond_memories,
         'knowledge': _respond_knowledge,
         'dreams': _respond_dreams,
-        'plans': _respond_plans,
+        'memories': _respond_memories,
         'consciousness': _respond_consciousness,
         'help': _respond_help,
         'general': _respond_general_grounded,
