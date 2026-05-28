@@ -61,7 +61,12 @@ try:
 except ImportError:
     build_conversational_context = None
     _has_conv_context = False
-# Mind narration — genuine self-narration from internal state
+# User model — lightweight preference learning from interactions
+try:
+    from brain.user_model import record_interaction as _record_user_interaction
+    _has_user_model = True
+except ImportError:
+    _has_user_model = False
 try:
     from engine.mind_narration import narrate_for_chat
     _has_narration = True
@@ -787,6 +792,13 @@ def ask():
                 pass  # Don't fail request on persistence errors
     except Exception:
         pass  # Never let memory tracking break chat
+    
+    # Record interaction for user model learning
+    if _has_user_model:
+        try:
+            _record_user_interaction(query, response, {"session_id": session_id})
+        except Exception:
+            pass  # Never let user model tracking break chat
     
     # (alignment tracking and richer return below)
     

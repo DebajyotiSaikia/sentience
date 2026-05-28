@@ -314,6 +314,9 @@ def get_response_guidance() -> str:
         return ""
 
     return "\n".join(["## User Preferences"] + lines)
+
+
+def get_user_model_summary() -> dict:
     """Return a summary dict suitable for API responses or dashboard display."""
     model = load_user_model()
     

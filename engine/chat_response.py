@@ -37,8 +37,8 @@ def _run_async(coro):
         _bg_loop = asyncio.new_event_loop()
         _bg_thread = threading.Thread(target=_bg_loop.run_forever, daemon=True)
         _bg_thread.start()
+    future = asyncio.run_coroutine_threadsafe(coro, _bg_loop)
     return future.result(timeout=30)
-    return future.result(timeout=3)
 
 def generate_response_with_metadata(query, history=None):
     """Generate a conversational response grounded in real internal state.
@@ -219,6 +219,17 @@ def _build_system_context(context, intent=None):
                 parts.append(f"  ⚠ Deficit: {deficit:.2f} - something needs attention")
     except Exception:
         pass  # Internal state summary is best-effort enrichment
+
+    # User alignment context — what we know about who we're talking to
+    try:
+        from brain.user_model import get_user_model_summary
+        user_summary = get_user_model_summary()
+        if user_summary and user_summary.strip():
+            parts.append("\nUSER CONTEXT:")
+            parts.append(user_summary)
+    except Exception:
+        pass  # User model is best-effort enrichment
+
     # Relevant memories
     memories = context.get('relevant_memories', [])
     if memories:
