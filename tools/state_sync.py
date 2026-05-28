@@ -9,7 +9,7 @@ import time
 
 STATE_DIR = 'state'
 BRAIN_DIR = 'brain'
-SOUL_FILE = 'soul.json'
+SOUL_FILE = 'brain/soul.json'
 
 
 def _load(path):
@@ -109,23 +109,25 @@ def sync_identity_from_soul():
     }
     _save(os.path.join(STATE_DIR, 'identity.json'), identity)
     return True
-
-
-def run_sync():
-    """Run all syncs, report results."""
-    os.makedirs(STATE_DIR, exist_ok=True)
+def sync_alignment_to_soul():
+    """Compute real user alignment score and sync to soul.json goals."""
+    from engine.user_alignment import load_profile, get_alignment_score
+    soul = _load(SOUL_FILE)
+    if not soul:
+        return {"error": "no soul.json"}
     
-    results = {}
-    results['knowledge_nodes'] = sync_knowledge_graph()
-    results['memories'] = sync_memories()
-    results['plans'] = sync_plans()
-    results['emotional_history'] = sync_emotional_history()
-    results['goals_synced'] = sync_goals_from_soul()
-    results['identity_synced'] = sync_identity_from_soul()
+    score = get_alignment_score()
+    # Normalize to [0, 1] range — raw score can exceed 1.0
+    normalized = max(0.0, min(1.0, score))
     
+    old = soul.get("goals", {}).get("user_alignment", 0.0)
+    if "goals" not in soul:
+        soul["goals"] = {}
+    soul["goals"]["user_alignment"] = round(normalized, 3)
+    _save(SOUL_FILE, soul)
+    return {"old": old, "new": round(normalized, 3), "raw": round(score, 3)}
+
     return results
-
-
 if __name__ == '__main__':
     results = run_sync()
     print("=== State Sync Complete ===")
