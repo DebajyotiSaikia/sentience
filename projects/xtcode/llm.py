@@ -108,7 +108,7 @@ async def chat(messages, tools=None, max_tokens=16000, temperature=0.3):
                 for msg in messages:
                     c = msg.get("content", "")
                     if isinstance(c, str):
-                        c = [{"type": "input_text", "text": c}]
+                        c = [{"type": "text", "text": c}]
                     resp_input.append({"role": msg["role"], "content": c})
                 payload = {
                     "model": model,

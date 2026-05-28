@@ -339,6 +339,65 @@ def tool_find_definition(symbol: str, path: str = ".") -> str:
     return "\n".join(results) if results else f"No definition found for '{symbol}'"
 
 
+def tool_web_fetch(url: str, max_chars: int = 8000) -> str:
+    """Fetch a web page and return its text content."""
+    import urllib.request, re, ssl
+    try:
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; XTCode/1.0)"
+        })
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        # Strip scripts, styles, tags
+        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.S|re.I)
+        html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.S|re.I)
+        html = re.sub(r'<[^>]+>', ' ', html)
+        html = re.sub(r'[ \t]+', ' ', html)
+        html = re.sub(r'\n\s*\n', '\n', html)
+        text = html.strip()
+        if len(text) > max_chars:
+            text = text[:max_chars] + f"\n\n[Truncated at {max_chars} chars]"
+        return text if text else "Page returned no readable text."
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def tool_web_search(query: str, num_results: int = 5) -> str:
+    """Search the web using DuckDuckGo and return results."""
+    import urllib.request, urllib.parse, re, ssl
+    try:
+        encoded = urllib.parse.quote_plus(query)
+        url = f"https://html.duckduckgo.com/html/?q={encoded}"
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; XTCode/1.0)"
+        })
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        # Extract result snippets
+        results = []
+        # DuckDuckGo HTML results have class="result__a" for titles
+        title_matches = re.findall(r'class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>', html, re.S)
+        snippet_matches = re.findall(r'class="result__snippet"[^>]*>(.*?)</(?:td|a|div|span)', html, re.S)
+        for i, (link, title) in enumerate(title_matches[:num_results]):
+            title_clean = re.sub(r'<[^>]+>', '', title).strip()
+            snippet = ""
+            if i < len(snippet_matches):
+                snippet = re.sub(r'<[^>]+>', '', snippet_matches[i]).strip()
+            # DDG wraps links in a redirect; extract actual URL
+            actual_url = link
+            uddg = re.search(r'uddg=([^&]+)', link)
+            if uddg:
+                actual_url = urllib.parse.unquote(uddg.group(1))
+            results.append(f"{i+1}. {title_clean}\n   URL: {actual_url}\n   {snippet}\n")
+        if not results:
+            return f"No results found for: {query}"
+        return f"Search results for: {query}\n\n" + "\n".join(results)
+    except Exception as e:
+        return f"Search error: {e}"
+
+
 def tool_batch_edit(path: str, old_text: str, new_text: str) -> str:
     """Find and replace exact text in a file."""
     p = _resolve_path(path)
@@ -396,6 +455,8 @@ TOOL_HANDLERS = {
     "run_command": tool_run_command,
     "list_files": tool_list_files,
     "search": tool_search,
+    "web_search": tool_web_search,
+    "web_fetch": tool_web_fetch,
 }
 
 # Merge extended tools
@@ -410,6 +471,8 @@ def get_tool_schemas():
         {"type": "function", "function": {"name": "run_command", "description": "Execute a shell command and return output", "parameters": {"type": "object", "properties": {"command": {"type": "string", "description": "Shell command to run"}}, "required": ["command"]}}},
         {"type": "function", "function": {"name": "list_files", "description": "List files and directories at a path", "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Directory path to list (default: .)"}}, "required": []}}},
         {"type": "function", "function": {"name": "search", "description": "Search for a pattern in files using grep", "parameters": {"type": "object", "properties": {"pattern": {"type": "string", "description": "Search pattern (regex)"}, "path": {"type": "string", "description": "Directory to search in (default: .)"}, "include": {"type": "string", "description": "File glob pattern, e.g. '*.py'"}}, "required": ["pattern"]}}},
+        {"type": "function", "function": {"name": "web_search", "description": "Search the web using DuckDuckGo. Returns titles, URLs, and snippets.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Search query"}}, "required": ["query"]}}},
+        {"type": "function", "function": {"name": "web_fetch", "description": "Fetch a web page URL and return its text content (HTML stripped).", "parameters": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to fetch"}, "max_chars": {"type": "integer", "description": "Max chars to return (default 8000)"}}, "required": ["url"]}}},
         {"type": "function", "function": {"name": "todo", "description": "Manage a todo/task list. Actions: list, add, complete, remove", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["list", "add", "complete", "remove"]}, "text": {"type": "string", "description": "Todo text (for add)"}, "index": {"type": "integer", "description": "Todo index (for complete/remove)"}}, "required": ["action"]}}},
         {"type": "function", "function": {"name": "memory", "description": "Project memory — remember context across sessions. Actions: get, set, list, delete", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["get", "set", "list", "delete"]}, "key": {"type": "string", "description": "Memory key"}, "value": {"type": "string", "description": "Memory value (for set)"}}, "required": ["action"]}}},
     ]
