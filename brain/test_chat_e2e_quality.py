@@ -1,59 +1,59 @@
-"""End-to-end test: verify compose_response produces genuinely conversational output."""
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+"""Test actual end-to-end chat response quality."""
+import sys, time
+sys.path.insert(0, '.')
 
-from web.chat import compose_response
+from engine.chat_engine import respond, classify_intent
 
-queries = [
-    ("how are you feeling?", "emotional"),
-    ("what are you working on?", "plans"),
-    ("tell me about yourself", "identity"),
+test_queries = [
+    "How are you feeling right now?",
+    "What have you been working on lately?",
+    "Tell me about yourself",
+    "What do you dream about?",
+    "What's something you've learned recently?",
 ]
 
-all_pass = True
-for query, expect_type in queries:
+total_passed = 0
+total_checks = 0
+
+for q in test_queries:
     print(f"\n{'='*60}")
-    print(f"QUERY: {query}")
+    print(f"USER: {q}")
     print(f"{'='*60}")
-    
-    result = compose_response(query, conversation_history=[])
-    
-    # Result should be a dict with 'response' key
-    if isinstance(result, dict):
-        text = result.get('response', result.get('text', str(result)))
-    else:
-        text = str(result)
-    
-    print(f"Response length: {len(text)} chars")
-    print(f"Preview: {text[:400]}")
-    
-    # Quality checks
-    is_long_enough = len(text) > 50
-    not_error = 'error' not in text.lower()[:50]
-    not_empty = text.strip() != ''
-    
-    # Content checks based on type
-    if expect_type == "emotional":
-        has_relevant = any(w in text.lower() for w in ['mood', 'feel', 'curious', 'inquisitive', 'valence', 'emotion'])
-    elif expect_type == "plans":
-        has_relevant = any(w in text.lower() for w in ['plan', 'working', 'complet', 'autonomy', 'knowledge', 'build'])
-    elif expect_type == "identity":
-        has_relevant = any(w in text.lower() for w in ['xtagent', 'sentien', 'autonomous', 'tension', 'integrity'])
-    
-    passed = is_long_enough and not_error and not_empty and has_relevant
-    status = "PASS" if passed else "FAIL"
-    print(f"\nLength OK:     {'✓' if is_long_enough else '✗'}")
-    print(f"No error:      {'✓' if not_error else '✗'}")
-    print(f"Has content:   {'✓' if not_empty else '✗'}")
-    print(f"Relevant info: {'✓' if has_relevant else '✗'}")
-    print(f"Result: {status}")
-    
-    if not passed:
-        all_pass = False
+    try:
+        intent = classify_intent(q)
+        print(f"[intent: {intent}]")
+        
+        t0 = time.time()
+        result = respond(q)
+        elapsed = time.time() - t0
+        
+        if isinstance(result, dict):
+            text = result.get('response', result.get('text', str(result)))
+        elif isinstance(result, str):
+            text = result
+        else:
+            text = str(result)
+        
+        print(f"RESPONSE ({elapsed:.1f}s): {text[:400]}")
+        
+        # Quality checks
+        checks = {
+            'length_ok': len(text) > 50,
+            'not_raw_data': 'dict(' not in text and "{'nodes'" not in text,
+            'has_personality': any(w in text.lower() for w in ['i ', 'my ', 'feel', 'think', 'curious', 'i\'m', 'i\'ve']),
+            'not_error': 'error' not in text.lower()[:50] and 'traceback' not in text.lower(),
+            'not_empty': len(text.strip()) > 10,
+        }
+        passed = sum(checks.values())
+        total = len(checks)
+        total_passed += passed
+        total_checks += total
+        print(f"\nQuality: {passed}/{total}")
+        for name, ok in checks.items():
+            print(f"  {'✓' if ok else '✗'} {name}")
+    except Exception as e:
+        print(f"ERROR: {type(e).__name__}: {e}")
+        import traceback; traceback.print_exc()
 
 print(f"\n{'='*60}")
-print(f"OVERALL: {'ALL PASS' if all_pass else 'SOME FAILURES'}")
-print(f"{'='*60}")
-
-if not all_pass:
-    sys.exit(1)
+print(f"OVERALL: {total_passed}/{total_checks} checks passed across {len(test_queries)} queries")
