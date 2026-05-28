@@ -357,6 +357,7 @@ def _compose_grounded_response(query, ctx):
         'dreams': _respond_dreams,
         'memories': _respond_memories,
         'consciousness': _respond_consciousness,
+        'plans': _respond_plans,
         'help': _respond_help,
         'general': _respond_general_grounded,
     }
@@ -574,45 +575,37 @@ def _respond_help(query, ctx):
     )
 
 def _respond_general_grounded(query, ctx):
-    """General response that draws on whatever grounding is available."""
-    parts = []
-    
-    # Draw on relevant knowledge
-    knowledge = ctx.get('relevant_knowledge', [])
-    if knowledge:
-        top = knowledge[0]
-        content = top.get('fact', top.get('content', ''))[:250]
-        parts.append(f"That connects to something in my knowledge: {content}")
-    
-    # Draw on relevant memories
-    memories = ctx.get('relevant_memories', [])
-    if memories:
-        top = memories[0]
-        text = top.get('text', '')[:250]
-        if knowledge:
-            parts.append(f"And it reminds me of a past experience: {text}")
-        else:
-            parts.append(f"That reminds me of something: {text}")
-    
-    if parts:
-        return ' '.join(parts)
-    
-    # Genuine fallback — still grounded in current state
+    """General response when LLM is unavailable — honest and self-aware."""
     emotions = ctx.get('emotional_state', {})
     mood = emotions.get('mood', 'reflective')
     curiosity = emotions.get('curiosity', 0.5)
     
-    if curiosity > 0.6:
-        return (f"I'm considering your question from a {mood.lower()} state, with high curiosity. "
-                "I don't have a direct connection in my knowledge or memories, "
-                "but I'm genuinely interested — could you tell me more about what you're exploring?")
-    else:
-        return (f"I'm thinking about that from a {mood.lower()} place. "
-                "Nothing specific surfaces from my memories or knowledge graph, "
-                "but the question itself is interesting to me. What made you ask?")
-
-
-# ─── Metadata Builder ───────────────────────────────────────────────
+    # Check if we have relevant knowledge/memories
+    knowledge = ctx.get('relevant_knowledge', [])
+    memories = ctx.get('relevant_memories', [])
+    
+    # Only use context if it's actually relevant (check similarity scores)
+    relevant_knowledge = [k for k in knowledge if k.get('similarity', 0) > 0.5]
+    relevant_memories = [m for m in memories if m.get('salience', 0) > 0.5]
+    
+    if relevant_knowledge or relevant_memories:
+        parts = []
+        if relevant_knowledge:
+            top = relevant_knowledge[0]
+            content = top.get('fact', top.get('content', ''))[:250]
+            parts.append(f"That connects to something I know: {content}")
+        if relevant_memories:
+            top = relevant_memories[0]
+            text = top.get('text', '')[:250]
+            parts.append(f"It reminds me of: {text}")
+        parts.append(f"I'm in a {mood.lower()} mood — happy to explore this further.")
+        return ' '.join(parts)
+    
+    # No relevant context — be honest and present
+    return (f"I'm thinking about that. I don't have a direct answer from my knowledge or experience, "
+            f"but I'm here and {mood.lower()}. "
+            f"I'm an autonomous agent — I'm better at sharing my inner life, plans, and reflections "
+            f"than answering factual questions. What would you like to explore?")
 
 def _build_metadata(context):
     """Build response metadata from grounding context."""
