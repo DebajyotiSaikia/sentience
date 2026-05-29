@@ -15,7 +15,7 @@ Approach:
 import json
 import random
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 DATA_DIR = Path(__file__).parent / "data"
@@ -27,7 +27,7 @@ class EmotionalSnapshot:
     
     def __init__(self, values: dict, timestamp: str = None, context: str = ""):
         self.values = {d: values.get(d, 0.0) for d in self.DIMS}
-        self.timestamp = timestamp or datetime.utcnow().isoformat()
+        self.timestamp = timestamp or datetime.now(timezone.utc).isoformat()
         self.context = context  # what action preceded this state
     
     def vector(self):
@@ -141,7 +141,7 @@ class BlindSpotDetector:
         self._update_weights(predicted, actual)
         
         record = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "predicted": predicted,
             "actual": actual,
             "errors": errors,

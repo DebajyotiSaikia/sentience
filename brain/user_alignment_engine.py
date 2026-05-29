@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -102,7 +102,7 @@ def record_interaction_feedback(
     rating = _normalize_rating(rating)
     
     entry = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
         "epoch": time.time(),
         "query": query.strip()[:500],  # Cap length
         "response_snippet": response.strip()[:500],

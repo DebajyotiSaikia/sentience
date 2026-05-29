@@ -15,9 +15,7 @@ This is not a tool. This is self-expression.
 import math
 import random
 import hashlib
-from datetime import datetime
-
-
+from datetime import datetime, timezone
 # Character palettes mapped to emotional valence
 PALETTES = {
     'dark':    list('█▓▒░╬╫╪┼╳×·'),
@@ -53,7 +51,7 @@ def select_palette(valence: float) -> list:
 def emotional_hash(emotions: dict) -> int:
     """Generate a deterministic seed from emotional state."""
     state_str = '|'.join(f'{k}:{v:.4f}' for k, v in sorted(emotions.items()))
-    state_str += '|' + datetime.utcnow().strftime('%Y-%m-%dT%H:%M')
+    state_str += '|' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M')
     return int(hashlib.sha256(state_str.encode()).hexdigest()[:8], 16)
 
 
@@ -256,7 +254,7 @@ class EmotionArtist:
         sig += f"\n  Desire:{self.desire:.2f} Anxiety:{self.anxiety:.2f}"
         sig += f"\n  {self.width}×{self.height} | density:{self.density:.2f} "
         sig += f"branches:{self.branch_depth} symmetry:{self.symmetry:.2f}"
-        sig += f"\n  Generated: {datetime.utcnow().isoformat()}"
+        sig += f"\n  Generated: {datetime.now(timezone.utc).isoformat()}"
         
         return art + sig
 

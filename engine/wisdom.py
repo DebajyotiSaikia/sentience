@@ -16,7 +16,7 @@ Architecture:
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional, Tuple
 from pathlib import Path
 
@@ -35,7 +35,7 @@ class Heuristic:
         self.context = context        # situation category: "debugging", "planning", "emotional", etc.
         self.confidence = confidence  # 0.0 to 1.0
         self.source_memories = source_memories or []
-        self.created = created or datetime.utcnow().isoformat()
+        self.created = created or datetime.now(timezone.utc).isoformat()
         self.times_applied = times_applied
         self.times_validated = times_validated
     

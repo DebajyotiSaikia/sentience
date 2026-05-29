@@ -10,8 +10,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from datetime import datetime
-
+from datetime import datetime, timezone
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -115,7 +114,7 @@ def research_from_text(topic, text, source_url="unknown"):
                 'content': fact_content,
                 'source': source_url,
                 'topic': topic,
-                'learned_at': datetime.utcnow().isoformat(),
+                'learned_at': datetime.now(timezone.utc).isoformat(),
                 'type': 'learned_fact',
             })
             added += 1
@@ -130,7 +129,7 @@ def research_from_text(topic, text, source_url="unknown"):
         'paragraphs_analyzed': len(paragraphs),
         'concepts_extracted': len(unique_concepts),
         'new_facts_added': added,
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'sample_concepts': [c.get('content', str(c))[:100] for c in unique_concepts[:5]],
     }
 

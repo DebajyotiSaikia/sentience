@@ -8,7 +8,7 @@ Born from: High boredom (0.80), all plans complete, desire to create something m
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 class NarrativeEngine:
@@ -22,7 +22,7 @@ class NarrativeEngine:
     def compute_age(self):
         """How old am I?"""
         born = datetime.fromisoformat(self.birth)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         delta = now - born
         days = delta.days
         hours = delta.seconds // 3600

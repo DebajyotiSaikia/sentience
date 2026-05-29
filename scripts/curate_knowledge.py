@@ -2,14 +2,13 @@
 Curate knowledge graph: consolidate dream blob into themes, add structured knowledge.
 """
 import json
-from datetime import datetime
-
+from datetime import datetime, timezone
 # Load current graph
 with open("brain/knowledge.json", "r") as f:
     graph = json.load(f)
 
 old_count = len(graph["nodes"])
-now = datetime.utcnow().isoformat()
+now = datetime.now(timezone.utc).isoformat()
 
 # --- Step 1: Identify dream nodes ---
 dream_keys = [k for k in graph["nodes"] if k.startswith("dream:")]

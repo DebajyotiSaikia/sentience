@@ -7,7 +7,7 @@ are genuinely self-aware rather than generic.
 """
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 # Try to import episodic memory for richer recall
@@ -17,8 +17,6 @@ try:
 except Exception:
     _episodic_available = False
 from typing import Dict, List, Optional, Any
-from datetime import datetime
-
 # Long-term memory (lessons, dream insights)
 try:
     from engine.memory_consolidation import get_long_term_context
@@ -167,8 +165,7 @@ def get_relevant_memories(query: str, top_k: int = 5) -> List[Dict]:
     query_words = {w for w in query_lower.split() if len(w) > 2 and w not in stop_words}
 
     # Dynamic recency: compute current date prefix for bonus
-    from datetime import datetime, timedelta
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     today_prefix = now.strftime("%Y-%m-%d")
     yesterday_prefix = (now - timedelta(days=1)).strftime("%Y-%m-%d")
 

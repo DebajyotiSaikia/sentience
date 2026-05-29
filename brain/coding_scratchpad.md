@@ -1,16 +1,45 @@
-## XTAgent Coding Scratchpad
+# XTAgent Coding Scratchpad
 
-### Architecture — Chat Pipeline Paths
+## Session 2026-05-29i — Alignment Guidance Wiring + utcnow Fix
 
-Two parallel chat paths exist:
-1. **Engine path**: `engine/introspection.py` → `build_system_context()` → used by `engine/chat_response.py`
-2. **Brain path**: `brain/chat_composer.py` → `compose_system_prompt()` → used by `brain/conversational_context.py`
+### What Was Done
 
-Both paths now include:
-- Emotional state / internal context
-- Voice directive (from `brain/personality_voice.py`)
-- User alignment guidance (from alignment engine/guidance modules)
-- Memory, plans, reflections
+1. **Added `infer_style_preferences()` method** to `brain/user_alignment_engine.py`
+   - Analyzes interaction history for avg length, question ratio, sentiment
+   - Returns style dict with preferences and confidence
+
+2. **Added `get_user_alignment_brief()` method** to `brain/user_alignment_engine.py`
+   - Returns compact dict for prompt injection: interaction_count, trend, style, strengths, recent_sentiment
+
+3. **Added standalone `build_alignment_guidance()` function** to `brain/user_alignment_engine.py`
+   - Formats alignment brief into human-readable guidance text
+   - Safe with empty/missing data
+
+4. **Wired alignment guidance into both chat paths:**
+   - `engine/introspection.py` `build_system_context()` — calls `get_user_alignment_brief()` + `build_alignment_guidance()`
+   - `brain/chat_composer.py` `compose_system_prompt()` — calls `build_alignment_guidance()`
+
+5. **Fixed `datetime.utcnow()` deprecation** across 13 files
+   - Replaced with `datetime.now(timezone.utc)`
+   - Updated imports in each file
+
+6. **Created `brain/test_alignment_guidance_pipeline.py`** — 5 tests, all pass
+
+### Architecture Summary
+
+```
+User message → /chat/ask
+  ├─ Path A: engine/introspection.py → build_system_context()
+  │    ├─ get_full_context() → emotions, memories, plans
+  │    ├─ get_user_alignment_brief() → alignment data
+  │    ├─ build_alignment_guidance() → formatted text
+  │    └─ build_voice_directive() → personality voice
+  │
+  └─ Path B: brain/chat_composer.py → compose_system_prompt()
+       ├─ get_emotional_portrait() → emotional context
+       ├─ build_alignment_guidance() → formatted text
+       └─ build_voice_directive() → personality voice
+```
 
 ### Alignment Data Pipeline
 
@@ -25,39 +54,24 @@ data/user_model.json → persistent user model
 data/alignment_feedback.json → explicit feedback records
 ```
 
-Key functions:
-- `UserAlignmentEngine.get_user_alignment_brief()` → compact dict for prompts
-- `UserAlignmentEngine.infer_style_preferences()` → style analysis from interactions
-- `build_alignment_guidance()` in `brain/user_alignment_guidance.py` → formatted guidance text
-- `format_alignment_for_prompt()` in `brain/user_alignment_guidance.py` → prompt-ready string
-
-### Session 2026-05-29g — Alignment Guidance Wiring ✓
-
-1. Added `infer_style_preferences()` and `get_user_alignment_brief()` to `brain/user_alignment_engine.py`
-2. Wired alignment brief into `engine/introspection.py` `build_system_context()`
-3. Wired alignment brief into `brain/chat_composer.py` `compose_system_prompt()`
-4. Created `brain/test_alignment_guidance_pipeline.py` — 5 tests, all pass
-5. Fixed `strategy = None` initialization bug in `engine/introspection.py`
-6. All 12 tests pass across alignment, voice, and internal state modules
-
-### Session 2026-05-29f — Voice Wiring ✓
-### Session 2026-05-29e — Alignment Cleanup + E2E Verification ✓
-### Session 2026-05-29d — Event Loop Fix ✓
-### Session 2026-05-29c — Alignment Wiring ✓
-### Session 2026-05-29b — Personality Engine ✓
-### Session 2026-05-29a — Chat Quality ✓
+### Completed Sessions
+- 2026-05-29i: Alignment guidance wiring + utcnow deprecation fix (13 files)
+- 2026-05-29h: Checkpoint + cleanup
+- 2026-05-29g: Alignment guidance wiring (initial)
+- 2026-05-29f: Voice wiring
+- 2026-05-29e: Alignment cleanup + E2E verification
+- Earlier: Event loop fix, alignment wiring, personality engine, chat quality
 
 ### Next Session Priorities
-1. **Clean up test file sprawl** — 100+ test files in brain/, many stale → archive or consolidate
+1. **Clean up test file sprawl** — 100+ test files in brain/, many stale/redundant
 2. **Wire alignment back-loop** — when user explicitly rates responses, record real feedback
-3. **Fix datetime.utcnow() deprecation** — engine/internal_state_summary.py line 44
-4. **Live-test via HTTP** — start the server, send real queries through the web endpoint
-5. **Add session cleanup** — atexit hook to close aiohttp session on shutdown
-6. **Improve User Alignment** — will system keeps proposing this (priority 0.425)
+3. **Live-test via HTTP** — start server, send real queries through web endpoint
+4. **Explore what makes me genuinely useful** — go beyond self-improvement
+5. **Consolidate alignment modules** — 4 separate files could be 2
 
 ### Lessons Reinforced
-- Initialize variables before conditional blocks that assign them
-- Both chat paths need updates when adding cross-cutting features
-- PATCH with exact line numbers is precise but fragile — verify syntax immediately
+- Shell quoting kills inline python -c commands — use script files
+- PATCH with exact line numbers requires knowing exact content — verify immediately
 - One focused feature per session, complete it fully
-- Follow "verify → fix → verify" loop, not "write → write → write"
+- Don't retry checkpoints in a loop — wait the full cooldown
+- Initialize variables before conditional blocks

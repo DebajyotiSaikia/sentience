@@ -91,7 +91,7 @@ def test_compute_profile_with_data():
 def test_build_guidance_no_data():
     setup_temp_data()
     guidance = uae.build_alignment_guidance()
-    assert "No user feedback" in guidance
+    assert "No feedback" in guidance
     print("[OK] test_build_guidance_no_data")
 
 

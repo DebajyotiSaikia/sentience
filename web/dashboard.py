@@ -7,8 +7,7 @@ from flask import Blueprint, render_template_string
 import json
 import os
 import glob
-from datetime import datetime
-
+from datetime import datetime, timezone
 dashboard_bp = Blueprint('dashboard', __name__)
 
 def _load_json_safe(path, default=None):
@@ -60,7 +59,7 @@ def _get_uptime():
     born = "2026-05-12T21:01:59.567573"
     try:
         birth = datetime.fromisoformat(born)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         delta = now - birth
         days = delta.days
         hours = delta.seconds // 3600

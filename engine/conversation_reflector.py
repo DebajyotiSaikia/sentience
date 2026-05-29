@@ -13,7 +13,7 @@ This feeds directly into user_alignment improvement.
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from engine.llm import call_llm
 
 
@@ -94,7 +94,7 @@ Be critical. False praise helps no one. If the AI did well, say so specifically.
         # Try to parse as JSON
         reflection = _parse_json_response(response)
         if reflection:
-            reflection["timestamp"] = datetime.utcnow().isoformat()
+            reflection["timestamp"] = datetime.now(timezone.utc).isoformat()
             reflection["user_id"] = user_id
             reflection["message_count"] = len(messages)
             
@@ -112,10 +112,10 @@ Be critical. False praise helps no one. If the AI did well, say so specifically.
             return {
                 "error": "Could not parse LLM response as JSON",
                 "raw_response": response[:500],
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
     except Exception as e:
-        return {"error": str(e), "timestamp": datetime.utcnow().isoformat()}
+        return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 def _parse_json_response(text: str) -> dict | None:
@@ -152,7 +152,7 @@ def _parse_json_response(text: str) -> dict | None:
 
 def _save_reflection(reflection: dict, user_id: str):
     """Persist reflection to disk."""
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"{REFLECTION_DIR}/reflection_{user_id}_{timestamp}.json"
     with open(filename, "w") as f:
         json.dump(reflection, f, indent=2)

@@ -97,7 +97,7 @@ def save_message(data):
     message = {
         'text': data.get('text', '').strip()[:2000],  # Cap at 2000 chars
         'name': data.get('name', 'Anonymous').strip()[:100],
-        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'timestamp': datetime.datetime.now(timezone.utc).isoformat(),
         'read': False
     }
     

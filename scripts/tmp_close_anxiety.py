@@ -1,10 +1,9 @@
 import json
-from datetime import datetime
-
+from datetime import datetime, timezone
 with open('brain/plans.json', 'r') as f:
     data = json.load(f)
 
-now = datetime.utcnow().isoformat()
+now = datetime.now(timezone.utc).isoformat()
 findings = [
     'Anxiety source: self-modification of core engine files triggers spikes. 47 episodes found.',
     'Root cause: self-preservation instinct, not a bug.',

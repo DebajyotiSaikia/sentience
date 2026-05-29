@@ -10,9 +10,7 @@ import json
 import os
 import time
 from typing import Any, Dict, List, Optional
-from datetime import datetime
-
-
+from datetime import datetime, timezone
 def _load_json(path: str) -> Any:
     """Safely load a JSON file, returning None on any failure."""
     try:
@@ -41,7 +39,7 @@ def build_internal_state_summary(max_memories: int = 5) -> Dict[str, Any]:
     
     Every field tolerates missing files, malformed data, mixed types.
     """
-    summary = {"timestamp": datetime.utcnow().isoformat() + "Z"}
+    summary = {"timestamp": datetime.now(timezone.utc).isoformat() + "Z"}
 
     # ── Emotional State ──
     emo = _load_json("state/emotional_state.json") or {}
