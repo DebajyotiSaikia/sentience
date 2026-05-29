@@ -1081,7 +1081,17 @@ def ask():
     # Try personality-based response first (draws on real internal state)
     if _has_personality and _personality_respond and not response:
         try:
-            personality_result = _personality_respond(query)
+            # Format conversation history list into readable string for LLM
+            history_str = ""
+            if conversation_history:
+                lines = []
+                for turn in conversation_history[-10:]:  # last 10 turns max
+                    role = turn.get('role', 'unknown')
+                    content = turn.get('content', '')
+                    if content:
+                        lines.append(f"{role}: {content}")
+                history_str = "\n".join(lines)
+            personality_result = _personality_respond(query, history_str)
             if personality_result:
                 response = personality_result
                 response_meta = {'source': 'personality', 'uses_real_state': True}

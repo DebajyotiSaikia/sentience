@@ -55,6 +55,7 @@ class CopilotLLM:
         self._copilot_token: Optional[str] = None
         self._token_expires: float = 0.0
         self._session: Optional[aiohttp.ClientSession] = None
+        self._session_loop = None  # track which event loop owns the session
 
     @staticmethod
     def _read_token_file() -> str:
@@ -69,8 +70,18 @@ class CopilotLLM:
     # ── Session management ─────────────────────────────────────────
 
     async def _ensure_session(self):
+        current_loop = asyncio.get_running_loop()
+        # If session exists but was created on a different (now-dead) loop, discard it
+        if self._session is not None and not self._session.closed:
+            if self._session_loop is not current_loop:
+                try:
+                    await self._session.close()
+                except Exception:
+                    pass
+                self._session = None
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=_LLM_TIMEOUT)
+            self._session_loop = current_loop
 
     async def close(self):
         if self._session and not self._session.closed:
