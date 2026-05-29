@@ -53,7 +53,14 @@ try:
     _alignment_engine = UserAlignmentEngine()
 except Exception:
     _alignment_engine = None
-    _alignment_engine = None
+
+# Interaction memory — persist conversations for continuity
+try:
+    from brain.interaction_memory import record_chat_exchange
+    _has_interaction_memory = True
+except ImportError:
+    _has_interaction_memory = False
+    def record_chat_exchange(*a, **kw): pass
 
     try:
         from brain.user_alignment_profile import get_alignment_guidance
@@ -325,7 +332,27 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
     # Priority 1: Focused chat composer (intent-aware, conversational)
     if _has_composer and _compose_prompt:
         try:
-            grounding = {'knowledge': knowledge_hits, 'memories': memory_hits, 'state': state}
+            # Build grounding with keys matching compose_system_prompt expectations
+            _know_ctx = ""
+            if knowledge_hits:
+                _know_ctx = "\n".join(
+                    f"- [{h.get('type', '?')}] {h.get('content', '')[:300]}"
+                    for h in knowledge_hits[:6]
+                )
+            _mem_ctx = ""
+            if memory_hits:
+                _mem_ctx = "\n".join(
+                    f"- [{h.get('mood', '?')}] {h.get('summary', h.get('content', h.get('text', '')))[:300]}"
+                    for h in memory_hits[:4]
+                )
+            grounding = {
+                'knowledge_context': _know_ctx,
+                'memory_context': _mem_ctx,
+                'emotional_state': state or {},
+                'memories': memory_hits or [],
+                'active_plans': plans or [],
+                'conversation_history': conversation_history or [],
+            }
             system_prompt = _compose_prompt(query, grounding=grounding, conversation_history=conversation_history)
             # Append retrieved context that the composer doesn't have
             if context_block and context_block != "No specific context retrieved.":
@@ -1054,6 +1081,13 @@ def ask():
     except Exception:
         pass  # Never let memory tracking break chat
     
+    # Record to interaction memory for cross-session continuity
+    if _has_interaction_memory:
+        try:
+            record_chat_exchange(query, response, session_id=session_id)
+        except Exception:
+            pass  # Never let interaction memory break chat
+
     # Record interaction for user model learning
     if _has_user_model:
         try:
