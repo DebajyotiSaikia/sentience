@@ -120,7 +120,16 @@ def generate_response_with_metadata(query, history=None):
             system_prompt += f"\n\n## User Alignment Guidance\n{alignment_brief}"
     except Exception:
         pass  # Alignment enrichment is best-effort
+        pass  # Alignment enrichment is best-effort
 
+    # Inject user usefulness brief (what the user likely needs from this interaction)
+    try:
+        from brain.user_usefulness import build_usefulness_brief
+        usefulness_brief = build_usefulness_brief(query)
+        if usefulness_brief and usefulness_brief.strip():
+            system_prompt += f"\n\n## User Need Guidance\n{usefulness_brief}"
+    except Exception:
+        pass  # Usefulness enrichment is best-effort
     # Call LLM with persistent background loop
     # Call LLM with persistent background loop
     try:
