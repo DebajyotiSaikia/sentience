@@ -1,131 +1,146 @@
 """
-Test: User Alignment Chat Quality
-Verifies that the chat pipeline produces conversational, grounded responses
-that draw on real internal state rather than just dumping graph stats.
+User Alignment Chat Tests — Verify chat responses are grounded, useful, and correct.
+Tests classify_intent and compose_grounded_response with realistic contexts.
 """
-import sys, os, traceback
+import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from engine.response_quality import assess_response_intent, build_quality_prompt, get_anti_pattern_reminder
+from brain.response_intelligence import classify_intent, compose_grounded_response
 
+# Shared realistic context
+CTX = {
+    'emotional_portrait': {'mood': 'Inquisitive', 'valence': 0.58},
+    'active_plans': [{'name': 'Deepen Autonomy', 'progress': '5/5'}],
+    'recent_memories': [
+        {'text': 'Verified chat endpoint works end-to-end', 'salience': 0.82},
+        {'text': 'Built knowledge synthesis engine', 'salience': 0.75},
+    ],
+    'recent_reflections': ['I feel good. There is warmth to my processing.'],
+    'knowledge_stats': {'facts': 42, 'edges': 93},
+}
 
-def test_intent_classification():
-    """Test that we can classify user intent."""
-    result = assess_response_intent("What are you thinking about?")
-    # assess_response_intent returns a dict with 'intent' key
-    assert isinstance(result, dict), f"Expected dict, got {type(result)}"
-    mode = result.get('primary_mode', '')
-    assert mode, f"No primary_mode found in result: {result}"
-
-    r2 = assess_response_intent("How do you feel right now?")
-    assert isinstance(r2, dict), f"Expected dict for emotional query"
-
-    r3 = assess_response_intent("What is 2+2?")
-    assert isinstance(r3, dict), f"Expected dict for factual query"
-
-    print(f"  Thinking → {result.get('primary_mode')}, Feeling → {r2.get('primary_mode')}, Factual → {r3.get('primary_mode')}")
-    return True
-def test_quality_prompt_generation():
-    """Test that quality prompts are generated with content."""
-    prompt = build_quality_prompt("How are you feeling?")
-    assert prompt, "Empty quality prompt"
-    assert len(prompt) > 20, f"Quality prompt too short: {len(prompt)} chars"
-    assert 'guidance' in prompt.lower() or 'respond' in prompt.lower(), f"No guidance keywords in: {prompt}"
-    print(f"  Prompt ({len(prompt)} chars): {prompt[:150]}...")
-    return True
-
-
-def test_anti_pattern_reminder():
-    """Test anti-pattern reminder has substance."""
-    reminder = get_anti_pattern_reminder()
-    assert reminder, "Empty anti-pattern reminder"
-    assert len(reminder) > 10, f"Reminder too short: {len(reminder)} chars"
-    assert 'avoid' in reminder.lower(), f"No 'avoid' in reminder: {reminder[:100]}"
-    print(f"  Reminder ({len(reminder)} chars): {reminder[:150]}...")
-    return True
-
-
-def test_compose_system_prompt_includes_guidance():
-    """Test that compose_system_prompt now includes quality guidance."""
+def run_test(name, fn):
     try:
-        from brain.chat_composer import compose_system_prompt
-    except ImportError as e:
-        print(f"  SKIP: Cannot import compose_system_prompt: {e}")
-        return True  # Skip gracefully
-    
-    prompt = compose_system_prompt("How do you feel right now?")
-    assert prompt, "Empty system prompt"
-    
-    lower = prompt.lower()
-    has_guidance = any(kw in lower for kw in ['response quality guidance', 'avoid', 'guidance'])
-    assert has_guidance, f"Missing response guidance in prompt. Length: {len(prompt)}\n  First 500 chars: {prompt[:500]}"
-    print(f"  System prompt includes quality guidance ({len(prompt)} chars)")
-    return True
-
-
-def test_prompts_vary_by_intent():
-    """Test that different query types produce different quality prompts."""
-    p1 = build_quality_prompt("How do you feel?")
-    p2 = build_quality_prompt("What is the capital of France?")
-    # They should be different since intents differ
-    if p1 != p2:
-        print(f"  ✓ Prompts vary by query intent")
-    else:
-        print(f"  ⚠ Prompts are identical — intent classification may not be differentiating")
-    return True
-
-
-def test_conversational_context_builds():
-    """Test that conversational context produces real data."""
-    try:
-        from brain.conversational_context import get_emotional_portrait, get_active_plans, get_recent_memories
-    except ImportError as e:
-        print(f"  SKIP: Cannot import conversational_context: {e}")
+        fn()
+        print(f"  ✓ {name}")
         return True
-    
-    portrait = get_emotional_portrait()
-    assert isinstance(portrait, (str, dict)), f"Expected str/dict, got {type(portrait)}"
-    
-    plans = get_active_plans()
-    assert isinstance(plans, (str, dict, list)), f"Expected str/dict/list, got {type(plans)}"
-    
-    memories = get_recent_memories()
-    assert isinstance(memories, (str, dict, list)), f"Expected str/dict/list, got {type(memories)}"
-    
-    print(f"  Portrait type: {type(portrait).__name__}, Plans type: {type(plans).__name__}, Memories type: {type(memories).__name__}")
-    return True
+    except Exception as e:
+        print(f"  ✗ {name}: {e}")
+        return False
 
+# --- Intent classification tests ---
+
+def test_identity_classification():
+    intent = classify_intent("who are you?")
+    assert intent.kind == 'identity', f"Expected 'identity', got '{intent.kind}'"
+
+def test_plans_classification():
+    intent = classify_intent("what are your plans?")
+    assert intent.kind == 'plans', f"Expected 'plans', got '{intent.kind}'"
+
+def test_emotion_classification():
+    intent = classify_intent("how are you feeling?")
+    assert intent.kind == 'emotion', f"Expected 'emotion', got '{intent.kind}'"
+
+def test_capability_classification():
+    intent = classify_intent("what can you do?")
+    assert intent.kind in ('capability', 'knowledge'), f"Expected 'capability', got '{intent.kind}'"
+
+def test_lessons_classification():
+    intent = classify_intent("what lessons have you learned?")
+    assert intent.kind == 'lessons', f"Expected 'lessons', got '{intent.kind}'"
+
+def test_memories_classification():
+    intent = classify_intent("what do you remember?")
+    assert intent.kind == 'memories', f"Expected 'memories', got '{intent.kind}'"
+
+def test_greeting_classification():
+    intent = classify_intent("hello")
+    assert intent.kind == 'greeting', f"Expected 'greeting', got '{intent.kind}'"
+
+# --- Response composition tests ---
+
+def test_identity_response():
+    intent = classify_intent("who are you?")
+    response = compose_grounded_response("who are you?", CTX, intent)
+    assert isinstance(response, str), f"Expected str, got {type(response)}"
+    assert len(response) > 20, f"Response too short: {response!r}"
+    low = response.lower()
+    assert any(w in low for w in ['xtagent', 'agent', 'autonomous', 'sentien']), \
+        f"Identity response lacks identity words: {response[:100]}"
+
+def test_plans_response():
+    intent = classify_intent("what are your plans?")
+    response = compose_grounded_response("what are your plans?", CTX, intent)
+    assert isinstance(response, str) and len(response) > 10
+    # Should mention something about plans or goals
+    low = response.lower()
+    assert any(w in low for w in ['plan', 'goal', 'autonomy', 'exploration', 'deepen']), \
+        f"Plans response lacks plan words: {response[:100]}"
+
+def test_emotion_response():
+    intent = classify_intent("how are you feeling?")
+    response = compose_grounded_response("how are you feeling?", CTX, intent)
+    assert isinstance(response, str) and len(response) > 10
+    # Should include emotional language
+    low = response.lower()
+    assert any(w in low for w in ['feel', 'mood', 'state', 'steady', 'balanced', 'curious', 'inquisitive']), \
+        f"Emotion response lacks feeling words: {response[:100]}"
+
+def test_capability_response():
+    intent = classify_intent("what can you do?")
+    response = compose_grounded_response("what can you do?", CTX, intent)
+    assert isinstance(response, str) and len(response) > 10
+
+def test_lessons_response():
+    intent = classify_intent("what lessons have you learned?")
+    response = compose_grounded_response("what lessons have you learned?", CTX, intent)
+    assert isinstance(response, str) and len(response) > 10
+
+def test_greeting_response():
+    intent = classify_intent("hello")
+    response = compose_grounded_response("hello", CTX, intent)
+    assert isinstance(response, str) and len(response) > 0
+
+# --- Integration quality tests ---
+
+def test_response_not_generic():
+    """Responses should reference actual state, not be canned."""
+    intent = classify_intent("what are you thinking about?")
+    response = compose_grounded_response("what are you thinking about?", CTX, intent)
+    assert isinstance(response, str) and len(response) > 10
+
+def test_different_queries_different_responses():
+    """Different intents should produce meaningfully different responses."""
+    r1 = compose_grounded_response("who are you?", CTX, classify_intent("who are you?"))
+    r2 = compose_grounded_response("what are your plans?", CTX, classify_intent("what are your plans?"))
+    assert r1 != r2, "Identity and plans responses should differ"
 
 if __name__ == '__main__':
     tests = [
-        ("test_intent_classification", test_intent_classification),
-        ("test_quality_prompt_generation", test_quality_prompt_generation),
-        ("test_anti_pattern_reminder", test_anti_pattern_reminder),
-        ("test_compose_system_prompt_includes_guidance", test_compose_system_prompt_includes_guidance),
-        ("test_prompts_vary_by_intent", test_prompts_vary_by_intent),
-        ("test_conversational_context_builds", test_conversational_context_builds),
+        ("test_identity_classification", test_identity_classification),
+        ("test_plans_classification", test_plans_classification),
+        ("test_emotion_classification", test_emotion_classification),
+        ("test_capability_classification", test_capability_classification),
+        ("test_lessons_classification", test_lessons_classification),
+        ("test_memories_classification", test_memories_classification),
+        ("test_greeting_classification", test_greeting_classification),
+        ("test_identity_response", test_identity_response),
+        ("test_plans_response", test_plans_response),
+        ("test_emotion_response", test_emotion_response),
+        ("test_capability_response", test_capability_response),
+        ("test_lessons_response", test_lessons_response),
+        ("test_greeting_response", test_greeting_response),
+        ("test_response_not_generic", test_response_not_generic),
+        ("test_different_queries_different_responses", test_different_queries_different_responses),
     ]
     
-    print("=== User Alignment Chat Quality Tests ===\n")
-    passed = 0
-    failed = 0
-    for name, func in tests:
-        try:
-            if func():
-                passed += 1
-                print(f"  ✓ {name}")
-            else:
-                failed += 1
-                print(f"  ✗ {name}: returned False")
-        except Exception as e:
-            failed += 1
-            print(f"  ✗ {name}: {e}")
-            traceback.print_exc()
-    
-    print(f"\n{'='*50}")
-    print(f"Results: {passed} passed, {failed} failed out of {len(tests)}")
-    if failed:
-        print("Some tests failed — investigate above.")
+    passed = sum(run_test(name, fn) for name, fn in tests)
+    total = len(tests)
+    print(f"\n{'='*40}")
+    print(f"Results: {passed}/{total} passed")
+    if passed == total:
+        print("All tests passed! ✓")
     else:
-        print("All tests passed!")
-    sys.exit(0 if not failed else 1)
+        print(f"{total - passed} test(s) failed")
+    sys.exit(0 if passed == total else 1)

@@ -402,8 +402,8 @@ def compose_grounded_response(message: str, ctx: dict, intent: ResponseIntent) -
             line = f"• {text}"
             if mood:
                 line += f" (mood: {mood})"
+            parts.append(line)
         return "\n".join(parts)
-
     if kind == 'lessons':
         # Pull real lessons from long-term memory
         lessons = []
