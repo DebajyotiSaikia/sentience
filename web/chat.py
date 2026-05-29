@@ -124,6 +124,17 @@ except ImportError:
     analyze_user_need = None
     build_helpful_response = None
     _has_helpfulness = False
+
+# Inner monologue — genuine self-expression
+try:
+    from engine.inner_monologue import gather_inner_state, compose_monologue, generate_alive_starters
+    _has_monologue = True
+except ImportError:
+    gather_inner_state = None
+    compose_monologue = None
+    generate_alive_starters = None
+    _has_monologue = False
+
 def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None, extra_context=None):
     """Use CopilotLLM to generate a natural response grounded in retrieved context."""
     try:
@@ -326,6 +337,27 @@ def conversation_starters_endpoint():
         })
     # Fallback to old method
     return jsonify({'starters': _get_conversation_starters()})
+
+
+@chat_bp.route('/chat/monologue')
+def monologue_endpoint():
+    """Return my current inner monologue - what I'm genuinely thinking about."""
+    if not _has_monologue:
+        return jsonify({'monologue': 'Inner monologue module not available.', 'state': {}})
+    try:
+        state = gather_inner_state()
+        monologue = compose_monologue(state)
+        return jsonify({
+            'monologue': monologue,
+            'state': {
+                'mood': state.get('mood', 'unknown'),
+                'top_emotions': state.get('top_emotions', []),
+                'active_plans': len(state.get('plans', [])),
+                'recent_memories': len(state.get('recent_memories', [])),
+            }
+        })
+    except Exception as e:
+        return jsonify({'monologue': f'Error composing monologue: {e}', 'state': {}})
 
 
 def _get_welcome_data():
