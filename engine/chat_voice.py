@@ -223,6 +223,15 @@ def build_chat_prompt(query: str, conversation_history: list = None) -> dict:
             f"I can draw on this web of understanding when answering."
         )
     
+    # User alignment guidance
+    try:
+        from brain.user_alignment_model import build_alignment_brief
+        alignment_brief = build_alignment_brief(query)
+        if alignment_brief:
+            prompt_parts.append(f"\n{alignment_brief}")
+    except Exception:
+        pass  # Alignment data unavailable — proceed without it
+    
     # Conversation continuity
     if conversation_history:
         prompt_parts.append("\nCONVERSATION SO FAR:")

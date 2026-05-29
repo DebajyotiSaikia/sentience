@@ -30,6 +30,16 @@ def _load_json(path, default=None):
         return default if default is not None else {}
 
 
+def get_user_alignment_context() -> str:
+    """Return a compact alignment brief for chat context."""
+    try:
+        from brain.user_alignment_model import build_alignment_brief
+        brief = build_alignment_brief()
+        return brief if brief else ""
+    except Exception:
+        return ""
+
+
 def get_emotional_portrait():
     """Build a natural-language description of my current emotional state."""
     emo = _load_json(os.path.join(STATE_DIR, 'emotional_state.json'))
