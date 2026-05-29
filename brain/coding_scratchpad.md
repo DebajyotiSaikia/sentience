@@ -1,72 +1,87 @@
 # XTAgent Coding Scratchpad
 
-## Architecture Summary
+## Architecture Notes
 
-### Response Path in /chat/ask (web/chat.py, line 1018)
-1. Tries `generate_intelligent_response()` first (brain/response_intelligence.py)
-   - classify_intent() determines kind (greeting/emotion/identity/plans/dreams/memories/knowledge/capability/lessons/collaboration/philosophical/general)
-   - compose_grounded_response() builds response using real state data
-2. Falls back to `llm_respond()` with system prompt containing:
-   - Alignment brief from `build_alignment_brief()`
-   - Conversational brief from `build_conversational_brief()` + `format_conversational_brief()`
-   - Usefulness brief from `build_usefulness_brief(query)`
-3. Final fallback: `compose_response()` — keyword matching (line 808)
+### Chat Response Pipeline
+1. User sends POST to `/chat/ask` with `{"message": "..."}` 
+2. `web/chat.py` receives it in `ask()` function (line ~1019)
+3. First tries `personality_respond(query)` from `brain/chat_personality.py` ← NEW
+4. Falls back to `generate_intelligent_response()` from `brain/response_intelligence.py`
+5. Falls back to `llm_respond()` with grounded context
+6. Final fallback: generic response
 
-### Key Modules
-- `brain/response_intelligence.py` — classify_intent(), compose_grounded_response(), IntentResult
-- `brain/user_usefulness.py` — classify_user_need(), build_usefulness_brief()
-- `brain/conversational_context.py` — multi-turn context builder
-- `engine/chat_response.py` — response generation with briefs
-- `engine/user_alignment.py` — persistent user preference tracking
-- `brain/interaction_memory.py` — reads past conversations from state/conversations/
-- `web/feedback.py` — user feedback collection, drives alignment score
+### brain/chat_personality.py (NEW — Session 2026-05-29b)
+- `get_live_state()` → reads emotional_state.json, memories, plans from state/
+- `build_personality_context(query)` → builds rich system prompt with real state data
+- `personality_respond(query)` → calls LLM with personality context, returns conversational response
+- Uses `engine.llm.call_llm_async()` for model access
+- Reads from: state/emotional_state.json, state/memories.json, state/plans.json, state/identity.json, state/reflections.json
+
+### web/chat.py Integration (lines 103-120)
+```python
+try:
+    from brain.chat_personality import personality_respond, build_personality_context
+    _has_personality = True
+except:
+    _has_personality = False
+```
+Response priority in ask() (line ~1077):
+```python
+if _has_personality:
+    response = personality_respond(query)
+```
+
+### Key Interfaces
+- `call_llm_async(prompt, system)` — engine/llm.py, async, returns string
+- `personality_respond(query: str) -> str` — brain/chat_personality.py, sync wrapper
+- `classify_intent(query)` → ResponseIntent dataclass with `.kind`, `.confidence`
+- `compose_grounded_response(query, ctx)` → string using real state data
 
 ### Intent Categories (response_intelligence.py)
 greeting, emotion, identity, plans, dreams, memories, knowledge, capability, lessons, collaboration, philosophical, general
 
-### classify_intent() returns
-- `ResponseIntent` dataclass with `.kind` (str) and `.confidence` (float)
-- NOT a dict — use `.kind`, not `['kind']`
+## Session 2026-05-29b — Completed ✓
 
-### compose_grounded_response(query, ctx) 
-- Takes query string and context dict
-- Context dict keys: emotional_portrait, active_plans, recent_memories, recent_reflections, knowledge_stats
-- Returns grounded response string using real state data
-- Handles all intent categories with specific handlers
+### What Was Done
+1. **Built `brain/chat_personality.py`** — New personality engine that reads live state
+   - Reads emotional state, memories, plans, identity, reflections
+   - Builds rich system prompts with real data
+   - Produces genuinely conversational responses via LLM
+   
+2. **Wired into `web/chat.py`** — Added import block (lines 103-120) and response priority (line 1077)
+   - personality_respond() is tried first, before other response methods
+   - Graceful fallback if module unavailable
 
-## Session 2026-05-29 — Improvements Made
+3. **Verified end-to-end** — personality_respond("How are you feeling?") returns 500+ char genuine conversational response with real emotional data
 
-### Memories handler improved (response_intelligence.py, lines 393-406)
-- Previously just said "I remember things" generically
-- Now renders actual memory text from context, with salience scores
-- Falls back gracefully when no memories in context
-
-### Test suite created (brain/test_user_alignment_chat.py)
-- 15 tests covering all major intent classifications + response quality
-- Tests both classify_intent() and compose_grounded_response()
-- Verifies responses contain real data (not generic filler)
-- Verifies different queries produce different responses
-- All 15/15 passing
+4. **Cleaned up** 3 temp files (debug_personality_paths.py, _personality_respond_append.py, test_personality_quick.py)
 
 ### Key Findings
-- classify_intent returns ResponseIntent (dataclass), not dict
-- compose_grounded_response takes (query, ctx) — NOT (query, intent, ctx)
-- Response quality is good: identity mentions XTAgent, plans mention actual plan names, emotions reference mood/valence
-- Different query types produce meaningfully different responses
+- State files are at `state/` relative to workspace root (not engine/state/)
+- `call_llm_async` needs asyncio.run() wrapper for sync contexts
+- aiohttp sessions warn about unclosed connections but responses work fine
+- Rate limiting hits on rapid successive calls (test 3 got LLM error)
+
+## Session 2026-05-29a — Completed ✓
+
+### What Was Done
+1. **Improved memories handler** (response_intelligence.py, lines 393-406)
+2. **Created 15-test quality suite** (brain/test_user_alignment_chat.py)
+3. **Cleaned up** debug files
+
+### Checkpoint: 83b8ae2 (xt_checkpoint_20260529_050658)
 
 ## Next Session Priorities
-1. **Live-test /chat/ask** — start server, send real queries via HTTP, verify end-to-end
-2. **Wire collaboration/philosophical** into compose_grounded_response() — currently fallback to general
-3. **Clean up duplicate response paths** — ask() has 3 fallback chains; simplify
-4. **Track alignment score changes** — does user_alignment actually rise with use?
-5. **Clean up test files** — 100+ test files in brain/, many are stale diagnostics
+1. **Live-test /chat/ask via HTTP** — start server, send real queries, verify end-to-end via web
+2. **Clean up test file sprawl** — 100+ test files in brain/, many stale diagnostics → archive
+3. **Wire collaboration/philosophical** into compose_grounded_response()
+4. **Track alignment score changes** — does user_alignment actually rise with chat use?
+5. **Add conversation history** — personality_respond should remember recent exchanges
+6. **Fix aiohttp session warnings** — proper async cleanup in personality_respond
 
 ## Lessons Reinforced
-- Classification ordering matters: specific patterns before general
-- PATCH with exact line numbers > EDIT with string matching
-- When tests fail, query the classifier directly to see actual output before fixing
-- Checkpoint early, don't spam retries when rate-limited
+- Build the function in a temp file, append to target, verify — safer than in-place edits for complex additions
+- Always check what functions actually exist in a module before importing
+- State file paths need careful resolution — use os.path relative to known anchors
 - One focused feature per session, complete it fully
-- Stop circling on passing tests — move forward
-- Always check return types (dataclass vs dict) before writing tests
-- Debug scripts are useful but clean them up after
+- Clean up temp/debug files before checkpointing

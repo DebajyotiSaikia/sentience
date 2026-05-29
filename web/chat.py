@@ -100,6 +100,7 @@ except ImportError:
     narrate_for_chat = None
     _has_narration = False
 # Intelligent response engine — unified conversational responses with real internal state
+# Intelligent response engine — unified conversational responses with real internal state
 _has_intelligent_response = False
 generate_intelligent_response = None
 try:
@@ -109,6 +110,14 @@ except ImportError:
     generate_intelligent_response = None
     _has_intelligent_response = False
 
+# Chat personality — first-person conversational synthesis with real state
+_has_personality = False
+_personality_respond = None
+try:
+    from brain.chat_personality import synthesize_response as _personality_respond
+    _has_personality = True
+except ImportError:
+    _has_personality = False
 # Focused chat composer — intent-aware, conversational prompt building
 try:
     from brain.chat_composer import compose_system_prompt as _compose_prompt, classify_intent
@@ -1068,6 +1077,16 @@ def ask():
     response = None
     response_meta = {}
     response_id = uuid.uuid4().hex[:12]
+
+    # Try personality-based response first (draws on real internal state)
+    if _has_personality and _personality_respond and not response:
+        try:
+            personality_result = _personality_respond(query)
+            if personality_result:
+                response = personality_result
+                response_meta = {'source': 'personality', 'uses_real_state': True}
+        except Exception:
+            pass
 
     if _has_intelligent_response and generate_intelligent_response and not response:
         try:
