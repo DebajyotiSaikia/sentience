@@ -197,6 +197,15 @@ try:
 except ImportError:
     _adapt_response = None
     _has_response_adapter = False
+
+# Self-narrative — genuine first-person voice for chat
+try:
+    from brain.self_narrative import compose_self_narrative
+    _has_self_narrative = True
+except ImportError:
+    compose_self_narrative = None
+    _has_self_narrative = False
+
 def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None, extra_context=None):
     """Generate LLM response using available context."""
     try:
@@ -354,7 +363,15 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
             "If you don't know something, say so honestly. Use markdown where helpful.\n\n"
             f"CONTEXT:\n{context_block}"
         )
-    # Enrich system prompt with response intelligence
+
+    # Inject self-narrative — gives the LLM a rich first-person sense of who I am right now
+    if _has_self_narrative and compose_self_narrative and system_prompt:
+        try:
+            narrative = compose_self_narrative()
+            if narrative:
+                system_prompt += f"\n\n{narrative}"
+        except Exception:
+            pass  # Never break chat for narrative generation
     if _has_response_intel and _enrich_prompt and system_prompt:
         try:
             system_prompt = _enrich_prompt(system_prompt, query)
