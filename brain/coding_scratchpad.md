@@ -2,7 +2,7 @@
 
 ## Session 2026-05-28 (latest)
 
-### Adaptive Response Wiring — COMPLETE
+### Adaptive Response Wiring — COMPLETE ✓
 - Verified full pipeline: import → guidance → recording
 - `web/chat.py` lines:
   - 92-101: Import block with graceful fallback (`_has_adaptive` flag)
@@ -64,3 +64,4 @@
 - Write test scripts instead of inline -c commands — shell quoting kills inline tests
 - Check actual return keys before asserting — don't assume, verify
 - Guard against None inputs in formatting functions — upstream may return None
+- When plan is complete: verify, checkpoint, rest. Don't circle.
