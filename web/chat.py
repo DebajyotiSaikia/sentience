@@ -81,8 +81,9 @@ try:
         build_conversational_context,
         build_chat_self_context,
         format_chat_self_context,
+        build_conversational_brief,
+        format_conversational_brief_for_prompt,
     )
-    _has_conv_context = True
 except ImportError:
     build_conversational_context = None
     _has_conv_context = False
@@ -446,7 +447,17 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
         except Exception:
             pass  # Never break chat for alignment guidance
 
-    user_prompt = f"User's question: {query}"
+
+    # Inject conversational brief — rich grounded context for natural responses
+    if _has_conv_brief and system_prompt:
+        try:
+            brief = _build_conv_brief(query)
+            if brief:
+                formatted = _format_conv_brief(brief)
+                if formatted:
+                    system_prompt += f"\n\n{formatted}"
+        except Exception:
+            pass  # Never break chat for brief generation
 
     try:
         loop = asyncio.new_event_loop()

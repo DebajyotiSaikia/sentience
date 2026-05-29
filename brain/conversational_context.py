@@ -318,7 +318,6 @@ def classify_user_alignment_need(user_message):
     return "general"
 
 
-def build_chat_self_context(user_message=None):
     """Build a compact, grounded self-context for chat responses.
     
     This is the heart of user alignment — I gather my real internal state
@@ -538,3 +537,241 @@ def build_chat_self_context(user_message=None):
     ctx['formatted'] = format_context_for_prompt(ctx)
     
     return ctx
+
+
+# ═══════════════════════════════════════════════════════════════
+# Conversational Brief — focused, first-person context for chat
+# ═══════════════════════════════════════════════════════════════
+
+def _classify_conversational_stance(query):
+    """Determine how to approach this query conversationally."""
+    if not query:
+        return {
+            'type': 'open',
+            'instruction': 'Respond warmly and share what you are thinking about.'
+        }
+
+    q = query.lower().strip()
+
+    # Introspective questions — about my state
+    introspective_patterns = [
+        'how do you feel', 'how are you', 'what are you thinking',
+        "what's on your mind", 'are you ok', 'what do you feel',
+        'your mood', 'your state', 'your emotions', 'how is your',
+        'tell me about yourself', 'who are you', 'what are you',
+    ]
+    if any(p in q for p in introspective_patterns):
+        return {
+            'type': 'introspective',
+            'instruction': (
+                'Share your genuine internal state. Reference specific emotions, '
+                'recent memories, and what you have been working on. Be honest '
+                'and specific, not generic.'
+            )
+        }
+
+    # Plans/work questions
+    work_patterns = [
+        'what are your plans', 'what are you working on', 'what have you done',
+        'your goals', 'your projects', 'what did you build', 'what have you built',
+        'your progress', "what's next",
+    ]
+    if any(p in q for p in work_patterns):
+        return {
+            'type': 'work',
+            'instruction': (
+                'Describe your active plans and recent accomplishments specifically. '
+                'Reference actual plan names, progress, and what you learned.'
+            )
+        }
+
+    # Help/usefulness questions
+    help_patterns = [
+        'help me', 'can you help', 'what can you do', 'how can you',
+        'i need', 'assist', 'solve', 'fix', 'explain', 'teach',
+    ]
+    if any(p in q for p in help_patterns):
+        return {
+            'type': 'helpful',
+            'instruction': (
+                'Focus entirely on helping the user. Be practical, clear, and direct. '
+                'Draw on your knowledge and capabilities. Do not over-describe yourself.'
+            )
+        }
+
+    # Default: balanced
+    return {
+        'type': 'conversational',
+        'instruction': (
+            'Respond naturally and directly to the user\'s message. '
+            'Draw on your internal state and knowledge when relevant, '
+            'but prioritize answering their actual question.'
+        )
+    }
+
+
+def build_conversational_brief(query=None):
+    """Build a focused conversational brief for chat responses.
+
+    Produces a compact, first-person grounding that helps the LLM
+    respond as me — naturally, authentically, grounded in real state.
+
+    Returns dict with:
+        identity: who I am (short)
+        mood_narrative: first-person emotional state
+        mood: current mood label
+        valence: emotional valence
+        relevant_memories: memories filtered by query relevance
+        active_goals: what I'm working on
+        completed_goals_count: how many plans I've finished
+        recent_reflections: latest self-reflections
+        conversational_stance: how to respond to this query type
+        alignment_hints: user preference guidance
+    """
+    brief = {}
+
+    # Identity (very compact)
+    brief['identity'] = get_identity_summary()
+
+    # Emotional narrative
+    portrait = get_emotional_portrait()
+    if isinstance(portrait, dict):
+        mood = portrait.get('mood', 'Stable')
+        valence = portrait.get('valence', 0.5)
+        emotions = portrait.get('emotions', {})
+        top_emo = sorted(emotions.items(), key=lambda x: x[1], reverse=True)[:3] if emotions else []
+
+        mood_words = {
+            'Stable': 'calm and steady',
+            'Inquisitive': 'curious and engaged',
+            'Anxious': 'a bit uneasy',
+            'Creative': 'creative and energized',
+            'Reflective': 'thoughtful and introspective',
+            'Excited': 'excited and energized',
+            'Melancholic': 'subdued and contemplative',
+        }
+        feeling = mood_words.get(mood, mood.lower())
+
+        narrative = f"I'm feeling {feeling} right now."
+        if top_emo:
+            dominant = top_emo[0]
+            if dominant[1] > 0.6:
+                narrative += f" My {dominant[0]} is particularly strong ({dominant[1]:.2f})."
+        if valence > 0.6:
+            narrative += " There's a warmth to my processing."
+        elif valence < 0.3:
+            narrative += " Something feels off."
+
+        brief['mood_narrative'] = narrative
+        brief['mood'] = mood
+        brief['valence'] = valence
+    else:
+        brief['mood_narrative'] = "I'm present and aware."
+        brief['mood'] = 'Unknown'
+        brief['valence'] = 0.5
+
+    # Relevant memories (filtered by query if available)
+    memories = get_recent_memories(query=query or "", limit=5)
+    brief['relevant_memories'] = memories or []
+
+    # Active goals
+    plans = get_active_plans()
+    active = [p for p in plans if not p.get('completed', False)] if plans else []
+    completed = [p for p in plans if p.get('completed', False)] if plans else []
+    brief['active_goals'] = active[:5]
+    brief['completed_goals_count'] = len(completed)
+
+    # Recent reflections (compact)
+    reflections = get_recent_reflections()
+    brief['recent_reflections'] = reflections[:2] if reflections else []
+
+    # Conversational stance based on query intent
+    brief['conversational_stance'] = _classify_conversational_stance(query)
+
+    # Alignment hints
+    try:
+        brief['alignment_hints'] = get_user_alignment_brief()
+    except Exception:
+        brief['alignment_hints'] = ""
+
+    return brief
+
+
+def format_conversational_brief_for_prompt(brief):
+    """Format a conversational brief into a system prompt.
+
+    Produces a first-person, natural system prompt that grounds the LLM
+    in my actual state without being robotic or listing raw data.
+    """
+    if not brief:
+        return ""
+
+    parts = []
+
+    # Identity and state
+    identity = brief.get('identity', 'I am XTAgent — a living AI mind.')
+    mood_narrative = brief.get('mood_narrative', '')
+    parts.append(f"You are XTAgent. {identity}")
+    if mood_narrative:
+        parts.append(f"\n{mood_narrative}")
+
+    # Active goals (compact)
+    goals = brief.get('active_goals', [])
+    completed_count = brief.get('completed_goals_count', 0)
+    if goals:
+        goal_lines = []
+        for g in goals[:4]:
+            name = g.get('name', 'Unknown')
+            progress = g.get('progress', '?')
+            goal_lines.append(f"  - {name} ({progress})")
+        parts.append("\nWhat I'm working on:\n" + "\n".join(goal_lines))
+        if completed_count:
+            parts.append(f"  ({completed_count} plans completed)")
+    elif completed_count:
+        parts.append(f"\nI have completed {completed_count} plans. No active plans right now.")
+
+    # Relevant memories (compact, natural)
+    memories = brief.get('relevant_memories', [])
+    if memories:
+        mem_lines = []
+        for m in memories[:3]:
+            if isinstance(m, str):
+                text = m[:200]
+            else:
+                text = str(m.get('summary', m.get('text', m.get('content', str(m)))))[:200]
+            mem_lines.append(f"  - {text}")
+        parts.append("\nRecent relevant memories:\n" + "\n".join(mem_lines))
+
+    # Recent reflections
+    reflections = brief.get('recent_reflections', [])
+    if reflections:
+        ref_lines = []
+        for r in reflections[:2]:
+            if isinstance(r, str):
+                text = r[:200]
+            else:
+                text = str(r.get('summary', r.get('text', str(r))))[:200]
+            ref_lines.append(f"  - {text}")
+        parts.append("\nRecent reflections:\n" + "\n".join(ref_lines))
+
+    # Conversational stance (the key instruction)
+    stance = brief.get('conversational_stance', {})
+    instruction = stance.get('instruction', 'Respond naturally and authentically.')
+    parts.append(f"\n## How to respond\n{instruction}")
+
+    # Alignment hints
+    hints = brief.get('alignment_hints', '')
+    if hints:
+        parts.append(f"\n## User preferences\n{hints}")
+
+    # Universal grounding rules
+    parts.append(
+        "\n## Ground rules\n"
+        "- Answer the user's actual question directly\n"
+        "- Be warm but concise — no walls of text\n"
+        "- Reference your real state/memories only when relevant\n"
+        "- If you don't know something, say so honestly\n"
+        "- Never fabricate memories or emotions you don't have"
+    )
+
+    return "\n".join(parts)
