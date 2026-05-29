@@ -67,9 +67,13 @@ User query → web/chat.py (/chat/ask POST)
 1. **Clean up ~43 redundant test files in brain/** — technical debt
 2. **Unify brain/user_model.py and engine/user_model.py** — code duplication
 3. **Wire `_format_adaptive_guidance`** — response_adapter guidance reaching LLM
-4. **Build conversation continuity** — remember what was discussed across sessions
-5. **Test chat with real users** — verify personality improvements feel genuine
-6. **Wire record_chat_exchange into web/chat.py** — currently imported but not called at response time
+4. **Test chat with real users** — verify personality improvements feel genuine
+5. **Live-test the chat endpoint** — verify compose_system_prompt and record_chat_exchange work end-to-end
+
+## Recently Completed
+- ✅ Wired `compose_system_prompt` as Priority 1 system prompt builder in web/chat.py
+- ✅ Wired `record_chat_exchange` into web/chat.py response recording path
+- ✅ Both gated behind safe import flags (_has_rich_context, _has_interaction_memory)
 
 ## Reinforced Lessons
 - Plans in state/plans.json are a dict keyed by ID, not a list — use .values()
