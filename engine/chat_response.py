@@ -83,7 +83,7 @@ def generate_response_with_metadata(query, history=None):
     # Build focused system prompt using the composer (intent-aware, selective context)
     try:
         from brain.chat_composer import compose_system_prompt
-        system_prompt = compose_system_prompt(query, ctx, history=history)
+        system_prompt = compose_system_prompt(query, grounding=ctx, conversation_history=history)
         log.debug("Using chat composer for system prompt")
     except Exception as e:
         log.debug("Chat composer unavailable (%s), falling back to _build_system_context", e)
@@ -102,6 +102,17 @@ def generate_response_with_metadata(query, history=None):
         except Exception:
             pass
 
+    # Inject adaptive response guidance (user model awareness)
+    try:
+        from brain.adaptive_response import build_response_guidance, format_guidance_for_prompt
+        guidance = build_response_guidance(query, user_id="default")
+        adaptive_text = format_guidance_for_prompt(guidance)
+        if adaptive_text:
+            system_prompt += f"\n\n{adaptive_text}"
+    except Exception:
+        pass
+
+    # Call LLM with persistent background loop
     # Call LLM with persistent background loop
     try:
         response_text = _run_async(call_llm(

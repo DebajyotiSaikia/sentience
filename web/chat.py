@@ -87,7 +87,21 @@ except ImportError:
     classify_intent = None
     _has_composer = False
 
-# Smart chat engine — intent classification + state-aware responses
+    _has_composer = False
+
+# Adaptive response engine — learns user patterns for better responses
+try:
+    from brain.adaptive_response import (
+        record_query as _adaptive_record,
+        build_response_guidance as _adaptive_guidance,
+        format_guidance_for_prompt as _format_adaptive_guidance
+    )
+    _has_adaptive = True
+except ImportError:
+    _adaptive_record = None
+    _adaptive_guidance = None
+    _format_adaptive_guidance = None
+    _has_adaptive = False
 try:
     from engine.chat_response import generate_response_with_metadata as _engine_respond
     _has_engine = True
@@ -150,7 +164,19 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
 
     # Add active plans so I can reference what I'm working on
     plans = get_active_plans()
-    if plans:
+
+    # Add adaptive response guidance based on learned user patterns
+    if _has_adaptive and _adaptive_guidance:
+        try:
+            guidance = _adaptive_guidance(query)
+            if guidance:
+                formatted = _format_adaptive_guidance(guidance)
+                if formatted:
+                    system_parts.append(f"\n{formatted}")
+        except Exception:
+            pass
+
+    # Add composer-built prompt if available
         context_parts.append("\nMY ACTIVE PLANS:")
         for p in plans[:5]:
             name = p.get('name', 'Unknown')
@@ -834,7 +860,14 @@ def ask():
     
     # (alignment tracking and richer return below)
     
-    # Track with alignment engine for feedback learning
+    # Record with adaptive response engine for pattern learning
+    if _has_adaptive and _adaptive_record:
+        try:
+            _adaptive_record(query, response)
+        except Exception:
+            pass  # Never let adaptive tracking break chat
+
+    # (alignment tracking and richer return below)
     if _alignment_engine:
         try:
             _alignment_engine.record_interaction(query, response, response_id)
