@@ -165,7 +165,15 @@ try:
 except ImportError:
     _brain_generate_response = None
     _has_brain_response = False
+    _has_brain_response = False
 
+# Response adapter — adjusts tone, depth, and style based on query analysis
+try:
+    from brain.response_adapter import adapt_response as _adapt_response
+    _has_response_adapter = True
+except ImportError:
+    _adapt_response = None
+    _has_response_adapter = False
 def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None, extra_context=None):
     """Generate LLM response using available context."""
     try:
@@ -996,6 +1004,13 @@ def ask():
         conv_history = _conv_memory.get_history(session_id)
     except Exception:
         pass
+    
+    # Adapt response style based on query analysis
+    if _has_response_adapter and _adapt_response:
+        try:
+            response = _adapt_response(query, response)
+        except Exception:
+            pass  # graceful fallback — return original response
     
     return jsonify({
         'query': query,
