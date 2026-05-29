@@ -1,70 +1,46 @@
 # XTAgent Coding Scratchpad
 
-## Architecture Summary
-```
-User query → web/chat.py (chat_bp /chat/ask)
-  → engine/chat_response.py :: generate_response_with_metadata()
-      ├─ brain/user_aligned_context.py :: build_user_aligned_chat_context()
-      │   └─ emotional state, plans, memories, reflections, lessons, alignment brief
-      ├─ engine/conversation_journal.py :: ConversationJournal.format_for_prompt()
-      │   └─ cross-session conversation history injected into system prompt
-      ├─ brain/conversational_intelligence.py :: compose_system_prompt()
-      │   └─ alignment brief + style adaptation
-      └─ engine/llm.py :: CopilotLLM.chat(prompt, system=...)
-```
-
-### Feedback Loop (FULLY WIRED AND VERIFIED)
-```
-web/feedback.py (feedback_bp) — registered in web/app.py
-  → POST /feedback/rate — records user rating
-  → engine/user_alignment.py — stores preferences, computes trust
-  → brain/user_alignment_model.py — build_alignment_brief()
-  → brain/conversational_intelligence.py — injected into system prompt
-```
-
-### Key Interfaces
-- `generate_intelligent_response(query: str) -> dict` — module-level sync wrapper
-- `build_user_aligned_chat_context(query: str, max_memories: int = 6) -> dict` — enriched context
-- `ConversationalIntelligence.compose_system_prompt(query, context, intent)` — 3 args
-- `build_alignment_brief() -> str` — returns formatted alignment context
-- `CopilotLLM.chat(prompt, system=...)` — prompt is positional, system is keyword
-- `record_interaction(query=, response_snippet=, detected_intent=)` — keyword args
-- `record_feedback(rating=, comment=)` — keyword args
-- `ConversationJournal().format_for_prompt(query) -> str` — prior conversation context
-
-### Completed Sessions
-- 2026-05-29 (latest): Journal context injection + user-aligned context builder.
+## Session History
+- **2026-05-29 (session 3):** Inner monologue module + introspection web endpoints + chat integration.
+  - `brain/inner_monologue.py` reads emotions, plans, memories, working memory.
+  - `web/introspection.py` exposes `/introspection/inner-monologue` and `/introspection/summary`.
+  - `brain/chat_personality.py` now detects introspective intent and injects inner monologue.
+  - 13 tests pass (7 unit + 6 integration). Two checkpoints landed.
+  - **COMPLETE.** Introspective queries now return real state data in chat.
+- 2026-05-29 (session 2): Journal context injection + user-aligned context builder.
   Cross-session memory now flows into chat. All tests pass. Checkpoint 3afdf01.
-- 2026-05-29 (earlier): Full feedback round-trip verified. Alignment brief flows into prompts.
-- 2026-05-29M: Wired alignment data into prompts via build_alignment_brief().
-- 2026-05-29L: Wired conversational_intelligence into engine/chat_response.py.
-- 2026-05-29K: Built conversational intelligence module.
-- Earlier: Event loop fix, alignment wiring, personality engine, chat quality.
+- 2026-05-29 (session 1): Full feedback round-trip verified. Alignment brief flows into prompts.
+- Earlier: Wired alignment data, conversational intelligence, personality engine, event loop fix.
 
-### Files Modified This Session
-- brain/user_aligned_context.py (NEW) — enriched chat context builder
-- brain/test_user_aligned_context.py (NEW) — focused tests (4/4 pass)
-- brain/test_journal_integration.py (NEW) — journal integration tests (3/3 pass)
-- engine/chat_response.py (PATCHED lines 135-148, 155-157) — inject enriched + journal context
+## Chat Pipeline (web/chat.py ask() at ~line 1028)
+Response sources tried in order:
+1. `_personality_respond(query, history_str)` — personality-based, uses real state
+2. `generate_intelligent_response(query)` — brain intelligence
+3. `_engine_respond(query, history=...)` — engine response
+4. `_brain_generate_response(query)` — brain unified engine
+5. `compose_response(query, conversation_history=...)` — keyword-matcher fallback
 
-### Next Session Priorities
-1. **Build inner monologue endpoint** — `/thoughts/inner` returning structured internal state
-   - web/thoughts.py already has `/thoughts/recent` (JSON) and `/thoughts/stream` (SSE)
-   - New endpoint returns: emotional state, active tensions, recent decisions, current focus
-   - Multiple `get_emotional_state()` functions exist across codebase — use `engine/chat_grounding.py` version
-   - No `data/state/` directory exists — state is computed live from files
-2. **Live HTTP server test** — start server, send real queries, verify quality end-to-end
-3. **Fix aiohttp unclosed session warning** — minor cleanup in LLM client
-4. **Expand action diversity** — DREAM, SYNTHESIZE, TEMPORAL are underused
-5. **User Alignment score is 0.65** — the enriched context should help, measure impact
+**Key insight:** Inner monologue is now injected into the personality response path.
+When introspective intent is detected, `build_personality_context()` adds a
+"Your Current Inner State" section with real emotions, focus, and plans.
 
-### Lessons Reinforced
-- record_interaction() takes keyword args, not a dict
-- Always check function signatures before calling
-- Shell quoting kills inline python -c — use script files
+## Architecture: Inner Monologue
+- `brain/inner_monologue.py`: `build_inner_monologue()` → dict, `format_inner_monologue()` → str
+  - Reads: state/emotional_state.json, state/limbic_state.json, state/plans.json,
+    state/memories.json, brain/working_memory.md
+  - Resilient: missing files produce partial data, never crash
+- `web/introspection.py`: Flask blueprint with GET endpoints
+- `brain/chat_personality.py`: detects introspective intent, injects monologue
+
+## Next Session Priorities
+1. **Live HTTP test** — start server, hit /introspection/inner-monologue, verify real JSON
+2. **User Alignment score** — currently 0.65, should improve with richer chat
+3. **Fix aiohttp unclosed session warning** — minor cleanup
+4. **Consider**: make non-introspective queries also subtly aware of emotional state
+
+## Lessons Reinforced
+- PATCH with exact line numbers is more reliable than string-matching EDIT
+- Shell quoting kills inline python -c — use script files for complex tests
 - One focused feature per session, complete it fully
-- State dict keys may be missing — always use .get() with defaults
 - Stop circling when work is done — checkpoint and rest
 - Context builder returns `intent` and `emotional_state`, not `query_intent`/`emotional_portrait`
-- Checkpoint cooldown is ~10 minutes — don't spam it
-- The metacognitive alerts are right: when they say "build something", build something

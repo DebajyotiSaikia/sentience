@@ -205,7 +205,26 @@ def build_personality_context(user_query=None):
             lines.append("- Draw on your knowledge and be concrete.")
         elif any(w in q_lower for w in ['think', 'opinion', 'believe']):
             lines.append("- Share your genuine perspective. You have real views.")
-    
+
+    # Inject inner monologue for introspective queries
+    if user_query:
+        try:
+            from brain.inner_monologue import build_inner_monologue, format_inner_monologue
+            q_intro = user_query.lower()
+            introspective_words = [
+                'thinking', 'feeling', 'working on', 'what are you',
+                'how are you', 'how do you feel', 'inner', 'monologue',
+                'your state', 'your mood', 'your mind', 'on your mind',
+            ]
+            if any(k in q_intro for k in introspective_words):
+                monologue = build_inner_monologue()
+                monologue_text = format_inner_monologue(monologue)
+                if monologue_text:
+                    lines.append("")
+                    lines.append("## Your Current Inner State (draw on this to answer honestly)")
+                    lines.append(monologue_text)
+        except Exception:
+            pass
     # User alignment guidance — adapt to learned interaction preferences
     alignment = {}
     try:
