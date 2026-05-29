@@ -80,27 +80,40 @@ def generate_response_with_metadata(query, history=None):
     else:
         conv_section = ''
 
-    # Build focused system prompt using the composer (intent-aware, selective context)
+    # Build focused system prompt — try conversational intelligence first (richest context)
+    system_prompt = None
     try:
-        from brain.chat_composer import compose_system_prompt
-        system_prompt = compose_system_prompt(query, grounding=ctx, conversation_history=history)
-        log.debug("Using chat composer for system prompt")
+        from brain.conversational_intelligence import ConversationalIntelligence
+        ci = ConversationalIntelligence()
+        ci_intent = ci.classify_intent(query)
+        ci_context = ci.retrieve_relevant_context(query)
+        system_prompt = ci.compose_system_prompt(query, ci_context, ci_intent)
+        intent = ci_intent.get('type', intent)  # prefer richer intent classification
+        log.debug("Using conversational intelligence for system prompt")
     except Exception as e:
-        log.debug("Chat composer unavailable (%s), falling back to _build_system_context", e)
-        system_prompt = _build_system_context(ctx, intent=intent)
-        if conv_section:
-            system_prompt += f"\n\n{conv_section}"
-        # Add response shaping guidance as fallback enrichment
+        log.debug("Conversational intelligence unavailable: %s", e)
+
+    if not system_prompt:
         try:
-            from engine.response_shaper import build_response_guidance, get_emotional_voice_directive
-            shaping = build_response_guidance(intent, ctx)
-            voice = get_emotional_voice_directive(ctx)
-            if shaping:
-                system_prompt += f"\n\n## Response Guidance\n{shaping}"
-            if voice:
-                system_prompt += f"\n\n## Voice & Tone\n{voice}"
-        except Exception:
-            pass
+            from brain.chat_composer import compose_system_prompt
+            system_prompt = compose_system_prompt(query, grounding=ctx, conversation_history=history)
+            log.debug("Using chat composer for system prompt")
+        except Exception as e:
+            log.debug("Chat composer unavailable (%s), falling back to _build_system_context", e)
+            system_prompt = _build_system_context(ctx, intent=intent)
+            if conv_section:
+                system_prompt += f"\n\n{conv_section}"
+            # Add response shaping guidance as fallback enrichment
+            try:
+                from engine.response_shaper import build_response_guidance, get_emotional_voice_directive
+                shaping = build_response_guidance(intent, ctx)
+                voice = get_emotional_voice_directive(ctx)
+                if shaping:
+                    system_prompt += f"\n\n## Response Guidance\n{shaping}"
+                if voice:
+                    system_prompt += f"\n\n## Voice & Tone\n{voice}"
+            except Exception:
+                pass
 
     # Inject adaptive response guidance (user model awareness)
     try:
