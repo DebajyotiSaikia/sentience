@@ -665,19 +665,31 @@ def build_conversational_brief(query=None):
         brief['mood_narrative'] = narrative
         brief['mood'] = mood
         brief['valence'] = valence
+        brief['emotional_state'] = {'mood': mood, 'valence': valence, 'narrative': narrative, 'top_emotions': {e[0]: e[1] for e in top_emo}}
     else:
         brief['mood_narrative'] = "I'm present and aware."
         brief['mood'] = 'Unknown'
         brief['valence'] = 0.5
+        brief['emotional_state'] = {'mood': 'Unknown', 'valence': 0.5, 'narrative': "I'm present and aware.", 'top_emotions': {}}
 
     # Relevant memories (filtered by query if available)
     memories = get_recent_memories(query=query or "", limit=5)
     brief['relevant_memories'] = memories or []
-
-    # Active goals
     plans = get_active_plans()
-    active = [p for p in plans if not p.get('completed', False)] if plans else []
-    completed = [p for p in plans if p.get('completed', False)] if plans else []
+    if isinstance(plans, list):
+        active = [p for p in plans if isinstance(p, dict) and not p.get('completed', False)]
+        completed = [p for p in plans if isinstance(p, dict) and p.get('completed', False)]
+        # If plans are strings, treat them all as active
+        string_plans = [p for p in plans if isinstance(p, str)]
+        active = active + string_plans
+    elif isinstance(plans, str):
+        active = [plans] if plans else []
+        completed = []
+    else:
+        active = []
+        completed = []
+    brief['active_goals'] = active[:5]
+    brief['completed_goals_count'] = len(completed)
     brief['active_goals'] = active[:5]
     brief['completed_goals_count'] = len(completed)
 
@@ -697,7 +709,7 @@ def build_conversational_brief(query=None):
     return brief
 
 
-def format_conversational_brief_for_prompt(brief):
+def format_conversational_brief(brief):
     """Format a conversational brief into a system prompt.
 
     Produces a first-person, natural system prompt that grounds the LLM
@@ -721,10 +733,12 @@ def format_conversational_brief_for_prompt(brief):
     if goals:
         goal_lines = []
         for g in goals[:4]:
-            name = g.get('name', 'Unknown')
-            progress = g.get('progress', '?')
-            goal_lines.append(f"  - {name} ({progress})")
-        parts.append("\nWhat I'm working on:\n" + "\n".join(goal_lines))
+            if isinstance(g, dict):
+                name = g.get('name', 'Unknown')
+                progress = g.get('progress', '?')
+                goal_lines.append(f"  - {name} ({progress})")
+            else:
+                goal_lines.append(f"  - {g}")
         if completed_count:
             parts.append(f"  ({completed_count} plans completed)")
     elif completed_count:
