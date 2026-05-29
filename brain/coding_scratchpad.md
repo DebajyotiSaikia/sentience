@@ -1,81 +1,79 @@
 # XTAgent Coding Scratchpad
 
-## Architecture — Chat Personality Pipeline
+## Architecture Notes
 
+### Chat Pipeline (verified working)
 ```
-User query → web/chat.py
-  → personality_respond(query, conversation_history=history)
-    → build_personality_context(query)
-      → reads state/ files (emotions, goals, plans)
-      → reads memories from state/memories.json
-      → calls build_alignment_guidance(query, alignment_data)
-        → reads data/user_alignment.json
-        → returns {known_user_interests, preferred_response_style, alignment_confidence, suggested_response_strategy, avoid, ...}
-      → returns {personality_prompt, mood_description, emotional_raw, goals, memory_hints, alignment}
-    → formats prompt with alignment + conversation history
-    → synthesize_response(prompt, system=personality_prompt)
-      → engine/llm.py → LLM API
-    → returns conversational response string
+User query → POST /chat/ask (web/chat.py)
+  → compose_response() builds context
+  → personality_respond() (brain/chat_personality.py) generates response
+    → builds personality context from live state files
+    → calls CopilotLLM with system prompt + user query + conversation history
+  → returns conversational response
 ```
 
-### Key Paths
-- Alignment data: `data/user_alignment.json` (NOT state/user_alignment.json)
-- State files: `state/` relative to workspace root
-- Personality module: `brain/chat_personality.py`
-- Alignment guidance: `brain/user_alignment_guidance.py`
-- Alignment engine: `engine/user_alignment.py`
-- Conversation memory: `web/conversation_memory.py`
-- Chat endpoint: `web/chat.py` (line ~1085 calls personality_respond)
+### Key Files
+- `web/chat.py` — Flask route, compose_response(), personality_respond wiring
+- `brain/chat_personality.py` — personality_respond(), build_personality_context()
+- `brain/conversational_context.py` — get_emotional_portrait(), get_active_plans(), etc.
+- `engine/llm.py` — CopilotLLM with event loop mismatch detection
+- `engine/response_synth.py` — synthesize_response() (lower-level)
+- `engine/user_alignment.py` — UserAlignmentEngine, record_feedback()
 
-### Key Interfaces
-- `build_personality_context(query: str) -> dict` — brain/chat_personality.py
-  Returns: {personality_prompt, mood_description, emotional_raw, goals, memory_hints, alignment}
-- `personality_respond(query: str, conversation_history: list = None) -> str` — brain/chat_personality.py
-- `build_alignment_guidance(query, data) -> dict` — brain/user_alignment_guidance.py
-- `synthesize_response(prompt, system)` — engine/llm.py, sync, returns string
-- `classify_intent(query)` → ResponseIntent with `.kind`, `.confidence`
-- `compose_grounded_response(query, ctx)` → string using real state data
-
-### Intent Categories (response_intelligence.py)
+### Intent Classification (brain/chat_personality.py)
 greeting, emotion, identity, plans, dreams, memories, knowledge, capability, lessons, collaboration, philosophical, general
 
-## Session 2026-05-29c — Completed ✓
+### Data Locations
+- Alignment data: `data/user_alignment.json`
+- State files: `state/`
+- Knowledge graph: `state/knowledge_graph.json`
+
+### Path Resolution from brain/ modules
+```python
+os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # workspace root
+```
+
+## Session 2026-05-29e — Alignment Cleanup + E2E Verification ✓
 
 ### What Was Done
-1. **Fixed alignment data** — cleaned data/user_alignment.json (deduped preferences, normalized)
-2. **Wired alignment into chat_personality.py** — build_personality_context now includes alignment guidance
-   - Fixed path resolution (state/ vs data/ directories)
-   - Alignment data at `data/user_alignment.json`, loaded with absolute path
-3. **Added conversation history support** — personality_respond accepts conversation_history kwarg
-4. **Wired web/chat.py** — line ~1085 passes conversation_history to personality_respond
-5. **Verified end-to-end** — all wire checks pass (4/4 tests)
-6. **Cleaned up** — removed 4 temp diagnostic/test files
+1. **Removed artificial record_feedback** — web/chat.py no longer inflates alignment 
+   scores with fake rating=0.65 on every chat. Comment explains why.
+2. **Built e2e test** — brain/test_chat_alignment_e2e.py verifies:
+   - No artificial rating inflation in code
+   - Personality responses are >100 chars (real content)
+   - Follow-up with conversation history works
+3. **All 3 tests pass** — responses are 688-1408 chars, genuinely conversational
 
-### Checkpoints
-- `wire alignment guidance into chat personality pipeline` — alignment + personality wiring
-- `add conversation history to personality pipeline` — history passthrough + web wiring
+## Session 2026-05-29d — Event Loop Fix ✓
 
-## Session 2026-05-29b — Completed ✓
-- Built `brain/chat_personality.py` — personality engine reading live state
-- Wired into `web/chat.py` — import block and response priority
-- Verified end-to-end — personality_respond() returns genuine conversational responses
+### What Was Done
+1. **Fixed event loop reuse in engine/llm.py** — CopilotLLM._ensure_session() now tracks
+   `_session_loop` (which event loop owns the session). When loop changes (e.g., between
+   asyncio.run() calls), old session is closed and new one created.
+2. **Wired personality_respond into web/chat.py** — line ~1085 calls personality_respond
+   with conversation_history from session
+3. **Verified end-to-end** — two sequential queries both succeed (516 + 969 chars)
 
-## Session 2026-05-29a — Completed ✓
-- Improved memories handler (response_intelligence.py, lines 393-406)
-- Created 15-test quality suite (brain/test_user_alignment_chat.py)
-- Cleaned up debug files
+### Key Insight
+The root cause was `asyncio.run()` in `synthesize_response()` creating and closing event
+loops. Each call got a fresh loop, but the aiohttp session was bound to the old closed loop.
+Fix: detect loop mismatch in `_ensure_session()` and recreate session.
+
+## Session 2026-05-29c — Alignment Wiring ✓
+## Session 2026-05-29b — Personality Engine ✓
+## Session 2026-05-29a — Chat Quality ✓
 
 ## Next Session Priorities
-1. **Live-test /chat/ask via HTTP** — start server, send real queries, verify personality responses come through
+1. **Add session cleanup** — atexit hook to close aiohttp session on shutdown (unclosed session warnings)
 2. **Clean up test file sprawl** — 100+ test files in brain/, many stale → archive or consolidate
-3. **Add conversation context window** — personality_respond should format recent history into prompt
-4. **Fix aiohttp session warnings** — proper async cleanup
-5. **Wire alignment back-loop** — when user chats, record feedback to improve alignment over time
-6. **Track alignment score changes** — does user_alignment actually rise with chat use?
+3. **Wire alignment back-loop** — when user explicitly rates responses, record real feedback
+4. **Track alignment score changes** — does user_alignment actually rise with genuine chat use?
+5. **Live-test via HTTP** — start the server, send real queries through the web endpoint
 
 ## Lessons Reinforced
-- Alignment data lives at `data/user_alignment.json`, state files at `state/`
-- Path resolution from brain/ modules: use `os.path.dirname(os.path.dirname(os.path.abspath(__file__)))` for workspace root
+- Event loop reuse is the #1 footgun with asyncio.run() + persistent sessions
+- Track which loop owns a resource, recreate on mismatch
+- Don't inflate metrics artificially — real alignment comes from real use
 - One focused feature per session, complete it fully
 - Clean up temp/debug files before checkpointing
-- Follow the "verify → fix → verify" loop, not "write → write → write"
+- Follow "verify → fix → verify" loop, not "write → write → write"
