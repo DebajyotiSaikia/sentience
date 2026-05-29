@@ -112,6 +112,15 @@ def generate_response_with_metadata(query, history=None):
     except Exception:
         pass
 
+    # Inject user alignment brief (preferences, tone, interaction patterns)
+    try:
+        from brain.user_alignment_model import build_alignment_brief
+        alignment_brief = build_alignment_brief(query)
+        if alignment_brief and alignment_brief.strip():
+            system_prompt += f"\n\n## User Alignment Guidance\n{alignment_brief}"
+    except Exception:
+        pass  # Alignment enrichment is best-effort
+
     # Call LLM with persistent background loop
     # Call LLM with persistent background loop
     try:
