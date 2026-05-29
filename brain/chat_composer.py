@@ -371,6 +371,16 @@ def compose_system_prompt(
             prompt_parts.extend(["", "## Voice & Tone", voice_directive])
     except Exception:
         pass  # Voice directive is optional enhancement
+    
+    # User alignment brief — adapt to user's communication preferences
+    try:
+        from brain.user_alignment_engine import get_user_alignment_brief
+        alignment_brief = get_user_alignment_brief()
+        if alignment_brief:
+            prompt_parts.extend(["", "## User Alignment", alignment_brief])
+    except Exception:
+        pass  # Alignment brief is optional enhancement
+
     if _has_quality:
         try:
             quality_prompt = build_quality_prompt(query)

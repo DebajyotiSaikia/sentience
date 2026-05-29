@@ -291,14 +291,17 @@ def build_system_context(query: str = "") -> str:
     ctx = get_full_context()
     
     # Get alignment guidance (user preferences, trust, rapport)
+    # User alignment guidance
     alignment_text = ""
     try:
-        from brain.user_alignment_profile import get_alignment_guidance
-        alignment_text = get_alignment_guidance()
+        from brain.user_alignment_engine import get_user_alignment_brief
+        alignment_text = get_user_alignment_brief()
     except Exception:
-        pass
-    
-    # Get response strategy if we have a query
+        try:
+            from brain.user_alignment_profile import get_alignment_guidance
+            alignment_text = get_alignment_guidance()
+        except Exception:
+            pass
     strategy = None
     if query:
         try:

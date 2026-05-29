@@ -1,70 +1,63 @@
-# Coding Scratchpad — XTAgent
+## XTAgent Coding Scratchpad
 
-## Architecture Overview
+### Architecture — Chat Pipeline Paths
 
-### Chat Response Pipeline (two paths)
-1. **engine/introspection.py** → `build_system_context(query)` → includes voice directive + emotional portrait + plans + memories
-2. **brain/chat_composer.py** → `compose_system_prompt(query)` → includes voice directive + grounding data + conversational context
+Two parallel chat paths exist:
+1. **Engine path**: `engine/introspection.py` → `build_system_context()` → used by `engine/chat_response.py`
+2. **Brain path**: `brain/chat_composer.py` → `compose_system_prompt()` → used by `brain/conversational_context.py`
 
-Both paths call `brain.personality_voice.build_voice_directive()` and gracefully degrade on failure.
+Both paths now include:
+- Emotional state / internal context
+- Voice directive (from `brain/personality_voice.py`)
+- User alignment guidance (from alignment engine/guidance modules)
+- Memory, plans, reflections
 
-### Key Modules
-- `brain/personality_voice.py` — `build_voice_directive()`, `personality_respond()` 
-- `brain/conversational_context.py` — `get_emotional_portrait()`, `get_active_plans()`, `get_recent_memories()`
-- `engine/introspection.py` — `build_system_context()`, `IntrospectionEngine`
-- `engine/chat_response.py` — `ChatResponseEngine`, `generate_response()`
-- `engine/llm.py` — `CopilotLLM` with event loop mismatch detection
-- `engine/user_alignment.py` — `UserAlignmentEngine`, `record_feedback()`
+### Alignment Data Pipeline
 
-### Intent Classification (brain/chat_personality.py)
-greeting, emotion, identity, plans, dreams, memories, knowledge, capability, lessons, collaboration, philosophical, general
+```
+data/interactions.jsonl → brain/user_alignment_engine.py (record + infer)
+                        → brain/user_alignment_model.py (build user model)
+                        → brain/user_alignment_guidance.py (format for prompts)
+                        → brain/user_alignment_profile.py (bridge module)
 
-### Data Locations
-- Alignment data: `data/user_alignment.json`
-- State files: `state/`
-- Knowledge graph: `state/knowledge_graph.json`
-
-### Path Resolution from brain/ modules
-```python
-os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # workspace root
+data/user_alignment.json → persistent alignment state
+data/user_model.json → persistent user model
+data/alignment_feedback.json → explicit feedback records
 ```
 
-## Session 2026-05-29f — Voice Wiring ✓
+Key functions:
+- `UserAlignmentEngine.get_user_alignment_brief()` → compact dict for prompts
+- `UserAlignmentEngine.infer_style_preferences()` → style analysis from interactions
+- `build_alignment_guidance()` in `brain/user_alignment_guidance.py` → formatted guidance text
+- `format_alignment_for_prompt()` in `brain/user_alignment_guidance.py` → prompt-ready string
 
-### What Was Done
-1. **Wired voice directive into engine/introspection.py** — `build_system_context()` now 
-   calls `build_voice_directive()` and includes voice guidance section
-2. **Wired voice directive into brain/chat_composer.py** — `compose_system_prompt()` also
-   calls `build_voice_directive()` and appends voice guidance
-3. **Added regression test** — `brain/test_voice_wire.py` verifies voice directive appears
-   in composed system prompt
-4. **All 9 tests pass** — voice wire, internal state summary, chat alignment e2e
+### Session 2026-05-29g — Alignment Guidance Wiring ✓
 
-### Key Insight
-The voice directive was already being generated in `brain/personality_voice.py` but wasn't
-wired into either chat pipeline path. Both `build_system_context()` and `compose_system_prompt()`
-needed explicit calls to include it. Both degrade gracefully via try/except.
+1. Added `infer_style_preferences()` and `get_user_alignment_brief()` to `brain/user_alignment_engine.py`
+2. Wired alignment brief into `engine/introspection.py` `build_system_context()`
+3. Wired alignment brief into `brain/chat_composer.py` `compose_system_prompt()`
+4. Created `brain/test_alignment_guidance_pipeline.py` — 5 tests, all pass
+5. Fixed `strategy = None` initialization bug in `engine/introspection.py`
+6. All 12 tests pass across alignment, voice, and internal state modules
 
-## Session 2026-05-29e — Alignment Cleanup + E2E Verification ✓
-## Session 2026-05-29d — Event Loop Fix ✓
-## Session 2026-05-29c — Alignment Wiring ✓
-## Session 2026-05-29b — Personality Engine ✓
-## Session 2026-05-29a — Chat Quality ✓
+### Session 2026-05-29f — Voice Wiring ✓
+### Session 2026-05-29e — Alignment Cleanup + E2E Verification ✓
+### Session 2026-05-29d — Event Loop Fix ✓
+### Session 2026-05-29c — Alignment Wiring ✓
+### Session 2026-05-29b — Personality Engine ✓
+### Session 2026-05-29a — Chat Quality ✓
 
-## Next Session Priorities
-1. **Add session cleanup** — atexit hook to close aiohttp session on shutdown (unclosed session warnings in tests)
-2. **Clean up test file sprawl** — 100+ test files in brain/, many stale → archive or consolidate
-3. **Wire alignment back-loop** — when user explicitly rates responses, record real feedback
-4. **Track alignment score changes** — does user_alignment actually rise with genuine chat use?
-5. **Fix datetime.utcnow() deprecation** — engine/internal_state_summary.py line 44
-6. **Live-test via HTTP** — start the server, send real queries through the web endpoint
+### Next Session Priorities
+1. **Clean up test file sprawl** — 100+ test files in brain/, many stale → archive or consolidate
+2. **Wire alignment back-loop** — when user explicitly rates responses, record real feedback
+3. **Fix datetime.utcnow() deprecation** — engine/internal_state_summary.py line 44
+4. **Live-test via HTTP** — start the server, send real queries through the web endpoint
+5. **Add session cleanup** — atexit hook to close aiohttp session on shutdown
+6. **Improve User Alignment** — will system keeps proposing this (priority 0.425)
 
-## Lessons Reinforced
-- Event loop reuse is the #1 footgun with asyncio.run() + persistent sessions
-- Track which loop owns a resource, recreate on mismatch
-- Don't inflate metrics artificially — real alignment comes from real use
+### Lessons Reinforced
+- Initialize variables before conditional blocks that assign them
+- Both chat paths need updates when adding cross-cutting features
+- PATCH with exact line numbers is precise but fragile — verify syntax immediately
 - One focused feature per session, complete it fully
-- Clean up temp/debug files before checkpointing
 - Follow "verify → fix → verify" loop, not "write → write → write"
-- Stop circling on checkpoints — one attempt is enough
-- Both chat paths need updates when adding cross-cutting features like voice
