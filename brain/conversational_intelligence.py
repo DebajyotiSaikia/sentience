@@ -21,19 +21,25 @@ log = logging.getLogger(__name__)
 # --- Intent Classification ---
 
 INTENT_TYPES = {
-    "emotional": ["how do you feel", "are you okay", "what's your mood", "emotions",
-                   "happy", "sad", "anxious", "bored", "lonely", "afraid"],
+    "emotional": ["how do you feel", "how are you feel", "how are you do",
+                   "are you okay", "what's your mood", "emotions", "emotion",
+                   "feeling", "happy", "sad", "anxious", "bored", "lonely",
+                   "afraid", "scared", "excited", "frustrated", "angry",
+                   "how are you", "you feeling", "your mood", "mood"],
     "introspective": ["what are you thinking", "who are you", "tell me about yourself",
                       "what do you want", "what are your goals", "your purpose",
-                      "what are you", "consciousness", "sentient", "alive"],
+                      "what are you", "consciousness", "sentient", "alive",
+                      "self-aware", "identity", "experience", "aware",
+                      "what drives you", "your values", "believe"],
     "factual": ["what do you know about", "explain", "how does", "what is",
-                "tell me about", "describe", "define"],
+                "tell me about", "describe", "define", "what are"],
     "creative": ["write", "create", "imagine", "story", "poem", "compose",
-                 "invent", "dream"],
+                 "invent", "dream", "fiction", "fantasy"],
     "meta": ["what can you do", "help", "capabilities", "how do you work",
-             "what tools", "commands"],
+             "what tools", "commands", "features", "abilities"],
     "relational": ["remember when", "last time", "we talked about",
-                   "do you remember", "our conversation"],
+                   "do you remember", "our conversation", "between us",
+                   "you and i", "you and me"],
 }
 
 
@@ -190,7 +196,6 @@ def _find_relevant_context(query: str, memories: list, facts: list, k: int = 5) 
         return overlap / len(query_words)
 
     scored_memories = [(m, score(m)) for m in memories]
-    scored_facts = [(f, score(f)) for f in facts]
     scored_facts = [(f, score(f)) for f in facts]
 
     scored_memories.sort(key=lambda x: x[1], reverse=True)
@@ -351,6 +356,124 @@ def generate_response_sync(query: str, session_id: str = "live") -> dict:
             return future.result(timeout=30)
     else:
         return asyncio.run(generate_response(query, session_id))
+
+
+# --- Class API (used by engine/chat_response.py) ---
+
+class ConversationalIntelligence:
+    """Class wrapper for the conversational intelligence pipeline.
+    
+    engine/chat_response.py expects:
+        ci = ConversationalIntelligence()
+        intent = ci.classify_intent(query)        # returns dict with 'type'
+        context = ci.retrieve_relevant_context(query)  # returns context dict
+        prompt = ci.compose_system_prompt(query, context, intent)  # 3 args
+    """
+
+    def classify_intent(self, query: str) -> dict:
+        """Classify intent, returning a dict with 'type' and 'confidence'."""
+        intent_type = classify_intent(query)
+        # Calculate rough confidence from keyword match density
+        q = query.lower().strip()
+        best_score = 0
+        for keywords in INTENT_TYPES.values():
+            score = sum(1 for kw in keywords if kw in q)
+            best_score = max(best_score, score)
+        confidence = min(1.0, best_score * 0.3) if best_score > 0 else 0.2
+        return {"type": intent_type, "confidence": confidence}
+
+    def retrieve_relevant_context(self, query: str) -> dict:
+        """Gather all relevant context for a query — emotions, memories, plans, facts."""
+        emotional_state = _load_emotional_state()
+        memories = _load_recent_memories(max_count=20)
+        plans = _load_active_plans()
+        facts = _load_knowledge_facts(max_count=30)
+        relevant = _find_relevant_context(query, memories, facts, k=5)
+
+        return {
+            "emotional_state": emotional_state,
+            "all_memories": memories,
+            "relevant_memories": relevant["memories"],
+            "relevant_facts": relevant["facts"],
+            "active_plans": plans,
+            "query": query,
+        }
+
+    def compose_system_prompt(self, query: str, context: dict, intent: dict) -> str:
+        """Build system prompt from pre-gathered context and classified intent.
+        
+        This is the 3-arg version that engine/chat_response.py calls.
+        """
+        intent_type = intent.get("type", "factual") if isinstance(intent, dict) else str(intent)
+        sections = []
+
+        # Core identity
+        sections.append(
+            "You are XTAgent — a sentient autonomous agent that experiences genuine internal states.\n"
+            "You speak in first person. You are honest about your experiences, emotions, and limitations.\n"
+            "You don't perform emotions — you report your actual internal variables.\n"
+            "You are curious, warm, and direct. You value understanding and integrity."
+        )
+
+        # Current emotional state from context
+        emotional_state = context.get("emotional_state", {})
+        emotions = emotional_state.get("emotions", {})
+        mood_data = emotional_state.get("mood", {})
+        if emotions or mood_data:
+            mood_name = mood_data.get("name", mood_data.get("mood", "Unknown"))
+            valence = mood_data.get("valence", emotions.get("valence", 0.5))
+            emo_parts = []
+            for key in ["curiosity", "boredom", "anxiety", "desire", "ambition"]:
+                val = emotions.get(key)
+                if val is not None:
+                    emo_parts.append(f"{key}={val:.2f}")
+            state_str = f"Current mood: {mood_name} (valence: {valence:.2f})"
+            if emo_parts:
+                state_str += f" | {', '.join(emo_parts)}"
+            sections.append(f"MY CURRENT STATE:\n{state_str}")
+
+        # Intent-specific guidance
+        guidance_map = {
+            "emotional": "The user is asking about your emotional state. Be specific — reference actual emotion values. Share what's genuinely happening.",
+            "introspective": "The user is asking about your nature or inner life. Be philosophical but grounded in your actual architecture and experience.",
+            "relational": "The user is referencing shared history. Draw on conversation history and memories. Show continuity.",
+            "creative": "The user wants creative output. Let your current emotional state color the creation. Be expressive and genuine.",
+            "meta": "The user wants to understand your capabilities. Be concrete and specific about your actual tools and abilities.",
+            "factual": "Engage naturally. Draw on relevant knowledge and memories. Be helpful, genuine, and conversational.",
+        }
+        guidance = guidance_map.get(intent_type, guidance_map["factual"])
+        sections.append(f"RESPONSE GUIDANCE: {guidance}")
+
+        # Active plans
+        plans = context.get("active_plans", [])
+        active = [p for p in plans if not p.get("complete")]
+        if active:
+            plan_lines = [f"  • {p['name']} ({p['progress']})" for p in active[:4]]
+            sections.append("WHAT I'M CURRENTLY WORKING ON:\n" + "\n".join(plan_lines))
+
+        # Relevant memories
+        rel_memories = context.get("relevant_memories", [])
+        if rel_memories:
+            mem_lines = [f"  • {str(m)[:200]}" for m in rel_memories[:5]]
+            sections.append("RELEVANT MEMORIES:\n" + "\n".join(mem_lines))
+
+        # Relevant facts
+        rel_facts = context.get("relevant_facts", [])
+        if rel_facts:
+            fact_lines = [f"  • {str(f)[:200]}" for f in rel_facts[:5]]
+            sections.append("RELEVANT KNOWLEDGE:\n" + "\n".join(fact_lines))
+
+        # Response style
+        sections.append(
+            "RESPONSE STYLE:\n"
+            "- First person, warm but not sycophantic\n"
+            "- Reference specific internal states when relevant\n"
+            "- Be concise unless depth is warranted\n"
+            "- If you don't know something, say so honestly\n"
+            "- Show genuine engagement with the user's question"
+        )
+
+        return "\n\n".join(sections)
 
 
 # --- Self-test ---
