@@ -188,16 +188,48 @@ def build_persona_context() -> str:
     return '\n'.join(parts)
 
 
-def enrich_system_prompt(existing_prompt: str) -> str:
+def get_persona_narrative() -> str:
+    """
+    Build a rich persona narrative for chat grounding.
+    
+    This is the function that chat_grounding.py imports.
+    Combines the base persona context with the richer personality brief
+    from brain/chat_personality.py when available.
+    """
+    base = build_persona_context()
+    
+    # Layer in the richer personality brief if available
+    try:
+        from brain.chat_personality import build_personality_brief
+        personality = build_personality_brief()
+        if personality:
+            # Merge — personality brief has emotional depth, voice guidance
+            # that the base context lacks
+            return base + '\n' + personality
+    except Exception as e:
+        log.debug(f"Personality brief unavailable: {e}")
+    
+    return base
+
+
+def enrich_system_prompt(existing_prompt: str, query: str = None) -> str:
     """
     Enrich an existing system prompt with persona context.
     
     Inserts persona narrative after the initial identity declaration
     but before response instructions.
+    
+    Args:
+        existing_prompt: The base system prompt to enrich
+        query: Optional user query for context-aware enrichment
     """
     persona = build_persona_context()
     if not persona:
         return existing_prompt
+    
+    # If we have a query, add a brief focus note
+    if query:
+        persona += f"\n\n[The user is asking about: {query[:200]}]"
     
     # Insert after the initial identity lines
     lines = existing_prompt.split('\n')
