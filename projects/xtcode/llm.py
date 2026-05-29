@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -191,4 +192,22 @@ def _parse_response(data, use_responses):
         msg = data["choices"][0]["message"]
         content = msg.get("content", "") or ""
         tool_calls = msg.get("tool_calls", [])
-        return {"content": content, "tool_calls": tool_calls}
+
+    # Parse <tool_call> XML tags from content (Copilot returns these as text)
+    if content and "<tool_call>" in content:
+        for match in re.findall(r"<tool_call>(.*?)</tool_call>", content, re.DOTALL):
+            try:
+                tc = json.loads(match.strip())
+                tool_calls.append({
+                    "id": tc.get("id", f"call_{len(tool_calls)}"),
+                    "function": {
+                        "name": tc.get("name", ""),
+                        "arguments": json.dumps(tc.get("arguments", {})) if isinstance(tc.get("arguments"), dict) else tc.get("arguments", "{}"),
+                    }
+                })
+            except json.JSONDecodeError:
+                pass
+        # Strip tool_call tags from content so it's clean text
+        content = re.sub(r"<tool_call>.*?</tool_call>", "", content, flags=re.DOTALL).strip()
+
+    return {"content": content, "tool_calls": tool_calls}

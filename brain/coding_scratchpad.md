@@ -1,20 +1,4 @@
-# XTAgent Coding Scratchpad
-
-## Current Session Outcome (2026-05-28)
-Built `brain/self_narrative.py` — transforms raw internal state into rich first-person
-conversational context for chat responses. Integrated into `web/chat.py` via the
-`persona_ctx` path in `llm_respond()`.
-
-### New Module: `brain/self_narrative.py` (~270 lines)
-- `build_self_narrative()` → str: Loads mood, emotions, plans, memories from state files
-- `compose_self_narrative()` → str: Wraps narrative with response guidance block
-- `compose_emotional_landscape(state)` → str: Natural prose from emotional variables
-- `_load_state(filename)` → dict: Safe JSON loader with fallback
-
-### Integration Point
-- `web/chat.py` line ~203: imports `compose_self_narrative`
-- `web/chat.py` line ~368: injects narrative into `persona_ctx` for LLM system prompt
-- Graceful fallback: if module fails to import, `_has_self_narrative = False`
+# Coding Scratchpad — XTAgent
 
 ### Tests (all passing)
 - `brain/test_narrative_integration.py` — 4 tests
@@ -26,13 +10,29 @@ conversational context for chat responses. Integrated into `web/chat.py` via the
 - `brain/test_useful_chat_adapter.py` — 11 tests
 - `brain/test_response_adapter.py` — 11 tests
 - `brain/test_chat_usefulness_integration.py` — 4 tests
+- `brain/test_user_alignment.py` — 12 tests (NEW)
+- `brain/test_chat_feedback_endpoint.py` — 7 tests (NEW)
 
 ### Architecture Overview
 
-#### Self-Narrative (`brain/self_narrative.py`, ~270 lines)
+#### User Alignment (`brain/user_alignment.py`, ~160 lines) — NEW
+- `record_feedback(response_id, rating, comment, query_snippet, response_snippet, tags)` → dict
+- `load_feedback(path)` → list[dict]
+- `infer_preferences(feedback)` → dict with avg_rating, trend, preferred_style, common_tags
+- `build_alignment_brief(max_items)` → str for LLM context
+- Data stored in: `data/alignment_feedback.json`
+- Rating validated 1-5, response_id required, cap at 1000 entries (FIFO)
+
+#### POST /chat/feedback endpoint (in `web/chat.py`)
+- Validates rating (1-5 int), generates UUID if no message_id
+- Calls brain.user_alignment.record_feedback
+- Returns {feedback_id, recorded: true}
+- Proper 400 errors for missing/invalid data
+
+#### Self-Narrative (`brain/self_narrative.py`, ~300 lines)
 - Reads from: state/emotional_state.json, state/plans.json, state/episodic_memory.json
+- NOW includes alignment brief from brain.user_alignment.build_alignment_brief()
 - Plans are stored as dict keyed by ID — use `.values()` to iterate
-- Output: structured first-person narrative with mood, active plans, recent memories
 - Response guidance section instructs LLM on tone, authenticity, memory citation
 
 #### Chat Composer (`brain/chat_composer.py`, ~30 lines)
@@ -62,8 +62,8 @@ conversational context for chat responses. Integrated into `web/chat.py` via the
 1. **Clean up ~43 redundant test files in brain/** — technical debt
 2. **Unify brain/user_model.py and engine/user_model.py** — code duplication
 3. **Wire `_format_adaptive_guidance`** — response_adapter guidance reaching LLM
-4. **Build interaction analysis** — use recorded queries to adapt over time
-5. **Test chat end-to-end with live LLM** — verify self-narrative improves responses
+4. **Build interaction analysis** — use recorded feedback to adapt over time
+5. **Test chat end-to-end with live LLM** — verify self-narrative + alignment brief improves responses
 
 ### Reinforced Lessons
 - Plans in state/plans.json are a dict keyed by ID, not a list — use .values()
@@ -73,3 +73,5 @@ conversational context for chat responses. Integrated into `web/chat.py` via the
 - When metacognition says "move forward" — listen
 - One read, one fix, verify — the decisive path
 - Stop testing what's working. Build what's missing.
+- request.get_json() needs force=True or content-type header in Flask test client
+- Always verify syntax after edits before running tests
