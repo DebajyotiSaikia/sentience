@@ -362,7 +362,15 @@ def compose_system_prompt(
             "Match the depth to what's needed. Don't over-explain simple things.",
         ])
     
-    # Add response quality guidance if available
+    
+    # Voice directive — how I should sound based on current emotional state
+    try:
+        from brain.personality_voice import build_voice_directive
+        voice_directive = build_voice_directive()
+        if voice_directive:
+            prompt_parts.extend(["", "## Voice & Tone", voice_directive])
+    except Exception:
+        pass  # Voice directive is optional enhancement
     if _has_quality:
         try:
             quality_prompt = build_quality_prompt(query)
