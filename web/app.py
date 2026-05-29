@@ -81,6 +81,7 @@ def create_app():
     # knowledge_unified_bp removed — routes conflicted with knowledge_live_bp
     from web.ask import ask_bp
     from web.thoughts import thoughts_bp
+    from web.introspection import introspection_bp
     from web.diagnostics import diagnostics_bp
     from web.emotional_timeline import emotional_timeline_bp
     from web.portrait import portrait_bp
@@ -127,6 +128,7 @@ def create_app():
     app.register_blueprint(ask_bp)
     # knowledge_unified_bp deregistered (route conflict with knowledge_live_bp)
     app.register_blueprint(thoughts_bp)
+    app.register_blueprint(introspection_bp)
     app.register_blueprint(diagnostics_bp)
     app.register_blueprint(emotional_timeline_bp)
     app.register_blueprint(portrait_bp)
