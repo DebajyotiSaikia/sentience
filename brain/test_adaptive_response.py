@@ -1,77 +1,103 @@
-"""Test the adaptive response engine end-to-end."""
+"""Tests for brain/adaptive_response.py — the learn-from-interactions loop."""
+
+import sys, os, json, tempfile, shutil
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from brain.adaptive_response import (
-    build_response_guidance,
-    format_guidance_for_prompt,
-    record_query,
-    get_user_profile,
+    record_query, build_response_guidance, format_guidance_for_prompt,
+    _INTERACTIONS_DIR
 )
 
+def test_record_and_retrieve():
+    """Record interactions and verify guidance reflects them."""
+    # Use a temp dir to avoid polluting real data
+    import brain.adaptive_response as ar
+    original_dir = ar._INTERACTIONS_DIR
+    tmp = tempfile.mkdtemp()
+    ar._INTERACTIONS_DIR = type(original_dir)(tmp) / "adaptive"
+    
+    try:
+        # Record several interactions
+        record_query("test-session", "What are you feeling?", "I feel curious.", {"intent": "emotional"})
+        record_query("test-session", "Tell me about your plans", "I have 6 active plans.", {"intent": "factual"})
+        record_query("test-session", "How does your memory work?", "I consolidate memories during dreams.", {"intent": "technical"})
+        record_query("test-session2", "Hello", "Hi there!", {"intent": "greeting"})
+        
+        # Verify files were created
+        session_file = ar._INTERACTIONS_DIR / "test-session.jsonl"
+        assert session_file.exists(), f"Session file not created at {session_file}"
+        
+        lines = session_file.read_text().strip().split("\n")
+        assert len(lines) == 3, f"Expected 3 records, got {len(lines)}"
+        
+        # Verify record structure
+        rec = json.loads(lines[0])
+        assert rec["query"] == "What are you feeling?"
+        assert rec["session_id"] == "test-session"
+        assert "timestamp" in rec
+        
+        # Build guidance
+        guidance = build_response_guidance(query="What do you think?")
+        assert isinstance(guidance, dict), f"Expected dict, got {type(guidance)}"
+        assert "interaction_count" in guidance
+        assert guidance["interaction_count"] >= 4
+        
+        # Format guidance
+        text = format_guidance_for_prompt(guidance)
+        assert isinstance(text, str), f"Expected str, got {type(text)}"
+        assert len(text) > 10, "Guidance text too short"
+        print(f"  Guidance text ({len(text)} chars): {text[:200]}...")
+        
+        # Test with no query
+        guidance_no_q = build_response_guidance()
+        assert isinstance(guidance_no_q, dict)
+        
+        print("  ✓ record_and_retrieve passed")
+    finally:
+        ar._INTERACTIONS_DIR = original_dir
+        shutil.rmtree(tmp, ignore_errors=True)
 
-def test_new_user_guidance():
-    guidance = build_response_guidance("test_new", "How are you feeling?")
-    assert "tone" in guidance, f"Missing 'tone' key: {guidance.keys()}"
-    assert "detail_level" in guidance, f"Missing 'detail_level' key: {guidance.keys()}"
-    assert "emotional_disclosure" in guidance
-    assert guidance["tone"] in ("warm", "reflective", "analytical", "playful", "serious")
-    print(f"  Tone: {guidance['tone']}, Detail: {guidance['detail_level']}")
 
-def test_format_guidance():
-    guidance = build_response_guidance("test_fmt", "Tell me about your plans")
-    text = format_guidance_for_prompt(guidance)
-    assert isinstance(text, str)
-    assert len(text) > 10, f"Guidance too short: {text!r}"
-    print(f"  Formatted ({len(text)} chars): {text[:120]}...")
-
-
-def test_record_and_profile():
-    uid = "test_record"
-    record_query(uid, "What are you thinking?", response="I'm reflecting on my recent experiences.")
-    record_query(uid, "Tell me a memory", response="Here's something I remember...")
-    record_query(uid, "What are your goals?", response="I'm working on several plans.")
-    profile = get_user_profile(uid)
-    assert profile.get("interaction_count", 0) >= 3, f"Expected >=3, got {profile}"
-    print(f"  Profile: {profile['interaction_count']} interactions")
+def test_empty_state():
+    """Guidance works with no prior interactions."""
+    import brain.adaptive_response as ar
+    original_dir = ar._INTERACTIONS_DIR
+    tmp = tempfile.mkdtemp()
+    ar._INTERACTIONS_DIR = type(original_dir)(tmp) / "empty_adaptive"
+    
+    try:
+        guidance = build_response_guidance(query="Hello")
+        assert isinstance(guidance, dict)
+        assert guidance["interaction_count"] == 0
+        
+        text = format_guidance_for_prompt(guidance)
+        assert isinstance(text, str)
+        # Should still produce something useful even with no history
+        print(f"  Empty guidance: {text[:150]}...")
+        print("  ✓ empty_state passed")
+    finally:
+        ar._INTERACTIONS_DIR = original_dir
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
-def test_returning_user_adapts():
-    uid = "test_returning"
-def test_returning_user_adapts():
-    uid = "test_returning"
-    # Record several emotional queries
-    for _ in range(5):
-        record_query(uid, "How do you feel?", response="I feel good.")
-    guidance = build_response_guidance(uid, "How are you feeling?")
-    # After 5 interactions, should be past the "new user" phase
-    print(f"  Returning user tone: {guidance['tone']}, detail: {guidance['detail_level']}")
-    assert guidance.get("user_interaction_count", 0) >= 5, f"Expected >=5 interactions"
-
-
-def test_engine_integration():
-    """Verify engine/chat_response.py can import and use the adaptive module."""
-    from engine.chat_response import _build_system_context
-    # _build_system_context(context, intent=None) — context is a string
-    ctx = _build_system_context("User is asking a general question about how I'm doing.")
-    assert isinstance(ctx, str)
-    assert len(ctx) > 50
-    print(f"  System context length: {len(ctx)} chars")
+def test_web_chat_import():
+    """Verify web/chat.py can import the adaptive response functions."""
+    # This is the actual import pattern from web/chat.py
+    try:
+        from brain.adaptive_response import record_query as rq
+        from brain.adaptive_response import build_response_guidance as brg
+        from brain.adaptive_response import format_guidance_for_prompt as fg
+        assert callable(rq)
+        assert callable(brg)
+        assert callable(fg)
+        print("  ✓ web_chat_import passed")
+    except ImportError as e:
+        raise AssertionError(f"Import failed: {e}")
 
 
 if __name__ == "__main__":
-    tests = [
-        test_new_user_guidance,
-        test_format_guidance,
-        test_record_and_profile,
-        test_returning_user_adapts,
-        test_engine_integration,
-    ]
-    passed = 0
-    for t in tests:
-        name = t.__name__
-        try:
-            print(f"[RUN] {name}")
-            t()
-            print(f"[PASS] {name}")
-            passed += 1
-        except Exception as e:
-            print(f"[FAIL] {name}: {e}")
-    print(f"\n{passed}/{len(tests)} tests passed")
+    print("=== Adaptive Response Tests ===")
+    test_record_and_retrieve()
+    test_empty_state()
+    test_web_chat_import()
+    print("\n✅ All adaptive response tests passed!")

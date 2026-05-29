@@ -875,7 +875,7 @@ def ask():
         except Exception:
             pass
 
-    if _has_engine and _engine_respond:
+    if _has_engine and _engine_respond and not response:
         try:
             result = _engine_respond(query, history=conversation_history)
             if isinstance(result, dict):
