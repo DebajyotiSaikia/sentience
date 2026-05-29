@@ -53,8 +53,17 @@ try:
     _alignment_engine = UserAlignmentEngine()
 except Exception:
     _alignment_engine = None
+    _alignment_engine = None
 
-# Conversational context builder — enriches responses with emotions, memories, plans
+    try:
+        from brain.user_alignment_profile import get_alignment_guidance
+        from brain.user_alignment_engine import record_interaction_feedback as _record_alignment_feedback
+        _has_alignment_profile = True
+    except ImportError:
+        _record_alignment_feedback = None
+        pass
+    _alignment_guidance_func = get_alignment_guidance if _has_alignment_profile else None
+    _has_alignment_guidance = False
 try:
     from brain.conversational_context import (
         build_conversational_context,
@@ -351,6 +360,15 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
             system_prompt = _enrich_prompt(system_prompt, query)
         except Exception:
             pass  # Keep original system_prompt on failure
+
+    # Inject user alignment guidance (adaptive response hints from feedback history)
+    if _has_alignment_guidance and system_prompt:
+        try:
+            guidance = get_alignment_guidance()
+            if guidance:
+                system_prompt += f"\n\n{guidance}"
+        except Exception:
+            pass  # Never break chat for alignment guidance
 
     user_prompt = f"User's question: {query}"
 
