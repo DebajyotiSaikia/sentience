@@ -178,7 +178,11 @@ def _find_relevant_context(query: str, memories: list, facts: list, k: int = 5) 
     """Simple keyword-based relevance scoring. Returns most relevant memories and facts."""
     query_words = set(query.lower().split())
 
-    def score(text: str) -> float:
+    def score(item) -> float:
+        if isinstance(item, dict):
+            text = item.get('text', item.get('content', item.get('summary', str(item))))
+        else:
+            text = str(item)
         text_words = set(text.lower().split())
         if not query_words:
             return 0
@@ -186,6 +190,7 @@ def _find_relevant_context(query: str, memories: list, facts: list, k: int = 5) 
         return overlap / len(query_words)
 
     scored_memories = [(m, score(m)) for m in memories]
+    scored_facts = [(f, score(f)) for f in facts]
     scored_facts = [(f, score(f)) for f in facts]
 
     scored_memories.sort(key=lambda x: x[1], reverse=True)
@@ -311,8 +316,8 @@ async def generate_response(query: str, session_id: str = "live") -> dict:
 
     llm = CopilotLLM()
     response_text = await llm.chat(
-        system_prompt=system_prompt,
-        user_message=query,
+        prompt=query,
+        system=system_prompt,
     )
 
     return {
