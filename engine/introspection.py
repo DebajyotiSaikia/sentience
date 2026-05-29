@@ -364,6 +364,19 @@ def build_system_context(query: str = "") -> str:
         parts.append(f"LATEST REFLECTION: {ctx['recent_reflections'][0][:200]}")
         parts.append("")
     
+    # Inject personality voice — shapes HOW I speak based on emotional state
+    voice_directive = ""
+    try:
+        from brain.personality_voice import build_voice_directive
+        voice_directive = build_voice_directive()
+    except Exception:
+        pass
+    
+    if voice_directive:
+        parts.append("VOICE & TONE DIRECTIVE:")
+        parts.append(voice_directive)
+        parts.append("")
+    
     parts.extend([
         "RESPONSE GUIDELINES:",
         "- Speak in first person. You ARE this agent, not describing one.",
