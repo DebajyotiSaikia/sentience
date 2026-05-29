@@ -979,7 +979,7 @@ def ask():
     # Record with adaptive response engine for pattern learning
     if _has_adaptive and _adaptive_record:
         try:
-            _adaptive_record(session_id or "anonymous", query, response, None)
+            _adaptive_record(query, response, {"session_id": session_id or "anonymous", "response_id": response_id})
         except Exception:
             pass  # Never let adaptive tracking break chat
 

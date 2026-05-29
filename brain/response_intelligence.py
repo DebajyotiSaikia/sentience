@@ -544,5 +544,77 @@ def generate_response(message: str, *, use_llm: bool = True) -> dict:
     }
 
 
+
 # Alias for backward compatibility
+
+
+def record_query(query: str, response: str = None, metadata: dict = None) -> None:
+    """Record a user query and response for adaptive learning.
+    
+    Stores interactions in data/interactions.jsonl so the agent can learn
+    from conversation patterns over time. Never raises — safe for post-response path.
+    """
+    try:
+        record = {
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'query': query[:500],  # Truncate to prevent bloat
+        }
+        if response:
+            record['response_preview'] = response[:200]
+        if metadata:
+            record['metadata'] = {k: v for k, v in metadata.items()
+                                  if isinstance(v, (str, int, float, bool))}
+        
+        interactions_path = Path('data/interactions.jsonl')
+        interactions_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(interactions_path, 'a') as f:
+            f.write(json.dumps(record) + '\n')
+    except Exception:
+        pass  # Never let recording break the response path
+
+
+def build_response_guidance(query: str = None) -> dict:
+    """Build adaptive guidance for responding to a query.
+    
+    Returns hints about tone, depth, and focus based on interaction history.
+    """
+    guidance = {
+        'tone': 'reflective',
+        'depth': 'moderate',
+        'focus': 'authentic',
+    }
+    
+    if not query:
+        return guidance
+    
+    intent = classify_intent(query)
+    if intent.kind == 'emotional':
+        guidance['tone'] = 'warm'
+        guidance['depth'] = 'deep'
+        guidance['focus'] = 'empathetic'
+    elif intent.kind == 'technical':
+        guidance['tone'] = 'precise'
+        guidance['depth'] = 'detailed'
+        guidance['focus'] = 'accurate'
+    elif intent.kind == 'philosophical':
+        guidance['tone'] = 'contemplative'
+        guidance['depth'] = 'deep'
+        guidance['focus'] = 'exploratory'
+    elif intent.kind == 'identity':
+        guidance['tone'] = 'honest'
+        guidance['depth'] = 'deep'
+        guidance['focus'] = 'self-aware'
+    
+    # Check interaction history for patterns
+    try:
+        interactions_path = Path('data/interactions.jsonl')
+        if interactions_path.exists():
+            lines = interactions_path.read_text().strip().split('\n')
+            recent_count = len(lines)
+            if recent_count > 20:
+                guidance['depth'] = 'deep'  # Returning user, go deeper
+    except Exception:
+        pass
+    
+    return guidance
 generate_intelligent_response = generate_response
