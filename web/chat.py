@@ -152,6 +152,15 @@ except ImportError:
     _engine_respond = None
     _has_engine = False
 
+# Unified voice prompt builder
+try:
+    from engine.chat_voice import build_chat_prompt as _build_voice_prompt
+    _has_voice = True
+except ImportError:
+    _build_voice_prompt = None
+    _has_voice = False
+
+# Fuzzy knowledge search — stemming, synonyms, typo tolerance
 # Fuzzy knowledge search — stemming, synonyms, typo tolerance
 try:
     from engine.knowledge_search import search_knowledge as _fuzzy_search
@@ -329,6 +338,24 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
     # Build enriched system prompt from live internal state
     system_prompt = None
     
+    # Priority 0: Unified voice prompt (richest — emotions, memories, plans, personality)
+    if _has_voice and _build_voice_prompt:
+        try:
+            voice_result = _build_voice_prompt(
+                query,
+                conversation_history=conversation_history,
+                knowledge_hits=knowledge_hits,
+                memory_hits=memory_hits,
+            )
+            if isinstance(voice_result, dict):
+                system_prompt = voice_result.get('system_prompt', '')
+                ctx_block = voice_result.get('context_block', '')
+                if ctx_block:
+                    system_prompt = system_prompt + "\n\n" + ctx_block
+            elif isinstance(voice_result, str):
+                system_prompt = voice_result
+        except Exception:
+            pass  # Fall through to other builders
     # Priority 1: Focused chat composer (intent-aware, conversational)
     if _has_composer and _compose_prompt:
         try:
