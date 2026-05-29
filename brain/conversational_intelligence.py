@@ -14,6 +14,10 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+try:
+    from brain.user_alignment_model import build_alignment_brief
+except ImportError:
+    build_alignment_brief = None
 
 log = logging.getLogger(__name__)
 
@@ -462,6 +466,15 @@ class ConversationalIntelligence:
         if rel_facts:
             fact_lines = [f"  • {str(f)[:200]}" for f in rel_facts[:5]]
             sections.append("RELEVANT KNOWLEDGE:\n" + "\n".join(fact_lines))
+
+        # User alignment preferences
+        if build_alignment_brief:
+            try:
+                brief = build_alignment_brief()
+                if brief and len(brief) > 20:
+                    sections.append(f"USER ALIGNMENT DATA:\n{brief}")
+            except Exception as e:
+                log.debug(f"Alignment brief unavailable: {e}")
 
         # Response style
         sections.append(
