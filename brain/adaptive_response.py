@@ -238,6 +238,8 @@ def build_response_guidance(user_id: str, query: str) -> dict:
 
 def format_guidance_for_prompt(guidance: dict) -> str:
     """Format response guidance as a system prompt section."""
+    if not guidance:
+        return ""
     parts = ["\n── ADAPTIVE RESPONSE GUIDANCE ──"]
     parts.append(f"Detail level: {guidance['detail_level']}")
     parts.append(f"Emotional disclosure: {guidance['emotional_disclosure']}")
