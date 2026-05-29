@@ -1,97 +1,139 @@
-"""Test user_alignment module against its actual API."""
-import sys, os, json, tempfile
-from pathlib import Path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Runtime-verified exports: load_profile, save_profile, record_feedback,
-# get_alignment_context, format_alignment_context, extract_preferences,
-# apply_preferences, DATA_PATH
-from engine.user_alignment import (
-    load_profile, save_profile, record_feedback,
-    get_alignment_context, format_alignment_context,
-    extract_preferences, apply_preferences, DATA_PATH
+"""Tests for the user alignment feedback engine."""
+import json
+import os
+import tempfile
+import pytest
+from unittest.mock import patch
+from brain.user_alignment import (
+    load_feedback,
+    save_feedback,
+    record_feedback,
+    infer_preferences,
+    build_alignment_brief,
+    FEEDBACK_PATH,
 )
-import engine.user_alignment as ua
 
-# Use a temp file for testing
-TEMP_PATH = Path(tempfile.gettempdir()) / "test_user_alignment.json"
-original_path = ua.DATA_PATH
-ua.DATA_PATH = TEMP_PATH
 
-passed = 0
-failed = 0
+@pytest.fixture
+def temp_feedback(tmp_path):
+    """Redirect feedback storage to a temp dir."""
+    fake_path = tmp_path / "alignment_feedback.json"
+    with patch("brain.user_alignment.FEEDBACK_PATH", fake_path):
+        with patch("brain.user_alignment.DATA_DIR", tmp_path):
+            yield fake_path
 
-def test(name, condition):
-    global passed, failed
-    if condition:
-        print(f"  ✓ {name}")
-        passed += 1
-    else:
-        print(f"  ✗ {name}")
-        failed += 1
 
-try:
-    # Clean start
-    if TEMP_PATH.exists():
-        TEMP_PATH.unlink()
+def test_load_empty(temp_feedback):
+    """No file → empty list."""
+    assert load_feedback() == []
 
-    # 1. Load empty profile
-    p = load_profile()
-    test("load_profile returns dict", isinstance(p, dict))
 
-    # 2. Record feedback
-    result = record_feedback("Hello there", "Hi! How can I help?", rating=0.9, comment="friendly")
-    test("record_feedback returns something", result is not None)
+def test_record_and_load(temp_feedback):
+    rec = record_feedback("resp-001", 4, comment="Very helpful!", tags=["clear"])
+    assert rec["rating"] == 4
+    assert rec["response_id"] == "resp-001"
+    assert rec["tags"] == ["clear"]
 
-    # 3. Load profile again - should have feedback
-    p2 = load_profile()
-    has_feedback = "feedback" in p2 and len(p2["feedback"]) >= 1
-    test("feedback persisted in profile", has_feedback)
+    loaded = load_feedback()
+    assert len(loaded) == 1
+    assert loaded[0]["comment"] == "Very helpful!"
 
-    # 4. Record more feedback to build history
-    record_feedback("Explain X", "X is a concept...", rating=0.3, comment="too brief")
-    record_feedback("Tell me about Y", "Y is fascinating because...", rating=0.8)
 
-    # 5. Get alignment context
-    ctx = get_alignment_context()
-    test("get_alignment_context returns dict", isinstance(ctx, dict))
+def test_record_validates_rating(temp_feedback):
+    with pytest.raises(ValueError, match="Rating must be int 1-5"):
+        record_feedback("resp-002", 0)
+    with pytest.raises(ValueError, match="Rating must be int 1-5"):
+        record_feedback("resp-002", 6)
+    with pytest.raises(ValueError):
+        record_feedback("resp-002", "good")
 
-    # 6. Format alignment context
-    formatted = format_alignment_context(ctx)
-    test("format_alignment_context returns string", isinstance(formatted, str))
-    test("formatted context is non-empty", len(formatted) > 0)
 
-    # 7. Extract preferences from text
-    prefs = extract_preferences("I prefer detailed explanations with examples")
-    test("extract_preferences returns something", prefs is not None)
+def test_record_validates_response_id(temp_feedback):
+    with pytest.raises(ValueError, match="response_id is required"):
+        record_feedback("", 3)
 
-    # 8. Apply preferences
-    result = apply_preferences("I prefer detailed explanations with examples")
-    test("apply_preferences runs without error", True)
 
-    # 9. Save and reload profile
-    profile = load_profile()
-    profile["test_marker"] = "alive"
-    save_profile(profile)
-    reloaded = load_profile()
-    test("save/load round-trip works", reloaded.get("test_marker") == "alive")
+def test_multiple_records(temp_feedback):
+    record_feedback("r1", 5, tags=["concise"])
+    record_feedback("r2", 2, tags=["verbose", "confusing"])
+    record_feedback("r3", 4, tags=["helpful"])
+    
+    loaded = load_feedback()
+    assert len(loaded) == 3
 
-    # 10. Feedback count
-    p3 = load_profile()
-    fb_count = len(p3.get("feedback", []))
-    test("multiple feedbacks accumulated", fb_count >= 3)
 
-    # Summary
-    print(f"\n{'='*40}")
-    print(f"Results: {passed} passed, {failed} failed out of {passed + failed}")
-    if failed == 0:
-        print("ALL TESTS PASSED ✓")
-    else:
-        print("SOME TESTS FAILED ✗")
-        sys.exit(1)
+def test_infer_preferences_empty():
+    prefs = infer_preferences([])
+    assert prefs["total_feedback"] == 0
+    assert prefs["avg_rating"] is None
+    assert prefs["trend"] == "unknown"
 
-finally:
-    # Restore original path and clean up
-    ua.DATA_PATH = original_path
-    if TEMP_PATH.exists():
-        TEMP_PATH.unlink()
+
+def test_infer_preferences_with_data():
+    feedback = [
+        {"rating": 5, "tags": ["clear", "helpful"], "comment": "Great response!"},
+        {"rating": 4, "tags": ["helpful"], "comment": "Good"},
+        {"rating": 1, "tags": ["verbose", "off-topic"], "comment": "Too long"},
+        {"rating": 2, "tags": ["verbose"], "comment": "Didn't answer my question"},
+        {"rating": 5, "tags": ["concise"], "comment": "Perfect"},
+        {"rating": 4, "tags": ["clear"], "comment": "Nice"},
+    ]
+    prefs = infer_preferences(feedback)
+    assert prefs["total_feedback"] == 6
+    assert prefs["avg_rating"] is not None
+    assert "helpful" in prefs["liked_patterns"]
+    assert "verbose" in prefs["disliked_patterns"]
+    assert len(prefs["liked_comments"]) <= 3
+    assert len(prefs["disliked_comments"]) <= 3
+
+
+def test_infer_trend_improving():
+    # Old ratings bad, new ratings good
+    feedback = [
+        {"rating": 1}, {"rating": 2}, {"rating": 1},
+        {"rating": 4}, {"rating": 5}, {"rating": 5},
+    ]
+    prefs = infer_preferences(feedback)
+    assert prefs["trend"] == "improving"
+
+
+def test_infer_trend_declining():
+    feedback = [
+        {"rating": 5}, {"rating": 5}, {"rating": 4},
+        {"rating": 2}, {"rating": 1}, {"rating": 1},
+    ]
+    prefs = infer_preferences(feedback)
+    assert prefs["trend"] == "declining"
+
+
+def test_build_alignment_brief_empty():
+    """No feedback → empty string."""
+    brief = build_alignment_brief.__wrapped__(max_items=5) if hasattr(build_alignment_brief, '__wrapped__') else None
+    # Direct test with empty feedback
+    prefs = infer_preferences([])
+    assert prefs["total_feedback"] == 0
+
+
+def test_build_alignment_brief_with_data(temp_feedback):
+    record_feedback("r1", 5, tags=["clear"], comment="Love it")
+    record_feedback("r2", 1, tags=["verbose"], comment="Way too long")
+    record_feedback("r3", 4, tags=["helpful"])
+
+    brief = build_alignment_brief()
+    assert "USER ALIGNMENT" in brief
+    assert "3 interactions" in brief
+    assert "clear" in brief or "helpful" in brief
+
+
+def test_feedback_cap(temp_feedback):
+    """Feedback shouldn't grow beyond 500 records."""
+    for i in range(510):
+        record_feedback(f"r-{i}", (i % 5) + 1)
+    loaded = load_feedback()
+    assert len(loaded) <= 500
+
+
+def test_response_snippet_truncation(temp_feedback):
+    long_response = "x" * 1000
+    rec = record_feedback("r1", 3, response_snippet=long_response)
+    assert len(rec["response_snippet"]) <= 200

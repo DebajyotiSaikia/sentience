@@ -1136,45 +1136,6 @@ def ask():
         'metadata': response_meta
     })
 
-    import random
-    suggestions = []
-
-    # Pull interesting facts from knowledge
-    try:
-        knowledge_path = os.path.join(os.path.dirname(__file__), '..', 'brain', 'knowledge.json')
-        with open(knowledge_path, 'r') as f:
-            data = json.load(f)
-        nodes = data.get('nodes', {}) if isinstance(data, dict) else {}
-        fact_items = list(nodes.values())
-        if fact_items:
-            samples = random.sample(fact_items, min(3, len(fact_items)))
-            for info in samples:
-                fact = info.get('fact', str(info)) if isinstance(info, dict) else str(info)
-                if len(fact) > 20:
-                    suggestions.append({
-                        'text': fact[:100].rstrip('.') + '?',
-                        'type': 'knowledge'
-                    })
-    except Exception:
-        pass
-
-    # Add contextual defaults
-    defaults = [
-        "What are you thinking about right now?",
-        "What have you learned recently?",
-        "How are you feeling?",
-        "What are your current goals?",
-        "What surprised you today?",
-        "Tell me something you're curious about.",
-    ]
-    needed = max(0, 5 - len(suggestions))
-    for d in random.sample(defaults, min(needed, len(defaults))):
-        suggestions.append({'text': d, 'type': 'starter'})
-
-    random.shuffle(suggestions)
-    return jsonify({'suggestions': suggestions[:5]})
-
-
 @chat_bp.route('/api/chat/insights')
 def chat_insights():
     """Return what we've learned about user interactions."""
