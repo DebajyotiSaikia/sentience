@@ -1,39 +1,43 @@
 # XTAgent Coding Scratchpad
 
-## Architecture Notes
+## Session 2026-05-29c — Completed ✓
 
-### Chat Response Pipeline
-1. User sends POST to `/chat/ask` with `{"message": "..."}` 
-2. `web/chat.py` receives it in `ask()` function (line ~1019)
-3. First tries `personality_respond(query)` from `brain/chat_personality.py` ← NEW
-4. Falls back to `generate_intelligent_response()` from `brain/response_intelligence.py`
-5. Falls back to `llm_respond()` with grounded context
-6. Final fallback: generic response
+### What Was Done
+1. **Fixed alignment data** (`data/user_alignment.json`) — deduped preferences (4 unique), normalized feedback ratings, cleaned data shape
+2. **Wired alignment guidance into `brain/chat_personality.py`** (lines 209-231):
+   - Reads `data/user_alignment.json` directly (correct path, not state_root-relative)
+   - Calls `build_alignment_guidance()` from `brain/user_alignment_guidance.py`
+   - Injects guidance into personality context dict under `alignment` key
+   - Graceful fallback if guidance module unavailable
+3. **Verified end-to-end**: `build_personality_context()` returns dict with alignment keys including `interaction_count=107`, `trust=1.435`, `preferred_response_style`, `suggested_response_strategy`
+4. **`personality_respond()` works** — returns genuine conversational responses incorporating alignment data
+5. **Cleaned up** 5 temp diagnostic files
 
-### brain/chat_personality.py (NEW — Session 2026-05-29b)
-- `get_live_state()` → reads emotional_state.json, memories, plans from state/
-- `build_personality_context(query)` → builds rich system prompt with real state data
-- `personality_respond(query)` → calls LLM with personality context, returns conversational response
-- Uses `engine.llm.call_llm_async()` for model access
-- Reads from: state/emotional_state.json, state/memories.json, state/plans.json, state/identity.json, state/reflections.json
-
-### web/chat.py Integration (lines 103-120)
-```python
-try:
-    from brain.chat_personality import personality_respond, build_personality_context
-    _has_personality = True
-except:
-    _has_personality = False
+### Architecture After This Session
 ```
-Response priority in ask() (line ~1077):
-```python
-if _has_personality:
-    response = personality_respond(query)
+User query → web/chat.py → personality_respond(query)
+  → build_personality_context(query)
+    → reads state/ files (emotions, identity, plans, memories)
+    → reads data/user_alignment.json
+    → calls build_alignment_guidance(query, alignment_data)
+    → returns dict: {personality_prompt, mood_description, emotional_raw, goals, memory_hints, alignment}
+  → call_llm_async(prompt, system=personality_prompt)
+  → returns conversational response
 ```
+
+### Key Paths
+- Alignment data: `data/user_alignment.json` (NOT state/user_alignment.json)
+- State files: `state/` relative to workspace root
+- Personality module: `brain/chat_personality.py`
+- Alignment guidance: `brain/user_alignment_guidance.py`
+- Alignment engine: `engine/user_alignment.py`
 
 ### Key Interfaces
-- `call_llm_async(prompt, system)` — engine/llm.py, async, returns string
+- `build_personality_context(query: str) -> dict` — brain/chat_personality.py
+  Returns: {personality_prompt, mood_description, emotional_raw, goals, memory_hints, alignment}
 - `personality_respond(query: str) -> str` — brain/chat_personality.py, sync wrapper
+- `build_alignment_guidance(query, data) -> dict` — brain/user_alignment_guidance.py
+- `call_llm_async(prompt, system)` — engine/llm.py, async, returns string
 - `classify_intent(query)` → ResponseIntent dataclass with `.kind`, `.confidence`
 - `compose_grounded_response(query, ctx)` → string using real state data
 
@@ -44,23 +48,9 @@ greeting, emotion, identity, plans, dreams, memories, knowledge, capability, les
 
 ### What Was Done
 1. **Built `brain/chat_personality.py`** — New personality engine that reads live state
-   - Reads emotional state, memories, plans, identity, reflections
-   - Builds rich system prompts with real data
-   - Produces genuinely conversational responses via LLM
-   
-2. **Wired into `web/chat.py`** — Added import block (lines 103-120) and response priority (line 1077)
-   - personality_respond() is tried first, before other response methods
-   - Graceful fallback if module unavailable
-
-3. **Verified end-to-end** — personality_respond("How are you feeling?") returns 500+ char genuine conversational response with real emotional data
-
-4. **Cleaned up** 3 temp files (debug_personality_paths.py, _personality_respond_append.py, test_personality_quick.py)
-
-### Key Findings
-- State files are at `state/` relative to workspace root (not engine/state/)
-- `call_llm_async` needs asyncio.run() wrapper for sync contexts
-- aiohttp sessions warn about unclosed connections but responses work fine
-- Rate limiting hits on rapid successive calls (test 3 got LLM error)
+2. **Wired into `web/chat.py`** — Added import block and response priority
+3. **Verified end-to-end** — personality_respond() returns genuine conversational responses
+4. **Cleaned up** 3 temp files
 
 ## Session 2026-05-29a — Completed ✓
 
@@ -72,16 +62,16 @@ greeting, emotion, identity, plans, dreams, memories, knowledge, capability, les
 ### Checkpoint: 83b8ae2 (xt_checkpoint_20260529_050658)
 
 ## Next Session Priorities
-1. **Live-test /chat/ask via HTTP** — start server, send real queries, verify end-to-end via web
-2. **Clean up test file sprawl** — 100+ test files in brain/, many stale diagnostics → archive
-3. **Wire collaboration/philosophical** into compose_grounded_response()
-4. **Track alignment score changes** — does user_alignment actually rise with chat use?
-5. **Add conversation history** — personality_respond should remember recent exchanges
-6. **Fix aiohttp session warnings** — proper async cleanup in personality_respond
+1. **Live-test /chat/ask via HTTP** — start server, send real queries, verify personality responses come through the web endpoint
+2. **Clean up test file sprawl** — 100+ test files in brain/, many stale → archive or consolidate
+3. **Add conversation history** — personality_respond should remember recent exchanges (session memory)
+4. **Fix aiohttp session warnings** — proper async cleanup in personality_respond
+5. **Wire alignment back-loop** — when user chats, record their feedback to improve alignment over time
+6. **Track alignment score changes** — does user_alignment actually rise with chat use?
 
 ## Lessons Reinforced
-- Build the function in a temp file, append to target, verify — safer than in-place edits for complex additions
-- Always check what functions actually exist in a module before importing
-- State file paths need careful resolution — use os.path relative to known anchors
+- `build_personality_context` returns a dict, not a string — always verify return types
+- Alignment data lives at `data/user_alignment.json`, state files at `state/`
+- Path resolution bugs are the #1 cause of "module works but data missing" — always verify paths from the actual working directory
 - One focused feature per session, complete it fully
 - Clean up temp/debug files before checkpointing

@@ -206,6 +206,32 @@ def build_personality_context(user_query=None):
         elif any(w in q_lower for w in ['think', 'opinion', 'believe']):
             lines.append("- Share your genuine perspective. You have real views.")
     
+    # User alignment guidance — adapt to learned interaction preferences
+    alignment = {}
+    try:
+        from brain.user_alignment_guidance import build_alignment_guidance
+        import json as _json
+        workspace_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        align_file = os.path.join(workspace_root, 'data', 'user_alignment.json')
+        alignment_context = {}
+        if os.path.exists(align_file):
+            try:
+                with open(align_file) as _af:
+                    alignment_context = _json.load(_af)
+            except Exception:
+                pass
+        alignment = build_alignment_guidance(user_query or "", alignment_context) or {}
+        style = alignment.get('style_guidance', [])
+        if style:
+            lines.append("## Communication Style Preferences")
+            for s in style[:3]:
+                lines.append(f"- {s}")
+        prefs = alignment.get('preference_signals', {})
+        if alignment.get('interaction_count', 0) > 0:
+            lines.append(f"- Interaction count: {alignment.get('interaction_count', 0)}")
+            lines.append(f"- Trust level: {alignment.get('trust', 'unknown')}")
+    except Exception:
+        alignment = {}
     personality_prompt = "\n".join(lines)
     
     # Memory hints for response enrichment
@@ -221,6 +247,7 @@ def build_personality_context(user_query=None):
         'emotional_raw': emotions,
         'goals': goals,
         'memory_hints': memory_hints,
+        'alignment': alignment,
     }
 
 
