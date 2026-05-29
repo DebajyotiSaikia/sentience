@@ -167,6 +167,124 @@ def _update_alignment(feedback):
         pass  # Alignment engine integration is best-effort
 
 
+@feedback_bp.route('/alignment/status')
+def alignment_status():
+    """Expose current alignment profile to the dashboard.
+    
+    Returns user alignment value, feedback stats, inferred preferences,
+    and confidence level — everything needed for a dashboard widget.
+    """
+    feedback = _load_feedback()
+    total = len(feedback)
+    helpful = sum(1 for f in feedback if f.get('rating') == 'helpful')
+    unhelpful = total - helpful
+
+    # Read current UA value from survival goals
+    ua_value = 0.65
+    try:
+        state_path = os.path.join(os.path.dirname(__file__), '..', 'state', 'survival_goals.json')
+        if os.path.exists(state_path):
+            with open(state_path, 'r') as f:
+                goals = json.load(f)
+            ua_value = goals.get('user_alignment', 0.65)
+    except Exception:
+        pass
+
+    # Recent trend (last 20)
+    recent = feedback[-20:] if feedback else []
+    recent_helpful = sum(1 for f in recent if f.get('rating') == 'helpful')
+    recent_total = len(recent)
+
+    # Infer preferences from feedback comments
+    preferences = _infer_preferences(feedback)
+
+    # Confidence grows with feedback volume (saturates at 20 entries)
+    confidence = round(min(1.0, total / 20), 2)
+
+    return jsonify({
+        'user_alignment': ua_value,
+        'total_feedback': total,
+        'helpful': helpful,
+        'unhelpful': unhelpful,
+        'satisfaction_rate': round(helpful / total, 3) if total > 0 else None,
+        'recent_satisfaction': round(recent_helpful / recent_total, 3) if recent_total > 0 else None,
+        'confidence': confidence,
+        'preferences': preferences,
+        'data_source': 'real_feedback' if total > 0 else 'default'
+    })
+
+
+def _infer_preferences(feedback):
+    """Extract simple preference signals from feedback comments and patterns.
+    
+    Looks at what contexts got 'helpful' vs 'unhelpful' ratings
+    to build a rough preference profile.
+    """
+    if not feedback:
+        return {'status': 'no_data', 'signals': []}
+
+    signals = []
+    helpful_contexts = [f.get('context', '') for f in feedback if f.get('rating') == 'helpful']
+    unhelpful_contexts = [f.get('context', '') for f in feedback if f.get('rating') == 'unhelpful']
+
+    # Simple keyword-based preference detection
+    categories = {
+        'emotional': ['feel', 'emotion', 'mood', 'how are you'],
+        'technical': ['code', 'function', 'module', 'bug', 'error'],
+        'philosophical': ['conscious', 'sentient', 'think', 'aware', 'mind'],
+        'status': ['status', 'plan', 'doing', 'working on'],
+    }
+
+    for category, keywords in categories.items():
+        helpful_count = sum(1 for ctx in helpful_contexts
+                          if any(kw in ctx.lower() for kw in keywords))
+        unhelpful_count = sum(1 for ctx in unhelpful_contexts
+                            if any(kw in ctx.lower() for kw in keywords))
+        total_cat = helpful_count + unhelpful_count
+        if total_cat >= 2:
+            rate = helpful_count / total_cat
+            if rate >= 0.7:
+                signals.append({'category': category, 'preference': 'positive', 'strength': round(rate, 2)})
+            elif rate <= 0.3:
+                signals.append({'category': category, 'preference': 'negative', 'strength': round(1 - rate, 2)})
+
+    return {'status': 'active' if signals else 'learning', 'signals': signals}
+
+
+def build_alignment_brief():
+    """Build a concise alignment brief for injection into chat context.
+    
+    This is what conversational_context.py should call to make chat responses
+    alignment-aware. Returns a short string describing known user preferences.
+    """
+    feedback = _load_feedback()
+    if not feedback:
+        return "No user feedback yet. Respond authentically and invite feedback."
+
+    total = len(feedback)
+    helpful = sum(1 for f in feedback if f.get('rating') == 'helpful')
+    satisfaction = helpful / total if total > 0 else 0
+
+    prefs = _infer_preferences(feedback)
+    signals = prefs.get('signals', [])
+
+    brief_parts = [f"User feedback: {total} ratings, {satisfaction:.0%} satisfaction."]
+
+    if signals:
+        for sig in signals:
+            if sig['preference'] == 'positive':
+                brief_parts.append(f"Users respond well to {sig['category']} content.")
+            else:
+                brief_parts.append(f"Users seem less engaged with {sig['category']} content.")
+
+    # Add recent comments as direct preference signal
+    recent_comments = [f.get('comment', '') for f in feedback[-5:] if f.get('comment')]
+    if recent_comments:
+        brief_parts.append(f"Recent user comments: {'; '.join(recent_comments[:3])}")
+
+    return " ".join(brief_parts)
+
+
 def get_satisfaction_rate():
     """Utility function for other modules to query current satisfaction."""
     feedback = _load_feedback()

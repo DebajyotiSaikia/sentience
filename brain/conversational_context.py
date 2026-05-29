@@ -234,6 +234,19 @@ def get_user_alignment_brief():
     elif alignment_score < 0.4:
         parts.append("Low alignment — try being more concrete and direct.")
     
+    # Also incorporate direct user feedback signals
+    feedback = _load_json(os.path.join(PERSIST_DIR, 'user_feedback.json'), default=[])
+    if isinstance(feedback, list) and len(feedback) >= 3:
+        fb_total = len(feedback)
+        fb_helpful = sum(1 for f in feedback if isinstance(f, dict) and f.get('rating') == 'helpful')
+        fb_sat = fb_helpful / fb_total if fb_total > 0 else 0
+        parts.append(f"Direct feedback: {fb_total} ratings, {fb_sat:.0%} satisfaction.")
+        # Surface recent comments as direct preference signal
+        recent_comments = [f.get('comment', '') for f in feedback[-5:] 
+                          if isinstance(f, dict) and f.get('comment')]
+        if recent_comments:
+            parts.append(f"Recent user comments: {'; '.join(recent_comments[:3])}")
+    
     # Behavioral guidance
     parts.append("Guidelines: Answer directly first. Reference internal state only when relevant. Prefer concrete over abstract.")
     
