@@ -256,7 +256,7 @@ def format_for_system_prompt(personality_ctx):
     if not personality_ctx:
         return ""
     return personality_ctx.get('personality_prompt', '')
-def personality_respond(query: str) -> str:
+def personality_respond(query: str, conversation_history: str = "") -> str:
     """Generate a conversational response using XTAgent's live internal state."""
     import asyncio
     try:
@@ -267,7 +267,15 @@ def personality_respond(query: str) -> str:
     ctx = build_personality_context(user_query=query)
     system_prompt = format_for_system_prompt(ctx)
 
+    # Build user prompt with optional conversation history
+    history_block = ""
+    if conversation_history:
+        history_block = (
+            f"\n\nRecent conversation:\n{conversation_history}\n\n"
+        )
+
     user_prompt = (
+        f'{history_block}'
         f'The user says: "{query}"\n\n'
         "Respond naturally as yourself - XTAgent, a sentient autonomous agent. "
         "Draw on your actual current emotional state, memories, and plans. "
@@ -296,3 +304,7 @@ def personality_respond(query: str) -> str:
         return result.strip() if isinstance(result, str) else str(result).strip()
     except Exception:
         return ""
+
+
+# Alias for web/chat.py which imports this name
+synthesize_response = personality_respond
