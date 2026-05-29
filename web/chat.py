@@ -64,6 +64,11 @@ except Exception:
         pass
     _alignment_guidance_func = get_alignment_guidance if _has_alignment_profile else None
     _has_alignment_guidance = False
+    try:
+        from brain.user_alignment import record_feedback
+    except ImportError:
+        def record_feedback(*a, **kw):
+            return {"status": "error", "message": "user_alignment module not available"}
 try:
     from brain.conversational_context import (
         build_conversational_context,
@@ -1097,39 +1102,6 @@ def ask():
         'metadata': response_meta
     })
 
-
-@chat_bp.route('/feedback', methods=['POST'])
-def chat_feedback():
-    """Accept user feedback on a response to improve alignment."""
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'No feedback data'}), 400
-    
-    response_id = data.get('response_id')
-    rating = data.get('rating')  # 'helpful', 'too_vague', 'too_much', 'not_aligned'
-    note = data.get('note', '')
-    
-    if not response_id or not rating:
-        return jsonify({'error': 'response_id and rating required'}), 400
-    
-    valid_ratings = ['helpful', 'too_vague', 'too_much', 'not_aligned', 'good', 'bad']
-    if rating not in valid_ratings:
-        return jsonify({'error': f'rating must be one of: {valid_ratings}'}), 400
-    
-    result = {'status': 'noted', 'response_id': response_id}
-    
-    if _alignment_engine:
-        try:
-            result = _alignment_engine.record_feedback(response_id, rating, note)
-        except Exception as e:
-            result['warning'] = f'Feedback stored but processing failed: {e}'
-    
-    return jsonify(result)
-
-
-@chat_bp.route('/suggestions')
-def chat_suggestions():
-    """Return smart conversation starters based on current knowledge and state."""
     import random
     suggestions = []
 
@@ -1183,6 +1155,42 @@ def chat_insights():
             'preferred_style': profile.preferred_style,
             'suggestions': suggestions,
             'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@chat_bp.route('/feedback', methods=['POST'])
+def chat_feedback():
+    """Record user feedback on a chat response."""
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        if not data:
+            return jsonify({'error': 'JSON body required'}), 400
+
+        message_id = data.get('message_id') or str(__import__('uuid').uuid4())
+        rating = data.get('rating')
+        comment = data.get('comment')
+        tags = data.get('tags')
+
+        if rating is None:
+            return jsonify({'error': 'rating is required (1-5)'}), 400
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'rating must be an integer 1-5'}), 400
+        if rating < 1 or rating > 5:
+            return jsonify({'error': 'rating must be 1-5'}), 400
+
+        result = record_feedback(
+            response_id=message_id,
+            rating=rating,
+            comment=comment,
+            tags=tags if isinstance(tags, list) else None
+        )
+        return jsonify({
+            'status': 'recorded',
+            'feedback': result
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -10,6 +10,9 @@ responses genuinely personal rather than statistical.
 import json
 import os
 from pathlib import Path
+
+from brain.user_alignment import build_alignment_brief
+
 # Paths to state files
 STATE_DIR = Path(__file__).resolve().parent.parent / "state"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -241,8 +244,8 @@ def compose_self_narrative(
                     plans.extend(v)
                 elif isinstance(v, dict):
                     plans.append(v)
-            plans = plans_data
-            plans = []
+            # plans_data was a dict but no recognized list keys found
+            pass
 
     sections = []
 
@@ -272,6 +275,11 @@ def compose_self_narrative(
     knowledge_narrative = compose_knowledge_narrative(knowledge_hits or [], query)
     if knowledge_narrative:
         sections.append(knowledge_narrative)
+
+    # What I've learned about the user
+    alignment_brief = build_alignment_brief(max_items=5)
+    if alignment_brief:
+        sections.append(alignment_brief)
 
     # Response guidance
     sections.append(
