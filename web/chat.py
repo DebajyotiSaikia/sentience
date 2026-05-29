@@ -100,11 +100,11 @@ except ImportError:
     narrate_for_chat = None
     _has_narration = False
 # Intelligent response engine — unified conversational responses with real internal state
-# Intelligent response engine — unified conversational responses with real internal state
+# Conversational intelligence — unified conversational responses with real internal state
 _has_intelligent_response = False
 generate_intelligent_response = None
 try:
-    from brain.response_intelligence import generate_intelligent_response
+    from brain.conversational_intelligence import generate_intelligent_response
     _has_intelligent_response = True
 except ImportError:
     generate_intelligent_response = None
@@ -1090,7 +1090,6 @@ def ask():
                 response_meta = intro_result.get('metadata', {})
                 response_meta['source'] = 'intelligent'
         except Exception:
-            pass
             pass
 
     if _has_engine and _engine_respond and not response:
