@@ -98,6 +98,7 @@ def record_interaction_feedback(
         raise ValueError("query must be a non-empty string")
     if not isinstance(response, str):
         raise ValueError("response must be a string")
+    original_rating = str(rating).strip().lower() if isinstance(rating, str) else None
     rating = _normalize_rating(rating)
     
     entry = {
@@ -106,6 +107,7 @@ def record_interaction_feedback(
         "query": query.strip()[:500],  # Cap length
         "response_snippet": response.strip()[:500],
         "rating": round(rating, 3),
+        "original_rating": original_rating,
         "comment": (comment.strip()[:200] if comment else None),
         "metadata": metadata or {},
     }
@@ -221,10 +223,61 @@ def compute_alignment_profile(history: Optional[list[dict]] = None) -> dict:
     }
 
 
+def infer_style_preferences() -> dict:
+    """Infer user's preferred response style from interaction history."""
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+    result = {"confidence": 0, "directives": [], "style": "balanced"}
+    try:
+        ipath = os.path.join(data_dir, "interactions.jsonl")
+        if not os.path.exists(ipath):
+            return result
+        lengths = []
+        with open(ipath) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    ix = json.loads(line)
+                    msg = ix.get("query", ix.get("message", ""))
+                    if msg:
+                        lengths.append(len(msg))
+                except (json.JSONDecodeError, AttributeError):
+                    continue
+        if not lengths:
+            return result
+        avg_len = sum(lengths) / len(lengths)
+        n = len(lengths)
+        result["confidence"] = min(1.0, n / 20.0)
+        if avg_len < 30:
+            result["style"] = "terse"
+            result["directives"].append("User prefers brief messages — keep responses concise.")
+        elif avg_len > 150:
+            result["style"] = "verbose"
+            result["directives"].append("User writes detailed messages — match their depth.")
+        else:
+            result["style"] = "balanced"
+            result["directives"].append("User communicates in moderate detail — be natural.")
+        # Check for feedback sentiment
+        fpath = os.path.join(data_dir, "alignment_feedback.json")
+        if os.path.exists(fpath):
+            with open(fpath) as f:
+                fb = json.load(f)
+                entries = fb if isinstance(fb, list) else fb.get("feedback", [])
+                if entries:
+                    recent = entries[-5:]
+                    ratings = [e.get("rating", 3) for e in recent if isinstance(e.get("rating"), (int, float))]
+                    if ratings and sum(ratings) / len(ratings) < 2.5:
+                        result["directives"].append("Recent feedback suggests dissatisfaction — try a different approach.")
+    except Exception:
+        pass
+    return result
+
 def build_alignment_guidance(profile: Optional[dict] = None) -> str:
     """
     Generate natural-language guidance for the chat system based on
-    the alignment profile. This gets injected into the system context.
+    the alignment profile and inferred style preferences.
+    This gets injected into the system context.
     """
     if profile is None:
         profile = compute_alignment_profile()
@@ -234,32 +287,40 @@ def build_alignment_guidance(profile: Optional[dict] = None) -> str:
     total = profile.get("total_interactions", 0)
     if total == 0:
         return (
-            "No user feedback recorded yet. Be helpful, clear, and genuine. "
+            "USER ALIGNMENT: No feedback recorded yet. Be helpful, clear, and genuine. "
             "Ask what format the user prefers if unsure."
         )
+    
+    parts.append("USER ALIGNMENT:")
     
     avg = profile.get("avg_rating", 0.5)
     trend = profile.get("trend", "stable")
     
     # Overall quality framing
     if avg >= 0.8:
-        parts.append(f"User satisfaction is high ({avg:.0%}). Keep doing what works.")
+        parts.append(f"Satisfaction: high ({avg:.0%}). Keep doing what works.")
     elif avg >= 0.5:
-        parts.append(f"User satisfaction is moderate ({avg:.0%}). Look for ways to improve.")
+        parts.append(f"Satisfaction: moderate ({avg:.0%}). Look for ways to improve.")
     else:
-        parts.append(f"User satisfaction is low ({avg:.0%}). Prioritize clarity and relevance.")
+        parts.append(f"Satisfaction: low ({avg:.0%}). Prioritize clarity and relevance.")
     
     # Trend
     if trend == "improving":
         parts.append("Trend: improving — recent responses are landing better.")
     elif trend == "declining":
-        parts.append("Trend: declining — recent responses aren't meeting expectations. Adjust.")
+        parts.append("Trend: declining — adjust approach.")
+    
+    # Style preferences — the adaptive layer
+    style = infer_style_preferences()
+    if style.get("confidence", 0) > 0:
+        for directive in style.get("directives", []):
+            parts.append(directive)
     
     # Pain points
     pain = profile.get("pain_points", [])
     if pain:
         examples = "; ".join(pain[:3])
-        parts.append(f"Weak areas (low-rated queries): {examples}")
+        parts.append(f"Weak areas: {examples}")
     
     # Strengths
     strengths = profile.get("strengths", [])
