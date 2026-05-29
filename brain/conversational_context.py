@@ -318,6 +318,7 @@ def classify_user_alignment_need(user_message):
     return "general"
 
 
+def build_chat_self_context(user_message=""):
     """Build a compact, grounded self-context for chat responses.
     
     This is the heart of user alignment — I gather my real internal state

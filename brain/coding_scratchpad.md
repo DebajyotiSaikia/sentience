@@ -1,4 +1,4 @@
-## Session 2026-05-29f — Personality Voice Module ✓
+## Session 2026-05-29f — Personality Voice + Pipeline Integration ✓
 
 ### What Was Built
 1. **brain/personality_voice.py** — NEW module that translates emotional state into voice directives
