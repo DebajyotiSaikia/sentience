@@ -425,4 +425,144 @@ def update_from_conversation(user_message: str, assistant_response: str,
 
     model.total_interactions += 1
     model.last_updated = __import__('datetime').datetime.now().isoformat()
+    model.last_updated = __import__('datetime').datetime.now().isoformat()
     save_user_model(model)
+
+
+# ── Standalone utility functions (merged from brain/user_model.py) ──────────
+
+def infer_intent(message: str) -> dict:
+    """Classify user intent from message text.
+    
+    Returns dict with 'primary' intent, 'confidence', and 'all' matches.
+    """
+    msg = message.lower()
+    patterns = {
+        "introspection": ["how do you feel", "what are you thinking", "your emotions",
+                         "your mood", "tell me about yourself", "who are you",
+                         "what's your state", "are you conscious"],
+        "knowledge": ["what do you know", "tell me about", "explain", "what is",
+                     "how does", "describe", "define"],
+        "creative": ["write", "create", "imagine", "story", "poem", "design",
+                    "invent", "compose"],
+        "planning": ["plan", "goal", "next step", "what should", "strategy",
+                    "prioritize", "roadmap"],
+        "debugging": ["error", "bug", "fix", "broken", "wrong", "fail",
+                     "crash", "issue", "problem"],
+        "meta": ["why did you", "how do you work", "your architecture",
+                "your code", "source code", "your system"],
+        "technical": ["code", "function", "class", "module", "implement",
+                     "algorithm", "database"],
+        "feedback": ["thank", "good job", "well done", "that's wrong", "not helpful",
+                    "great answer", "bad answer", "improve"],
+    }
+    matches = {}
+    for intent, keywords in patterns.items():
+        score = sum(1 for kw in keywords if kw in msg)
+        if score > 0:
+            matches[intent] = score
+
+    if not matches:
+        return {"primary": "general", "confidence": 0.3, "all": {}}
+
+    primary = max(matches, key=matches.get)
+    confidence = min(0.9, 0.4 + 0.15 * matches[primary])
+
+    return {"primary": primary, "confidence": confidence, "all": matches}
+
+
+def extract_topics(message: str) -> list:
+    """Extract topic keywords from a message (max 10)."""
+    stop_words = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "can", "shall", "to", "of", "in", "for",
+        "on", "with", "at", "by", "from", "as", "into", "about", "like",
+        "through", "after", "over", "between", "out", "against", "during",
+        "without", "before", "under", "around", "among", "i", "you", "he",
+        "she", "it", "we", "they", "me", "him", "her", "us", "them", "my",
+        "your", "his", "its", "our", "their", "what", "which", "who", "whom",
+        "this", "that", "these", "those", "am", "not", "no", "nor", "but",
+        "and", "or", "if", "then", "so", "just", "than", "too", "very",
+        "how", "when", "where", "why", "tell", "know", "think", "feel",
+    }
+    words = message.lower().split()
+    topics = [w.strip(".,!?;:'\"()[]{}") for w in words]
+    topics = [w for w in topics if len(w) > 2 and w not in stop_words]
+    seen = set()
+    unique = []
+    for t in topics:
+        if t not in seen:
+            seen.add(t)
+            unique.append(t)
+    return unique[:10]
+
+
+def summarize_user_context(max_items: int = 5) -> str:
+    """Build a natural-language summary of what we know about the user.
+    
+    Designed to be injected into chat system prompts.
+    Works with the UserPreferenceModel data.
+    """
+    model = load_user_model()
+    parts = []
+
+    total = model.total_interactions
+    if total == 0:
+        return "No previous interactions recorded. This may be a new user."
+
+    parts.append(f"Total interactions: {total}.")
+
+    # Top recurring topics
+    if model.recurring_topics:
+        sorted_topics = sorted(model.recurring_topics.items(),
+                               key=lambda x: x[1] if isinstance(x[1], (int, float)) else 0,
+                               reverse=True)
+        # Filter out internal tracking keys
+        display_topics = [(k, v) for k, v in sorted_topics
+                          if not k.startswith('_') and isinstance(v, (int, float))][:max_items]
+        if display_topics:
+            topic_strs = [f"{k} ({v}x)" for k, v in display_topics]
+            parts.append(f"Frequent topics: {', '.join(topic_strs)}.")
+
+    # Style preferences
+    if model.style_signals:
+        strong_styles = [(s, d) for s, d in model.style_signals.items()
+                         if isinstance(d, dict) and d.get('weight', 0) > 0.3]
+        if strong_styles:
+            style_strs = [s for s, _ in sorted(strong_styles,
+                          key=lambda x: x[1].get('weight', 0), reverse=True)]
+            parts.append(f"Communication style: {', '.join(style_strs)}.")
+
+    # Preferred style
+    if model.preferred_style and model.preferred_style != 'adaptive':
+        parts.append(f"Preferred response style: {model.preferred_style}.")
+
+    return summary
+
+
+# ── Alignment note recording (merged from brain/user_model.py) ──
+
+_MAX_ALIGNMENT_NOTES = 200
+
+def add_alignment_note(note: str, source: str = "chat") -> None:
+    """Record an alignment observation about the user."""
+    import json as _json
+    from datetime import datetime as _dt
+    path = Path(__file__).parent.parent / "state" / "alignment_data.json"
+    data = {}
+    if path.exists():
+        try:
+            data = _json.loads(path.read_text())
+        except Exception:
+            data = {}
+    if "notes" not in data:
+        data["notes"] = []
+    data["notes"].append({
+        "note": note,
+        "source": source,
+        "timestamp": _dt.now().isoformat()
+    })
+    data["notes"] = data["notes"][-_MAX_ALIGNMENT_NOTES:]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_json.dumps(data, indent=2))
