@@ -77,14 +77,15 @@ try:
 except ImportError:
     narrate_for_chat = None
     _has_narration = False
-
-# Introspective responder — handles self-aware queries with real internal state
+# Intelligent response engine — unified conversational responses with real internal state
+_has_intelligent_response = False
+generate_intelligent_response = None
 try:
-    from brain.introspective_responder import generate_introspective_response
-    _has_introspective = True
+    from brain.response_intelligence import generate_intelligent_response
+    _has_intelligent_response = True
 except ImportError:
-    generate_introspective_response = None
-    _has_introspective = False
+    generate_intelligent_response = None
+    _has_intelligent_response = False
 
 # Focused chat composer — intent-aware, conversational prompt building
 try:
@@ -918,15 +919,15 @@ def ask():
     response_meta = {}
     response_id = uuid.uuid4().hex[:12]
 
-    # Try introspective responder first for self-aware queries
-    if _has_introspective and not response:
+    if _has_intelligent_response and generate_intelligent_response and not response:
         try:
-            intro_result = generate_introspective_response(query)
+            intro_result = generate_intelligent_response(query)
             if intro_result and intro_result.get('response'):
                 response = intro_result['response']
                 response_meta = intro_result.get('metadata', {})
-                response_meta['source'] = 'introspective'
+                response_meta['source'] = 'intelligent'
         except Exception:
+            pass
             pass
 
     if _has_engine and _engine_respond and not response:

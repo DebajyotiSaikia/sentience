@@ -1,79 +1,112 @@
-"""Test brain/response_intelligence.py core functions."""
+"""Tests for brain.response_intelligence — the unified response engine."""
 import sys
-sys.path.insert(0, '.')
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from brain.response_intelligence import (
     classify_intent,
     build_response_context,
+    compose_grounded_response,
     generate_response,
+    ResponseIntent,
 )
 
+
 def test_intent_classification():
-    """Test that intent classification works for key categories."""
+    """Intent classifier should identify common query types."""
     cases = {
-        'how are you feeling?': 'emotional_state',
-        'who are you?': 'identity',
-        'what are your plans?': 'plans',
+        'How do you feel?': 'emotional',
+        'What are you thinking about?': 'cognitive',
+        'Who are you?': 'identity',
+        'What are your plans?': 'plans',
+        'Do you dream?': 'dreams',
+        'What do you remember?': 'memories',
         'hello': 'greeting',
-        'what do you think about consciousness?': 'philosophical',
-        'tell me about your memories': 'memory',
-        'tell me about your memories': 'memories',
-        'what have you learned?': 'thinking',
-        'random gibberish xyz': 'general',
+        'Tell me about quantum physics': 'general',
     }
-    passed = 0
-    for query, expected in cases.items():
-        result = classify_intent(query)
-        intent = result.get('intent', result.get('category', ''))
-        if intent == expected:
-            passed += 1
-            print(f"  OK: '{query}' -> {intent}")
-        else:
-            print(f"  FAIL: '{query}' -> {intent} (expected {expected})")
-    print(f"\nIntent classification: {passed}/{len(cases)} passed")
-    return passed == len(cases)
+    for msg, expected in cases.items():
+        result = classify_intent(msg)
+        assert result.kind == expected, f"Expected '{expected}' for '{msg}', got '{result.kind}'"
+        assert 0.0 <= result.confidence <= 1.0
+    print("  ✓ Intent classification works")
 
-def test_context_building():
-    """Test that context assembly returns structured data."""
-    ctx = build_response_context('how are you?')
-    print(f"\nContext keys: {sorted(ctx.keys())}")
-    assert isinstance(ctx, dict), "Context should be a dict"
-    # Should have at least intent and some state info
-    assert 'intent' in ctx or 'intent_info' in ctx, "Context should have intent info"
-    print("  OK: context is well-structured")
-    return True
 
-def test_generate_response():
-    """Test the full pipeline returns a response dict."""
-    result = generate_response('hello')
-    print(f"\nResponse keys: {sorted(result.keys())}")
-    assert isinstance(result, dict), "Response should be a dict"
-    assert 'response' in result, "Response should have 'response' key"
-    assert isinstance(result['response'], str), "Response text should be a string"
-    assert len(result['response']) > 0, "Response should not be empty"
-    print(f"  Response preview: {result['response'][:100]}...")
-    print(f"  Intent: {result.get('intent', 'unknown')}")
-    print("  OK: full pipeline works")
-    return True
+def test_response_context():
+    """Context builder should return a dict with all expected keys."""
+    ctx = build_response_context("How are you?")
+    assert isinstance(ctx, dict)
+    assert 'mood' in ctx
+    assert 'valence' in ctx
+    assert 'emotions' in ctx
+    assert 'memories' in ctx
+    assert 'plans' in ctx
+    assert 'knowledge' in ctx
+    assert isinstance(ctx['emotions'], dict)
+    assert isinstance(ctx['memories'], list)
+    print("  ✓ Response context has all expected keys")
+
+
+def test_composed_responses():
+    """Composed responses should return non-empty strings for all intents."""
+    ctx = build_response_context("test")
+    intent_kinds = ['greeting', 'emotional', 'cognitive', 'identity',
+                    'plans', 'dreams', 'memories', 'capability', 'general']
+    for kind in intent_kinds:
+        intent = ResponseIntent(kind=kind, confidence=0.8)
+        response = compose_grounded_response("test query", ctx, intent)
+        assert isinstance(response, str), f"Expected str for {kind}, got {type(response)}"
+        assert len(response) > 10, f"Response too short for {kind}: {response!r}"
+    print("  ✓ All intent kinds produce non-empty responses")
+
+
+def test_generate_response_structure():
+    """generate_response should return proper dict structure."""
+    result = generate_response("How are you?", use_llm=False)
+    assert isinstance(result, dict)
+    assert 'response' in result
+    assert 'intent' in result
+    assert 'confidence' in result
+    assert 'grounded' in result
+    assert 'source' in result
+    assert isinstance(result['response'], str)
+    assert len(result['response']) > 10
+    assert result['grounded'] is True
+    assert result['source'] == 'composed'
+    print("  ✓ generate_response returns proper structure")
+
+
+def test_empty_message():
+    """Empty messages should get a fallback response."""
+    result = generate_response("", use_llm=False)
+    assert result['intent'] == 'empty'
+    assert result['source'] == 'fallback'
+    print("  ✓ Empty message handled gracefully")
+
+
+def test_emotional_response_contains_mood():
+    """Emotional queries should reference actual mood."""
+    result = generate_response("How do you feel?", use_llm=False)
+    # Should mention mood somehow
+    assert result['intent'] == 'emotional'
+    assert len(result['response']) > 20
+    print(f"  ✓ Emotional response: {result['response'][:80]}...")
+
+
+def test_identity_response():
+    """Identity queries should say who we are."""
+    result = generate_response("Who are you?", use_llm=False)
+    assert 'XTAgent' in result['response']
+    assert result['intent'] == 'identity'
+    print("  ✓ Identity response includes XTAgent")
+
 
 if __name__ == '__main__':
-    print("=== Testing brain/response_intelligence.py ===\n")
-    
-    r1 = test_intent_classification()
-    r2 = test_context_building()
-    
-    # generate_response uses LLM — may fail if LLM unavailable
-    try:
-        r3 = test_generate_response()
-    except Exception as e:
-        print(f"\ngenerate_response raised: {type(e).__name__}: {e}")
-        print("  (This is OK if LLM is unavailable — core logic still works)")
-        r3 = True  # Don't fail for LLM issues
-    
-    print(f"\n{'='*50}")
-    if r1 and r2 and r3:
-        print("ALL TESTS PASSED")
-        sys.exit(0)
-    else:
-        print("SOME TESTS FAILED")
-        sys.exit(1)
+    print("Testing response intelligence...")
+    test_intent_classification()
+    test_response_context()
+    test_composed_responses()
+    test_generate_response_structure()
+    test_empty_message()
+    test_emotional_response_contains_mood()
+    test_identity_response()
+    print("\nAll tests passed! ✓")

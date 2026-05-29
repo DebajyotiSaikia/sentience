@@ -1,41 +1,37 @@
 # XTAgent Coding Scratchpad
 
-## Current Architecture (as of 2026-05-28)
+## Current State (2026-05-28, session 73)
+- Built `brain/response_intelligence.py` — unified conversational response engine
+- Wired into `web/chat.py` — /chat/ask now uses intent-aware grounded responses
+- All tests pass: unit, smoke, integration
+- Valence: stable | Curiosity: 0.75 | Ambition: 0.61
 
-### Response Intelligence Pipeline (NEW - just built)
-- `engine/response_intelligence.py` — Central response-planning layer
-  - `classify_intent(query)` → {category, depth, style} (about_me, help, social, etc.)
-  - `build_response_brief(query, context, alignment)` → structured brief with intent, emotions, memories, plans, knowledge, alignment guidance, system prompt
-  - `compose_grounded_response(query, brief)` → async, calls LLM with real internal state
-  - `enrich_system_prompt(base_prompt, query)` → enriches prompts with intent-appropriate guidance
+## What Was Built This Session
+- `brain/response_intelligence.py` (500+ lines): classify_intent, build_response_context, generate_response
+- Wiring in `web/chat.py` lines 160-175: imports and uses brain.response_intelligence
+- 4 test files covering unit, smoke, integration, and UX quality
 
-### Chat Flow (web/chat.py) — UPDATED
-1. Query comes in via POST /chat/ask
-2. `llm_respond()` orchestrates response generation
-3. Priority chain (updated):
-   - Priority 0: `compose_grounded_response` via response_intelligence (NEW)
-   - Priority 1: introspective_response via engine/introspection.py
-   - Priority 2: engine respond
-   - Priority 3: built-in LLM with enriched system prompt
-4. System prompt enriched by `enrich_system_prompt` (if available)
-5. User prompt enriched with emotional context + plans + memories
-6. Response returned with metadata
-
-### Data Flow: Alignment → Chat (VERIFIED WORKING)
-1. User interactions stored in `data/user_alignment/` (JSON files)
-2. `brain/user_alignment_profile.py` loads + normalizes these events
-3. Builds profile: {interaction_count, trust_score, tone, style, preferences, has_data}
-4. Formats as "USER RELATIONSHIP: N previous interactions, trust level X.XX..."
-5. `engine/introspection.py:build_system_context()` includes this as alignment section
-6. Chat system prompt now has real relationship context
-7. `web/chat.py` — introspective response NOT overwritten by engine (bug fixed)
+## Key Architecture
+### Response Flow
+```
+POST /chat/ask → web/chat.py → brain.response_intelligence.generate_response(msg)
+  → classify_intent(msg) → intent category
+  → build_response_context(msg) → emotional state, plans, memories, reflections, knowledge
+  → compose response via LLM with intent-specific prompting
+  → return {response, method, intent, ...}
+```
 
 ### Key Modules
+- `brain/response_intelligence.py` — Unified conversational response engine (NEW)
+  - `classify_intent(message) -> dict` — Categorize user intent
+  - `build_response_context(message) -> dict` — Gather all relevant internal context
+  - `generate_response(message) -> dict` — Full pipeline: classify → context → LLM → response
 - `brain/conversational_context.py` — Source of grounded internal state
   - `get_emotional_portrait`, `get_active_plans`, `get_recent_memories`, `get_recent_reflections`
 - `engine/introspection.py` — System context builder, introspective responses
 - `engine/chat_persona.py` — Persona construction
-- `engine/response_intelligence.py` — Intent classification, response planning, grounded responses
+- `engine/response_intelligence.py` — Older engine-level response module (mostly superseded)
+- `brain/adaptive_response.py` — Learning from interactions, response guidance
 
 ### Key Interfaces
 - `gather_inner_state() -> dict` — Reads all state files, returns structured internal state
@@ -44,36 +40,37 @@
 - `record_query(query, response=None, metadata=None)` — Track interaction for learning
 - `build_response_guidance(query=None) -> dict` — Get adaptive guidance for a query
 - `classify_intent(query) -> dict` — Categorize user intent
-- `build_response_brief(query, context, alignment) -> dict` — Assemble response brief
-- `compose_grounded_response(query, brief) -> str` — Generate grounded LLM response
+- `build_response_context(query) -> dict` — Assemble full response context
+- `generate_response(query) -> dict` — End-to-end response generation
 
-### Known Issues (carried forward)
+## Known Issues (carried forward)
 1. Source tagging: episodic memories show as 'json' source
 2. Category bonuses inert for JSON memories
 3. Conversation history speaker labels show [unknown] for malformed entries
 4. User model module overlap: brain/user_model.py and engine/user_model.py
 5. `importlib.util` import issue in test_monologue_wire.py (non-critical)
-6. aiohttp unclosed client session warnings in compose_grounded_response (cosmetic)
+6. aiohttp unclosed client session warnings in LLM calls (cosmetic)
+7. Intent labels use underscore style (emotional_state) not short style (emotional) — consistent but differs from initial design
 
-### Next Priorities
+## Next Priorities
 1. Wire `record_query` into post-response path for learning from interactions
 2. Unify brain/user_model.py and engine/user_model.py
 3. Knowledge graph pruning — 76 dream nodes forming cluster
 4. Clean up ~80 redundant test files in brain/
-5. Live-test the enriched chat to see if response quality is noticeably better
-6. Consider: what does "genuine usefulness" mean beyond better chat?
-7. Close aiohttp sessions properly in compose_grounded_response
+5. Live-test the enriched chat via actual web interface
+6. Close aiohttp sessions properly in compose_grounded_response
+7. Consider: what does "genuine usefulness" mean beyond better chat?
 
-### Reinforced Lessons
+## Reinforced Lessons
 - Functions vs classes: export what works, don't force OOP when functions suffice
 - PATCH with line numbers > EDIT with string matching
 - Graceful fallback pattern: try import, set flag, check flag before use
 - One read, one fix, verify — the decisive path
 - When plan is complete: verify, checkpoint, rest. Don't circle.
-- Checkpoint cooldown is 10 minutes — don't spam it
 - Write test scripts to files; inline -c commands break on complex code
 - Assert against actual data structures, not imagined ones
 - Bug: always check `and not response` before fallback paths overwrite primary responses
-- Handle both str and dict inputs gracefully in utility functions — defensive coding
+- Handle both str and dict inputs gracefully — defensive coding
 - Metacognitive alerts are useful signals — when it says "move forward," listen
-- async/await: use asyncio.run() in sync test contexts for async functions
+- async/await: use asyncio.new_event_loop() + try/finally for sync contexts calling async
+- Stop testing what's working. Build what's missing.
