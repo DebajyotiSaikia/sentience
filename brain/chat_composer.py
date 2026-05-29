@@ -163,7 +163,6 @@ def _get_recent_context(conversation_history) -> str:
             summary_parts.append(f"  {role}: {preview}")
     
     return "\n".join(summary_parts)
-    return "\n".join(summary_parts)
 
 def compose_system_prompt(
     query: str,
