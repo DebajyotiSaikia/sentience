@@ -87,8 +87,6 @@ except ImportError:
     classify_intent = None
     _has_composer = False
 
-    _has_composer = False
-
 # Adaptive response engine — learns user patterns for better responses
 try:
     from brain.adaptive_response import (
@@ -162,21 +160,22 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
             resp_text = exchange.get('assistant', '')
             context_parts.append(f"  Me: {resp_text[:200]}")
 
-    # Add active plans so I can reference what I'm working on
+    # Gather active plans for context
     plans = get_active_plans()
 
     # Add adaptive response guidance based on learned user patterns
     if _has_adaptive and _adaptive_guidance:
         try:
-            guidance = _adaptive_guidance(query)
+            guidance = _adaptive_guidance("default", query)
             if guidance:
                 formatted = _format_adaptive_guidance(guidance)
                 if formatted:
-                    system_parts.append(f"\n{formatted}")
+                    context_parts.append(f"\n{formatted}")
         except Exception:
             pass
 
-    # Add composer-built prompt if available
+    # Add active plans so I can reference what I'm working on
+    if plans:
         context_parts.append("\nMY ACTIVE PLANS:")
         for p in plans[:5]:
             name = p.get('name', 'Unknown')
@@ -858,12 +857,10 @@ def ask():
         except Exception:
             pass  # Never let user model tracking break chat
     
-    # (alignment tracking and richer return below)
-    
     # Record with adaptive response engine for pattern learning
     if _has_adaptive and _adaptive_record:
         try:
-            _adaptive_record(query, response)
+            _adaptive_record(session_id or "anonymous", query, response, None)
         except Exception:
             pass  # Never let adaptive tracking break chat
 
