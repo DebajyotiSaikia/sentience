@@ -152,9 +152,22 @@ def generate_response_with_metadata(query, history=None):
             system_prompt += f"\n\n{aligned_section}"
             log.debug("Injected user-aligned context (%d chars)", len(aligned_section))
     except Exception as e:
+        if aligned_section and aligned_section.strip():
+            system_prompt += f"\n\n{aligned_section}"
+            log.debug("Injected user-aligned context (%d chars)", len(aligned_section))
+    except Exception as e:
         log.debug("User-aligned context unavailable: %s", e)
 
-    # Call LLM with persistent background loop
+    # Inject past conversation lessons (cross-session memory)
+    try:
+        from engine.conversation_journal import ConversationJournal
+        journal = ConversationJournal()
+        journal_context = journal.format_for_prompt(query)
+        if journal_context and journal_context.strip():
+            system_prompt += f"\n\n## Past Conversation Wisdom\n{journal_context}"
+            log.debug("Injected journal context (%d chars)", len(journal_context))
+    except Exception as e:
+        log.debug("Journal context unavailable: %s", e)
     try:
         response_text = _run_async(call_llm(
             prompt, system=system_prompt, max_tokens=1024
