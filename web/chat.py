@@ -109,6 +109,21 @@ except ImportError:
     _adaptive_guidance = None
     _format_adaptive_guidance = None
     _has_adaptive = False
+
+# Useful chat adapter — classifies user needs and builds targeted guidance
+try:
+    from brain.useful_chat_adapter import (
+        classify_chat_need as _classify_need,
+        build_response_guidance as _build_useful_guidance,
+        format_grounded_context as _format_grounded,
+    )
+    _has_useful_adapter = True
+except ImportError:
+    _classify_need = None
+    _build_useful_guidance = None
+    _format_grounded = None
+    _has_useful_adapter = False
+
 try:
     from engine.chat_response import generate_response_with_metadata as _engine_respond
     _has_engine = True
@@ -230,6 +245,29 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
             name = p.get('name', 'Unknown')
             progress = p.get('progress', '?')
             context_parts.append(f"  - {name}: {progress}")
+
+    # Useful chat adapter — classify need, build targeted guidance, format grounded context
+    _useful_guidance_str = None
+    if _has_useful_adapter and _classify_need and _build_useful_guidance:
+        try:
+            _chat_need = _classify_need(query)
+            _adapter_ctx = {
+                'knowledge': knowledge_hits or [],
+                'memories': memory_hits or [],
+                'state': state or {},
+                'plans': plans or [],
+                'conversation_history': conversation_history or [],
+            }
+            _useful_guidance_str = _build_useful_guidance(query, _adapter_ctx, _chat_need)
+            if _useful_guidance_str:
+                context_parts.append(f"\n{_useful_guidance_str}")
+            # Also add grounded context formatted for the specific need
+            _grounded = _format_grounded(_adapter_ctx, _chat_need)
+            if _grounded:
+                context_parts.append(f"\n{_grounded}")
+        except Exception:
+            pass
+
     context_block = "\n".join(context_parts) if context_parts else "No specific context retrieved."
 
     # Priority 0: Grounded response via response intelligence
