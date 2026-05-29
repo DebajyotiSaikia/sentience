@@ -157,8 +157,16 @@ except ImportError:
     _build_brief = None
     _has_response_intel = False
 
+# Brain response intelligence — unified conversational engine
+try:
+    from brain.response_intelligence import generate_response as _brain_generate_response
+    _has_brain_response = True
+except ImportError:
+    _brain_generate_response = None
+    _has_brain_response = False
+
 def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None, extra_context=None):
-    """Use CopilotLLM to generate a natural response grounded in retrieved context."""
+    """Generate LLM response using available context."""
     try:
         from engine.llm import CopilotLLM
         llm = CopilotLLM()
@@ -932,6 +940,18 @@ def ask():
                 response = result
         except Exception:
             pass
+    # Try brain response intelligence (unified conversational engine)
+    if _has_brain_response and _brain_generate_response and not response:
+        try:
+            brain_result = _brain_generate_response(query)
+            if isinstance(brain_result, dict) and brain_result.get('response'):
+                response = brain_result['response']
+                response_meta = brain_result.get('metadata', {})
+                response_meta['source'] = 'brain_intelligence'
+                response_meta['intent'] = brain_result.get('intent', 'unknown')
+        except Exception:
+            pass
+
     if not response:
         response = compose_response(query, conversation_history=conversation_history)
     
