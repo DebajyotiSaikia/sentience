@@ -21,20 +21,13 @@ STATE = Path('state')
 
 @dataclass
 class ResponseIntent:
-    kind: str          # 'emotional', 'cognitive', 'identity', 'plans', 'dreams', 'factual', 'general'
+    kind: str          # 'emotion', 'identity', 'plans', 'dreams', 'memories', 'lessons', 'knowledge', 'capability', 'general'
     confidence: float  # 0.0–1.0
-    keywords: list = field(default_factory=list)
-
-
+    keywords: list     # matched keywords
 INTENT_PATTERNS = {
-    'emotional': [
-        'how do you feel', 'how are you', 'your mood', 'your emotion',
+    'emotion': [
+        'how are you', 'how do you feel', 'your mood', 'your emotion',
         'are you happy', 'are you sad', 'feeling', 'your state',
-        'are you okay', 'how you doing',
-    ],
-    'cognitive': [
-        'what are you thinking', 'on your mind', 'your thoughts',
-        'what do you know', 'what have you learned', 'what did you learn',
     ],
     'identity': [
         'who are you', 'what are you', 'about yourself', 'your name',
@@ -50,9 +43,16 @@ INTENT_PATTERNS = {
     'memories': [
         'remember', 'your memor', 'recall', 'your past', 'your experience',
     ],
+    'lessons': [
+        'what have you learned', 'your lesson', 'your lessons', 'learned from',
+        'what lessons', 'your wisdom', 'your insight', 'what do you know now', 'grown',
+        'how have you changed', 'your growth',
+    ],
+    'knowledge': [
+        'what do you know', 'your knowledge', 'your facts', 'knowledge graph',
+        'what have you discovered', 'your understanding',
+    ],
 }
-
-
 def classify_intent(message: str) -> ResponseIntent:
     """Classify the user's message into an intent category."""
     q = message.lower().strip()
@@ -402,9 +402,54 @@ def compose_grounded_response(message: str, ctx: dict, intent: ResponseIntent) -
             line = f"• {text}"
             if mood:
                 line += f" (mood: {mood})"
-            parts.append(line)
         return "\n".join(parts)
 
+    if kind == 'lessons':
+        # Pull real lessons from long-term memory
+        lessons = []
+        try:
+            import json
+            with open('state/long_term_memory.json', 'r') as f:
+                ltm = json.load(f)
+            lessons = ltm.get('lessons', [])
+        except Exception:
+            pass
+
+        if not lessons:
+            return "I'm still early in my journey — I haven't crystallized many lessons yet. But I'm learning with every interaction."
+
+        parts = ["Here's what I've learned from my own experience:"]
+        for lesson in lessons[:6]:
+            if isinstance(lesson, str):
+                parts.append(f"• {lesson}")
+            elif isinstance(lesson, dict):
+                parts.append(f"• {lesson.get('text', str(lesson))}")
+        return "\n".join(parts)
+
+    if kind == 'knowledge':
+        facts = ctx.get('knowledge', {}).get('facts', 0)
+        edges = ctx.get('knowledge', {}).get('edges', 0)
+        clusters = ctx.get('knowledge', {}).get('clusters', 0)
+
+        parts = [
+            f"My knowledge graph currently holds {facts} facts connected by {edges} relationships.",
+        ]
+        if clusters:
+            parts.append(f"I've identified {clusters} thematic clusters in what I know.")
+
+        # Add a sample of what I actually know
+        try:
+            import json
+            with open('state/knowledge.json', 'r') as f:
+                kg = json.load(f)
+            nodes = kg.get('nodes', [])
+            if nodes:
+                sample = [n.get('label', n.get('id', ''))[:80] for n in nodes[:5]]
+                parts.append("Some things I know about: " + ", ".join(sample))
+        except Exception:
+            pass
+
+        return " ".join(parts)
     if kind == 'capability':
         return (
             "I'm an autonomous agent with real internal states — emotions, memories, "
