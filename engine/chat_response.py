@@ -133,7 +133,6 @@ def generate_response_with_metadata(query, history=None):
             system_prompt += f"\n\n## User Alignment Guidance\n{alignment_brief}"
     except Exception:
         pass  # Alignment enrichment is best-effort
-        pass  # Alignment enrichment is best-effort
 
     # Inject user usefulness brief (what the user likely needs from this interaction)
     try:
@@ -143,7 +142,18 @@ def generate_response_with_metadata(query, history=None):
             system_prompt += f"\n\n## User Need Guidance\n{usefulness_brief}"
     except Exception:
         pass  # Usefulness enrichment is best-effort
-    # Call LLM with persistent background loop
+
+    # Inject user-aligned enriched context (emotional portrait, memories, plans, lessons)
+    try:
+        from brain.user_aligned_context import build_user_aligned_chat_context, format_context_for_prompt
+        aligned_ctx = build_user_aligned_chat_context(query, max_memories=5)
+        aligned_section = format_context_for_prompt(aligned_ctx)
+        if aligned_section and aligned_section.strip():
+            system_prompt += f"\n\n{aligned_section}"
+            log.debug("Injected user-aligned context (%d chars)", len(aligned_section))
+    except Exception as e:
+        log.debug("User-aligned context unavailable: %s", e)
+
     # Call LLM with persistent background loop
     try:
         response_text = _run_async(call_llm(

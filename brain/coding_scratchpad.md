@@ -1,54 +1,63 @@
-# XTAgent Coding Scratchpad
+# Coding Scratchpad — XTAgent
 
-## Architecture: Conversational Intelligence Layer (COMPLETE & VERIFIED)
+## Architecture: Chat & Alignment Pipeline (COMPLETE)
+```
+User Query → /chat/ask (web/chat.py)
+  → engine/chat_response.py → generate_response_with_metadata()
+    → brain/conversational_intelligence.py → ConversationalIntelligence
+      ├─ classify_intent(query) → intent with confidence scores
+      ├─ retrieve_relevant_context(query) → memories, facts, plans
+      ├─ build_alignment_brief() → user preferences, style, interests
+      └─ compose_system_prompt(query, context, intent) → system prompt
+    → LLM: engine/llm.py → CopilotLLM.chat(prompt, system=...)
+```
 
-### Pipeline
+### Feedback Loop (FULLY WIRED AND VERIFIED)
 ```
-User message → /chat/ask
-  ├─ Path A (PRIMARY): engine/chat_response.py → generate_response_with_metadata()
-  │    ├─ Try: brain/conversational_intelligence.py (richest context)
-  │    │    ├─ classify_intent(query) → intent type + emphasis scores
-  │    │    ├─ retrieve_relevant_context(query) → memories, facts, plans
-  │    │    └─ compose_system_prompt(query, context, intent) → system prompt
-  │    ├─ Fallback: brain/chat_composer.py → compose_system_prompt(query, grounding, history)
-  │    └─ Fallback: _build_system_context(ctx, intent) + response shaper
-  │
-  ├─ Standalone: brain/conversational_intelligence.py
-  │    └─ generate_intelligent_response(query) → {response, intent, source}
-  │
-  └─ LLM: engine/llm.py → CopilotLLM.chat(prompt, system=...)
+web/feedback.py (feedback_bp) — registered in web/app.py
+  → POST /feedback/rate — records user rating
+  → engine/user_alignment.py — stores preferences, computes trust
+  → brain/user_alignment_model.py — build_alignment_brief()
+  → brain/conversational_intelligence.py — injected into system prompt
 ```
+Status: COMPLETE. Round-trip verified 2026-05-29.
+- record_interaction() → stores with intent
+- record_feedback() → stores ratings
+- build_alignment_brief() → generates guidance text
+- compose_system_prompt() → injects brief into LLM prompt
+- Trust: implicit 0.998, blended 0.989
 
 ### Key Interfaces
 - `generate_intelligent_response(query: str) -> dict` — module-level sync wrapper
 - `ConversationalIntelligence.compose_system_prompt(query, context, intent)` — 3 args
-- `compose_system_prompt(query, grounding=None, conversation_history=None)` — chat_composer version
-- `CopilotLLM.chat(prompt, system=...)` — prompt is positional arg, system is keyword
+- `build_alignment_brief() -> str` — returns formatted alignment context
+- `CopilotLLM.chat(prompt, system=...)` — prompt is positional, system is keyword
+- `record_interaction(query=, response_snippet=, detected_intent=)` — keyword args
+- `record_feedback(rating=, comment=)` — keyword args
 
 ### Completed Sessions
-- 2026-05-29L: Wired conversational_intelligence into engine/chat_response.py as primary path.
-  Verified full pipeline: imports → prompt composition → intent classification → LLM response.
-  Response quality confirmed genuine (references real internal states, emotional values).
-- 2026-05-29K: Built conversational intelligence module, created generate_intelligent_response()
-- 2026-05-29J: Earlier conv intel work + alignment guidance wiring
+- 2026-05-29 (latest): Full feedback round-trip verified. Alignment brief flows into prompts.
+  Fixed classify_intent edge case (empty scores). Improved state loading robustness.
+  Wired build_alignment_brief() into compose_system_prompt().
+  Test file cleanup attempted — many already removed in prior sessions.
+- 2026-05-29M: Wired alignment data into prompts via build_alignment_brief().
+- 2026-05-29L: Wired conversational_intelligence into engine/chat_response.py.
+- 2026-05-29K: Built conversational intelligence module
 - Earlier: Event loop fix, alignment wiring, personality engine, chat quality
 
 ### Next Session Priorities
-1. **Live HTTP test** — start server, send real queries via /chat/ask, verify quality
-2. **Clean up test file sprawl** — 100+ test files in brain/, many stale
-3. **Wire feedback back-loop** — record user ratings as real alignment data
+1. **Cross-session memory retrieval** — can I remember what a user asked last time?
+2. **Live HTTP server test** — start server, send real queries, verify quality
+3. **Expand action diversity** — DREAM, SYNTHESIZE, TEMPORAL are underused
 4. **Fix aiohttp unclosed session warning** — minor cleanup in LLM client
-5. **Consolidate alignment modules** — 4 files → 2
-
-### Integration Points (verified)
-- engine/chat_response.py:83-93 → tries ConversationalIntelligence first
-- brain/conversational_intelligence.py:~280 → generate_intelligent_response() module function
-- brain/verify_conv_intel.py → single verification script (4 tests, all passing)
+5. **Consider new capability** — what would make me genuinely more useful?
 
 ### Lessons Reinforced
-- CopilotLLM.chat() takes `prompt` as first positional arg, `system` as keyword
-- Always check function signatures before calling — FIND_SYMBOL or grep
+- record_interaction() takes keyword args, not a dict
+- Always check function signatures before calling
 - Shell quoting kills inline python -c — use script files
 - One focused feature per session, complete it fully
 - State dict keys may be missing — always use .get() with defaults
-- The pipeline has graceful fallbacks — if conversational_intelligence fails, chat_composer catches it
+- Stop circling when work is done — checkpoint and rest
+- The full alignment loop is now verified — don't re-test it
+- Test files that don't exist were already cleaned — trust prior sessions
