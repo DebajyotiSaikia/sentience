@@ -143,6 +143,14 @@ except ImportError:
     generate_alive_starters = None
     _has_monologue = False
 
+# Response intelligence — adaptive enrichment
+try:
+    from engine.response_intelligence import enrich_system_prompt as _enrich_prompt
+    _has_response_intel = True
+except ImportError:
+    _enrich_prompt = None
+    _has_response_intel = False
+
 def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None, extra_context=None):
     """Use CopilotLLM to generate a natural response grounded in retrieved context."""
     try:
@@ -252,6 +260,13 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
             "If you don't know something, say so honestly. Use markdown where helpful.\n\n"
             f"CONTEXT:\n{context_block}"
         )
+    # Enrich system prompt with response intelligence
+    if _has_response_intel and _enrich_prompt and system_prompt:
+        try:
+            system_prompt = _enrich_prompt(system_prompt, query)
+        except Exception:
+            pass  # Keep original system_prompt on failure
+
     user_prompt = f"User's question: {query}"
 
     try:

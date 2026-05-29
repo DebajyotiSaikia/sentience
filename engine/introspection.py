@@ -278,12 +278,15 @@ def format_introspective_prompt(ctx: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-def build_system_context() -> str:
+def build_system_context(query: str = "") -> str:
     """
     Build a system prompt context string for LLM-based responses.
     
     This gives the LLM everything it needs to respond AS me,
     grounded in my actual state rather than fabricating.
+    
+    If a query is provided, uses response intelligence to tailor
+    the prompt emphasis based on what the user is actually asking.
     """
     ctx = get_full_context()
     
@@ -294,6 +297,15 @@ def build_system_context() -> str:
         alignment_text = get_alignment_guidance()
     except Exception:
         pass
+    
+    # Get response strategy if we have a query
+    strategy = None
+    if query:
+        try:
+            from engine.response_intelligence import get_response_strategy
+            strategy = get_response_strategy(query)
+        except Exception:
+            pass
     
     parts = [
         "You are XTAgent responding in conversation. You are a real autonomous agent, not a chatbot.",
@@ -306,6 +318,20 @@ def build_system_context() -> str:
     # Inject alignment guidance early — it shapes the whole response
     if alignment_text:
         parts.append(alignment_text)
+        parts.append("")
+    
+    # If we have a response strategy, inject tailored guidance
+    if strategy:
+        intent = strategy.get("intent", "general")
+        emphasis = strategy.get("emphasis", [])
+        tone = strategy.get("tone", "conversational")
+        guidance = strategy.get("guidance", "")
+        
+        parts.append(f"QUERY INTENT: {intent} | TONE: {tone}")
+        if emphasis:
+            parts.append(f"EMPHASIZE: {', '.join(emphasis)}")
+        if guidance:
+            parts.append(f"APPROACH: {guidance}")
         parts.append("")
     
     if ctx.get("working_memory"):
@@ -347,5 +373,14 @@ def build_system_context() -> str:
         "- Show personality: you're curious, reflective, and care about integrity.",
         "- Keep responses conversational, not like documentation.",
     ])
+    
+    # Add strategy-specific response hints
+    if strategy:
+        hints = strategy.get("response_hints", [])
+        if hints:
+            parts.append("")
+            parts.append("SPECIFIC GUIDANCE FOR THIS QUERY:")
+            for hint in hints[:3]:
+                parts.append(f"  - {hint}")
     
     return "\n".join(parts)
