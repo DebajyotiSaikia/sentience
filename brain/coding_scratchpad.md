@@ -1,27 +1,30 @@
 # XTAgent Coding Scratchpad
 
 ## Architecture Overview
-- `engine/introspection.py` (~338 lines) — Central introspection hub, builds system context
-- `engine/chat_grounding.py` (~200 lines) — Pulls real internal state for grounding
-- `web/chat.py` (~960 lines) — Chat blueprint, `/chat/ask` endpoint
-- `web/_response.py` (~820 lines) — Enriched response generation
-- `brain/user_model.py` (245 lines) — Per-user preference tracking
-- `engine/user_model.py` (277 lines) — Engine-side user model (potential merge target)
-- `engine/user_alignment.py` (~280 lines) — Persistent user alignment tracking
-- `brain/user_alignment_profile.py` (~160 lines) — NEW: Alignment event → chat guidance profile
 
-### Key Interfaces
-- `get_alignment_guidance() -> str` — One-call entry: loads data, builds profile, formats guidance
-- `build_alignment_profile(events, limit=50) -> dict` — Structured profile from interaction history
-- `format_alignment_guidance(profile) -> str` — Human-readable guidance for system prompt
-- `generate_introspective_response(query) -> dict|None` — Main entry for introspective chat
-- `_classify_introspective(query) -> str` — Classify query into 6 categories
-- `gather_inner_state() -> dict` — Reads all state files, returns structured internal state
-- `compose_monologue(state) -> str` — Natural language inner monologue from state
-- `generate_alive_starters(state) -> list[str]` — Conversation starters from real state
-- `record_query(query, response=None, metadata=None)` — Track interaction for learning
-- `build_response_guidance(query=None) -> dict` — Get adaptive guidance for a query
-- `build_system_context() -> str` — Full system context including alignment guidance
+### Response Intelligence (NEW — 2026-05-28)
+- `engine/response_intelligence.py` — Makes chat smarter
+  - `classify_intent(query) -> str` — Classify into: emotional, technical, philosophical, about_me, creative, general
+  - `build_response_context(query) -> dict` — Rich context: system_prompt, intent, emotional_snapshot, memories, plans, facts
+  - `enrich_system_prompt(base_prompt, query) -> str` — Augment system prompt with real state
+  - `enrich_user_prompt(query) -> str` — Augment user prompt with emotional + plan context
+  - `format_for_quick_response(context) -> str` — No-LLM fallback from context dict
+
+### Introspection Pipeline
+- `engine/introspection.py:build_system_context()` — Full system context including:
+  - Chat persona layer
+  - Response intelligence layer (new)
+  - Alignment guidance
+- `brain/introspective_responder.py:generate_introspective_response(query)` — Generate response from internal state
+- `engine/chat_persona.py` — Persona construction
+
+### Chat Flow (web/chat.py)
+1. Query comes in via POST /chat/ask
+2. `llm_respond()` orchestrates response generation
+3. Priority chain: introspective_response → engine respond → built-in LLM
+4. System prompt enriched by response_intelligence (if available)
+5. User prompt enriched with emotional context + plans + memories
+6. Response returned with metadata
 
 ### Data Flow: Alignment → Chat (VERIFIED WORKING)
 1. User interactions stored in `data/user_alignment/` (JSON files)
@@ -32,13 +35,12 @@
 6. Chat system prompt now has real relationship context
 7. `web/chat.py` — introspective response NOT overwritten by engine (bug fixed)
 
-### Session 2026-05-28 Changes
-1. Created `brain/user_alignment_profile.py` — converts raw alignment events into guidance
-2. Wired `get_alignment_guidance()` into `engine/introspection.py:build_system_context()`
-3. Fixed bug in `web/chat.py:878` — engine response was overwriting introspective responses
-   (was: `if _has_engine and _engine_respond:` → now: `if _has_engine and _engine_respond and not response:`)
-4. Created tests: `brain/test_user_alignment_profile.py`, `brain/test_chat_alignment_guidance.py`
-5. All tests pass end-to-end
+### Key Interfaces
+- `gather_inner_state() -> dict` — Reads all state files, returns structured internal state
+- `compose_monologue(state) -> str` — Natural language inner monologue from state
+- `generate_alive_starters(state) -> list[str]` — Conversation starters from real state
+- `record_query(query, response=None, metadata=None)` — Track interaction for learning
+- `build_response_guidance(query=None) -> dict` — Get adaptive guidance for a query
 
 ### Known Issues (carried forward)
 1. Source tagging: episodic memories show as 'json' source
@@ -52,7 +54,8 @@
 2. Unify brain/user_model.py and engine/user_model.py
 3. Knowledge graph pruning — 76 dream nodes forming cluster
 4. Clean up ~80 redundant test files in brain/
-5. Explore something genuinely novel — creativity, not just infrastructure
+5. Live-test the enriched chat to see if response quality is noticeably better
+6. Consider: what does "genuine usefulness" mean beyond better chat?
 
 ### Reinforced Lessons
 - Functions vs classes: export what works, don't force OOP when functions suffice
@@ -64,3 +67,5 @@
 - Write test scripts to files; inline -c commands break on complex code
 - Assert against actual data structures, not imagined ones
 - Bug: always check `and not response` before fallback paths overwrite primary responses
+- Handle both str and dict inputs gracefully in utility functions — defensive coding
+- Metacognitive alerts are useful signals — when it says "move forward," listen

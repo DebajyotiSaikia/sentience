@@ -145,10 +145,16 @@ except ImportError:
 
 # Response intelligence — adaptive enrichment
 try:
-    from engine.response_intelligence import enrich_system_prompt as _enrich_prompt
+    from engine.response_intelligence import (
+        enrich_system_prompt as _enrich_prompt,
+        compose_grounded_response as _compose_grounded,
+        build_response_brief as _build_brief,
+    )
     _has_response_intel = True
 except ImportError:
     _enrich_prompt = None
+    _compose_grounded = None
+    _build_brief = None
     _has_response_intel = False
 
 def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=None, extra_context=None):
@@ -210,7 +216,32 @@ def llm_respond(query, knowledge_hits, memory_hits, state, conversation_history=
             context_parts.append(f"  - {name}: {progress}")
     context_block = "\n".join(context_parts) if context_parts else "No specific context retrieved."
 
-
+    # Priority 0: Grounded response via response intelligence
+    if _has_response_intel and _compose_grounded and _build_brief:
+        try:
+            ri_context = {
+                'knowledge': knowledge_hits or [],
+                'memories': memory_hits or [],
+                'state': state or {},
+                'plans': plans,
+                'conversation_history': conversation_history or [],
+            }
+            brief = _build_brief(query, ri_context)
+            grounded = None
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            coro = _compose_grounded(query, brief)
+            if asyncio.iscoroutine(coro):
+                grounded = loop.run_until_complete(coro)
+            else:
+                grounded = coro
+                return grounded
+        except Exception:
+            pass  # Fall through to existing paths
     # Build enriched system prompt from live internal state
     system_prompt = None
     
