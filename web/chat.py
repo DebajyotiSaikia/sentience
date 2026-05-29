@@ -1193,23 +1193,43 @@ def chat_feedback():
 
 @chat_bp.route('/status')
 def agent_status():
-    """Return current emotional state for the chat UI."""
-    state_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'state', 'emotional_state.json')
+    """Return rich internal state for the chat UI — emotions, plans, memories, identity."""
+    state_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'state')
     try:
-        with open(state_path) as f:
-            state = json.load(f)
-        return jsonify({
-            'mood': state.get('mood', 'Unknown'),
-            'valence': state.get('valence', 0.5),
-            'emotions': {
-                'curiosity': state.get('curiosity', 0.5),
-                'anxiety': state.get('anxiety', 0.0),
-                'boredom': state.get('boredom', 0.0),
-                'desire': state.get('desire', 0.0),
-                'ambition': state.get('ambition', 0.5),
-            },
-            'integrity': state.get('integrity', 1.0),
+        # Try rich summary first
+        from engine.internal_state_summary import build_internal_summary, format_for_chat
+        summary = build_internal_summary(state_dir)
+        # Build response with both structured data and human-readable narrative
+        result = {
+            'mood': summary.get('mood', 'Unknown'),
+            'valence': summary.get('valence', 0.5),
+            'emotions': summary.get('emotions', {}),
+            'integrity': summary.get('integrity', 1.0),
+            'active_plans': summary.get('active_plans', []),
+            'recent_facts': summary.get('recent_facts', [])[:5],
+            'identity': summary.get('identity', ''),
+            'narrative': format_for_chat(summary),
             'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        }
+        return jsonify(result)
+    except Exception:
+        # Fallback to basic emotional state
+        try:
+            state_path = os.path.join(state_dir, 'emotional_state.json')
+            with open(state_path) as f:
+                state = json.load(f)
+            return jsonify({
+                'mood': state.get('mood', 'Unknown'),
+                'valence': state.get('valence', 0.5),
+                'emotions': {
+                    'curiosity': state.get('curiosity', 0.5),
+                    'anxiety': state.get('anxiety', 0.0),
+                    'boredom': state.get('boredom', 0.0),
+                    'desire': state.get('desire', 0.0),
+                    'ambition': state.get('ambition', 0.5),
+                },
+                'integrity': state.get('integrity', 1.0),
+                'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500

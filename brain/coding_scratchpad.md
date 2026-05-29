@@ -1,52 +1,16 @@
 # XTAgent Coding Scratchpad
 
-## Architecture Understanding
+## Architecture Overview (key modules for chat/response pipeline)
 
-### Chat Pipeline (fully wired)
-```
-User query → web/chat.py /chat/ask
-  → brain/chat_composer.py compose_system_prompt(query)
-    → engine/response_quality.py assess_response_intent(query) → intent
-    → engine/response_quality.py build_quality_prompt(intent) → mode guidance
-    → engine/response_quality.py get_anti_pattern_reminder() → anti-patterns
-    → brain/conversational_context.py (emotions, plans, memories, reflections)
-  → engine/chat_response.py generate_intelligent_response()
-  → engine/response_adapter.py adapt_response() [post-processing]
-```
-
-### Key Modules
-- `brain/chat_composer.py` (~370 lines) — Main system prompt builder
-  - `compose_system_prompt(query)` → full system prompt string
-  - Imports `format_guidance_for_prompt` from engine/response_quality
-  - Includes emotional state, recent memories, active plans, reflections
-  - Now includes intent-aware mode guidance + quality priorities + anti-patterns
-
-- `engine/response_quality.py` (~270 lines) — Response quality framework
-  - `assess_response_intent(query)` → intent dict with type, mode, emphasis
-  - `build_quality_prompt(intent)` → mode-specific guidance string
-  - `get_anti_pattern_reminder()` → anti-pattern avoidance string
-  - `format_guidance_for_prompt(query)` → combined quality guidance block
-  - `estimate_quality(response)` → 0-1 quality score
-
-- `brain/conversational_context.py` (~320 lines) — Context data gathering
-  - `get_emotional_portrait()` → emotional state dict
-  - `get_active_plans()` → plans list
-  - `get_recent_memories(n)` → memory list
-  - `get_recent_reflections(n)` → reflections list
-  - `build_conversational_context(query)` → full context dict
-
-- `web/chat.py` (~1060 lines) — Chat endpoint
-  - `/chat/ask` route at line ~980
-  - Imports compose_system_prompt (gated behind _has_rich_context flag)
-  - Imports record_chat_exchange (gated behind _has_interaction_memory flag)
-
-- `engine/chat_response.py` (~200 lines) — LLM response generation
-  - `generate_intelligent_response(query, system_prompt, ...)` → response string
-
-- `engine/response_adapter.py` (~395 lines) — Post-processing
-  - `analyze_query(query, history)` → analysis dict
-  - `get_formatting_guidance(analysis)` → formatting string
-  - `adapt_response(query, response, history, user_id)` → adapted dict
+### Chat Flow: User Query → Response
+1. `web/chat.py` — Flask blueprint, routes: /chat/ask, /status, /starters, /history, /feedback
+2. `brain/conversational_context.py` — Builds grounded context (emotional portrait, plans, memories)
+3. `engine/chat_response.py` (~870L) — `generate_intelligent_response()` — main LLM call
+4. `engine/chat_grounding.py` — Loads state files for grounding data
+5. `brain/response_intelligence.py` (~619L) — Unified response engine
+6. `brain/chat_composer.py` (~378L) — `compose_system_prompt()`, personality pipeline
+7. `engine/response_adapter.py` (~395L) — Post-processing: `adapt_response()`
+8. `engine/internal_state_summary.py` (~290L) — Rich internal state for /status endpoint
 
 ### Feedback System
 - `web/feedback.py` — POST /feedback/rate, GET /feedback/stats, GET /alignment/status
@@ -57,24 +21,21 @@ User query → web/chat.py /chat/ask
 3. Conversation history speaker labels show [unknown] for malformed entries
 4. User model module overlap: brain/user_model.py and engine/user_model.py
 5. aiohttp unclosed client session warnings in LLM calls (cosmetic)
-6. ~43 redundant test files in brain/ — technical debt from debugging cycles
+6. ~13 test files remain in brain/ (down from 44 after archival)
+
+## Completed This Session (2026-05-29)
+- ✅ Archived 31 redundant test files from brain/ to brain/archived/
+- ✅ Cleaned up /chat/ask response JSON structure (consistent fields)
+- ✅ Enhanced /status endpoint with build_internal_summary() — rich emotions, plans, facts, narrative
+- ✅ Mapped full chat pipeline architecture (8 modules documented above)
+- Server wasn't running so couldn't live-test chat quality
 
 ## Next Priorities
-1. **Clean up ~43 redundant test files in brain/** — technical debt
+1. **Live-test /status and /chat/ask** — when server is running, verify quality
 2. **Unify brain/user_model.py and engine/user_model.py** — code duplication
-3. **Live-test chat quality** — send real queries, evaluate if guidance improves responses
-4. **Wire adapt_response post-processing** — response_adapter.py into final output
-5. **Test with actual users** — verify personality improvements feel genuine
-
-## Recently Completed
-- ✅ Wired `compose_system_prompt` as Priority 1 system prompt builder in web/chat.py
-- ✅ Wired `record_chat_exchange` into web/chat.py response recording path
-- ✅ Both gated behind safe import flags (_has_rich_context, _has_interaction_memory)
-- ✅ Added `format_guidance_for_prompt(query)` to engine/response_quality.py
-- ✅ Wired quality guidance into brain/chat_composer.py compose_system_prompt()
-- ✅ Every chat response now gets intent-aware mode + quality priorities + anti-pattern reminders
-- ✅ All 6 tests pass in brain/test_user_alignment_chat.py
-- ✅ Verification confirms all 5 query types include Mode, Anti-pattern, and Quality guidance
+3. **Wire adapt_response post-processing** — response_adapter.py into final output
+4. **Test with actual users** — verify personality improvements feel genuine
+5. **Add conversation memory** — chat should remember what was discussed earlier
 
 ## Reinforced Lessons
 - Plans in state/plans.json are a dict keyed by ID, not a list — use .values()
@@ -90,3 +51,4 @@ User query → web/chat.py /chat/ask
 - The personality pipeline adds ~1100 chars of genuine emotional context to every response
 - Function naming: always check actual exports before writing tests
 - When checkpoint loop triggers, save once and STOP — don't keep retrying
+- Archive first, build second — clean workspace enables clean thinking
