@@ -166,7 +166,6 @@ except ImportError:
     _brain_generate_response = None
     _has_brain_response = False
     _has_brain_response = False
-
 # Response adapter — adjusts tone, depth, and style based on query analysis
 try:
     from brain.response_adapter import adapt_response as _adapt_response
@@ -1008,7 +1007,10 @@ def ask():
     # Adapt response style based on query analysis
     if _has_response_adapter and _adapt_response:
         try:
-            response = _adapt_response(query, response)
+            adapter_meta = _adapt_response(query, response)
+            if isinstance(adapter_meta, str):
+                response = adapter_meta
+            # If dict (metadata), response stays unchanged
         except Exception:
             pass  # graceful fallback — return original response
     
