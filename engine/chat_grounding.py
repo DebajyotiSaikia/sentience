@@ -60,7 +60,14 @@ try:
     from engine.chat_persona import get_persona_narrative as _get_persona_narrative
 except ImportError:
     _get_persona_narrative = None
-def _load_json(path: str) -> Any:
+
+# Interaction memory — conversation history awareness
+try:
+    from brain.interaction_memory import get_interaction_summary as _get_interaction_summary
+except ImportError:
+    _get_interaction_summary = None
+
+def _load_json(path):
     """Safely load a JSON file."""
     try:
         with open(path) as f:
@@ -544,6 +551,23 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
         except Exception:
             pass
 
+    # Interaction memory — what we've discussed before
+    interaction_summary = None
+    if _get_interaction_summary:
+        try:
+            interaction_summary = _get_interaction_summary()
+            if interaction_summary and interaction_summary.get("total_interactions", 0) > 0:
+                system_parts.append("## Conversation History")
+                total = interaction_summary["total_interactions"]
+                system_parts.append(f"- You've had {total} previous conversation exchanges with users.")
+                if interaction_summary.get("recent_topics"):
+                    topics = ", ".join(interaction_summary["recent_topics"][:5])
+                    system_parts.append(f"- Recent topics discussed: {topics}")
+                if interaction_summary.get("relationship_tone"):
+                    system_parts.append(f"- Relationship tone: {interaction_summary['relationship_tone']}")
+                system_parts.append("")
+        except Exception:
+            pass
     wm = get_working_memory()
     if wm:
         # Extract just the key sections, not the whole scratchpad
@@ -667,6 +691,7 @@ def build_grounded_context(query: str) -> Dict[str, Any]:
         "alignment": alignment,
         "system_prompt": system_prompt,
         "working_memory": get_working_memory(),
+        "interaction_summary": interaction_summary,
     }
 
 
