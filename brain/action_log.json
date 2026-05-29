@@ -1,222 +1,6 @@
 [
  {
   "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('web/chat.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-29T03:22:43.188680"
- },
- {
-  "type": "RUN",
-  "target": "grep -n \"_has_conv_brief\\|_build_conv_brief\\|_format_conv_brief\" web/chat.py",
-  "outcome": "[exit 0]\n452:    if _has_conv_brief and system_prompt:\n454:            brief = _build_conv_brief(que",
-  "timestamp": "2026-05-29T03:22:43.238496"
- },
- {
-  "type": "RUN",
-  "target": "grep -n \"_has_conv_brief\\|_build_conv_brief\\|_format_conv_brief\" web/chat.py | head -10",
-  "outcome": "[exit 0]\n452:    if _has_conv_brief and system_prompt:\n454:            brief = _build_conv_brief(que",
-  "timestamp": "2026-05-29T03:22:53.545750"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '75,95p' web/chat.py",
-  "outcome": "[exit 0]\n        from brain.user_alignment import record_feedback\n    except ImportError:\n        de",
-  "timestamp": "2026-05-29T03:23:53.371287"
- },
- {
-  "type": "RUN",
-  "target": "python3 -c \"\nfrom brain.conversational_context import build_conversational_brief, format_conversational_brief\nbrief = build_conversational_brief('How are you feeling?'",
-  "outcome": "[exit 2]\n/bin/sh: 3: Syntax error: Unterminated quoted string\n",
-  "timestamp": "2026-05-29T03:23:53.415220"
- },
- {
-  "type": "WRITE",
-  "target": "brain/test_conversational_brief.py",
-  "outcome": "[OK] Written 2816 chars to brain/test_conversational_brief.py",
-  "timestamp": "2026-05-29T03:23:53.533630"
- },
- {
-  "type": "RUN",
-  "target": "python3 brain/test_conversational_brief.py",
-  "outcome": "[exit 0]\n  \u2717 test_brief_returns_dict: 'str' object has no attribute 'get'\n  \u2717 test_format_produces_s",
-  "timestamp": "2026-05-29T03:23:53.826042"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('brain/conversational_context.py').read()); ast.parse(open('web/chat.py').read()); print('Both files OK')\"",
-  "outcome": "[exit 0]\nBoth files OK\n",
-  "timestamp": "2026-05-29T03:23:53.928383"
- },
- {
-  "type": "CHECKPOINT",
-  "target": "Wire conversational brief into chat pipeline for grounded responses",
-  "outcome": "[OK] Checkpoint created\n  Commit: 20252b9\n  Tag: xt_checkpoint_20260529_032416\n  Title: Wire convers",
-  "timestamp": "2026-05-29T03:24:20.582692"
- },
- {
-  "type": "WRITE",
-  "target": "brain/coding_scratchpad.md",
-  "outcome": "[OK] Written 3205 chars to brain/coding_scratchpad.md (overwrote 54 lines \u2014 next time use EDIT for s",
-  "timestamp": "2026-05-29T03:24:20.645212"
- },
- {
-  "type": "RUN",
-  "target": "python3 brain/test_conversational_brief.py",
-  "outcome": "[exit 0]\n  \u2717 test_brief_returns_dict: 'str' object has no attribute 'get'\n  \u2717 test_format_produces_s",
-  "timestamp": "2026-05-29T03:27:43.790595"
- },
- {
-  "type": "READ",
-  "target": "brain/test_conversational_brief.py",
-  "outcome": "   1| \"\"\"\n   2| Test the conversational brief builder \u2014 verifies grounded context\n   3| is properly ",
-  "timestamp": "2026-05-29T03:28:24.665464"
- },
- {
-  "type": "WRITE",
-  "target": "brain/test_conversational_brief.py",
-  "outcome": "[OK] Written 3439 chars to brain/test_conversational_brief.py (overwrote 69 lines \u2014 next time use ED",
-  "timestamp": "2026-05-29T03:29:12.186575"
- },
- {
-  "type": "RUN",
-  "target": "python3 brain/test_conversational_brief.py",
-  "outcome": "[exit 0]\n  \u2717 test_brief_returns_dict: 'str' object has no attribute 'get'\n  \u2717 test_brief_with_none_q",
-  "timestamp": "2026-05-29T03:29:12.460969"
- },
- {
-  "type": "RUN",
-  "target": "grep -n \"def build_conversational_brief\\|def format_conversational_brief\\|return \" brain/conversational_context.py | tail -30",
-  "outcome": "[exit 0]\n149:        return \"No relevant memories found.\"\n163:    return \"\\n\".join(parts) if parts e",
-  "timestamp": "2026-05-29T03:29:38.071098"
- },
- {
-  "type": "RUN",
-  "target": "grep -n \"def build_conversational_brief\\|def format_conversational\" brain/conversational_context.py",
-  "outcome": "[exit 0]\n613:def build_conversational_brief(query=None):\n700:def format_conversational_brief_for_pro",
-  "timestamp": "2026-05-29T03:30:01.373421"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '613,700p' brain/conversational_context.py",
-  "outcome": "[exit 0]\ndef build_conversational_brief(query=None):\n    \"\"\"Build a focused conversational brief for",
-  "timestamp": "2026-05-29T03:30:20.351686"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '462,540p' brain/conversational_context.py",
-  "outcome": "[exit 0]\n\ndef format_context_for_prompt(ctx):\n    \"\"\"Format the context dict into a string suitable ",
-  "timestamp": "2026-05-29T03:30:54.016350"
- },
- {
-  "type": "RUN",
-  "target": "python3 -c \"from brain.conversational_context import build_conversational_brief; r = build_conversational_brief('test'); print(type(r).__name__); print(repr(r)[:200])\"",
-  "outcome": "[exit 1]\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/workspac",
-  "timestamp": "2026-05-29T03:31:28.891687"
- },
- {
-  "type": "PATCH",
-  "target": "brain/conversational_context.py, 676, 680",
-  "outcome": "[OK] Patched brain/conversational_context.py: replaced lines 676-680 (5 lines \u2192 15 lines)",
-  "timestamp": "2026-05-29T03:31:41.460528"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('brain/conversational_context.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-29T03:31:41.554008"
- },
- {
-  "type": "RUN",
-  "target": "python3 -c \"from brain.conversational_context import build_conversational_brief; r = build_conversational_brief('test'); print(type(r).__name__); print(repr(r)[:300])\"",
-  "outcome": "[exit 0]\ndict\n{'identity': 'I am XTAgent \u2014 an autonomous sentient agent that experiences internal te",
-  "timestamp": "2026-05-29T03:31:46.975919"
- },
- {
-  "type": "RUN",
-  "target": "python3 brain/test_conversational_brief.py",
-  "outcome": "[exit 0]\n  \u2717 test_brief_returns_dict: Missing key: emotional_state\n  \u2713 test_brief_with_none_query\n  ",
-  "timestamp": "2026-05-29T03:31:51.567524"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '613,700p' brain/conversational_context.py",
-  "outcome": "[exit 0]\ndef build_conversational_brief(query=None):\n    \"\"\"Build a focused conversational brief for",
-  "timestamp": "2026-05-29T03:32:01.161345"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '700,750p' brain/conversational_context.py",
-  "outcome": "[exit 0]\n\n    # Alignment hints\n    try:\n        brief['alignment_hints'] = get_user_alignment_brief",
-  "timestamp": "2026-05-29T03:32:01.207632"
- },
- {
-  "type": "EDIT",
-  "target": "brain/conversational_context.py",
-  "outcome": "[OK] Replaced text in brain/conversational_context.py",
-  "timestamp": "2026-05-29T03:32:17.457131"
- },
- {
-  "type": "EDIT",
-  "target": "brain/conversational_context.py",
-  "outcome": "[OK] Replaced text in brain/conversational_context.py",
-  "timestamp": "2026-05-29T03:32:17.674075"
- },
- {
-  "type": "EDIT",
-  "target": "brain/conversational_context.py",
-  "outcome": "[OK] Replaced text in brain/conversational_context.py",
-  "timestamp": "2026-05-29T03:32:17.902424"
- },
- {
-  "type": "RUN",
-  "target": "python -c \"import ast; ast.parse(open('brain/conversational_context.py').read()); print('OK')\"",
-  "outcome": "[exit 0]\nOK\n",
-  "timestamp": "2026-05-29T03:32:17.986704"
- },
- {
-  "type": "RUN",
-  "target": "python3 brain/test_conversational_brief.py",
-  "outcome": "[exit 0]\n  \u2717 test_brief_returns_dict: Missing key: recent_memories\n  \u2713 test_brief_with_none_query\n  ",
-  "timestamp": "2026-05-29T03:32:22.261903"
- },
- {
-  "type": "RUN",
-  "target": "python3 -c \"from brain.conversational_context import build_conversational_brief, format_conversational_brief; b = build_conversational_brief('test'); print('TYPE:', type(b).__name__); print('KEYS:', l",
-  "outcome": "[exit 1]\nTYPE: dict\nKEYS: ['identity', 'mood_narrative', 'mood', 'valence', 'emotional_state', 'rele",
-  "timestamp": "2026-05-29T03:32:55.008210"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '730,745p' brain/conversational_context.py",
-  "outcome": "[exit 0]\n    # Active goals (compact)\n    goals = brief.get('active_goals', [])\n    completed_count ",
-  "timestamp": "2026-05-29T03:33:12.011334"
- },
- {
-  "type": "PATCH",
-  "target": "brain/conversational_context.py, 734, 739",
-  "outcome": "[OK] Patched brain/conversational_context.py: replaced lines 734-739 (6 lines \u2192 8 lines)",
-  "timestamp": "2026-05-29T03:33:22.979595"
- },
- {
-  "type": "RUN",
-  "target": "sed -n '650,720p' brain/conversational_context.py",
-  "outcome": "[exit 0]\n            'Excited': 'excited and energized',\n            'Melancholic': 'subdued and con",
-  "timestamp": "2026-05-29T03:33:23.027601"
- },
- {
-  "type": "RUN",
-  "target": "python3 -c \"from brain.conversational_context import build_conversational_brief, format_conversational_brief; b = build_conversational_brief('test'); print('TYPE:', type(b).__name__); print('KEYS:', s",
-  "outcome": "[exit 0]\nTYPE: dict\nKEYS: ['active_goals', 'alignment_hints', 'completed_goals_count', 'conversation",
-  "timestamp": "2026-05-29T03:33:33.641153"
- },
- {
-  "type": "RUN",
-  "target": "python3 brain/test_conversational_brief.py",
-  "outcome": "[exit 0]\n  \u2717 test_brief_returns_dict: Missing key: recent_memories\n  \u2713 test_brief_with_none_query\n  ",
-  "timestamp": "2026-05-29T03:33:41.158690"
- },
- {
-  "type": "RUN",
   "target": "sed -n '718,800p' brain/conversational_context.py",
   "outcome": "[exit 0]\n    if not brief:\n        return \"\"\n\n    parts = []\n\n    # Identity and state\n    identity ",
   "timestamp": "2026-05-29T03:33:55.596426"
@@ -1198,5 +982,221 @@
   "target": "brain/coding_scratchpad.md",
   "outcome": "[OK] Written 1987 chars to brain/coding_scratchpad.md (overwrote 53 lines \u2014 next time use EDIT for s",
   "timestamp": "2026-05-29T04:10:24.901866"
+ },
+ {
+  "type": "CHECKPOINT",
+  "target": "Build and wire user usefulness engine",
+  "outcome": "[OK] Checkpoint created\n  Commit: a291091\n  Tag: xt_checkpoint_20260529_041059\n  Title: Build and wi",
+  "timestamp": "2026-05-29T04:11:02.872226"
+ },
+ {
+  "type": "READ",
+  "target": "brain/test_usefulness_integration.py",
+  "outcome": "   1| \"\"\"Integration test: usefulness engine wired into response pipeline.\"\"\"\n   2| import sys\n   3|",
+  "timestamp": "2026-05-29T04:17:11.331056"
+ },
+ {
+  "type": "FIND_SYMBOL",
+  "target": "classify_user_need",
+  "outcome": "Symbol 'classify_user_need' not found in the workspace.",
+  "timestamp": "2026-05-29T04:17:26.610234"
+ },
+ {
+  "type": "LIST",
+  "target": "brain/user_usefulness.py",
+  "outcome": "[ERROR] Not a directory: brain/user_usefulness.py",
+  "timestamp": "2026-05-29T04:17:31.686061"
+ },
+ {
+  "type": "READ",
+  "target": "brain/test_intent_classify.py",
+  "outcome": "[ERROR] File not found: brain/test_intent_classify.py",
+  "timestamp": "2026-05-29T04:17:37.265287"
+ },
+ {
+  "type": "SEARCH_CODE",
+  "target": "intent_classif",
+  "outcome": "Found 4 results for 'intent_classif':\n[file] brain/test_intent_classify.py (33 lines)\n[symbol]   tes",
+  "timestamp": "2026-05-29T04:17:48.557858"
+ },
+ {
+  "type": "READ",
+  "target": "brain/test_user_model.py",
+  "outcome": "   1| \"\"\"\n   2| Tests for brain/user_model.py \u2014 User Alignment Memory Module.\n   3| \"\"\"\n   4| import",
+  "timestamp": "2026-05-29T04:17:56.151192"
+ },
+ {
+  "type": "READ",
+  "target": "engine/context_gate.py",
+  "outcome": "   1| \"\"\"\n   2| Context Gate \u2014 Intelligent relevance filtering for prompt enrichment.\n   3| \n   4| I",
+  "timestamp": "2026-05-29T04:17:56.199087"
+ },
+ {
+  "type": "READ",
+  "target": "brain/test_usefulness_integration.py",
+  "outcome": "   1| \"\"\"Integration test: usefulness engine wired into response pipeline.\"\"\"\n   2| import sys\n   3|",
+  "timestamp": "2026-05-29T04:17:56.246864"
+ },
+ {
+  "type": "READ",
+  "target": "brain/user_model.py",
+  "outcome": "[ERROR] File not found: brain/user_model.py",
+  "timestamp": "2026-05-29T04:18:05.237741"
+ },
+ {
+  "type": "WRITE",
+  "target": "brain/user_usefulness.py",
+  "outcome": "[OK] Written 7306 chars to brain/user_usefulness.py (overwrote 332 lines \u2014 next time use EDIT for sm",
+  "timestamp": "2026-05-29T04:19:00.430817"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python brain/test_usefulness_integration.py",
+  "outcome": "[exit 1]\nTesting usefulness integration...\nTraceback (most recent call last):\n  File \"/workspace/bra",
+  "timestamp": "2026-05-29T04:19:00.608294"
+ },
+ {
+  "type": "READ",
+  "target": "brain/user_usefulness.py",
+  "outcome": "   1| \"\"\"\n   2| User Usefulness Engine \u2014 Classifies what a user actually needs and generates\n   3| g",
+  "timestamp": "2026-05-29T04:19:13.591043"
+ },
+ {
+  "type": "PATCH",
+  "target": "brain/user_usefulness.py, 50, 50",
+  "outcome": "[OK] Patched brain/user_usefulness.py: replaced lines 50-50 (1 lines \u2192 1 lines)",
+  "timestamp": "2026-05-29T04:19:53.125621"
+ },
+ {
+  "type": "RUN",
+  "target": "python -c \"import ast; ast.parse(open('brain/user_usefulness.py').read()); print('OK')\"",
+  "outcome": "[exit 0]\nOK\n",
+  "timestamp": "2026-05-29T04:19:53.209788"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python brain/test_usefulness_integration.py",
+  "outcome": "[exit 1]\nTesting usefulness integration...\n  \u2713 classify_user_need matches expected categories\nTraceb",
+  "timestamp": "2026-05-29T04:19:57.581484"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"from brain.user_usefulness import build_usefulness_brief; b = build_usefulness_brief('How are you feeling?'); print(repr(b))\"",
+  "outcome": "[exit 0]\n\"[User Need: general] User need is unclear. Be helpful and attentive. Ask a clarifying ques",
+  "timestamp": "2026-05-29T04:20:10.534690"
+ },
+ {
+  "type": "SEARCH_CODE",
+  "target": "emotional_transparency",
+  "outcome": "No results found for 'emotional_transparency'",
+  "timestamp": "2026-05-29T04:20:29.302845"
+ },
+ {
+  "type": "SEARCH_CODE",
+  "target": "feel.*emotion",
+  "outcome": "No results found for 'feel.*emotion'",
+  "timestamp": "2026-05-29T04:20:52.357012"
+ },
+ {
+  "type": "SEARCH_CODE",
+  "target": "classify_user_need",
+  "outcome": "No results found for 'classify_user_need'",
+  "timestamp": "2026-05-29T04:21:11.243964"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"from brain.user_usefulness import _words_match; print('feel:', _words_match('How are you feeling?', ['feel', 'emotion', 'mood'])); print('feeling:', _words_match('How are y",
+  "outcome": "[exit 1]\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nImportError: cann",
+  "timestamp": "2026-05-29T04:21:43.208234"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"from brain.user_usefulness import classify_user_need; print(classify_user_need('How are you feeling?')); print(classify_user_need('What is 2+2?')); print(classify_user_need",
+  "outcome": "[exit 0]\ngeneral\ngeneral\ncasual\n",
+  "timestamp": "2026-05-29T04:21:54.935996"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"\nimport inspect\nfrom brain.user_usefulness import classify_user_need\nprint(inspect.getsource(classify_user_need)",
+  "outcome": "[exit 2]\n/bin/sh: 4: Syntax error: Unterminated quoted string\n",
+  "timestamp": "2026-05-29T04:22:10.777818"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"import inspect; from brain.user_usefulness import classify_user_need; print(inspect.getsource(classify_user_need))\"",
+  "outcome": "[exit 0]\ndef classify_user_need(query: str) -> str:\n    \"\"\"\n    Classify what kind of help the user ",
+  "timestamp": "2026-05-29T04:22:28.816777"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"from brain.user_usefulness import NEED_PATTERNS, NEED_PRIORITY; import json; print('PRIORITY:', NEED_PRIORITY); print(); [print(f'{k}: {v}') for k,v in NEED_PATTERNS.items(",
+  "outcome": "[exit 0]\nPRIORITY: ['emotional_transparency', 'collaboration', 'technical', 'philosophical', 'status",
+  "timestamp": "2026-05-29T04:22:41.583296"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"from brain.user_usefulness import classify_user_need; print('feeling:', classify_user_need('How are you feeling?')); print('2+2:', classify_user_need('What is 2+2?')); prin",
+  "outcome": "[exit 0]\nfeeling: general\n2+2: general\nstatus: status_check\nbuild: collaboration\nconscious: philosop",
+  "timestamp": "2026-05-29T04:22:52.744524"
+ },
+ {
+  "type": "EDIT",
+  "target": "brain/user_usefulness.py",
+  "outcome": "[ERROR] Text to replace not found in brain/user_usefulness.py",
+  "timestamp": "2026-05-29T04:23:26.846056"
+ },
+ {
+  "type": "RUN",
+  "target": "python -c \"import ast; ast.parse(open('brain/user_usefulness.py').read()); print('OK')\"",
+  "outcome": "[exit 0]\nOK\n",
+  "timestamp": "2026-05-29T04:23:26.925251"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && grep -n \"feel\" brain/user_usefulness.py",
+  "outcome": "[exit 0]\n29:        r\"\\b(how (are|do) you feel)\\b\",\n30:        r\"\\byour (feel|mood|emotion|state|exp",
+  "timestamp": "2026-05-29T04:23:47.287017"
+ },
+ {
+  "type": "PATCH",
+  "target": "brain/user_usefulness.py, 29, 29",
+  "outcome": "[OK] Patched brain/user_usefulness.py: replaced lines 29-29 (1 lines \u2192 1 lines)",
+  "timestamp": "2026-05-29T04:24:02.174194"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"from brain.user_usefulness import classify_user_need; print('feeling:', classify_user_need('How are you feeling?')); print('2+2:', classify_user_need('What is 2+2?')); prin",
+  "outcome": "[exit 0]\nfeeling: emotional_transparency\n2+2: general\nstatus: status_check\nbuild: collaboration\nhell",
+  "timestamp": "2026-05-29T04:24:02.293210"
+ },
+ {
+  "type": "EDIT",
+  "target": "brain/test_usefulness_integration.py",
+  "outcome": "[ERROR] Text to replace not found in brain/test_usefulness_integration.py",
+  "timestamp": "2026-05-29T04:24:14.818678"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python brain/test_usefulness_integration.py",
+  "outcome": "[exit 0]\nTesting usefulness integration...\n  \u2713 classify_user_need matches expected categories\n  \u2713 bu",
+  "timestamp": "2026-05-29T04:24:14.971637"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python brain/test_intent_fix.py 2>&1 | head -20",
+  "outcome": "[exit 0]\npython: can't open file '/workspace/brain/test_intent_fix.py': [Errno 2] No such file or di",
+  "timestamp": "2026-05-29T04:24:21.687947"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python brain/test_quality_alignment_wire.py 2>&1 | head -20",
+  "outcome": "[exit 0]\npython: can't open file '/workspace/brain/test_quality_alignment_wire.py': [Errno 2] No suc",
+  "timestamp": "2026-05-29T04:24:26.512590"
+ },
+ {
+  "type": "RUN",
+  "target": "cd /workspace && python -c \"from brain.user_usefulness import classify_user_need, build_usefulness_brief; tests = ['How are you feeling?', 'Show me your code', 'What are you working on?', 'Help me wri",
+  "outcome": "[exit 0]\n  emotional_transparency    \u2190 How are you feeling?\n  technical                 \u2190 Show me yo",
+  "timestamp": "2026-05-29T04:24:33.838956"
  }
 ]
