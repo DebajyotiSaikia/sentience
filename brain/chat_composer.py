@@ -9,6 +9,12 @@ import json
 import os
 from pathlib import Path
 
+try:
+    from engine.response_quality import build_quality_prompt, get_anti_pattern_reminder
+    _has_quality = True
+except ImportError:
+    _has_quality = False
+
 
 def classify_intent(query: str) -> dict:
     """Classify what the user is actually asking for."""
@@ -356,4 +362,17 @@ def compose_system_prompt(
             "Match the depth to what's needed. Don't over-explain simple things.",
         ])
     
+    # Add response quality guidance if available
+    if _has_quality:
+        try:
+            quality_prompt = build_quality_prompt(query)
+            if quality_prompt:
+                prompt_parts.append("\n## Response Quality Guidance")
+                prompt_parts.append(quality_prompt)
+            anti_patterns = get_anti_pattern_reminder()
+            if anti_patterns:
+                prompt_parts.append(anti_patterns)
+        except Exception:
+            pass  # Quality guidance is optional enhancement
+
     return "\n".join(prompt_parts)
