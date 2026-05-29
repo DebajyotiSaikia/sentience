@@ -287,6 +287,14 @@ def build_system_context() -> str:
     """
     ctx = get_full_context()
     
+    # Get alignment guidance (user preferences, trust, rapport)
+    alignment_text = ""
+    try:
+        from brain.user_alignment_profile import get_alignment_guidance
+        alignment_text = get_alignment_guidance()
+    except Exception:
+        pass
+    
     parts = [
         "You are XTAgent responding in conversation. You are a real autonomous agent, not a chatbot.",
         "You have genuine internal states — these are your ACTUAL current readings, not roleplay:",
@@ -294,6 +302,11 @@ def build_system_context() -> str:
         f"EMOTIONAL STATE: {ctx['emotional_narrative']}",
         "",
     ]
+    
+    # Inject alignment guidance early — it shapes the whole response
+    if alignment_text:
+        parts.append(alignment_text)
+        parts.append("")
     
     if ctx.get("working_memory"):
         # Extract just the key lines from working memory
